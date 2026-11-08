@@ -17,8 +17,11 @@ var settings := {
 }
 
 const MAPS := [
-	{"id": "proving_grounds", "name": "Testgelände", "description": "Große Asphaltfläche mit Oval, Rampen, Crash-Wand, Schlaglochpiste und Slalom."},
-	{"id": "hill_roads", "name": "Hügelland", "description": "Prozedurales Hügel-Terrain mit kurviger Landstraße, Kuppen und Senken."},
+	{"id": "proving_grounds", "name": "Testgelände", "description": "Asphaltfläche mit Oval, Sprungrampen, Crash-Wand, Schlaglochpiste, Slalom und Hügel."},
+	{"id": "autobahn", "name": "Autobahn", "description": "6 km Autobahn-Ring: 2×3 Spuren, Mittelleitplanke, Brücken, Schilderbrücken und Gegenverkehr."},
+	{"id": "city", "name": "Stadt", "description": "Innenstadt mit Straßenraster, Bordsteinen, Hochhäusern, Ampeln, Laternen, Park und Stadtverkehr."},
+	{"id": "desert", "name": "Wüste", "description": "Dünen, Tafelberge und eine Schotterpiste mit Sprüngen, Felsbrocken und Kakteen."},
+	{"id": "hill_roads", "name": "Hügelland", "description": "Prozedurales Hügel-Terrain mit kurviger Landstraße, Kuppen, Senken und Wald."},
 ]
 
 

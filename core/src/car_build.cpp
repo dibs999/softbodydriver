@@ -756,7 +756,11 @@ CarBuild buildCar(const CarDefinition& def) {
             if (m.y < prof.ySill(m.x) + 0.02) sys.zoneBeams[kZoneUnder].push_back(static_cast<std::uint32_t>(bi));
         }
         sys.coolantCapacityL = 6.5;
-        sys.radiatorUA = ed.radiatorUA;
+        // A radiator must be able to reject roughly the engine's full power at ~60 K over ambient
+        // with highway airflow, otherwise sustained full throttle overheats an undamaged car.
+        real peakPowerW = 0.0;
+        for (const auto& tq : ed.torqueCurve) peakPowerW = std::max(peakPowerW, tq.second * tq.first * 2.0 * kPi / 60.0);
+        sys.radiatorUA = std::max(ed.radiatorUA, peakPowerW / 58.0);
         sys.fuelCapacityL = ed.fuelCapacity;
         sys.fuelL = ed.fuelCapacity * 0.8;
         sys.bsfcGPerKWh = ed.bsfc;

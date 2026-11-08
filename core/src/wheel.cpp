@@ -112,7 +112,7 @@ void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, rea
         const real cooling = (8.0 + 2.5 * std::abs(vLong)) * (tempC - spec.ambientTempC);
         tempC += (0.9 * slipPower + rollPower - cooling) / heatCap * dt;
         const real hotWear = 1.0 + std::max<real>(0.0, tempC - 110.0) / 35.0;
-        wear += spec.wearRate * slipPower * hotWear / 3.6e6 * dt;
+        wear += spec.wearRate * slipPower * hotWear / 1.2e7 * dt;
         if (wear >= 1.0 || tempC >= spec.burstTempC) burst = true;
         wear = std::min<real>(wear, 1.0);
     }

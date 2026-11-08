@@ -13,7 +13,7 @@
     "wheels": { "FL": "WheelFrontL", "FR": "WheelFrontR", "RL": "WheelRearL", "RR": "WheelRearR" },
     "hide": ["BrakePad", "Axles"],
     "keepProcedural": ["chassis", "spring", "caliper"],
-    "materialOverrides": { "Glass": "glass" }
+    "materialOverrides": { "Glass": "glass", "Paint 1": "paint" }
   },
   "body": {
     "style": "coupe", "doors": 2,

@@ -439,16 +439,23 @@ void deformSurfaceBlended(const std::vector<Vec3>& pos, const std::vector<float>
         outPositions[i * 3 + 1] = static_cast<float>(p.y);
         outPositions[i * 3 + 2] = static_cast<float>(p.z);
         if (sk.weight[0] >= 0.0f) {
-            float dx = 0, dy = 0, dz = 0;
+            // Local strain: how differently the bound nodes moved (a uniform sag is not a dent).
+            float ax = 0, ay = 0, az = 0;
             for (int k = 0; k < 4; ++k) {
                 if (sk.weight[k] <= 0.0f) continue;
                 const float* d = &frames[12 + static_cast<std::size_t>(sk.node[k]) * 3];
-                dx += sk.weight[k] * d[0];
-                dy += sk.weight[k] * d[1];
-                dz += sk.weight[k] * d[2];
+                ax += sk.weight[k] * d[0];
+                ay += sk.weight[k] * d[1];
+                az += sk.weight[k] * d[2];
             }
-            const float m = std::sqrt(dx * dx + dy * dy + dz * dz);
-            dent[i] = std::clamp((m - 0.012f) / 0.03f, 0.0f, 1.0f);
+            float spread = 0.0f;
+            for (int k = 0; k < 4; ++k) {
+                if (sk.weight[k] <= 0.0f) continue;
+                const float* d = &frames[12 + static_cast<std::size_t>(sk.node[k]) * 3];
+                const float ex = d[0] - ax, ey = d[1] - ay, ez = d[2] - az;
+                spread = std::max(spread, std::sqrt(ex * ex + ey * ey + ez * ez));
+            }
+            dent[i] = std::clamp((spread - 0.02f) / 0.05f, 0.0f, 1.0f);
             if (dent[i] > 0.0f) anyDent = true;
         }
     }

@@ -72,6 +72,24 @@ Koordinaten im Generator: `x` zeigt nach vorne (hintere Stoßstange bei 0), `y` 
 }
 ```
 
+## Optional: Detail-Modell (`visualModel`)
+
+```jsonc
+"credits": "Quelle und Lizenz des Modells",
+"visualModel": {
+  "path": "res://models/carconcept/CarConcept.glb",
+  "forward": "+z",            // Modellachse, die nach vorne zeigt (+x, -x, +y, -y, +z, -z)
+  "up": "+y",                 // Modellachse nach oben
+  "fitLength": true,          // auf body.length skalieren (sonst "scale": 1.0)
+  "wheels": { "FL": "WheelFrontL", "FR": "WheelFrontR", "RL": "WheelRearL", "RR": "WheelRearR" },
+  "hide": ["BrakePad", "Axles"],                  // Teile (Namens-Teilstrings), die entfallen
+  "keepProcedural": ["chassis", "spring", "caliper"],  // eigene Teile, die sichtbar bleiben
+  "materialOverrides": { "Glass": "glass", "Paint 1": "paint" }  // Modell-Material -> Spiel-Material
+}
+```
+
+Die Physik-Struktur entsteht weiterhin aus `body` und den übrigen Abschnitten. Passe deshalb Länge, Breite, Höhe, Radstand, Überhang, Spurweite und Reifenradius an das Modell an. Unterhalb von Rädern, Karosserie und Innenraum wird jeder Vertex an die 4 nächsten Karosserie-Nodes gebunden. Die Radachse der Modellräder wird per Hauptachsenanalyse bestimmt.
+
 ## Was der Generator daraus baut
 
 - **Karosserie**: Ring-Stationen entlang der Fahrzeuglänge mit den Knoten Schweller-Träger, Schweller, Flanke, Gürtellinie und Dach bzw. Haube. Zwischen benachbarten Stationen liegen Längsträger und Schubdiagonalen. Die Fahrgastzelle ist steifer und fester, die Knautschzonen vorne und hinten sind weicher. Die Diagonalen über den Seitenfenstern verhalten sich wie Glas: schwach und spröde.

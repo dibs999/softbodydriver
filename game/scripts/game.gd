@@ -30,10 +30,18 @@ func _ready() -> void:
 	var maproot := Node3D.new()
 	maproot.name = "Map"
 	add_child(maproot)
-	if Game.selected_map == "hill_roads":
-		map_data = MapBuilder.build_hill_roads(world, maproot)
-	else:
-		map_data = MapBuilder.build_proving_grounds(world, maproot)
+	match Game.selected_map:
+		"hill_roads":
+			map_data = MapBuilder.build_hill_roads(world, maproot)
+		"desert":
+			map_data = preload("res://scripts/maps/desert.gd").build(world, maproot)
+		"autobahn":
+			map_data = preload("res://scripts/maps/autobahn.gd").build(world, maproot)
+		"city":
+			map_data = preload("res://scripts/maps/city.gd").build(world, maproot)
+		_:
+			map_data = MapBuilder.build_proving_grounds(world, maproot)
+	_apply_map_environment(map_data.get("environment", {}))
 
 	player = Game.spawn_vehicle(world, Game.selected_car, map_data["spawns"][0])
 	if player == null:
@@ -44,12 +52,15 @@ func _ready() -> void:
 	_apply_settings(player)
 	if Game.settings["traffic"]:
 		var others := Game.cars.filter(func(c): return c["path"] != Game.selected_car)
-		var spawns: Array = map_data.get("ai_spawns", [])
-		for i in mini(spawns.size(), others.size()):
-			var v := Game.spawn_vehicle(world, others[i]["path"], spawns[i])
+		var routes: Array = map_data.get("ai_routes", [])
+		if routes.is_empty():
+			for sp in map_data.get("ai_spawns", []):
+				routes.append({"waypoints": map_data["waypoints"], "speeds": map_data["speeds"], "spawn": sp})
+		for i in mini(routes.size(), others.size()):
+			var v := Game.spawn_vehicle(world, others[i]["path"], routes[i]["spawn"])
 			if v:
 				vehicles.append(v)
-				ai[v] = AIDriver.new(v, map_data["waypoints"], map_data["speeds"], 0.9)
+				ai[v] = AIDriver.new(v, routes[i]["waypoints"], routes[i]["speeds"], 0.9)
 
 	cam = CameraRig.new()
 	cam.current = true
@@ -70,6 +81,31 @@ func _ready() -> void:
 	cam.snap()
 
 
+var _env: Environment
+var _sky_mat: ProceduralSkyMaterial
+var _sun: DirectionalLight3D
+
+
+func _apply_map_environment(e: Dictionary) -> void:
+	if e.is_empty():
+		return
+	if e.has("sky_top"):
+		_sky_mat.sky_top_color = e["sky_top"]
+	if e.has("horizon"):
+		_sky_mat.sky_horizon_color = e["horizon"]
+		_sky_mat.ground_horizon_color = e["horizon"]
+	if e.has("fog"):
+		_env.fog_light_color = e["fog"]
+	if e.has("fog_density"):
+		_env.fog_density = e["fog_density"]
+	if e.has("sun"):
+		_sun.rotation_degrees = e["sun"]
+	if e.has("sun_energy"):
+		_sun.light_energy = e["sun_energy"]
+	if e.has("sun_color"):
+		_sun.light_color = e["sun_color"]
+
+
 func _build_environment() -> void:
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
@@ -80,6 +116,8 @@ func _build_environment() -> void:
 	sm.ground_horizon_color = Color(0.6, 0.65, 0.7)
 	sm.sun_angle_max = 20.0
 	sky.sky_material = sm
+	_sky_mat = sm
+	_env = e
 	e.background_mode = Environment.BG_SKY
 	e.sky = sky
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
@@ -101,6 +139,7 @@ func _build_environment() -> void:
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 180.0
 	add_child(sun)
+	_sun = sun
 
 
 func _apply_settings(v: SBVehicle) -> void:

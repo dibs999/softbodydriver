@@ -44,12 +44,25 @@ Aus einer Datei erzeugt der Generator:
 
 | Datei | Fahrzeug | Antrieb | Leistung | Masse |
 |---|---|---|---|---|
+| `concept_gt` | Concept-GT mit **importiertem Detail-Modell** (glTF, CC-BY 4.0) | RWD | 4,0 l V8 Biturbo, 456 kW | 1580 kg |
 | `kestrel_hatch` | Kompakt-Fließheck (C-Segment) | FWD | 1,5 l Turbo, 110 kW | 1290 kg |
 | `aurora_sedan` | Mittelklasse-Limousine | RWD | 2,0 l Turbo, 190 kW | 1590 kg |
 | `vortex_gt` | V8-Sportcoupé | RWD, Sperre | 5,0 l V8, 335 kW | 1720 kg |
 | `basalt_suv` | Mittelgroßer SUV | AWD | 3,5 l V6, 220 kW | 2050 kg |
 
-Marken und Modelle sind frei erfunden, Maße und Fahrleistungen entsprechen echten Autos der jeweiligen Klasse. Neue Autos legst du an, indem du eine `.car.json` kopierst und anpasst. Das Spiel findet sie automatisch. Das Format ist in [docs/CAR_FORMAT.md](docs/CAR_FORMAT.md) beschrieben.
+Marken und Modelle sind frei erfunden, Maße und Fahrleistungen entsprechen echten Autos der jeweiligen Klasse.
+
+### Echte 3D-Automodelle importieren (Flexbody)
+
+Jede Fahrzeugdatei kann über `visualModel` auf ein **glTF/GLB-Modell** verweisen. Das Spiel richtet das Modell automatisch aus (Achsen, Länge, Bodenhöhe) und bindet jeden Vertex an die nächsten Nodes der Physik-Struktur, wie die Flexbodies in BeamNG. Dellen, abgerissene Frontpartien und platte Reifen erscheinen dadurch am Detail-Modell. Die Räder des Modells werden als drehende Räder übernommen, auch wenn sie im Modell eingelenkt gespeichert sind. Beispiel: `game/cars/concept_gt.car.json` mit dem frei lizenzierten Modell [„Car Concept“ (Khronos, CC-BY 4.0)](game/models/carconcept/LICENSE.md).
+
+So kommt ein eigenes Auto ins Spiel:
+
+1. `.glb` nach `game/models/<name>/` legen.
+2. Eine vorhandene `.car.json` kopieren und Maße, Radstand, Spur und Reifenradius an das Modell anpassen.
+3. `visualModel` eintragen: Pfad, Vorwärts- und Hochachse, Namen der vier Rad-Nodes, auszublendende Teile. Details in [docs/CAR_FORMAT.md](docs/CAR_FORMAT.md).
+
+> **Echte Marken (Mercedes, BMW, …):** Freie Modelle solcher Autos gibt es zum Beispiel auf Sketchfab, meist unter CC-BY oder mit „Editorial Use“. Das Urheberrecht am 3D-Modell ist aber nur ein Teil. Name, Logo und Design gehören den Herstellern, und ein veröffentlichtes Spiel braucht dafür deren Lizenz. Deshalb nutzt auch BeamNG erfundene Marken. Für **private Nutzung** kannst du solche Modelle über den Import-Weg oben einbinden, ins Repository oder in Releases sollten sie nicht. Neue Autos legst du an, indem du eine `.car.json` kopierst und anpasst. Das Spiel findet sie automatisch. Das Format ist in [docs/CAR_FORMAT.md](docs/CAR_FORMAT.md) beschrieben.
 
 ### Schadensmodell (aus der Physik abgeleitet, nicht geskriptet)
 
@@ -61,7 +74,7 @@ Marken und Modelle sind frei erfunden, Maße und Fahrleistungen entsprechen echt
 | Motorlager / Kardanwelle | Bruch | Kraftfluss unterbrochen |
 | Tank | Beschädigung | Kraftstoffleck |
 | Bremsen | Scheibentemperatur | Fading ab ca. 450 °C |
-| Reifen | Bruch von Reifen-Beams | Platten |
+| Reifen | Rutschen erzeugt Wärme und Abrieb, Hitze erhöht den Luftdruck. Verbeulte Felge oder Flanke führt zu schleichendem Luftverlust | Weniger Grip bei kalten, überhitzten oder abgefahrenen Reifen. Platzen bei abgefahrener Lauffläche (Verschleiß 100 %) oder über 175 °C. Ein platter Reifen sackt sichtbar zusammen |
 | Fahrwerk | Verformung von Lenkern und Radträger | Schiefe Räder, Spur und Sturz verstellt |
 
 Weitere Systeme: Thermostat, elektrischer Lüfter, Fahrtwind am Kühler, Öltemperatur, Kraftstoffverbrauch nach spezifischem Verbrauch (BSFC), Abwürgen, Anlasser, Traktionskontrolle mit Motor- und Bremseingriff, ABS.
@@ -116,7 +129,16 @@ Für exportierte Release-Builds zusätzlich `-DGODOTCPP_TARGET=template_release`
 ### Karten
 
 - **Testgelände**: Asphaltfläche mit Oval (KI-Verkehr), Sprungrampen, Bodenwellen, Schlaglochpiste, Leitplanken, Crash-Wand, Mast für Seitenaufprall, Slalom und Hügel
+- **Autobahn**: 6 km Ring mit 2×3 Spuren, Beton-Mittelleitplanke, Schutzplanken, Brücken, Schilderbrücken, Beleuchtung und Gegenverkehr
+- **Stadt**: Straßenraster mit echten Bordsteinkanten, Hochhäusern mit Fensterfassaden, Ampeln, Laternen, Park und Stadtverkehr
+- **Wüste**: 1 km² Dünen und Tafelberge, Schotterpiste mit Sprüngen, Felsbrocken und Kakteen
 - **Hügelland**: prozedurales Terrain mit kurviger Landstraße über Kuppen und durch Senken, dazu Wald
+
+Statische Hindernisse laufen über eine Broadphase. Deshalb bremsen auch Karten mit über 600 Kollisionsobjekten (Leitplanken, Gebäude) die 2000-Hz-Physik nicht aus.
+
+### HUD
+
+Kombiinstrument mit Drehzahlmesser und Tacho als Rundinstrumente, dazu Digitaltempo, Gang und Getriebemodus, Tank- und Temperaturanzeige. Warnleuchten gibt es für Motor, Öldruck, Temperatur, Kühlmittel, Tank, Reifen, TCS, ABS und Handbremse. Daneben zeigen Panels Kühlwasser, Öl und Kraftstoff, die Reifen (Verschleiß, Temperatur, Luftdruck) und die Schäden in der Draufsicht.
 
 ## Entwicklung
 
@@ -159,7 +181,9 @@ Beispielausgabe des Prüfstands:
 - [x] Fahrzeugsysteme: Kühlung, Öl, Motorschaden, Kraftstoff, Bremsen, Traktionskontrolle und ABS
 - [x] Native Desktop-App (Godot 4.5 + GDExtension) für Windows, macOS und Linux, inklusive CI-Export
 - [ ] Abnehmbare Teile (Türen, Motorhaube, Stoßstangen als eigene Bruchgruppen) und splitterndes Glas
-- [ ] Kollision mit Bäumen und Requisiten (Broadphase für viele statische Objekte), bewegliche Requisiten (Pylonen, Fässer)
+- [ ] Bewegliche Requisiten (Pylonen, Fässer), Kollision mit Bäumen auf allen Karten
 - [ ] Reifenmodell mit Lastabhängigkeit und Schräglaufkurve, Oberflächen (Schotter, Gras, Nässe)
-- [ ] Detailliertere Karosserie-Meshes (optional aus Blender) über dasselbe Flexbody-Skinning
+- [x] Import detaillierter glTF-Automodelle als Flexbody
+- [x] Reifenverschleiß, -temperatur, Luftdruck, Plattfuß und Platzen
+- [x] Karten Autobahn, Stadt und Wüste, Kombiinstrument im HUD
 - [ ] Multithreading über mehrere Fahrzeuge

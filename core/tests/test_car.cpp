@@ -173,7 +173,7 @@ TEST_CASE("repair restores structure and systems") {
 
 TEST_CASE("tyres heat up, wear out and burst under sustained wheelspin") {
     CarBuild cb = buildCar(loadCarDefinition(carPath("aurora_sedan")));
-    for (PressureWheel& w : cb.body.wheels()) w.spec.wearRate = 4.0;  // accelerated test
+    for (PressureWheel& w : cb.body.wheels()) w.spec.wearRate = 14.0;  // accelerated test
     World w = flatWorld();
     w.addBody(std::move(cb.body));
     SoftBody& car = w.body(0);
