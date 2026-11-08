@@ -342,7 +342,7 @@ TEST_CASE("all built-in scenes are stable") {
         sc.run(sc.duration);
         const WorldStats st = sc.world.stats();
         CHECK(st.finite);
-        if (name != "slalom" && name != "accel_brake") {
+        if (name != "slalom" && name != "accel_brake" && name != "hill_climb") {
             CHECK(st.deformedBeams + st.brokenBeams > 0);
         }
     }
@@ -469,6 +469,7 @@ TEST_CASE("drivable car round-trips through sbeam JSON with wheels and powertrai
     const SoftBody car2 = parseSBeam(jsonText);
     CHECK(car2.nodeCount() == car.nodeCount());
     CHECK(car2.beamCount() == car.beamCount());
+    CHECK(car2.triangleCount() == car.triangleCount());
     CHECK(car2.wheels().size() == 4);
     CHECK(car2.hasPowertrain());
 }
@@ -487,4 +488,70 @@ TEST_CASE("C ABI spawns drivable car and advances telemetry") {
     CHECK(sb_body_node_count(w, car) > 300);
     sb_world_destroy(w);
 }
+
+TEST_CASE("heightfield collider interpolates height and slope normal") {
+    // 2x2 grid from (0,0) to (2,2), sloping up along +X from y=0 to y=1.
+    std::vector<real> h = {0.0, 0.0, 1.0, 1.0};
+    StaticCollider hf = StaticCollider::heightfield(0.0, 0.0, 2.0, 2.0, 2, 2, h, 0.9, "slope");
+    Vec3 n;
+    CHECK(hf.sampleHeight(1.0, 1.0, &n) == doctest::Approx(0.5));
+    CHECK(n.x < -0.4);
+    CHECK(n.y > 0.85);
+    CHECK(n.z == doctest::Approx(0.0));
+
+    real depth = 0;
+    REQUIRE(hf.contact({1.0, 0.4, 1.0}, n, depth));
+    CHECK(depth > 0.05);
+    CHECK_FALSE(hf.contact({1.0, 0.6, 1.0}, n, depth));
+}
+
+TEST_CASE("ColTri breaks automatically when an underlying edge beam breaks") {
+    SoftBody b("tri_break");
+    b.addNode("a", {0, 0, 0});
+    b.addNode("b", {1, 0, 0});
+    b.addNode("c", {0, 1, 0});
+    const auto bm = b.addBeam("a", "b");
+    b.addBeam("b", "c");
+    b.addBeam("c", "a");
+    b.addTriangle("a", "b", "c");
+    REQUIRE(b.triangleCount() == 1);
+    CHECK_FALSE(b.triangles()[0].broken);
+
+    b.breakBeam(bm);
+    CHECK(b.triangles()[0].broken);
+    CHECK(b.stats().brokenTriangles == 1);
+}
+
+TEST_CASE("inter-body Node-vs-ColTri collision conserves linear momentum and transfers velocity") {
+    WorldSettings ws;
+    ws.gravity = {0, 0, 0};
+    ws.airDensity = 0.0;
+    World w(ws);
+
+    LatticeSpec s = smallCube();
+    SoftBody c1 = buildLattice(s);
+    c1.translate({-0.9, 0.0, 0.0});
+    c1.setVelocity({8.0, 0.0, 0.0});
+
+    SoftBody c2 = buildLattice(s);
+    c2.translate({0.2, 0.0, 0.0});
+    c2.setVelocity({-2.0, 0.0, 0.0});
+
+    const Vec3 pInitial = c1.centerOfMassVelocity() * c1.totalMass() +
+                          c2.centerOfMassVelocity() * c2.totalMass();
+    w.addBody(std::move(c1));
+    w.addBody(std::move(c2));
+
+    w.simulate(0.35);
+    const Vec3 pFinal = w.body(0).centerOfMassVelocity() * w.body(0).totalMass() +
+                        w.body(1).centerOfMassVelocity() * w.body(1).totalMass();
+    // Momentum is conserved across inter-body Node-vs-ColTri collisions.
+    CHECK(pFinal.x == doctest::Approx(pInitial.x).epsilon(1e-4));
+    CHECK(pFinal.y == doctest::Approx(pInitial.y).epsilon(1e-4));
+    CHECK(pFinal.z == doctest::Approx(pInitial.z).epsilon(1e-4));
+    // Body 0 slowed down and Body 1 was pushed in +X.
+    CHECK(w.body(0).centerOfMassVelocity().x < 4.0);
+    CHECK(w.body(1).centerOfMassVelocity().x > 2.0);
+}
+
 

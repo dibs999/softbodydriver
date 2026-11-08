@@ -39,7 +39,11 @@ std::uint32_t SoftBody::addNode(const std::string& id, const Vec3& pos, const No
     invMass_.push_back(p.fixed ? 0.0 : 1.0 / p.mass);
     friction_.push_back(p.friction);
     collision_.push_back(p.collision ? 1 : 0);
-    const std::string name = id.empty() ? (std::string("n") + std::to_string(idx)) : id;
+    std::string name = id;
+    if (name.empty()) {
+        name = "n";
+        name += std::to_string(idx);
+    }
     nodeIds_.push_back(name);
     nodeParams_.push_back(p);
     nodeLookup_[name] = idx;
@@ -103,6 +107,47 @@ std::uint32_t SoftBody::addBeam(const std::string& a, const std::string& b, cons
     return addBeam(static_cast<std::uint32_t>(ia), static_cast<std::uint32_t>(ib), p);
 }
 
+std::int32_t SoftBody::findBeamBetween(std::uint32_t u, std::uint32_t v) const {
+    for (std::size_t i = 0; i < beams_.size(); ++i) {
+        if ((beams_[i].a == u && beams_[i].b == v) || (beams_[i].a == v && beams_[i].b == u))
+            return static_cast<std::int32_t>(i);
+    }
+    return -1;
+}
+
+std::uint32_t SoftBody::addTriangle(std::uint32_t a, std::uint32_t b, std::uint32_t c, const ColTriParams& p) {
+    if (a >= pos_.size() || b >= pos_.size() || c >= pos_.size())
+        throw std::invalid_argument("triangle node index out of range");
+    if (a == b || b == c || c == a)
+        throw std::invalid_argument("degenerate triangle with duplicate vertices");
+
+    ColTri t;
+    t.a = a;
+    t.b = b;
+    t.c = c;
+    t.friction = p.friction;
+    t.dragCoef = p.dragCoef;
+    t.breakable = p.breakable;
+    if (!p.breakGroup.empty()) t.breakGroup = breakGroupIndex(p.breakGroup);
+    t.edgeBeams[0] = findBeamBetween(a, b);
+    t.edgeBeams[1] = findBeamBetween(b, c);
+    t.edgeBeams[2] = findBeamBetween(c, a);
+    t.params = p;
+
+    const auto idx = static_cast<std::uint32_t>(triangles_.size());
+    triangles_.push_back(t);
+    return idx;
+}
+
+std::uint32_t SoftBody::addTriangle(const std::string& a, const std::string& b, const std::string& c,
+                                    const ColTriParams& p) {
+    const auto ia = findNode(a), ib = findNode(b), ic = findNode(c);
+    if (ia < 0) throw std::invalid_argument("unknown node: " + a);
+    if (ib < 0) throw std::invalid_argument("unknown node: " + b);
+    if (ic < 0) throw std::invalid_argument("unknown node: " + c);
+    return addTriangle(static_cast<std::uint32_t>(ia), static_cast<std::uint32_t>(ib), static_cast<std::uint32_t>(ic), p);
+}
+
 void SoftBody::setInput(int channel, real value) {
     if (channel < 0) return;
     if (static_cast<std::size_t>(channel) >= inputs_.size()) inputs_.resize(static_cast<std::size_t>(channel) + 1, 0.0);
@@ -131,6 +176,25 @@ void SoftBody::processPendingBreaks() {
         if (bm.breakGroup >= 0) {
             for (std::uint32_t other : breakGroupMembers_[static_cast<std::size_t>(bm.breakGroup)])
                 if (!beams_[other].broken) pendingBreaks_.push_back(other);
+        }
+    }
+    for (ColTri& tri : triangles_) {
+        if (tri.broken) continue;
+        if (tri.breakGroup >= 0) {
+            for (std::uint32_t bIdx : breakGroupMembers_[static_cast<std::size_t>(tri.breakGroup)]) {
+                if (beams_[bIdx].broken) {
+                    tri.broken = true;
+                    break;
+                }
+            }
+        }
+        if (!tri.broken && tri.breakable) {
+            for (int e = 0; e < 3; ++e) {
+                if (tri.edgeBeams[e] >= 0 && beams_[static_cast<std::size_t>(tri.edgeBeams[e])].broken) {
+                    tri.broken = true;
+                    break;
+                }
+            }
         }
     }
 }
@@ -359,11 +423,15 @@ BodyStats SoftBody::stats() const {
     BodyStats s;
     s.nodes = pos_.size();
     s.beams = beams_.size();
+    s.triangles = triangles_.size();
     for (const Beam& bm : beams_) {
         if (bm.broken) ++s.brokenBeams;
         else if (std::abs(bm.restLength - bm.hydroOffset - bm.baseRestLength) > 1e-3 * bm.baseRestLength &&
                  bm.hydroInput < 0)
             ++s.deformedBeams;
+    }
+    for (const ColTri& tri : triangles_) {
+        if (tri.broken) ++s.brokenTriangles;
     }
     s.totalMass = totalMass();
     s.kineticEnergy = kineticEnergy();

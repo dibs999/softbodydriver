@@ -86,11 +86,31 @@ struct Beam {
     BeamParams params;        ///< Original authoring parameters (for saving / tooling).
 };
 
+struct ColTriParams {
+    real friction = 0.5;
+    real dragCoef = 1.0;          ///< Aerodynamic pressure drag/lift coefficient.
+    bool breakable = true;        ///< Deactivates when an underlying edge beam or breakGroup breaks.
+    std::string breakGroup;
+};
+
+struct ColTri {
+    std::uint32_t a = 0, b = 0, c = 0;
+    real friction = 0.5;
+    real dragCoef = 1.0;
+    bool breakable = true;
+    bool broken = false;
+    std::int32_t breakGroup = -1;
+    std::int32_t edgeBeams[3] = {-1, -1, -1};  ///< Beam indices for (a,b), (b,c), (c,a), or -1.
+    ColTriParams params;
+};
+
 struct BodyStats {
     std::size_t nodes = 0;
     std::size_t beams = 0;
     std::size_t brokenBeams = 0;
     std::size_t deformedBeams = 0;  ///< |rest - base| / base > 0.1 %
+    std::size_t triangles = 0;
+    std::size_t brokenTriangles = 0;
     real totalMass = 0;
     real kineticEnergy = 0;
     real elasticEnergy = 0;
@@ -131,6 +151,11 @@ public:
     /// Returns the beam index. Throws std::invalid_argument for bad indices / zero length.
     std::uint32_t addBeam(std::uint32_t a, std::uint32_t b, const BeamParams& p = {});
     std::uint32_t addBeam(const std::string& a, const std::string& b, const BeamParams& p = {});
+
+    /// Adds a collision / aerodynamic surface triangle (a, b, c) with outward normal (b-a) x (c-a).
+    std::uint32_t addTriangle(std::uint32_t a, std::uint32_t b, std::uint32_t c, const ColTriParams& p = {});
+    std::uint32_t addTriangle(const std::string& a, const std::string& b, const std::string& c,
+                              const ColTriParams& p = {});
 
     /// Generates and registers a BeamNG-style PressureWheel on this body.
     std::size_t addWheel(const PressureWheelSpec& spec);
@@ -182,6 +207,7 @@ public:
     void setName(std::string n) { name_ = std::move(n); }
     std::size_t nodeCount() const { return pos_.size(); }
     std::size_t beamCount() const { return beams_.size(); }
+    std::size_t triangleCount() const { return triangles_.size(); }
 
     std::vector<Vec3>& positions() { return pos_; }
     const std::vector<Vec3>& positions() const { return pos_; }
@@ -197,6 +223,8 @@ public:
     const NodeParams& nodeParams(std::uint32_t i) const { return nodeParams_[i]; }
     std::vector<Beam>& beams() { return beams_; }
     const std::vector<Beam>& beams() const { return beams_; }
+    std::vector<ColTri>& triangles() { return triangles_; }
+    const std::vector<ColTri>& triangles() const { return triangles_; }
     const std::vector<std::string>& breakGroupNames() const { return breakGroupNames_; }
     std::vector<PressureWheel>& wheels() { return wheels_; }
     const std::vector<PressureWheel>& wheels() const { return wheels_; }
@@ -207,6 +235,7 @@ public:
 
 private:
     std::int32_t breakGroupIndex(const std::string& name);
+    std::int32_t findBeamBetween(std::uint32_t u, std::uint32_t v) const;
     void processPendingBreaks();
     void stepDrivetrain(real dt);
 
@@ -220,6 +249,7 @@ private:
     std::unordered_map<std::string, std::uint32_t> nodeLookup_;
 
     std::vector<Beam> beams_;
+    std::vector<ColTri> triangles_;
     std::vector<std::string> breakGroupNames_;
     std::vector<std::vector<std::uint32_t>> breakGroupMembers_;
     std::vector<std::uint32_t> pendingBreaks_;

@@ -56,7 +56,12 @@ def main() -> int:
     lib.sb_world_step.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
     lib.sb_body_node_count.argtypes = [ctypes.c_void_p, ctypes.c_int32]
     lib.sb_body_node_count.restype = ctypes.c_uint32
+    lib.sb_body_triangle_count.argtypes = [ctypes.c_void_p, ctypes.c_int32]
+    lib.sb_body_triangle_count.restype = ctypes.c_uint32
     lib.sb_body_get_positions_f32.argtypes = [ctypes.c_void_p, ctypes.c_int32, ctypes.POINTER(ctypes.c_float)]
+    lib.sb_body_get_triangles_state.argtypes = [
+        ctypes.c_void_p, ctypes.c_int32, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint8)
+    ]
 
     w = lib.sb_world_create(1.0 / 2000.0)
     lib.sb_world_add_ground_plane(w, 1.0)
@@ -69,11 +74,16 @@ def main() -> int:
     tel = TelemetryC()
     lib.sb_body_get_telemetry(w, car, ctypes.byref(tel))
     n_nodes = lib.sb_body_node_count(w, car)
+    n_tris = lib.sb_body_triangle_count(w, car)
     pos = (ctypes.c_float * (n_nodes * 3))()
     lib.sb_body_get_positions_f32(w, car, pos)
+    tris = (ctypes.c_uint32 * (n_tris * 3))()
+    tri_broken = (ctypes.c_uint8 * n_tris)()
+    lib.sb_body_get_triangles_state(w, car, tris, tri_broken)
 
     lib.sb_world_destroy(w)
-    print(f"C ABI OK: nodes={n_nodes}, speed={tel.speed_kmh:.1f} km/h, rpm={tel.engine_rpm:.0f}, gear={tel.gear}")
+    print(f"C ABI OK: nodes={n_nodes}, tris={n_tris}, speed={tel.speed_kmh:.1f} km/h, rpm={tel.engine_rpm:.0f}, gear={tel.gear}")
+    assert n_tris > 100, f"expected surface ColTris on car, got {n_tris}"
     assert tel.speed_kmh > 10.0, f"expected car to accelerate, got {tel.speed_kmh} km/h"
     return 0
 

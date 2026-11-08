@@ -22,6 +22,8 @@ struct LatticeSpec {
     BeamParams edge, faceDiagonal, bodyDiagonal;
     bool faceDiagonals = true;
     bool bodyDiagonals = true;
+    bool surfaceTriangles = true;  ///< Generate outward ColTris on exposed boundary faces.
+    ColTriParams surfaceTri;
     /// Optional: which cells exist (default: all). Nodes are created for corners of included cells.
     std::function<bool(int, int, int)> includeCell;
     /// Optional: per-node tweak (after mass distribution), receives the node position.

@@ -24,7 +24,7 @@ Recorder::Recorder(const World& world, std::string sceneName, std::string descri
             o["kind"] = "plane";
             o["point"] = vec(c.point);
             o["normal"] = vec(c.normal);
-        } else {
+        } else if (c.kind == StaticCollider::Kind::Box) {
             o["kind"] = "box";
             o["center"] = vec(c.center);
             o["half"] = vec(c.halfExtents);
@@ -32,6 +32,16 @@ Recorder::Recorder(const World& world, std::string sceneName, std::string descri
             for (int i = 0; i < 3; ++i)
                 for (int j = 0; j < 3; ++j) r.push_back(c.rotation.m[i][j]);
             o["rot"] = r;
+        } else if (c.kind == StaticCollider::Kind::Heightfield) {
+            o["kind"] = "heightfield";
+            o["origin"] = json::array({c.originX, 0.0, c.originZ});
+            o["cellSizeX"] = c.cellSizeX;
+            o["cellSizeZ"] = c.cellSizeZ;
+            o["nx"] = c.nx;
+            o["nz"] = c.nz;
+            json h = json::array();
+            for (real hv : c.heights) h.push_back(std::round(hv * 1000.0) / 1000.0);
+            o["heights"] = std::move(h);
         }
         colliders.push_back(o);
     }
@@ -46,6 +56,15 @@ Recorder::Recorder(const World& world, std::string sceneName, std::string descri
             beams.push_back(bm.b);
         }
         o["beams"] = beams;
+        if (b.triangleCount() > 0) {
+            json tris = json::array();
+            for (const ColTri& t : b.triangles()) {
+                tris.push_back(t.a);
+                tris.push_back(t.b);
+                tris.push_back(t.c);
+            }
+            o["triangles"] = std::move(tris);
+        }
         json fixed = json::array();
         for (std::uint32_t i = 0; i < b.nodeCount(); ++i)
             if (b.isFixed(i)) fixed.push_back(i);
@@ -60,6 +79,9 @@ Recorder::Recorder(const World& world, std::string sceneName, std::string descri
         std::vector<char> br(b.beamCount(), 0);
         for (std::size_t i = 0; i < b.beamCount(); ++i) br[i] = b.beams()[i].broken ? 1 : 0;
         broken_.push_back(std::move(br));
+        std::vector<char> brT(b.triangleCount(), 0);
+        for (std::size_t i = 0; i < b.triangleCount(); ++i) brT[i] = b.triangles()[i].broken ? 1 : 0;
+        brokenTris_.push_back(std::move(brT));
     }
     json s;
     s["colliders"] = colliders;
@@ -83,7 +105,7 @@ void Recorder::capture(const World& world) {
         f.throttle = std::round(t.throttle * 100.0) / 100.0;
         f.brake = std::round(t.brake * 100.0) / 100.0;
         f.steer = std::round(t.steer * 100.0) / 100.0;
-        f.speedKmh = std::round(t.speedKmh * 10.0) / 10.0;
+        f.speedKmh = std::round(t.speedKmh * 10.0) / 100.0 * 10.0;
     }
     for (std::size_t bi = 0; bi < world.bodies().size(); ++bi) {
         const SoftBody& b = world.bodies()[bi];
@@ -105,6 +127,16 @@ void Recorder::capture(const World& world) {
             }
         }
         f.newlyBroken.push_back(std::move(nb));
+
+        std::vector<std::uint32_t> nbt;
+        auto& triState = brokenTris_[bi];
+        for (std::size_t i = 0; i < b.triangleCount(); ++i) {
+            if (b.triangles()[i].broken && !triState[i]) {
+                triState[i] = 1;
+                nbt.push_back(static_cast<std::uint32_t>(i));
+            }
+        }
+        f.newlyBrokenTris.push_back(std::move(nbt));
     }
     frames_.push_back(std::move(f));
     nextFrameTime_ = world.time() + 1.0 / fps_;
@@ -125,6 +157,9 @@ std::string Recorder::toJson() const {
         bool anyBroken = false;
         for (const auto& v : f.newlyBroken) anyBroken |= !v.empty();
         if (anyBroken) o["b"] = f.newlyBroken;
+        bool anyBrokenTris = false;
+        for (const auto& v : f.newlyBrokenTris) anyBrokenTris |= !v.empty();
+        if (anyBrokenTris) o["bt"] = f.newlyBrokenTris;
         if (f.hasTelemetry) {
             o["tel"] = json::array({f.speedKmh, f.rpm, f.gear, f.throttle, f.brake, f.steer});
         }

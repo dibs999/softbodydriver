@@ -97,6 +97,42 @@ SoftBody buildLattice(const LatticeSpec& s) {
                     addBeam(i, j, k + 1, i + 1, j + 1, k, LatticeBeamKind::BodyDiagonal);
                 }
             }
+
+    // 4) Outward-oriented collision triangles on exposed boundary faces.
+    if (s.surfaceTriangles) {
+        auto addQuad = [&](int i0, int j0, int k0, int i1, int j1, int k1,
+                           int i2, int j2, int k2, int i3, int j3, int k3) {
+            const auto n0 = static_cast<std::uint32_t>(nodeOf[static_cast<std::size_t>(gridIndex(i0, j0, k0))]);
+            const auto n1 = static_cast<std::uint32_t>(nodeOf[static_cast<std::size_t>(gridIndex(i1, j1, k1))]);
+            const auto n2 = static_cast<std::uint32_t>(nodeOf[static_cast<std::size_t>(gridIndex(i2, j2, k2))]);
+            const auto n3 = static_cast<std::uint32_t>(nodeOf[static_cast<std::size_t>(gridIndex(i3, j3, k3))]);
+            body.addTriangle(n0, n1, n2, s.surfaceTri);
+            body.addTriangle(n0, n2, n3, s.surfaceTri);
+        };
+        for (int i = 0; i < s.cellsX; ++i)
+            for (int j = 0; j < s.cellsY; ++j)
+                for (int k = 0; k < s.cellsZ; ++k) {
+                    if (!cellIncluded(i, j, k)) continue;
+                    // -X face (outward normal -X)
+                    if (!cellIncluded(i - 1, j, k))
+                        addQuad(i, j, k, i, j, k + 1, i, j + 1, k + 1, i, j + 1, k);
+                    // +X face (outward normal +X)
+                    if (!cellIncluded(i + 1, j, k))
+                        addQuad(i + 1, j, k, i + 1, j + 1, k, i + 1, j + 1, k + 1, i + 1, j, k + 1);
+                    // -Y face (outward normal -Y)
+                    if (!cellIncluded(i, j - 1, k))
+                        addQuad(i, j, k, i + 1, j, k, i + 1, j, k + 1, i, j, k + 1);
+                    // +Y face (outward normal +Y)
+                    if (!cellIncluded(i, j + 1, k))
+                        addQuad(i, j + 1, k, i, j + 1, k + 1, i + 1, j + 1, k + 1, i + 1, j + 1, k);
+                    // -Z face (outward normal -Z)
+                    if (!cellIncluded(i, j, k - 1))
+                        addQuad(i, j, k, i, j + 1, k, i + 1, j + 1, k, i + 1, j, k);
+                    // +Z face (outward normal +Z)
+                    if (!cellIncluded(i, j, k + 1))
+                        addQuad(i, j, k + 1, i + 1, j, k + 1, i + 1, j + 1, k + 1, i, j + 1, k + 1);
+                }
+    }
     return body;
 }
 

@@ -92,6 +92,27 @@ json beamPropsToJson(const BeamParams& p) {
     return o;
 }
 
+void applyTriProps(ColTriParams& p, const json& obj, const std::string& ctx) {
+    for (auto it = obj.begin(); it != obj.end(); ++it) {
+        const std::string& k = it.key();
+        if (k == "friction") p.friction = readReal(*it, k);
+        else if (k == "dragCoef") p.dragCoef = readReal(*it, k);
+        else if (k == "breakable") p.breakable = it->get<bool>();
+        else if (k == "breakGroup") p.breakGroup = it->is_null() ? "" : it->get<std::string>();
+        else throw std::runtime_error(ctx + ": unknown triangle property '" + k + "'");
+    }
+}
+
+json triPropsToJson(const ColTriParams& p) {
+    const ColTriParams d;
+    json o = json::object();
+    o["friction"] = writeReal(p.friction);
+    o["dragCoef"] = writeReal(p.dragCoef);
+    if (p.breakable != d.breakable) o["breakable"] = p.breakable;
+    if (!p.breakGroup.empty()) o["breakGroup"] = p.breakGroup;
+    return o;
+}
+
 }  // namespace
 
 SoftBody parseSBeam(const std::string& jsonText) {
@@ -143,6 +164,29 @@ SoftBody parseSBeam(const std::string& jsonText) {
                 if (e.size() >= 3) applyBeamProps(p, e[2], ctx);
                 try {
                     body.addBeam(e[0].get<std::string>(), e[1].get<std::string>(), p);
+                } catch (const std::invalid_argument& ex) {
+                    throw std::runtime_error(ctx + ": " + ex.what());
+                }
+            }
+        }
+        if (doc.contains("triangles")) {
+            ColTriParams triDefaults;
+            const json& tris = doc["triangles"];
+            if (!tris.is_array()) throw std::runtime_error("sbeam: 'triangles' must be an array");
+            row = 0;
+            for (const json& e : tris) {
+                const std::string ctx = "triangles[" + std::to_string(row++) + "]";
+                if (e.is_object()) {
+                    if (e.value("reset", false)) triDefaults = ColTriParams{};
+                    if (e.contains("set")) applyTriProps(triDefaults, e["set"], ctx);
+                    continue;
+                }
+                if (!e.is_array() || e.size() < 3)
+                    throw std::runtime_error(ctx + ": expected [idA, idB, idC, {props}?]");
+                ColTriParams p = triDefaults;
+                if (e.size() >= 4) applyTriProps(p, e[3], ctx);
+                try {
+                    body.addTriangle(e[0].get<std::string>(), e[1].get<std::string>(), e[2].get<std::string>(), p);
                 } catch (const std::invalid_argument& ex) {
                     throw std::runtime_error(ctx + ": " + ex.what());
                 }
@@ -257,6 +301,20 @@ std::string serializeSBeam(const SoftBody& body, int indent) {
         beams.push_back({body.nodeIds()[bm.a], body.nodeIds()[bm.b]});
     }
     doc["beams"] = beams;
+
+    if (!body.triangles().empty()) {
+        json tris = json::array();
+        json lastTri;
+        for (const ColTri& t : body.triangles()) {
+            json props = triPropsToJson(t.params);
+            if (props != lastTri) {
+                tris.push_back({{"reset", true}, {"set", props}});
+                lastTri = props;
+            }
+            tris.push_back({body.nodeIds()[t.a], body.nodeIds()[t.b], body.nodeIds()[t.c]});
+        }
+        doc["triangles"] = std::move(tris);
+    }
 
     if (!body.wheels().empty()) {
         json wheels = json::array();

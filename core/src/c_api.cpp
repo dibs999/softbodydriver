@@ -35,6 +35,18 @@ void sb_world_add_box_collider(sb_world_t* w,
     w->world.addCollider(sb::StaticCollider::box({cx, cy, cz}, {hx, hy, hz}, {rx, ry, rz}, friction, "box"));
 }
 
+void sb_world_add_heightfield_collider(sb_world_t* w,
+                                       double origin_x, double origin_z,
+                                       double cell_size_x, double cell_size_z,
+                                       int32_t nx, int32_t nz,
+                                       const double* heights,
+                                       double friction) {
+    if (!w || !heights || nx < 2 || nz < 2) return;
+    std::vector<sb::real> h(heights, heights + static_cast<std::size_t>(nx) * static_cast<std::size_t>(nz));
+    w->world.addCollider(sb::StaticCollider::heightfield(
+        origin_x, origin_z, cell_size_x, cell_size_z, nx, nz, std::move(h), friction, "terrain"));
+}
+
 int32_t sb_world_spawn_drivable_car(sb_world_t* w, double x, double y, double z) {
     if (!w) return -1;
     sb::SoftBody car = sb::buildDrivableCar();
@@ -99,6 +111,11 @@ uint32_t sb_body_beam_count(const sb_world_t* w, int32_t idx) {
     return static_cast<uint32_t>(w->world.body(static_cast<std::size_t>(idx)).beamCount());
 }
 
+uint32_t sb_body_triangle_count(const sb_world_t* w, int32_t idx) {
+    if (!w || idx < 0 || static_cast<std::size_t>(idx) >= w->world.bodies().size()) return 0;
+    return static_cast<uint32_t>(w->world.body(static_cast<std::size_t>(idx)).triangleCount());
+}
+
 void sb_body_get_positions_f32(const sb_world_t* w, int32_t idx, float* out_xyz) {
     if (!w || !out_xyz || idx < 0 || static_cast<std::size_t>(idx) >= w->world.bodies().size()) return;
     const auto& pos = w->world.body(static_cast<std::size_t>(idx)).positions();
@@ -126,6 +143,21 @@ void sb_body_get_beams_state(const sb_world_t* w, int32_t idx, uint32_t* out_pai
                 const sb::real len = sb::length(pos[beams[i].b] - pos[beams[i].a]);
                 out_strain[i] = static_cast<float>(std::abs(len - beams[i].baseRestLength) / beams[i].baseRestLength);
             }
+        }
+    }
+}
+
+void sb_body_get_triangles_state(const sb_world_t* w, int32_t idx, uint32_t* out_triplets, uint8_t* out_broken) {
+    if (!w || idx < 0 || static_cast<std::size_t>(idx) >= w->world.bodies().size()) return;
+    const auto& tris = w->world.body(static_cast<std::size_t>(idx)).triangles();
+    for (std::size_t i = 0; i < tris.size(); ++i) {
+        if (out_triplets) {
+            out_triplets[3 * i + 0] = tris[i].a;
+            out_triplets[3 * i + 1] = tris[i].b;
+            out_triplets[3 * i + 2] = tris[i].c;
+        }
+        if (out_broken) {
+            out_broken[i] = tris[i].broken ? 1 : 0;
         }
     }
 }

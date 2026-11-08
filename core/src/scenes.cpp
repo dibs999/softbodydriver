@@ -258,9 +258,132 @@ Scene curbImpact() {
     return sc;
 }
 
+void setRollingVelocity(SoftBody& car, const Vec3& linearVel) {
+    car.setVelocity(linearVel);
+    const real speed = length(linearVel);
+    auto& vel = car.velocities();
+    const auto& pos = car.positions();
+    for (const PressureWheel& w : car.wheels()) {
+        const Vec3 c = w.center(car);
+        const Vec3 a = w.axis(car);
+        const real omega = w.spec.radius > 1e-4 ? speed / w.spec.radius : 0.0;
+        for (std::uint32_t idx : w.treadNodes) {
+            vel[idx] += cross(a, pos[idx] - c) * omega;
+        }
+    }
+}
+
+Scene headOnCrash() {
+    Scene sc;
+    sc.name = "head_on_crash";
+    sc.description = "Phase 3 Fahrzeug-gegen-Fahrzeug: Zwei fahrbare Autos (ColTri-Huelle) prallen mit ~100 km/h Relativgeschwindigkeit versetzt frontal aufeinander.";
+    sc.duration = 2.6;
+    addGround(sc.world, 0.95);
+
+    SoftBody car1 = buildDrivableCar();
+    car1.setName("car_blue");
+    car1.translate({-11.5, 0.01, -0.32});
+    setRollingVelocity(car1, {52.0 / 3.6, 0.0, 0.0});
+    sc.world.addBody(std::move(car1));
+
+    SoftBody car2 = buildDrivableCar();
+    car2.setName("car_amber");
+    rotateBody(car2, Mat3::fromEuler(0.0, kPi, 0.0), {2.1, 0.35, 0.0});
+    car2.translate({7.3, 0.01, 0.32});
+    setRollingVelocity(car2, {-52.0 / 3.6, 0.0, 0.0});
+    sc.world.addBody(std::move(car2));
+
+    sc.update = [](World& w) {
+        const real t = w.time();
+        VehicleControls c;
+        c.throttle = t < 0.65 ? 1.0 : 0.0;
+        c.brake = t >= 0.85 ? 0.6 : 0.0;
+        w.body(0).setControls(c);
+        w.body(1).setControls(c);
+    };
+    return sc;
+}
+
+Scene tBoneCrash() {
+    Scene sc;
+    sc.name = "t_bone_crash";
+    sc.description = "Phase 3 Kreuzungs-Unfall (T-Bone): Fahrzeug 2 (amber) trifft Fahrzeug 1 (blau) mit 60 km/h seitlich in die Fahrgastzelle.";
+    sc.duration = 2.6;
+    addGround(sc.world, 0.95);
+
+    SoftBody car1 = buildDrivableCar();
+    car1.setName("car_blue");
+    car1.translate({-9.5, 0.01, 0.0});
+    setRollingVelocity(car1, {40.0 / 3.6, 0.0, 0.0});
+    sc.world.addBody(std::move(car1));
+
+    SoftBody car2 = buildDrivableCar();
+    car2.setName("car_amber");
+    rotateBody(car2, Mat3::fromEuler(0.0, -kPi * 0.5, 0.0), {2.1, 0.35, 0.0});
+    car2.translate({-2.1, 0.01, -13.2});
+    setRollingVelocity(car2, {0.0, 0.0, 60.0 / 3.6});
+    sc.world.addBody(std::move(car2));
+
+    sc.update = [](World& w) {
+        const real t = w.time();
+        VehicleControls c1, c2;
+        c1.throttle = t < 0.7 ? 0.7 : 0.0;
+        c2.throttle = t < 0.7 ? 1.0 : 0.0;
+        c2.brake = t >= 0.9 ? 0.7 : 0.0;
+        w.body(0).setControls(c1);
+        w.body(1).setControls(c2);
+    };
+    return sc;
+}
+
+Scene hillClimb() {
+    Scene sc;
+    sc.name = "hill_climb";
+    sc.description = "Phase 3 Heightfield-Terrain: Fahrbares Auto bezwingt ein 3D-Huegelprofil mit Kuppe, Senke und Querneigung.";
+    sc.duration = 4.6;
+
+    const int nx = 97, nz = 25;
+    const real dx = 0.5, dz = 0.5;
+    const Vec3 origin{-6.0, 0.0, -6.0};
+    std::vector<real> heights(static_cast<std::size_t>(nx * nz), 0.0);
+    for (int ix = 0; ix < nx; ++ix) {
+        const real x = origin.x + ix * dx;
+        for (int iz = 0; iz < nz; ++iz) {
+            const real z = origin.z + iz * dz;
+            real h = 0.0;
+            if (x > 2.0) {
+                const real ramp = std::min<real>(1.0, (x - 2.0) / 4.0);
+                const real hill1 = 0.95 * std::exp(-((x - 11.0) * (x - 11.0)) / (4.5 * 4.5));
+                const real dip   = -0.35 * std::exp(-((x - 18.5) * (x - 18.5)) / (3.2 * 3.2));
+                const real hill2 = 1.35 * std::exp(-((x - 27.5) * (x - 27.5)) / (5.5 * 5.5));
+                const real bank  = 0.14 * std::sin(z * 0.45) * std::sin((x - 2.0) * 0.22);
+                h = ramp * (hill1 + dip + hill2 + bank);
+            }
+            heights[static_cast<std::size_t>(ix * nz + iz)] = h;
+        }
+    }
+    sc.world.addCollider(StaticCollider::heightfield(origin.x, origin.z, dx, dz, nx, nz, std::move(heights), 1.05, "terrain"));
+
+    SoftBody car = buildDrivableCar();
+    car.translate({-3.5, 0.02, 0.0});
+    setRollingVelocity(car, {28.0 / 3.6, 0.0, 0.0});
+    sc.world.addBody(std::move(car));
+
+    sc.update = [](World& w) {
+        const real t = w.time();
+        VehicleControls c;
+        c.throttle = t < 4.1 ? 1.0 : 0.2;
+        w.body(0).setControls(c);
+    };
+    return sc;
+}
+
 }  // namespace
 
 Scene makeScene(const std::string& name) {
+    if (name == "head_on_crash") return headOnCrash();
+    if (name == "t_bone_crash") return tBoneCrash();
+    if (name == "hill_climb") return hillClimb();
     if (name == "accel_brake") return accelBrake();
     if (name == "slalom") return slalom();
     if (name == "curb_impact") return curbImpact();

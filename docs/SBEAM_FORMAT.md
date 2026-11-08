@@ -55,7 +55,22 @@ Koordinatensystem (wie in Godot): **+Y ist oben**, **+X ist vorne**, Einheiten s
 | `hardening` | `0.0` | Kaltverfestigung: um welchen Faktor `deform` beim Verbiegen ansteigt. |
 | `precompression` | `1.0` | Faktor auf die Ruhelänge beim Spawnen (z. B. vorgespannte Fahrwerksfeder). |
 | `springExpansion`, `dampExpansion` | `-1` | Nur für `"anisotropic"`: Werte bei Zug (`< 0` = wie `spring`/`damp`). |
-| `hydroInput`, `hydroRatio` | `-1`, `0` | Nur für `"hydro"`: Kanal-Index und relative Längenänderung bei Input `±1`. |
-| `breakGroup` | `""` | Name einer Bruchgruppe: reißt *ein* Beam der Gruppe, reißen alle (z. B. Türscharniere). |
-
 Mit `{"reset": true, "set": {...}}` werden alle Standardwerte vor dem Setzen wieder auf ihre Grundwerte zurückgesetzt.
+
+## Kollisions- und Aerodynamik-Dreiecke (`triangles`)
+
+```jsonc
+  "triangles": [
+    {"set": {"friction": 0.5, "dragCoef": 1.0, "breakable": true, "breakGroup": "hood_latch"}},
+    // [idA, idB, idC] mit Außen-Normale (pos[b] - pos[a]) x (pos[c] - pos[a])
+    ["n0", "n1", "n2"]
+  ]
+```
+
+| Eigenschaft | Standard | Bedeutung |
+|---|---|---|
+| `friction` | `0.5` | Reibungskoeffizient für Fahrzeug-gegen-Fahrzeug-Kontakte (`Node vs ColTri`). |
+| `dragCoef` | `1.0` | Aerodynamischer Druckwiderstands-/Abtriebs-Beiwert $C_d$. |
+| `breakable` | `true` | Wenn `true`, löst sich das Dreieck automatisch auf, sobald einer seiner drei Kanten-Beams reißt. |
+| `breakGroup` | `""` | Optionale Bruchgruppe: reißt die Gruppe, deaktiviert sich auch das `ColTri`. |
+

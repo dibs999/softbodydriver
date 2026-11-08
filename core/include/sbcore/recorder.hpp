@@ -26,8 +26,9 @@ public:
 private:
     struct Frame {
         real time = 0;
-        std::vector<std::vector<std::int32_t>> positionsMm;      // per body, xyz interleaved
-        std::vector<std::vector<std::uint32_t>> newlyBroken;    // per body
+        std::vector<std::vector<std::int32_t>> positionsMm;          // per body, xyz interleaved
+        std::vector<std::vector<std::uint32_t>> newlyBroken;        // per body
+        std::vector<std::vector<std::uint32_t>> newlyBrokenTris;    // per body
         bool hasTelemetry = false;
         int rpm = 0, gear = 0;
         real throttle = 0, brake = 0, steer = 0, speedKmh = 0;
@@ -39,6 +40,7 @@ private:
     real nextFrameTime_ = 0;
     std::string staticJson_;  // colliders + body topology, captured at construction
     std::vector<std::vector<char>> broken_;
+    std::vector<std::vector<char>> brokenTris_;
     std::vector<Frame> frames_;
 };
 

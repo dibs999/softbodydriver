@@ -13,13 +13,15 @@ gebaut und exportiert eine stabile C-Schnittstelle in [`core/include/sbcore/c_ap
 |---|---|
 | `sb_world_create(dt)` | Erstellt eine 2000-Hz-Welt (`dt = 1.0 / 2000.0`). |
 | `sb_world_add_ground_plane(w, friction)` | Fügt eine Bodenebene ($y = 0$) hinzu. |
-| `sb_world_spawn_drivable_car(w, x, y, z)` | Spawnt das fahrbare Auto (Chassis + 4 Pressure-Wheels + Federung + Hydro-Lenkung + 5-Gang-Antrieb). |
+| `sb_world_add_heightfield_collider(...)` | Fügt ein 3D-Heightfield-Terrain (`nx × nz` Höhenwerte) mit analytischen Steigungsnormalen hinzu. |
+| `sb_world_spawn_drivable_car(w, x, y, z)` | Spawnt das fahrbare Auto (Chassis + `ColTri`-Karosserie + 4 Pressure-Wheels + Federung + Hydro-Lenkung + 5-Gang-Antrieb). |
 | `sb_world_load_sbeam(w, path, x, y, z)` | Lädt ein beliebiges `.sbeam.json`-Fahrzeug. |
 | `sb_body_set_controls(w, idx, thr, brk, steer, hb, gear)` | Übergibt Gas, Bremse, Lenkung (`[-1, 1]`), Handbremse und Gang (`-99` = Automatik). |
 | `sb_world_step(w, steps)` | Berechnet `steps` Physik-Schritte (z. B. `33` Schritte pro 60-FPS-Grafikframe). |
 | `sb_body_get_telemetry(w, idx, &tel)` | Liest Geschwindigkeit (`km/h`), Drehzahl (`RPM`), Gang, Kupplung und verbeulte/gebrochene Beams aus. |
 | `sb_body_get_positions_f32(w, idx, buf)` | Schreibt alle Node-Positionen als `float[3 * N]` direkt für ein `ImmediateMesh` / `ArrayMesh`. |
 | `sb_body_get_beams_state(w, idx, pairs, strain)` | Schreibt alle Beam-Indexpaare und deren relative Dehnung (`< 0` = gerissen) für die Debug-/Flexbody-Darstellung. |
+| `sb_body_get_triangles_state(w, idx, triplets, broken)` | Schreibt alle `ColTri`-Dreiecksindizes (`3 * T`) und deren Bruchstatus (`0/1`) für das Karosserie-Mesh. |
 
 ## Schnelltest über Python (`ctypes`)
 
