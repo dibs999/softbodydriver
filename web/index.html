@@ -3,14 +3,15 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>SoftBodyDriver – Live 3D Soft-Body Simulator (2000 Hz)</title>
+<title>SoftBodyDriver – 3D WebGL Soft-Body Simulator (2000 Hz · Blender 4.2 Models)</title>
+<script src="blender_models.js"></script>
 <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
 <style>
   :root {
     --background: #0b1120;
     --foreground: #f8fafc;
-    --card: rgba(15, 23, 42, 0.88);
-    --border: rgba(51, 65, 85, 0.85);
+    --card: rgba(15, 23, 42, 0.86);
+    --border: rgba(71, 85, 105, 0.8);
     --primary: #f97316;
     --accent: #38bdf8;
     --muted: #94a3b8;
@@ -23,7 +24,7 @@
     font-size: 12px; overflow: hidden; user-select: none;
     -webkit-font-smoothing: antialiased;
   }
-  #gameWrap { position: relative; width: 100vw; height: 100vh; overflow: hidden; background: #070b14; }
+  #gameWrap { position: relative; width: 100vw; height: 100vh; overflow: hidden; background: #1e293b; }
   canvas#viewport { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
   canvas#viewport:active { cursor: grabbing; }
 
@@ -63,7 +64,6 @@
     padding: 4px 8px; font-size: 12px; cursor: pointer;
   }
 
-  /* Left Damage & Telemetry App */
   .damage-app {
     position: absolute; bottom: 58px; left: 10px;
     width: 230px; padding: 10px 12px; z-index: 15;
@@ -81,7 +81,6 @@
   }
   .stat-val { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--foreground); text-align: right; }
 
-  /* Right Tacho & G-Meter App */
   .tacho-app {
     position: absolute; bottom: 58px; right: 10px;
     width: 265px; padding: 10px 14px; z-index: 15;
@@ -105,7 +104,6 @@
   .pedal-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; font-size: 12px; color: var(--muted); }
   .pbar-bg { width: 100%; height: 5px; background: rgba(30, 41, 59, 0.9); border-radius: 3px; overflow: hidden; margin-top: 2px; }
 
-  /* Bottom Control Dock */
   .bottom-dock {
     position: absolute; bottom: 10px; left: 10px; right: 10px;
     display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
@@ -117,7 +115,6 @@
     font-family: ui-monospace, monospace; font-size: 11px; color: #cbd5e1;
   }
 
-  /* Tuning Drawer */
   .tuning-drawer {
     position: absolute; top: 58px; right: 10px;
     width: 280px; padding: 12px 14px; z-index: 25;
@@ -127,15 +124,6 @@
   .tune-row { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
   .tune-label { display: flex; justify-content: space-between; color: #cbd5e1; }
   .tune-slider { width: 100%; accent-color: #f97316; cursor: pointer; }
-
-  /* Notification Toast */
-  .toast-banner {
-    position: absolute; top: 62px; left: 50%; transform: translateX(-50%);
-    padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 600;
-    background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(56, 189, 248, 0.5);
-    color: #e0f2fe; pointer-events: none; z-index: 18;
-    transition: opacity 0.25s ease;
-  }
 </style>
 </head>
 <body>
@@ -145,8 +133,8 @@
   <!-- TOP BAR: Scenarios, Vehicles, AI & Tuning -->
   <div class="hud-panel topbar">
     <div class="brand">
-      <span class="brand-logo">SoftBodyDriver</span>
-      <span class="brand-sub hidden sm:inline">2000 Hz Live-Physik · Flexbody + Node-Beam</span>
+      <span class="brand-logo">SoftBodyDriver 3D</span>
+      <span class="brand-sub">WebGL PBR · 3D-Flexbodies · 2000 Hz Physik</span>
     </div>
 
     <div class="btn-group">
@@ -160,9 +148,9 @@
 
     <div class="btn-group">
       <select id="carPreset" class="sselect" title="Fahrzeug-Modell">
-        <option value="coupe">🚗 ETK-S Coupé (AWD · 260 PS)</option>
+        <option value="coupe">🚗 ETK-S Sport Coupé (AWD · 260 PS)</option>
         <option value="muscle">🏎️ Bruckell V8 Muscle (RWD · 390 PS)</option>
-        <option value="offroad">🚙 Gavril Offroad 4x4 (AWD · Hoch)</option>
+        <option value="offroad">🚙 Gavril Offroad 4x4 (AWD · Bullbar)</option>
       </select>
       <select id="aiMode" class="sselect" title="KI-Fahrzeug-Modus">
         <option value="derby">🤖 KI: Verfolgung / Derby</option>
@@ -174,7 +162,7 @@
     </div>
   </div>
 
-  <!-- TUNING DRAWER (Ctrl+W style) -->
+  <!-- TUNING DRAWER -->
   <div id="tuningDrawer" class="hud-panel tuning-drawer">
     <div class="app-title">
       <span>Fahrzeug-Tuning &amp; Setup</span>
@@ -211,24 +199,19 @@
     </div>
     <div class="dmg-row">
       <svg width="68" height="112" viewBox="0 0 68 112" style="flex-shrink:0">
-        <!-- Wheels -->
         <rect id="svgWheelFL" x="3" y="18" width="9" height="20" rx="3" fill="#10b981" stroke="#0f172a" stroke-width="1.5"/>
         <rect id="svgWheelFR" x="56" y="18" width="9" height="20" rx="3" fill="#10b981" stroke="#0f172a" stroke-width="1.5"/>
         <rect id="svgWheelRL" x="3" y="74" width="9" height="20" rx="3" fill="#10b981" stroke="#0f172a" stroke-width="1.5"/>
         <rect id="svgWheelRR" x="56" y="74" width="9" height="20" rx="3" fill="#10b981" stroke="#0f172a" stroke-width="1.5"/>
-        <!-- Front bumper / hood -->
         <path id="svgZoneFront" d="M16 8 Q34 3 52 8 L54 34 L14 34 Z" fill="#10b981" fill-opacity="0.85" stroke="#0f172a" stroke-width="1.5"/>
-        <!-- Cabin / Safety cell -->
         <rect id="svgZoneCabin" x="14" y="35" width="40" height="42" rx="4" fill="#10b981" fill-opacity="0.85" stroke="#0f172a" stroke-width="1.5"/>
-        <!-- Windshield & Roof inner -->
         <rect x="19" y="42" width="30" height="26" rx="3" fill="#0f172a" fill-opacity="0.55"/>
-        <!-- Rear trunk / bumper -->
         <path id="svgZoneRear" d="M14 78 L54 78 L52 104 Q34 108 16 104 Z" fill="#10b981" fill-opacity="0.85" stroke="#0f172a" stroke-width="1.5"/>
       </svg>
       <div class="stat-grid">
         <span>Nodes:</span><span id="stNodes" class="stat-val">0</span>
         <span>Beams:</span><span id="stBeams" class="stat-val">0</span>
-        <span>ColTris:</span><span id="stTris" class="stat-val">0</span>
+        <span>3D-Tris:</span><span id="stTris" class="stat-val">0</span>
         <span>Verbeult:</span><span id="stDeform" class="stat-val" style="color:#fbbf24">0</span>
         <span>Gerissen:</span><span id="stBroken" class="stat-val" style="color:#fb7185">0</span>
         <span>Reifen:</span><span id="stTires" class="stat-val" style="color:#34d399">4 OK</span>
@@ -287,7 +270,7 @@
     </div>
 
     <div class="btn-group">
-      <button id="btnFlexbody" class="sbtn blue active" title="3D-Flexbody-Karosserie anzeigen">🚘 Karosserie</button>
+      <button id="btnFlexbody" class="sbtn blue active" title="3D-Flexbody-Modell anzeigen">🚘 3D-Modell</button>
       <button id="btnXray" class="sbtn blue" title="Node-Beam-Skelett einblenden (B)">🦴 Beams <span class="kbd">B</span></button>
       <button id="btnCam" class="sbtn" title="Kamera-Modus wechseln (C)">🎥 Cam: Verfolger <span class="kbd">C</span></button>
     </div>
@@ -296,10 +279,10 @@
 
 <script>
 // ============================================================================
-// SoftBodyDriver – Live 2000 Hz Node-Beam + PressureWheel + Flexbody Engine
+// SoftBodyDriver 3D – WebGL PBR-Style Renderer + Sculpted 3D Flexbodies + 2000Hz
 // ============================================================================
 
-const DT = 1.0 / 2000.0; // Authentic 2000 Hz physics step
+const DT = 1.0 / 2000.0;
 const GRAVITY = -9.81;
 
 const BEAM_NORMAL = 0;
@@ -314,11 +297,10 @@ const ZONE_WHEEL_FR = 4;
 const ZONE_WHEEL_RL = 5;
 const ZONE_WHEEL_RR = 6;
 
-// Tuning & Preset Config
 const PRESETS = {
-  coupe:   { name: "ETK-S Coupé",     powerMult: 1.05, ridePrecomp: 1.05, springMult: 1.0, psi: 32, deformMult: 1.0, drive: "AWD", color: [38, 155, 245], roofH: 0.45 },
-  muscle:  { name: "Bruckell V8",     powerMult: 1.48, ridePrecomp: 1.02, springMult: 0.9, psi: 30, deformMult: 0.9, drive: "RWD", color: [239, 68, 68],  roofH: 0.42 },
-  offroad: { name: "Gavril 4x4",      powerMult: 1.35, ridePrecomp: 1.18, springMult: 1.25,psi: 26, deformMult: 1.4, drive: "AWD", color: [16, 185, 129], roofH: 0.52 },
+  coupe:   { name: "ETK-S Coupé",     powerMult: 1.08, ridePrecomp: 1.04, springMult: 1.0, psi: 32, deformMult: 1.0, drive: "AWD", color: [0.08, 0.52, 0.96] },
+  muscle:  { name: "Bruckell V8",     powerMult: 1.48, ridePrecomp: 1.02, springMult: 0.92,psi: 30, deformMult: 0.9, drive: "RWD", color: [0.88, 0.16, 0.22] },
+  offroad: { name: "Gavril 4x4",      powerMult: 1.35, ridePrecomp: 1.18, springMult: 1.25,psi: 28, deformMult: 1.4, drive: "AWD", color: [0.08, 0.68, 0.42] },
 };
 
 let currentPreset = "coupe";
@@ -327,35 +309,180 @@ let aiBehavior = "derby";
 let timeScale = 1.0;
 let showFlexbody = true;
 let showBeams = false;
-let camMode = 0; // 0 = Chase, 1 = Hood/Cockpit, 2 = Free Orbit, 3 = Side Action
+let camMode = 0;
 const CAM_NAMES = ["Verfolger", "Cockpit", "Frei (Orbit)", "Action-Seite"];
-
-// Custom tuning overrides
 const tuning = { power: 1.0, ride: 1.05, spring: 1.0, psi: 32, deform: 1.0 };
 
 // ============================================================================
-// World Terrain & Static Colliders (Heightfield + Oriented 3D Boxes + Ramps)
+// 1. 3D Math & Matrix Utilities
+// ============================================================================
+function mat4Perspective(fovRad, aspect, near, far) {
+  const f = 1.0 / Math.tan(fovRad * 0.5);
+  const nf = 1.0 / (near - far);
+  return new Float32Array([
+    f / aspect, 0, 0, 0,
+    0, f, 0, 0,
+    0, 0, (far + near) * nf, -1,
+    0, 0, (2 * far * near) * nf, 0
+  ]);
+}
+
+function mat4LookAt(eye, target, up) {
+  let zx = eye[0] - target[0], zy = eye[1] - target[1], zz = eye[2] - target[2];
+  let zl = Math.hypot(zx, zy, zz) || 1;
+  zx /= zl; zy /= zl; zz /= zl;
+  let xx = up[1]*zz - up[2]*zy, xy = up[2]*zx - up[0]*zz, xz = up[0]*zy - up[1]*zx;
+  let xl = Math.hypot(xx, xy, xz) || 1;
+  xx /= xl; xy /= xl; xz /= xl;
+  const yx = zy*xz - zz*xy, yy = zz*xx - zx*xz, yz = zx*xy - zy*xx;
+  return new Float32Array([
+    xx, yx, zx, 0,
+    xy, yy, zy, 0,
+    xz, yz, zz, 0,
+    -(xx*eye[0] + xy*eye[1] + xz*eye[2]),
+    -(yx*eye[0] + yy*eye[1] + yz*eye[2]),
+    -(zx*eye[0] + zy*eye[1] + zz*eye[2]),
+    1
+  ]);
+}
+
+function mat4Multiply(a, b) {
+  const out = new Float32Array(16);
+  for (let c = 0; c < 4; ++c) {
+    for (let r = 0; r < 4; ++r) {
+      out[c*4 + r] =
+        a[0*4 + r]*b[c*4 + 0] +
+        a[1*4 + r]*b[c*4 + 1] +
+        a[2*4 + r]*b[c*4 + 2] +
+        a[3*4 + r]*b[c*4 + 3];
+    }
+  }
+  return out;
+}
+
+// ============================================================================
+// 2. Mesh Builder Helper (Produces Interleaved Pos(3), Norm(3), Col(4), Mat(2))
+//    Mat: [roughness/specType, metallic/clearcoat]
+//    specType: 0.0 = matte/terrain, 1.0 = metallic car paint, 2.0 = glass, 3.0 = emissive lamp, 4.0 = chrome/alloy
+// ============================================================================
+class MeshBuilder {
+  constructor() {
+    this.verts = []; // 12 floats per vertex: x,y,z, nx,ny,nz, r,g,b,a, matType,roughness
+  }
+
+  pushTri(p0, p1, p2, col, matType = 0.0, rough = 0.5, customNorms = null) {
+    let n0, n1, n2;
+    if (customNorms) {
+      [n0, n1, n2] = customNorms;
+    } else {
+      const ux = p1[0]-p0[0], uy = p1[1]-p0[1], uz = p1[2]-p0[2];
+      const vx = p2[0]-p0[0], vy = p2[1]-p0[1], vz = p2[2]-p0[2];
+      let nx = uy*vz - uz*vy, ny = uz*vx - ux*vz, nz = ux*vy - uy*vx;
+      const nl = Math.hypot(nx, ny, nz) || 1;
+      n0 = n1 = n2 = [nx/nl, ny/nl, nz/nl];
+    }
+    const r = col[0], g = col[1], b = col[2], a = col.length > 3 ? col[3] : 1.0;
+    for (const [p, n] of [[p0, n0], [p1, n1], [p2, n2]]) {
+      this.verts.push(p[0], p[1], p[2], n[0], n[1], n[2], r, g, b, a, matType, rough);
+    }
+  }
+
+  pushQuad(p0, p1, p2, p3, col, matType = 0.0, rough = 0.5) {
+    this.pushTri(p0, p1, p2, col, matType, rough);
+    this.pushTri(p0, p2, p3, col, matType, rough);
+  }
+
+  addBox(cx, cy, cz, hx, hy, hz, rot, col, matType = 0.0, rough = 0.6) {
+    const c = [];
+    for (let i = 0; i < 8; ++i) {
+      const lx = (i&1)?hx:-hx, ly = (i&2)?hy:-hy, lz = (i&4)?hz:-hz;
+      if (rot) {
+        c.push([
+          cx + rot[0]*lx + rot[1]*ly + rot[2]*lz,
+          cy + rot[3]*lx + rot[4]*ly + rot[5]*lz,
+          cz + rot[6]*lx + rot[7]*ly + rot[8]*lz
+        ]);
+      } else {
+        c.push([cx + lx, cy + ly, cz + lz]);
+      }
+    }
+    const faces = [[0,1,3,2],[4,6,7,5],[0,4,5,1],[2,3,7,6],[0,2,6,4],[1,5,7,3]];
+    for (const f of faces) {
+      this.pushQuad(c[f[0]], c[f[1]], c[f[2]], c[f[3]], col, matType, rough);
+    }
+  }
+
+  addCylinderY(cx, y0, cz, rBottom, rTop, height, segs, col, matType = 0.0, rough = 0.5, capTop = true) {
+    const y1 = y0 + height;
+    for (let i = 0; i < segs; ++i) {
+      const a0 = (i / segs) * Math.PI * 2;
+      const a1 = ((i + 1) / segs) * Math.PI * 2;
+      const c0 = Math.cos(a0), s0 = Math.sin(a0);
+      const c1 = Math.cos(a1), s1 = Math.sin(a1);
+      const p00 = [cx + rBottom*c0, y0, cz + rBottom*s0];
+      const p10 = [cx + rBottom*c1, y0, cz + rBottom*s1];
+      const p11 = [cx + rTop*c1,    y1, cz + rTop*s1];
+      const p01 = [cx + rTop*c0,    y1, cz + rTop*s0];
+      this.pushQuad(p00, p01, p11, p10, col, matType, rough);
+      if (capTop && rTop > 0.005) {
+        this.pushTri([cx, y1, cz], p11, p01, col, matType, rough);
+      }
+    }
+  }
+
+  addBlenderProp(propKey, cx, cy, cz, yaw = 0.0, scale = 1.0) {
+    const bp = window.BLENDER_MODELS && window.BLENDER_MODELS.props && window.BLENDER_MODELS.props[propKey];
+    if (!bp) return false;
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    const v = bp.verts;
+    const xform = (pt) => [
+      cx + (c * pt[0] + s * pt[2]) * scale,
+      cy + pt[1] * scale,
+      cz + (-s * pt[0] + c * pt[2]) * scale
+    ];
+    const xnorm = (n) => [
+      c * n[0] + s * n[2],
+      n[1],
+      -s * n[0] + c * n[2]
+    ];
+    for (let i = 0; i < bp.tris.length; ++i) {
+      const t = bp.tris[i];
+      const p0 = xform(v[t.a]), p1 = xform(v[t.b]), p2 = xform(v[t.c]);
+      const fn = xnorm(t.n);
+      this.pushTri(p0, p1, p2, t.col, t.type, t.rough, [fn, fn, fn]);
+    }
+    return true;
+  }
+
+  toFloat32Array() {
+    return new Float32Array(this.verts);
+  }
+}
+
+// ============================================================================
+// 3. World Environment & Detailed 3D Models for Everything (Blender 4.2 Assets)
 // ============================================================================
 class WorldEnvironment {
   constructor() {
-    this.boxes = [];
-    this.checkpoints = [];
+    this.boxes = []; // Physical OBB colliders
+    this.staticMeshData = null;
+    this.staticVertexCount = 0;
     this.setupProvingGrounds();
   }
 
   sampleTerrainHeight(x, z) {
-    // Rolling hills in the northern & eastern proving grounds (z > 18 or x > 38)
     let h = 0.0;
+    // Rolling mountains & hills in the east (x > 26) and north/south outer ring
     if (x > 26.0) {
       const ramp = Math.min(1.0, (x - 26.0) / 8.0);
-      const h1 = 2.2 * Math.exp(-((x - 45.0) ** 2) / 90.0 - ((z - 0.0) ** 2) / 180.0);
-      const h2 = 3.2 * Math.exp(-((x - 68.0) ** 2) / 130.0 - ((z - 6.0) ** 2) / 220.0);
-      const wave = 0.35 * Math.sin((x - 26.0) * 0.25) * Math.cos(z * 0.2);
+      const h1 = 2.4 * Math.exp(-((x - 45.0) ** 2) / 95.0 - ((z - 0.0) ** 2) / 180.0);
+      const h2 = 3.8 * Math.exp(-((x - 70.0) ** 2) / 140.0 - ((z - 6.0) ** 2) / 240.0);
+      const wave = 0.35 * Math.sin((x - 26.0) * 0.24) * Math.cos(z * 0.18);
       h += ramp * (h1 + h2 + wave);
     }
-    if (z < -18.0) {
-      const r2 = Math.min(1.0, (-18.0 - z) / 6.0);
-      h += r2 * 1.6 * Math.exp(-((z + 32.0) ** 2) / 70.0) * Math.cos(x * 0.08);
+    if (Math.abs(z) > 22.0) {
+      const d = (Math.abs(z) - 22.0) / 12.0;
+      h += Math.min(6.5, d * d * 2.8) * (0.7 + 0.3 * Math.sin(x * 0.11 + z * 0.07));
     }
     return h;
   }
@@ -368,54 +495,181 @@ class WorldEnvironment {
     return [-hx * il, il, -hz * il];
   }
 
-  addBox(cx, cy, cz, hx, hy, hz, rx, ry, rz, color = [100, 116, 139], friction = 0.85, name = "box") {
-    const cx_ = Math.cos(rx), sx_ = Math.sin(rx);
-    const cy_ = Math.cos(ry), sy_ = Math.sin(ry);
-    const cz_ = Math.cos(rz), sz_ = Math.sin(rz);
-    // R = Rz * Ry * Rx
-    const m00 = cz_*cy_, m01 = cz_*sy_*sx_ - sz_*cx_, m02 = cz_*sy_*cx_ + sz_*sx_;
-    const m10 = sz_*cy_, m11 = sz_*sy_*sx_ + cz_*cx_, m12 = sz_*sy_*cx_ - cz_*sx_;
-    const m20 = -sy_,    m21 = cy_*sx_,               m22 = cy_*cx_;
-    const rot = [m00, m01, m02, m10, m11, m12, m20, m21, m22];
+  makeRot(rx, ry, rz) {
+    const cx = Math.cos(rx), sx = Math.sin(rx);
+    const cy = Math.cos(ry), sy = Math.sin(ry);
+    const cz = Math.cos(rz), sz = Math.sin(rz);
+    return [
+      cz*cy, cz*sy*sx - sz*cx, cz*sy*cx + sz*sx,
+      sz*cy, sz*sy*sx + cz*cx, sz*sy*cx - cz*sx,
+      -sy,   cy*sx,            cy*cx
+    ];
+  }
+
+  addBoxCollider(cx, cy, cz, hx, hy, hz, rx, ry, rz, friction = 0.85, kind = "box") {
+    const rot = this.makeRot(rx, ry, rz);
     const maxR = Math.hypot(hx, hy, hz);
-    this.boxes.push({ cx, cy, cz, hx, hy, hz, rot, maxR, color, friction, name });
+    this.boxes.push({ cx, cy, cz, hx, hy, hz, rot, maxR, friction, kind });
+    return rot;
   }
 
   setupProvingGrounds() {
     this.boxes = [];
-    // 1) Launch Ramp + Landing Ramp along Z = 0, X = 12..25
-    const ang = 13 * Math.PI / 180;
-    this.addBox(12.5, 0.42, 0.0, 3.2, 0.45, 2.4, 0, 0, ang, [245, 158, 11], 0.95, "launch_ramp");
-    this.addBox(23.5, 0.42, 0.0, 3.2, 0.45, 2.4, 0, 0, -ang, [245, 158, 11], 0.95, "landing_ramp");
+    const mb = new MeshBuilder();
 
-    // 2) EuroNCAP Offset Crash Barrier & Yellow Crash Bollards at Z = 9
-    this.addBox(14.0, 1.1, 8.8, 0.8, 1.1, 2.8, 0, 0, 0, [239, 68, 68], 0.7, "crash_wall");
-    this.addBox(6.0, 0.9, 8.2, 0.28, 0.9, 0.28, 0, 0, 0, [250, 204, 21], 0.8, "bollard_1");
-    this.addBox(6.0, 0.9, 10.2, 0.28, 0.9, 0.28, 0, 0, 0, [250, 204, 21], 0.8, "bollard_2");
+    // A) 3D Terrain Mesh + Asphalt Highway + Racing Curbs + Skidpad Markings
+    const step = 2.0;
+    for (let x = -44; x < 92; x += step) {
+      for (let z = -44; z < 44; z += step) {
+        const x0 = x, x1 = x + step, z0 = z, z1 = z + step;
+        const h00 = this.sampleTerrainHeight(x0, z0);
+        const h10 = this.sampleTerrainHeight(x1, z0);
+        const h11 = this.sampleTerrainHeight(x1, z1);
+        const h01 = this.sampleTerrainHeight(x0, z1);
 
-    // 3) Slalom Pylons along Z = -8
+        const n00 = this.sampleTerrainNormal(x0, z0);
+        const n10 = this.sampleTerrainNormal(x1, z0);
+        const n11 = this.sampleTerrainNormal(x1, z1);
+        const n01 = this.sampleTerrainNormal(x0, z1);
+
+        const avgH = 0.25 * (h00 + h10 + h11 + h01);
+        const mx = 0.5 * (x0 + x1), mz = 0.5 * (z0 + z1);
+
+        let col = [0.22, 0.44, 0.20, 1.0];
+        let rough = 0.88;
+
+        const onMainRoad = Math.abs(mz) < 4.0 && mx > -40 && mx < 34;
+        const onCrossRoad = Math.abs(mx - 0.0) < 4.0 && mz > -22 && mz < 22;
+        const onProvingPad = mx > -16 && mx < 24 && mz > -18 && mz < 14 && avgH < 0.05;
+
+        const noise = 0.96 + 0.04 * Math.sin(mx * 1.7 + mz * 2.3);
+        if (onMainRoad || onCrossRoad) {
+          col = [0.19 * noise, 0.21 * noise, 0.25 * noise, 1.0];
+          rough = 0.65;
+        } else if (onProvingPad) {
+          col = [0.25 * noise, 0.28 * noise, 0.33 * noise, 1.0];
+          rough = 0.72;
+          if (((Math.floor(mx / 4) + Math.floor(mz / 4)) & 1) === 0) {
+            col[0] *= 1.06; col[1] *= 1.06; col[2] *= 1.06;
+          }
+        } else {
+          const hillT = Math.min(1.0, avgH / 4.2);
+          const checker = (((Math.floor(mx / 4) + Math.floor(mz / 4)) & 1) === 0) ? 1.04 : 0.96;
+          col = [
+            (0.20 + hillT * 0.26) * checker,
+            (0.45 - hillT * 0.06) * checker,
+            (0.18 + hillT * 0.14) * checker,
+            1.0
+          ];
+        }
+
+        const p00 = [x0, h00, z0], p10 = [x1, h10, z0], p11 = [x1, h11, z1], p01 = [x0, h01, z1];
+        mb.pushTri(p00, p01, p11, col, 0.0, rough, [n00, n01, n11]);
+        mb.pushTri(p00, p11, p10, col, 0.0, rough, [n00, n11, n10]);
+      }
+    }
+
+    // Painted Road Lane Markings & Red-White Racing Curbs along the Main Strip
+    for (let x = -36; x < 30; x += 2.0) {
+      if ((Math.floor(x / 2) & 1) === 0) {
+        mb.addBox(x + 0.6, 0.008, 0.0, 0.55, 0.005, 0.08, null, [0.96, 0.78, 0.14, 1.0], 0.0, 0.4);
+      }
+      const isRed = (Math.floor(x / 2) & 1) === 0;
+      const curbCol = isRed ? [0.88, 0.18, 0.18, 1.0] : [0.94, 0.95, 0.96, 1.0];
+      mb.addBox(x + 1.0, 0.015, -3.95, 1.0, 0.015, 0.22, null, curbCol, 0.0, 0.5);
+      mb.addBox(x + 1.0, 0.015,  3.95, 1.0, 0.015, 0.22, null, curbCol, 0.0, 0.5);
+    }
+
+    // B) 3D Stunt Launch Ramp & Landing Ramp
+    const buildRampModel = (cx, cy, cz, hx, hy, hz, ang, isLaunch) => {
+      const rot = this.addBoxCollider(cx, cy, cz, hx, hy, hz, 0, 0, ang, 0.95, "ramp");
+      mb.addBox(cx, cy, cz, hx, hy, hz, rot, [0.24, 0.27, 0.32, 1.0], 0.0, 0.5);
+      mb.addBox(cx, cy + hy * 0.92, cz - hz + 0.12, hx, 0.14, 0.12, rot, [0.96, 0.60, 0.08, 1.0], 1.0, 0.3);
+      mb.addBox(cx, cy + hy * 0.92, cz + hz - 0.12, hx, 0.14, 0.12, rot, [0.96, 0.60, 0.08, 1.0], 1.0, 0.3);
+      for (let s = -hx + 0.6; s < hx - 0.4; s += 1.1) {
+        const sx = cx + rot[0]*s + rot[1]*(hy + 0.01);
+        const sy = cy + rot[3]*s + rot[4]*(hy + 0.01);
+        mb.addBox(sx, sy, cz, 0.25, 0.012, hz * 0.75, rot, [0.98, 0.75, 0.12, 1.0], 0.0, 0.4);
+      }
+      const highX = cx + (isLaunch ? hx * 0.72 : -hx * 0.72);
+      for (const sz of [-hz * 0.78, hz * 0.78]) {
+        mb.addBox(highX, 0.45, cz + sz, 0.16, 0.45, 0.16, null, [0.38, 0.42, 0.48, 1.0], 4.0, 0.3);
+      }
+    };
+    const rampAng = 13 * Math.PI / 180;
+    buildRampModel(12.5, 0.42, 0.0, 3.2, 0.45, 2.4,  rampAng, true);
+    buildRampModel(23.5, 0.42, 0.0, 3.2, 0.45, 2.4, -rampAng, false);
+
+    // C) Blender 4.2 EuroNCAP Crash Barrier & New Jersey Concrete Barriers
+    this.addBoxCollider(14.0, 1.1, 8.8, 0.85, 1.1, 2.8, 0, 0, 0, 0.7, "crash_wall");
+    mb.addBlenderProp("euroncap_barrier", 14.0, 0.0, 8.8, 0.0, 1.0);
+
+    for (let i = -3; i <= 5; ++i) {
+      const bx = i * 3.2, bz = 13.5;
+      this.addBoxCollider(bx, 0.55, bz, 1.5, 0.55, 0.32, 0, 0, 0, 0.8, "jersey");
+      mb.addBlenderProp("jersey_barrier", bx, 0.0, bz, 0.0, 1.0);
+    }
+
+    // D) Blender 4.2 Steel Safety Bollards
+    for (const bz of [8.2, 10.2]) {
+      this.addBoxCollider(6.0, 0.9, bz, 0.28, 0.9, 0.28, 0, 0, 0, 0.8, "bollard");
+      mb.addBlenderProp("steel_bollard", 6.0, 0.0, bz, 0.0, 1.0);
+    }
+
+    // E) Blender 4.2 Traffic Cones (Leitkegel) for Slalom Course (Z = -8)
     for (let i = 0; i < 4; ++i) {
       const px = 4.0 + i * 9.0;
       const pz = -8.0 + (i % 2 === 0 ? 1.1 : -1.1);
-      this.addBox(px, 0.55, pz, 0.32, 0.55, 0.32, 0, 0, 0, [249, 115, 22], 0.8, "pylon");
+      this.addBoxCollider(px, 0.52, pz, 0.30, 0.52, 0.30, 0, 0, 0, 0.75, "cone");
+      mb.addBlenderProp("traffic_cone", px, 0.0, pz, 0.0, 1.0);
     }
 
-    // 4) Suspension Washboard / Curb Strips at Z = -14
+    // F) Suspension Washboard / Beveled Rumble Strips (Z = -14)
     for (let i = 0; i < 6; ++i) {
       const px = 2.0 + i * 2.6;
       const side = (i % 2 === 0) ? -0.75 : 0.75;
-      this.addBox(px, 0.09, -14.0 + side, 0.45, 0.14, 0.85, 0, 0, 0, [56, 189, 248], 0.9, "curb");
+      const cz = -14.0 + side;
+      this.addBoxCollider(px, 0.09, cz, 0.45, 0.14, 0.85, 0, 0, 0, 0.9, "curb");
+      const col = (i % 2 === 0) ? [0.14, 0.65, 0.95, 1.0] : [0.96, 0.62, 0.10, 1.0];
+      mb.addBox(px, 0.10, cz, 0.42, 0.10, 0.85, null, col, 1.0, 0.4);
+      mb.addBox(px, 0.19, cz, 0.26, 0.04, 0.82, null, [0.94, 0.96, 0.98, 1.0], 1.0, 0.4);
     }
+
+    // G) Overhead Start/Finish Gantry Arch + Blender 4.2 Tire Stacks & Pine Trees
+    mb.addBox(4.0, 2.6, -4.6, 0.22, 2.6, 0.22, null, [0.32, 0.36, 0.42, 1.0], 4.0, 0.4);
+    mb.addBox(4.0, 2.6,  4.6, 0.22, 2.6, 0.22, null, [0.32, 0.36, 0.42, 1.0], 4.0, 0.4);
+    mb.addBox(4.0, 5.1,  0.0, 0.28, 0.42, 4.9, null, [0.15, 0.20, 0.28, 1.0], 1.0, 0.4);
+    mb.addBox(3.71, 5.1, 0.0, 0.02, 0.32, 3.8, null, [0.96, 0.45, 0.08, 1.0], 3.0, 0.2);
+
+    for (const [tx, tz] of [[-8.0, 5.2], [-8.0, -5.2], [18.0, -5.2]]) {
+      this.addBoxCollider(tx, 0.6, tz, 0.45, 0.6, 0.45, 0, 0, 0, 0.9, "tires");
+      mb.addBlenderProp("tire_stack", tx, 0.0, tz, 0.0, 1.0);
+    }
+
+    const treeCoords = [
+      [-18, -16], [-12, -21], [-2, -22], [14, -22], [28, -20], [42, -18],
+      [-18,  16], [-6,   19], [8,   20], [24,  19], [38,  16], [52,  15],
+      [48,  -10], [56,    4], [62,  -6], [36,  -12]
+    ];
+    for (let ti = 0; ti < treeCoords.length; ++ti) {
+      const [tx, tz] = treeCoords[ti];
+      const ty = this.sampleTerrainHeight(tx, tz);
+      const scale = 0.85 + (ti % 4) * 0.18;
+      mb.addBlenderProp("pine_tree", tx, ty, tz, ti * 1.1, scale);
+    }
+
+    this.staticMeshData = mb.toFloat32Array();
+    this.staticVertexCount = this.staticMeshData.length / 12;
   }
 }
 
 // ============================================================================
-// SoftBody Vehicle Class (324 Nodes, 2375 Beams, 368 ColTris + Flexbody Mesh)
+// 4. Sculpted High-Detail 3D Vehicle Model + Trilinear Flexbody Skinning
 // ============================================================================
 class SoftBodyVehicle {
   constructor(name, colorRGB, presetKey = "coupe") {
     this.name = name;
-    this.color = colorRGB;
+    this.color = colorRGB.slice();
     this.presetKey = presetKey;
 
     this.maxNodes = 600;
@@ -423,6 +677,9 @@ class SoftBodyVehicle {
     this.px = new Float64Array(this.maxNodes);
     this.py = new Float64Array(this.maxNodes);
     this.pz = new Float64Array(this.maxNodes);
+    this.restX = new Float64Array(this.maxNodes);
+    this.restY = new Float64Array(this.maxNodes);
+    this.restZ = new Float64Array(this.maxNodes);
     this.vx = new Float64Array(this.maxNodes);
     this.vy = new Float64Array(this.maxNodes);
     this.vz = new Float64Array(this.maxNodes);
@@ -451,20 +708,19 @@ class SoftBodyVehicle {
     this.bHydroRatio = new Float64Array(this.maxBeams);
     this.bHydroOffset = new Float64Array(this.maxBeams);
 
-    this.colTris = []; // {a, b, c, edge0, edge1, edge2, broken}
-    this.wheels = [];  // {hubR, hubL, treadNodes, beamIndices, radius, width, driven, steered, braked, handbraked, omega, burst, zone}
-    this.flexFaces = []; // 3D visual body polygons skinned to the Node-Beam grid
+    this.colTris = [];
+    this.wheels = [];
+    this.flexTris = []; // High-poly sculpted 3D car body triangles skinned to the physics nodes!
 
-    // Controls & Drivetrain state
     this.controls = { throttle: 0, brake: 0, steer: 0, handbrake: 0 };
     this.smoothedSteer = 0;
     this.engineRpm = 850;
     this.gear = 1;
-    this.clutch = 0;
     this.shiftTimer = 0;
     this.prevVel = [0, 0, 0];
-    this.gForce = [0, 0]; // [lateralG, longG]
+    this.gForce = [0, 0];
     this.impactImpulse = 0;
+    this.sparkPos = null;
 
     this.buildVehicle();
   }
@@ -472,6 +728,7 @@ class SoftBodyVehicle {
   addNode(x, y, z, m, fric = 0.4) {
     const i = this.nodeCount++;
     this.px[i] = x; this.py[i] = y; this.pz[i] = z;
+    this.restX[i] = x; this.restY[i] = y; this.restZ[i] = z;
     this.vx[i] = 0; this.vy[i] = 0; this.vz[i] = 0;
     this.mass[i] = m;
     this.invMass[i] = m > 0 ? 1.0 / m : 0.0;
@@ -503,22 +760,20 @@ class SoftBodyVehicle {
 
   buildVehicle() {
     const pr = PRESETS[this.presetKey] || PRESETS.coupe;
-    this.color = pr.color.slice();
     const defMult = pr.deformMult * tuning.deform;
     const sprMult = pr.springMult * tuning.spring;
     const ridePre = pr.ridePrecomp * (tuning.ride / 1.05);
 
-    // 12 x 3 x 6 structural lattice
     const cx = 12, cy = 3, cz = 6;
     const sx = 0.35, sy = 0.28, sz = 0.28;
     const ox = 0.0, oy = 0.35, oz = -0.84;
 
     const cellIncluded = (i, j, k) => {
       if (i < 0 || j < 0 || k < 0 || i >= cx || j >= cy || k >= cz) return false;
-      if (j === 2 && (i < 3 || i >= 9)) return false; // Cabin only in middle
+      if (j === 2 && (i < 3 || i >= 9)) return false;
       const wheelX = (i >= 1 && i <= 3) || (i >= 8 && i <= 10);
       const wheelZ = (k === 0 || k === 5);
-      if (j === 0 && wheelX && wheelZ) return false; // Wheel arch cutouts
+      if (j === 0 && wheelX && wheelZ) return false;
       return true;
     };
 
@@ -526,7 +781,6 @@ class SoftBodyVehicle {
     const gIdx = (i, j, k) => (i * ny + j) * nz + k;
     this.gridNode = new Int16Array((cx + 1) * ny * nz).fill(-1);
 
-    // Create used grid nodes
     const used = new Uint8Array((cx + 1) * ny * nz);
     let countUsed = 0;
     for (let i = 0; i < cx; ++i)
@@ -545,16 +799,12 @@ class SoftBodyVehicle {
         for (let k = 0; k <= cz; ++k) {
           const g = gIdx(i, j, k);
           if (!used[g]) continue;
-          let x = ox + i * sx, y = oy + j * sy, z = oz + k * sz;
-          // Aerodynamic styling of the lattice nodes (sloped hood & fastback roof)
-          if (j === 2 && i === 9) y -= 0.06;
-          if (j === 2 && i === 3) y -= 0.05;
-          if (j === 1 && i === 12) y -= 0.07;
+          const x = ox + i * sx, y = oy + j * sy, z = oz + k * sz;
           const m = (j === 0) ? nodeMass * 1.35 : (j >= 2 ? nodeMass * 0.65 : nodeMass);
           this.gridNode[g] = this.addNode(x, y, z, m, 0.35);
         }
+    this.chassisNodeCount = this.nodeCount;
 
-    // Deduplicated beams across cells
     const seen = new Set();
     const tryBeam = (i0, j0, k0, i1, j1, k1, kind) => {
       const a = this.gridNode[gIdx(i0, j0, k0)];
@@ -573,13 +823,9 @@ class SoftBodyVehicle {
       let st = 5.5e4 * defMult;
       let zone = ZONE_CHASSIS;
 
-      if (mx > 3.1) { // Front crumple zone
-        df *= 0.42; st *= 0.55; zone = ZONE_FRONT;
-      } else if (mx < 1.05) { // Rear crumple zone
-        df *= 0.55; st *= 0.65; zone = ZONE_REAR;
-      } else if (my > oy + 1.4 * sy) { // Safety cage
-        df *= 2.2; st *= 2.5;
-      }
+      if (mx > 3.1) { df *= 0.42; st *= 0.55; zone = ZONE_FRONT; }
+      else if (mx < 1.05) { df *= 0.55; st *= 0.65; zone = ZONE_REAR; }
+      else if (my > oy + 1.4 * sy) { df *= 2.2; st *= 2.5; }
       this.addBeam(u, v, sp, dm, df, st, zone, BEAM_NORMAL, 1.0);
     };
 
@@ -605,44 +851,28 @@ class SoftBodyVehicle {
           tryBeam(i+1, j, k, i, j+1, k+1, 2);
         }
 
-    // Build exterior ColTris + 3D Flexbody Visual Panels on exposed cell faces
-    const addFaceQuad = (i0,j0,k0, i1,j1,k1, i2,j2,k2, i3,j3,k3, faceDir) => {
-      const n0 = this.gridNode[gIdx(i0,j0,k0)];
-      const n1 = this.gridNode[gIdx(i1,j1,k1)];
-      const n2 = this.gridNode[gIdx(i2,j2,k2)];
-      const n3 = this.gridNode[gIdx(i3,j3,k3)];
+    // Exterior collision triangles for inter-vehicle crashes
+    const addColQuad = (i0,j0,k0, i1,j1,k1, i2,j2,k2, i3,j3,k3) => {
+      const n0 = this.gridNode[gIdx(i0,j0,k0)], n1 = this.gridNode[gIdx(i1,j1,k1)];
+      const n2 = this.gridNode[gIdx(i2,j2,k2)], n3 = this.gridNode[gIdx(i3,j3,k3)];
       if (n0 < 0 || n1 < 0 || n2 < 0 || n3 < 0) return;
       this.colTris.push({ a: n0, b: n1, c: n2, broken: 0 });
       this.colTris.push({ a: n0, b: n2, c: n3, broken: 0 });
-
-      // Classify visual material for 3D Flexbody rendering
-      const avgX = 0.25 * (this.px[n0] + this.px[n1] + this.px[n2] + this.px[n3]);
-      const avgY = 0.25 * (this.py[n0] + this.py[n1] + this.py[n2] + this.py[n3]);
-      const avgZ = 0.25 * (this.pz[n0] + this.pz[n1] + this.pz[n2] + this.pz[n3]);
-      let mat = "body"; // body paint
-      if (avgY > oy + 1.55 * sy && faceDir !== "+Y" && faceDir !== "-Y") {
-        mat = "glass"; // Windshield, rear window & side windows
-      } else if (faceDir === "+X" && avgY < oy + 1.1 * sy) {
-        mat = Math.abs(avgZ) > 0.42 ? "headlight" : "grille";
-      } else if (faceDir === "-X" && avgY > oy + 0.4 * sy && avgY < oy + 1.1 * sy) {
-        mat = Math.abs(avgZ) > 0.35 ? "taillight" : "grille";
-      } else if (faceDir === "-Y") {
-        mat = "underbody";
-      }
-      this.flexFaces.push({ n0, n1, n2, n3, mat });
     };
-
     for (let i = 0; i < cx; ++i)
       for (let j = 0; j < cy; ++j)
         for (let k = 0; k < cz; ++k) {
           if (!cellIncluded(i, j, k)) continue;
-          if (!cellIncluded(i-1, j, k)) addFaceQuad(i,j,k, i,j,k+1, i,j+1,k+1, i,j+1,k, "-X");
-          if (!cellIncluded(i+1, j, k)) addFaceQuad(i+1,j,k, i+1,j+1,k, i+1,j+1,k+1, i+1,j,k+1, "+X");
-          if (!cellIncluded(i, j-1, k)) addFaceQuad(i,j,k, i+1,j,k, i+1,j,k+1, i,j,k+1, "-Y");
-          if (!cellIncluded(i, j+1, k)) addFaceQuad(i,j+1,k, i,j+1,k+1, i+1,j+1,k+1, i+1,j+1,k, "+Y");
-          if (!cellIncluded(i, j, k-1)) addFaceQuad(i,j,k, i,j+1,k, i+1,j+1,k, i+1,j,k, "-Z");
-          if (!cellIncluded(i, j, k+1)) addFaceQuad(i,j,k+1, i+1,j,k+1, i+1,j+1,k+1, i,j+1,k+1, "+Z");
+          if (!cellIncluded(i-1, j, k)) addColQuad(i,j,k, i,j,k+1, i,j+1,k+1, i,j+1,k);
+          if (!cellIncluded(i+1, j, k)) addColQuad(i+1,j,k, i+1,j+1,k, i+1,j+1,k+1, i+1,j,k+1);
+          if (!cellIncluded(i, j-1, k)) addColQuad(i,j,k, i+1,j,k, i+1,j,k+1, i,j,k+1);
+          if (!cellIncluded(i, j+1, k)) addColQuad(i,j+1,k, i,j+1,k+1, i+1,j+1,k+1, i+1,j+1,k);
+          if (!cellIncluded(i, j, k-1)) addColQuad(i,j,k, i,j+1,k, i+1,j+1,k, i+1,j,k);
+          if (!cellIncluded(i, j, k+1)) addColQuad(i,j,k+1, i+1,j,k+1, i+1,j+1,k+1, i,j+1,k+1);
         }
+
+    // Build High-Detail Sculpted 3D Flexbody Mesh Bound to Chassis Nodes!
+    this.buildSculptedFlexbody();
 
     // 4 Independent Suspension Corners + PressureWheels
     const mountCorner = (name, iF, iM, iR, kInner, zSign, steered, driven, handbraked, zone) => {
@@ -668,9 +898,7 @@ class SoftBodyVehicle {
       for (const h of [hubIn, hubOut]) {
         this.addBeam(h, nLowF, 2.2e5, 130, 3.8e4, 1.1e5, zone);
         this.addBeam(h, nLowR, 2.2e5, 130, 3.8e4, 1.1e5, zone);
-        // Coilover spring-damper strut
         this.addBeam(h, nStrutTop, 4.8e4 * sprMult, 2400, 6e4, 1.5e5, zone, BEAM_NORMAL, ridePre);
-        // Bump-stop limiter
         this.addBeam(h, nStrutTop, 2.6e5, 800, 9e4, 2e5, zone, BEAM_SUPPORT, 0.72);
       }
 
@@ -689,10 +917,9 @@ class SoftBodyVehicle {
         }
       }
 
-      // Build PressureWheel (12 rays -> 24 tread nodes)
       const numRays = 12;
       const radius = this.presetKey === "offroad" ? 0.36 : 0.32;
-      const width = 0.22;
+      const width = 0.23;
       const treadNodes = [];
       const beamIndices = [];
       const cX = xCenter, cY = yHub, cZ = 0.5 * (zOut + zIn);
@@ -729,15 +956,77 @@ class SoftBodyVehicle {
       this.wheels.push({
         name, hubR: hubRight, hubL: hubLeft, treadNodes, beamIndices,
         radius, width, numRays, steered, driven, braked: true, handbraked,
-        omega: 0, burst: false, zone
+        omega: 0, burst: false, zone, zSign
       });
     };
 
     const isAWD = pr.drive === "AWD";
-    mountCorner("FL", 1, 2, 3, 1, -1.0, true,  isAWD, false, ZONE_WHEEL_FL);
-    mountCorner("FR", 1, 2, 3, 5, +1.0, true,  isAWD, false, ZONE_WHEEL_FR);
-    mountCorner("RL", 8, 9, 10, 1, -1.0, false, true,  true,  ZONE_WHEEL_RL);
-    mountCorner("RR", 8, 9, 10, 5, +1.0, false, true,  true,  ZONE_WHEEL_RR);
+    mountCorner("FL", 8, 9, 10, 1, -1.0, true,  isAWD, false, ZONE_WHEEL_FL);
+    mountCorner("FR", 8, 9, 10, 5, +1.0, true,  isAWD, false, ZONE_WHEEL_FR);
+    mountCorner("RL", 1, 2, 3,  1, -1.0, false, true,  true,  ZONE_WHEEL_RL);
+    mountCorner("RR", 1, 2, 3,  5, +1.0, false, true,  true,  ZONE_WHEEL_RR);
+  }
+
+  // Bind any 3D rest-space point [x,y,z] to the 4 nearest chassis physics nodes with inverse-distance weights
+  bindVertex(x, y, z) {
+    let i0 = 0, i1 = 1, i2 = 2, i3 = 3;
+    let d0 = 1e9, d1 = 1e9, d2 = 1e9, d3 = 1e9;
+    const n = this.chassisNodeCount;
+    for (let i = 0; i < n; ++i) {
+      const dx = x - this.restX[i], dy = y - this.restY[i], dz = z - this.restZ[i];
+      const d = Math.hypot(dx, dy, dz);
+      if (d < d0) { d3=d2; i3=i2; d2=d1; i2=i1; d1=d0; i1=i0; d0=d; i0=i; }
+      else if (d < d1) { d3=d2; i3=i2; d2=d1; i2=i1; d1=d; i1=i; }
+      else if (d < d2) { d3=d2; i3=i2; d2=d; i2=i; }
+      else if (d < d3) { d3=d; i3=i; }
+    }
+    const w0 = 1.0 / (d0 + 0.04)**2;
+    const w1 = 1.0 / (d1 + 0.04)**2;
+    const w2 = 1.0 / (d2 + 0.04)**2;
+    const w3 = 1.0 / (d3 + 0.04)**2;
+    const ws = w0 + w1 + w2 + w3;
+    const nw0 = w0/ws, nw1 = w1/ws, nw2 = w2/ws, nw3 = w3/ws;
+    const ax = nw0*this.restX[i0] + nw1*this.restX[i1] + nw2*this.restX[i2] + nw3*this.restX[i3];
+    const ay = nw0*this.restY[i0] + nw1*this.restY[i1] + nw2*this.restY[i2] + nw3*this.restY[i3];
+    const az = nw0*this.restZ[i0] + nw1*this.restZ[i1] + nw2*this.restZ[i2] + nw3*this.restZ[i3];
+    return {
+      idx: [i0, i1, i2, i3],
+      w: [nw0, nw1, nw2, nw3],
+      off: [x - ax, y - ay, z - az]
+    };
+  }
+
+  evalSkinned(bv, rotMat) {
+    const [i0, i1, i2, i3] = bv.idx;
+    const [w0, w1, w2, w3] = bv.w;
+    // Check if the supporting nodes have torn far apart
+    const spanSq = (this.px[i0] - this.px[i1])**2 + (this.py[i0] - this.py[i1])**2 + (this.pz[i0] - this.pz[i1])**2;
+    const ox = bv.off[0], oy = bv.off[1], oz = bv.off[2];
+    const rx = rotMat[0]*ox + rotMat[1]*oy + rotMat[2]*oz;
+    const ry = rotMat[3]*ox + rotMat[4]*oy + rotMat[5]*oz;
+    const rz = rotMat[6]*ox + rotMat[7]*oy + rotMat[8]*oz;
+    return [
+      w0*this.px[i0] + w1*this.px[i1] + w2*this.px[i2] + w3*this.px[i3] + rx,
+      w0*this.py[i0] + w1*this.py[i1] + w2*this.py[i2] + w3*this.py[i3] + ry,
+      w0*this.pz[i0] + w1*this.pz[i1] + w2*this.pz[i2] + w3*this.pz[i3] + rz,
+      spanSq > 0.65
+    ];
+  }
+
+  buildSculptedFlexbody() {
+    this.flexVerts = [];
+    this.flexTris = [];
+
+    const bModel = window.BLENDER_MODELS && window.BLENDER_MODELS.vehicles && window.BLENDER_MODELS.vehicles[this.presetKey];
+    if (bModel) {
+      for (let i = 0; i < bModel.verts.length; ++i) {
+        const v = bModel.verts[i];
+        this.flexVerts.push(this.bindVertex(v[0], v[1], v[2]));
+      }
+      for (let i = 0; i < bModel.tris.length; ++i) {
+        this.flexTris.push(bModel.tris[i]);
+      }
+    }
   }
 
   translate(dx, dy, dz) {
@@ -781,7 +1070,7 @@ class SoftBodyVehicle {
 
   centerOfMass() {
     let x = 0, y = 0, z = 0, count = 0;
-    const limit = Math.min(this.nodeCount, 220); // Main chassis lattice
+    const limit = Math.min(this.nodeCount, this.chassisNodeCount);
     for (let i = 0; i < limit; ++i) {
       x += this.px[i]; y += this.py[i]; z += this.pz[i];
       count++;
@@ -790,20 +1079,36 @@ class SoftBodyVehicle {
     return [x * inv, y * inv, z * inv];
   }
 
+  // Estimate current 3x3 orientation basis of the chassis for normal/offset transformation
+  chassisBasis() {
+    const nRear = Math.min(this.chassisNodeCount - 1, 55);
+    const nFront = Math.min(this.chassisNodeCount - 1, 165);
+    let fx = this.px[nFront] - this.px[nRear];
+    let fy = this.py[nFront] - this.py[nRear];
+    let fz = this.pz[nFront] - this.pz[nRear];
+    const fl = Math.hypot(fx, fy, fz) || 1;
+    fx /= fl; fy /= fl; fz /= fl;
+
+    // Approximate up = [0,1,0] orthogonalized
+    let rx = -fz, ry = 0, rz = fx;
+    const rl = Math.hypot(rx, ry, rz) || 1;
+    rx /= rl; rz /= rl;
+    const ux = ry*fz - rz*fy, uy = rz*fx - rx*fz, uz = rx*fy - ry*fx;
+    return [
+      fx, ux, rx,
+      fy, uy, ry,
+      fz, uz, rz
+    ];
+  }
+
   forwardDir() {
-    // Use middle chassis safety-cell nodes to estimate car heading
-    const nRear = Math.min(this.nodeCount - 1, 65);
-    const nFront = Math.min(this.nodeCount - 1, 145);
-    let dx = this.px[nFront] - this.px[nRear];
-    let dy = this.py[nFront] - this.py[nRear];
-    let dz = this.pz[nFront] - this.pz[nRear];
-    const l = Math.hypot(dx, dy, dz) || 1;
-    return [dx / l, dy / l, dz / l];
+    const b = this.chassisBasis();
+    return [b[0], b[3], b[6]];
   }
 
   velocityVec() {
     let vx = 0, vy = 0, vz = 0, count = 0;
-    const limit = Math.min(this.nodeCount, 220);
+    const limit = Math.min(this.nodeCount, this.chassisNodeCount);
     for (let i = 0; i < limit; ++i) {
       vx += this.vx[i]; vy += this.vy[i]; vz += this.vz[i];
       count++;
@@ -820,12 +1125,10 @@ class SoftBodyVehicle {
       this.fz[i] = 0;
     }
 
-    // Smooth steering
     const targetSteer = Math.max(-1, Math.min(1, this.controls.steer));
     const maxDelta = 4.2 * dt;
     this.smoothedSteer += Math.max(-maxDelta, Math.min(maxDelta, targetSteer - this.smoothedSteer));
 
-    // 1) Accumulate Beam Forces + Plasticity + Breaking
     const nb = this.beamCount;
     for (let i = 0; i < nb; ++i) {
       if (this.bBroken[i]) continue;
@@ -857,12 +1160,16 @@ class SoftBodyVehicle {
         if (this.bType[i] === BEAM_HYDRO) this.bHydroOffset[i] += delta;
         ext = len - newR;
         fs = k * ext;
-        this.impactImpulse = Math.max(this.impactImpulse, Math.abs(delta) * 120.0);
+        if (Math.abs(delta) > 0.002) {
+          this.impactImpulse = Math.max(this.impactImpulse, Math.abs(delta) * 120.0);
+          this.sparkPos = [0.5*(this.px[a]+this.px[b]), 0.5*(this.py[a]+this.py[b]), 0.5*(this.pz[a]+this.pz[b])];
+        }
       }
 
       if (Math.abs(fs) > this.bStrength[i]) {
         this.bBroken[i] = 1;
         this.impactImpulse = Math.max(this.impactImpulse, 1.5);
+        this.sparkPos = [0.5*(this.px[a]+this.px[b]), 0.5*(this.py[a]+this.py[b]), 0.5*(this.pz[a]+this.pz[b])];
         continue;
       }
 
@@ -875,10 +1182,8 @@ class SoftBodyVehicle {
       this.fx[b] -= fx; this.fy[b] -= fy; this.fz[b] -= fz;
     }
 
-    // 2) Powertrain & PressureWheels
     this.stepDrivetrain(dt);
 
-    // 3) Symplectic Euler Integration + Ground / Obstacle Collision
     for (let i = 0; i < n; ++i) {
       const im = this.invMass[i];
       if (im === 0) continue;
@@ -889,7 +1194,6 @@ class SoftBodyVehicle {
       this.py[i] += this.vy[i] * dt;
       this.pz[i] += this.vz[i] * dt;
 
-      // Heightfield terrain collision
       const th = env.sampleTerrainHeight(this.px[i], this.pz[i]);
       if (this.py[i] < th) {
         const [nx, ny, nz] = env.sampleTerrainNormal(this.px[i], this.pz[i]);
@@ -916,7 +1220,6 @@ class SoftBodyVehicle {
         }
       }
 
-      // Oriented 3D Box Colliders
       for (let bi = 0; bi < env.boxes.length; ++bi) {
         const bx = env.boxes[bi];
         const dx = this.px[i] - bx.cx, dy = this.py[i] - bx.cy, dz = this.pz[i] - bx.cz;
@@ -965,7 +1268,6 @@ class SoftBodyVehicle {
 
     let drivenOmegaSum = 0, drivenCount = 0;
     for (const w of this.wheels) {
-      // Check burst
       if (!w.burst) {
         for (const bi of w.beamIndices) {
           if (this.bBroken[bi]) { w.burst = true; break; }
@@ -1002,10 +1304,9 @@ class SoftBodyVehicle {
     }
 
     const avgOmega = drivenCount > 0 ? drivenOmegaSum / drivenCount : 0;
-    const gears = [-3.2, 0.0, 3.5, 2.15, 1.48, 1.12, 0.88]; // idx 0=R, 1=N, 2..6=1..5
+    const gears = [-3.2, 0.0, 3.5, 2.15, 1.48, 1.12, 0.88];
     this.shiftTimer = Math.max(0, this.shiftTimer - dt);
 
-    // Automatic Reverse / Forward switching
     let thr = this.controls.throttle;
     let brk = this.controls.brake;
     if (this.gear >= 1 && brk > 0.5 && thr < 0.1 && avgOmega < 1.8) {
@@ -1017,7 +1318,6 @@ class SoftBodyVehicle {
       thr = brk; brk = 0;
     }
 
-    // Auto upshift/downshift
     if (this.gear >= 1 && this.shiftTimer <= 0) {
       if (this.engineRpm > 6100 && this.gear < 5) { this.gear++; this.shiftTimer = 0.25; }
       else if (this.engineRpm < 2350 && this.gear > 1) { this.gear--; this.shiftTimer = 0.25; }
@@ -1031,7 +1331,7 @@ class SoftBodyVehicle {
     const engTorque = (this.shiftTimer > 0.12 ? 0 : thr * peakTorque) - (1 - thr) * 35.0;
     const totalDriveTorque = (engTorque * gRatio * 0.92) / Math.max(1, drivenCount);
 
-    const radialPressure = (!w_burst_all(this.wheels) && psiVal > 0) ? (psiVal * 5.6) : 0;
+    const radialPressure = (!this.wheels.every(w => w.burst) && psiVal > 0) ? (psiVal * 5.6) : 0;
 
     for (const w of this.wheels) {
       const [ax, ay, az] = w._axis;
@@ -1064,19 +1364,139 @@ class SoftBodyVehicle {
       this.fx[w.hubR] -= 0.5 * sfx; this.fy[w.hubR] -= 0.5 * sfy; this.fz[w.hubR] -= 0.5 * sfz;
     }
   }
-}
 
-function w_burst_all(wheels) {
-  return wheels.every(w => w.burst);
+  appendDynamicMesh(mb, env, showWire) {
+    const isBraking = this.controls.brake > 0.1 || this.controls.handbrake > 0.1;
+    const alpha = showWire ? 0.42 : 1.0;
+
+    // 1) Evaluate all skinned Blender 4.2 vertices in current deformed state
+    const basis = this.chassisBasis();
+    const pos = new Array(this.flexVerts.length);
+    const torn = new Uint8Array(this.flexVerts.length);
+    for (let i = 0; i < this.flexVerts.length; ++i) {
+      const res = this.evalSkinned(this.flexVerts[i], basis);
+      pos[i] = [res[0], res[1], res[2]];
+      torn[i] = res[3] ? 1 : 0;
+    }
+
+    // 2) Compute deformed normals over Blender's EdgeSplit-prepared vertices
+    const vnx = new Float32Array(this.flexVerts.length);
+    const vny = new Float32Array(this.flexVerts.length);
+    const vnz = new Float32Array(this.flexVerts.length);
+
+    for (let ti = 0; ti < this.flexTris.length; ++ti) {
+      const t = this.flexTris[ti];
+      if (torn[t.a] || torn[t.b] || torn[t.c]) continue;
+      const p0 = pos[t.a], p1 = pos[t.b], p2 = pos[t.c];
+      const ux = p1[0]-p0[0], uy = p1[1]-p0[1], uz = p1[2]-p0[2];
+      const vx = p2[0]-p0[0], vy = p2[1]-p0[1], vz = p2[2]-p0[2];
+      let nx = uy*vz - uz*vy, ny = uz*vx - ux*vz, nz = ux*vy - uy*vx;
+      // Align with Blender's outward rest normal rotated by chassisBasis
+      if (t.n) {
+        const rnx = basis[0]*t.n[0] + basis[1]*t.n[1] + basis[2]*t.n[2];
+        const rny = basis[3]*t.n[0] + basis[4]*t.n[1] + basis[5]*t.n[2];
+        const rnz = basis[6]*t.n[0] + basis[7]*t.n[1] + basis[8]*t.n[2];
+        if (nx*rnx + ny*rny + nz*rnz < 0) { nx = -nx; ny = -ny; nz = -nz; }
+      }
+      vnx[t.a] += nx; vny[t.a] += ny; vnz[t.a] += nz;
+      vnx[t.b] += nx; vny[t.b] += ny; vnz[t.b] += nz;
+      vnx[t.c] += nx; vny[t.c] += ny; vnz[t.c] += nz;
+    }
+    const vNorm = new Array(this.flexVerts.length);
+    for (let i = 0; i < this.flexVerts.length; ++i) {
+      const l = Math.hypot(vnx[i], vny[i], vnz[i]) || 1;
+      vNorm[i] = [vnx[i]/l, vny[i]/l, vnz[i]/l];
+    }
+
+    for (let ti = 0; ti < this.flexTris.length; ++ti) {
+      const t = this.flexTris[ti];
+      if (torn[t.a] || torn[t.b] || torn[t.c]) continue;
+      let col, matType = t.type, rough = t.rough;
+      if (t.paint) {
+        col = [this.color[0], this.color[1], this.color[2], alpha];
+        matType = 1.0;
+      } else if (t.type === 2.0) {
+        col = [t.col[0], t.col[1], t.col[2], showWire ? 0.25 : t.col[3]];
+      } else if (t.type === 3.0 && t.col[0] > 0.85 && t.col[1] < 0.3) {
+        // Taillight / Brake light
+        col = isBraking ? [1.0, 0.14, 0.18, 1.0] : [0.72, 0.06, 0.10, 1.0];
+        matType = isBraking ? 3.0 : 1.0;
+      } else {
+        col = [t.col[0], t.col[1], t.col[2], alpha];
+      }
+      mb.pushTri(pos[t.a], pos[t.b], pos[t.c], col, matType, rough, [vNorm[t.a], vNorm[t.b], vNorm[t.c]]);
+    }
+
+    // 3) 3D Tires, Sidewalls, 6-Spoke Metallic Alloy Rims & Red Brake Calipers
+    for (const w of this.wheels) {
+      const N = w.numRays;
+      const hOut = w.zSign > 0 ? w.hubR : w.hubL;
+      const hIn  = w.zSign > 0 ? w.hubL : w.hubR;
+      const pOut = [this.px[hOut], this.py[hOut], this.pz[hOut]];
+      const pIn  = [this.px[hIn],  this.py[hIn],  this.pz[hIn]];
+      let ax = pOut[0] - pIn[0], ay = pOut[1] - pIn[1], az = pOut[2] - pIn[2];
+      const al = Math.hypot(ax, ay, az) || 1;
+      const outN = [ax/al, ay/al, az/al];
+
+      const ringOut = w.zSign > 0 ? 0 : 1;
+      const ringIn  = 1 - ringOut;
+
+      for (let r = 0; r < N; ++r) {
+        const r0 = w.treadNodes[ringOut * N + r];
+        const r1 = w.treadNodes[ringOut * N + ((r + 1) % N)];
+        const l0 = w.treadNodes[ringIn  * N + r];
+        const l1 = w.treadNodes[ringIn  * N + ((r + 1) % N)];
+
+        const pr0 = [this.px[r0], this.py[r0], this.pz[r0]];
+        const pr1 = [this.px[r1], this.py[r1], this.pz[r1]];
+        const pl0 = [this.px[l0], this.py[l0], this.pz[l0]];
+        const pl1 = [this.px[l1], this.py[l1], this.pz[l1]];
+
+        if ((pr1[0]-pr0[0])**2 + (pr1[1]-pr0[1])**2 + (pr1[2]-pr0[2])**2 > 0.22) continue;
+
+        let rnx = 0.5*(pr0[0]+pr1[0]) - pOut[0];
+        let rny = 0.5*(pr0[1]+pr1[1]) - pOut[1];
+        let rnz = 0.5*(pr0[2]+pr1[2]) - pOut[2];
+        const rl = Math.hypot(rnx, rny, rnz) || 1;
+        const radN = [rnx/rl, rny/rl, rnz/rl];
+
+        const treadCol = (r % 2 === 0) ? [0.11, 0.12, 0.14, 1.0] : [0.16, 0.17, 0.20, 1.0];
+        mb.pushTri(pr0, pr1, pl1, treadCol, 0.0, 0.85, [radN, radN, radN]);
+        mb.pushTri(pr0, pl1, pl0, treadCol, 0.0, 0.85, [radN, radN, radN]);
+
+        const rim0 = [pOut[0] + 0.58*(pr0[0]-pOut[0]), pOut[1] + 0.58*(pr0[1]-pOut[1]), pOut[2] + 0.58*(pr0[2]-pOut[2])];
+        const rim1 = [pOut[0] + 0.58*(pr1[0]-pOut[0]), pOut[1] + 0.58*(pr1[1]-pOut[1]), pOut[2] + 0.58*(pr1[2]-pOut[2])];
+
+        mb.pushTri(rim0, rim1, pr1, [0.14, 0.15, 0.18, 1.0], 0.0, 0.78, [outN, outN, outN]);
+        mb.pushTri(rim0, pr1, pr0,  [0.14, 0.15, 0.18, 1.0], 0.0, 0.78, [outN, outN, outN]);
+
+        const isSpoke = (r % 2 === 0);
+        const rimCol = isSpoke ? [0.85, 0.88, 0.93, 1.0] : (r === 1 ? [0.90, 0.15, 0.18, 1.0] : [0.20, 0.22, 0.26, 1.0]);
+        mb.pushTri(pOut, rim0, rim1, rimCol, isSpoke ? 4.0 : 1.0, isSpoke ? 0.12 : 0.4, [outN, outN, outN]);
+      }
+    }
+
+    // 4) Soft Ground Drop-Shadow Quad under the vehicle chassis
+    const [comX, , comZ] = this.centerOfMass();
+    const [fx, , fz] = this.forwardDir();
+    const rx = -fz, rz = fx;
+    const shY = env.sampleTerrainHeight(comX, comZ) + 0.022;
+    const hl = 2.15, hw = 0.95;
+    const s0 = [comX - fx*hl - rx*hw, shY, comZ - fz*hl - rz*hw];
+    const s1 = [comX + fx*hl - rx*hw, shY, comZ + fz*hl - rz*hw];
+    const s2 = [comX + fx*hl + rx*hw, shY, comZ + fz*hl + rz*hw];
+    const s3 = [comX - fx*hl + rx*hw, shY, comZ - fz*hl + rz*hw];
+    mb.pushQuad(s0, s3, s2, s1, [0.02, 0.04, 0.08, 0.52], 0.0, 1.0);
+  }
 }
 
 // ============================================================================
-// Inter-Vehicle Node-vs-ColTri Collision (Phase 3 Momentum-Conserving)
+// 5. Inter-Vehicle Node-vs-ColTri Collision
 // ============================================================================
 function collideVehicles(carA, carB) {
   const cA = carA.centerOfMass(), cB = carB.centerOfMass();
   const distSq = (cA[0]-cB[0])**2 + (cA[1]-cB[1])**2 + (cA[2]-cB[2])**2;
-  if (distSq > 32.0) return; // Fast broadphase
+  if (distSq > 32.0) return;
 
   const pairCollide = (nodeCar, triCar) => {
     const skin = 0.028, maxDepth = 0.14;
@@ -1099,7 +1519,6 @@ function collideVehicles(carA, carB) {
 
         const e0x = pbx - pax, e0y = pby - pay, e0z = pbz - paz;
         const e1x = pcx - pax, e1y = pcy - pay, e1z = pcz - paz;
-        // Disable triangle if its underlying beams broke and vertices separated
         if (e0x*e0x + e0y*e0y + e0z*e0z > 0.42 || e1x*e1x + e1y*e1y + e1z*e1z > 0.42) {
           t.broken = 1;
           continue;
@@ -1138,8 +1557,9 @@ function collideVehicles(carA, carB) {
           triCar.vx[ib] -= nx * i3; triCar.vy[ib] -= ny * i3; triCar.vz[ib] -= nz * i3;
           triCar.vx[ic] -= nx * i3; triCar.vy[ic] -= ny * i3; triCar.vz[ic] -= nz * i3;
           nodeCar.impactImpulse = Math.max(nodeCar.impactImpulse, Math.abs(vn) * 0.15);
+          nodeCar.sparkPos = [px, py, pz];
         }
-        break; // At most one triangle contact per node per substep for numerical stability
+        break;
       }
     }
   };
@@ -1148,7 +1568,321 @@ function collideVehicles(carA, carB) {
 }
 
 // ============================================================================
-// Procedural WebAudio Engine & Crash Sound Synthesizer
+// 6. 3D Particle System (Tire Drift Smoke & Crash Sparks)
+// ============================================================================
+class ParticleSystem {
+  constructor() {
+    this.particles = [];
+  }
+  spawn(x, y, z, vx, vy, vz, col, size, life) {
+    if (this.particles.length > 160) this.particles.shift();
+    this.particles.push({ x, y, z, vx, vy, vz, col, size, life, maxLife: life });
+  }
+  update(dt) {
+    for (let i = this.particles.length - 1; i >= 0; --i) {
+      const p = this.particles[i];
+      p.life -= dt;
+      if (p.life <= 0) { this.particles.splice(i, 1); continue; }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.z += p.vz * dt;
+    }
+  }
+  appendToMesh(mb) {
+    for (const p of this.particles) {
+      const t = p.life / p.maxLife;
+      const s = p.size * (1.2 - 0.5 * t);
+      const col = [p.col[0], p.col[1], p.col[2], p.col[3] * t];
+      mb.addBox(p.x, p.y, p.z, s, s, s, null, col, p.col[0] > 0.9 ? 3.0 : 0.0, 0.9);
+    }
+  }
+}
+const particles = new ParticleSystem();
+
+// ============================================================================
+// 7. WebGL 3D Hardware Renderer (PBR-Style Clearcoat Shader + Sky + Wireframe)
+// ============================================================================
+class WebGLRenderer3D {
+  constructor(canvas) {
+    this.canvas = canvas;
+    const gl = canvas.getContext("webgl2", { antialias: true, preserveDrawingBuffer: true }) ||
+               canvas.getContext("webgl",  { antialias: true, preserveDrawingBuffer: true });
+    this.gl = gl;
+    if (!gl) return;
+
+    const vsTri = `
+      attribute vec3 aPos;
+      attribute vec3 aNorm;
+      attribute vec4 aCol;
+      attribute vec2 aMat;
+      uniform mat4 uVP;
+      varying vec3 vWorldPos;
+      varying vec3 vNorm;
+      varying vec4 vCol;
+      varying vec2 vMat;
+      void main() {
+        vWorldPos = aPos;
+        vNorm = aNorm;
+        vCol = aCol;
+        vMat = aMat;
+        gl_Position = uVP * vec4(aPos, 1.0);
+      }
+    `;
+
+    const fsTri = `
+      precision highp float;
+      varying vec3 vWorldPos;
+      varying vec3 vNorm;
+      varying vec4 vCol;
+      varying vec2 vMat;
+      uniform vec3 uEye;
+      void main() {
+        vec3 N = normalize(vNorm);
+        vec3 V = normalize(uEye - vWorldPos);
+        vec3 L = normalize(vec3(0.48, 0.78, 0.39));
+        vec3 H = normalize(L + V);
+
+        float matType = vMat.x;
+        float rough   = clamp(vMat.y, 0.04, 1.0);
+
+        // Emissive lights (Headlights, Brake lights, Reflectors)
+        if (matType > 2.5 && matType < 3.5) {
+          gl_FragColor = vec4(vCol.rgb * 1.25, vCol.a);
+          return;
+        }
+
+        // Hemisphere sky/ground ambient + directional sun diffuse
+        float ndl = max(dot(N, L), 0.0);
+        float hemi = 0.5 + 0.5 * N.y;
+        vec3 amb = mix(vec3(0.22, 0.25, 0.30), vec3(0.58, 0.68, 0.84), hemi);
+        vec3 color = vCol.rgb * (amb * 0.62 + vec3(1.02, 0.98, 0.90) * ndl * 0.78);
+
+        // Blinn-Phong + Clearcoat Fresnel reflections for Car Paint (1.0), Glass (2.0), Chrome (4.0)
+        float ndh = max(dot(N, H), 0.0);
+        float ndv = max(dot(N, V), 0.0);
+        float fresnel = pow(1.0 - ndv, 4.0);
+
+        if (matType > 0.5) {
+          float shininess = mix(128.0, 14.0, rough);
+          float spec = pow(ndh, shininess) * (1.2 - rough * 0.7);
+          vec3 envSky = mix(vec3(0.45, 0.58, 0.78), vec3(0.85, 0.92, 1.0), max( reflect(-V, N).y, 0.0 ));
+          float envFactor = (matType > 1.5 && matType < 2.5) ? (0.35 + 0.55 * fresnel) : (0.14 + 0.38 * fresnel);
+          color = mix(color, envSky, envFactor) + vec3(1.0, 0.98, 0.94) * spec;
+        } else {
+          // Subtle micro-detail on terrain & asphalt
+          float spec = pow(ndh, 16.0) * (1.0 - rough) * 0.25;
+          color += vec3(spec);
+        }
+
+        // Atmospheric distance fog blending into the horizon sky
+        float dist = length(vWorldPos - uEye);
+        float fog = clamp((dist - 48.0) / 95.0, 0.0, 0.78);
+        vec3 fogCol = vec3(0.58, 0.72, 0.88);
+        color = mix(color, fogCol, fog);
+
+        gl_FragColor = vec4(color, vCol.a);
+      }
+    `;
+
+    const vsLine = `
+      attribute vec3 aPos;
+      attribute vec3 aCol;
+      uniform mat4 uVP;
+      varying vec3 vCol;
+      void main() {
+        vCol = aCol;
+        gl_Position = uVP * vec4(aPos, 1.0);
+      }
+    `;
+    const fsLine = `
+      precision mediump float;
+      varying vec3 vCol;
+      void main() {
+        gl_FragColor = vec4(vCol, 0.95);
+      }
+    `;
+
+    // Background Sky Dome Shader
+    const vsSky = `
+      attribute vec2 aPos;
+      varying vec2 vUv;
+      void main() {
+        vUv = aPos;
+        gl_Position = vec4(aPos, 0.999, 1.0);
+      }
+    `;
+    const fsSky = `
+      precision mediump float;
+      varying vec2 vUv;
+      uniform float uPitch;
+      void main() {
+        float y = clamp(vUv.y * 0.5 + 0.5 + uPitch * 0.35, 0.0, 1.0);
+        vec3 horizon = vec3(0.64, 0.78, 0.92);
+        vec3 zenith  = vec3(0.16, 0.36, 0.68);
+        vec3 col = mix(horizon, zenith, pow(y, 0.65));
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `;
+
+    this.progTri  = this.createProgram(vsTri, fsTri);
+    this.progLine = this.createProgram(vsLine, fsLine);
+    this.progSky  = this.createProgram(vsSky, fsSky);
+
+    this.staticBuf = gl.createBuffer();
+    this.dynBuf    = gl.createBuffer();
+    this.lineBuf   = gl.createBuffer();
+    this.skyBuf    = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.skyBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
+    this.staticUploaded = false;
+  }
+
+  compileShader(type, src) {
+    const gl = this.gl;
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    return s;
+  }
+
+  createProgram(vs, fs) {
+    const gl = this.gl;
+    const p = gl.createProgram();
+    gl.attachShader(p, this.compileShader(gl.VERTEX_SHADER, vs));
+    gl.attachShader(p, this.compileShader(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(p);
+    return p;
+  }
+
+  uploadStaticEnvironment(env) {
+    const gl = this.gl;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.staticBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, env.staticMeshData, gl.STATIC_DRAW);
+    this.staticCount = env.staticVertexCount;
+    this.staticUploaded = true;
+  }
+
+  bindTriAttributes(prog) {
+    const gl = this.gl;
+    const stride = 12 * 4;
+    const locPos  = gl.getAttribLocation(prog, "aPos");
+    const locNorm = gl.getAttribLocation(prog, "aNorm");
+    const locCol  = gl.getAttribLocation(prog, "aCol");
+    const locMat  = gl.getAttribLocation(prog, "aMat");
+    gl.enableVertexAttribArray(locPos);
+    gl.vertexAttribPointer(locPos, 3, gl.FLOAT, false, stride, 0);
+    gl.enableVertexAttribArray(locNorm);
+    gl.vertexAttribPointer(locNorm, 3, gl.FLOAT, false, stride, 12);
+    gl.enableVertexAttribArray(locCol);
+    gl.vertexAttribPointer(locCol, 4, gl.FLOAT, false, stride, 24);
+    gl.enableVertexAttribArray(locMat);
+    gl.vertexAttribPointer(locMat, 2, gl.FLOAT, false, stride, 40);
+  }
+
+  render(env, cars, eye, tgt, pitch) {
+    const gl = this.gl;
+    if (!gl) return;
+    if (!this.staticUploaded) this.uploadStaticEnvironment(env);
+
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.round(this.canvas.clientWidth * dpr);
+    const h = Math.round(this.canvas.clientHeight * dpr);
+    if (this.canvas.width !== w || this.canvas.height !== h) {
+      this.canvas.width = w;
+      this.canvas.height = h;
+    }
+    gl.viewport(0, 0, w, h);
+    gl.clearDepth(1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    // 1) Render Daylight Sky Dome
+    gl.disable(gl.DEPTH_TEST);
+    gl.useProgram(this.progSky);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.skyBuf);
+    const skyPos = gl.getAttribLocation(this.progSky, "aPos");
+    gl.enableVertexAttribArray(skyPos);
+    gl.vertexAttribPointer(skyPos, 2, gl.FLOAT, false, 0, 0);
+    gl.uniform1f(gl.getUniformLocation(this.progSky, "uPitch"), pitch);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    // 2) Setup Camera View-Projection Matrix
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LEQUAL);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    const proj = mat4Perspective(50 * Math.PI / 180, (w / Math.max(1, h)), 0.2, 180.0);
+    const view = mat4LookAt(eye, tgt, [0, 1, 0]);
+    const vp = mat4Multiply(proj, view);
+
+    // 3) Draw Static 3D World (Terrain, Asphalt Highway, Ramps, Barriers, Cones, Bollards, Trees, Arch)
+    gl.useProgram(this.progTri);
+    gl.uniformMatrix4fv(gl.getUniformLocation(this.progTri, "uVP"), false, vp);
+    gl.uniform3fv(gl.getUniformLocation(this.progTri, "uEye"), eye);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.staticBuf);
+    this.bindTriAttributes(this.progTri);
+    gl.drawArrays(gl.TRIANGLES, 0, this.staticCount);
+
+    // 4) Build & Draw Dynamic 3D Sculpted Vehicles + Particles
+    if (showFlexbody) {
+      const dynMb = new MeshBuilder();
+      for (let i = 0; i < cars.length; ++i) {
+        cars[i].appendDynamicMesh(dynMb, env, showBeams);
+      }
+      particles.appendToMesh(dynMb);
+      const dynData = dynMb.toFloat32Array();
+      const dynCount = dynData.length / 12;
+      if (dynCount > 0) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.dynBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, dynData, gl.STREAM_DRAW);
+        this.bindTriAttributes(this.progTri);
+        gl.drawArrays(gl.TRIANGLES, 0, dynCount);
+      }
+    }
+
+    // 5) Draw 3D Node-Beam Skeleton Lines (when X-Ray mode B is active or on high-strain crash beams)
+    const lineVerts = [];
+    for (let ci = 0; ci < cars.length; ++ci) {
+      const car = cars[ci];
+      for (let bi = 0; bi < car.beamCount; ++bi) {
+        if (car.bBroken[bi]) continue;
+        const a = car.ba[bi], b = car.bb[bi];
+        const len = Math.hypot(car.px[b]-car.px[a], car.py[b]-car.py[a], car.pz[b]-car.pz[a]);
+        const strain = Math.abs(len - car.bBaseRest[bi]) / car.bBaseRest[bi];
+        if (!showBeams && showFlexbody && strain < 0.045) continue;
+
+        let r = 0.22, g = 0.74, bl = 0.98;
+        if (strain > 0.08) { r = 0.98; g = 0.20; bl = 0.32; }
+        else if (strain > 0.025) { r = 0.98; g = 0.75; bl = 0.14; }
+        else if (car.bZone[bi] >= ZONE_WHEEL_FL) { r = 0.20; g = 0.85; bl = 0.60; }
+        else if (ci === 1) { r = 0.78; g = 0.52; bl = 0.98; }
+
+        lineVerts.push(
+          car.px[a], car.py[a] + 0.004, car.pz[a], r, g, bl,
+          car.px[b], car.py[b] + 0.004, car.pz[b], r, g, bl
+        );
+      }
+    }
+    if (lineVerts.length > 0) {
+      const lineArr = new Float32Array(lineVerts);
+      gl.useProgram(this.progLine);
+      gl.uniformMatrix4fv(gl.getUniformLocation(this.progLine, "uVP"), false, vp);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.lineBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, lineArr, gl.STREAM_DRAW);
+      const lPos = gl.getAttribLocation(this.progLine, "aPos");
+      const lCol = gl.getAttribLocation(this.progLine, "aCol");
+      gl.enableVertexAttribArray(lPos);
+      gl.vertexAttribPointer(lPos, 3, gl.FLOAT, false, 24, 0);
+      gl.enableVertexAttribArray(lCol);
+      gl.vertexAttribPointer(lCol, 3, gl.FLOAT, false, 24, 12);
+      gl.drawArrays(gl.LINES, 0, lineArr.length / 6);
+    }
+  }
+}
+
+// ============================================================================
+// 8. Procedural WebAudio Engine & Crash Sound Synthesizer
 // ============================================================================
 class SoundSystem {
   constructor() {
@@ -1201,60 +1935,75 @@ class SoundSystem {
 const sound = new SoundSystem();
 
 // ============================================================================
-// Scene Management & Spawning
+// 9. Scene Management, Spawning & Controls
 // ============================================================================
 const env = new WorldEnvironment();
+const canvas = document.getElementById("viewport");
+const renderer = new WebGLRenderer3D(canvas);
+
 let cars = [];
 let playerIdx = 0;
+let camYaw = -1.25, camPitch = 0.24, camDist = 6.6;
+let camTarget = [0, 0.8, 0];
+let dragging = false, lastX = 0, lastY = 0;
 
 function spawnScenario(scnName) {
   currentScenario = scnName;
   cars = [];
   playerIdx = 0;
+  particles.particles = [];
 
   const car1 = new SoftBodyVehicle("Spieler", PRESETS[currentPreset].color, currentPreset);
-  const car2 = new SoftBodyVehicle("KI-Gegner", [192, 132, 252], "muscle");
-  car2.color = [168, 85, 247]; // Distinct purple
+  const car2 = new SoftBodyVehicle("KI-Gegner", [0.88, 0.20, 0.24], "muscle");
 
   if (scnName === "proving_grounds") {
     car1.translate(-2.5, 0.02, 0.0);
     car2.rotateY(Math.PI, 2.1, 0);
-    car2.translate(16.0, 0.02, -4.5);
+    car2.translate(16.0, 0.02, -4.2);
+    camYaw = -1.18; camPitch = 0.22; camDist = 6.5;
   } else if (scnName === "head_on_duel") {
     car1.translate(-6.2, 0.02, -0.28);
     car1.setRollingSpeed(58 / 3.6, 0);
     car2.rotateY(Math.PI, 2.1, 0);
     car2.translate(3.8, 0.02, 0.28);
     car2.setRollingSpeed(-58 / 3.6, 0);
+    camYaw = -0.95; camPitch = 0.25; camDist = 6.8;
   } else if (scnName === "t_bone_arena") {
     car1.translate(-4.5, 0.02, -3.5);
     car1.setRollingSpeed(36 / 3.6, 0);
     car2.rotateY(-Math.PI * 0.5, 2.1, 0);
     car2.translate(-2.1, 0.02, -9.2);
     car2.setRollingSpeed(0, 56 / 3.6);
+    camYaw = -0.82; camPitch = 0.26; camDist = 7.2;
   } else if (scnName === "mega_jump") {
     car1.translate(2.2, 0.02, 0.0);
     car1.setRollingSpeed(68 / 3.6, 0);
     car2.translate(28.5, 0.02, 0.0);
+    camYaw = -1.15; camPitch = 0.22; camDist = 6.8;
   } else if (scnName === "hill_trial") {
     car1.translate(26.0, 0.08, 0.0);
     car1.setRollingSpeed(42 / 3.6, 0);
     car2.translate(36.0, 1.5, 4.0);
+    camYaw = -1.2; camPitch = 0.24; camDist = 6.8;
   }
 
   cars.push(car1, car2);
+  const [cx, cy, cz] = car1.centerOfMass();
+  camTarget = [cx, cy + 0.35, cz];
+
   document.querySelectorAll(".scnBtn").forEach(b => b.classList.toggle("active", b.dataset.scn === scnName));
   updateActiveCarLabel();
 }
 
 function repairActiveCar(inPlace = false) {
   const oldCar = cars[playerIdx];
-  const [cx, cy, cz] = oldCar.centerOfMass();
+  const [cx, , cz] = oldCar.centerOfMass();
   const [fx, , fz] = oldCar.forwardDir();
   const yaw = Math.atan2(-fz, fx);
 
   const pKey = playerIdx === 0 ? currentPreset : "muscle";
-  const fresh = new SoftBodyVehicle(oldCar.name, oldCar.color, pKey);
+  const col  = playerIdx === 0 ? PRESETS[currentPreset].color : [0.88, 0.20, 0.24];
+  const fresh = new SoftBodyVehicle(oldCar.name, col, pKey);
   if (inPlace) {
     fresh.rotateY(yaw, 2.1, 0);
     const th = env.sampleTerrainHeight(cx, cz);
@@ -1268,14 +2017,11 @@ function repairActiveCar(inPlace = false) {
 
 function updateActiveCarLabel() {
   document.getElementById("activeCarLbl").textContent =
-    playerIdx === 0 ? `Fahrzeug 1 (${PRESETS[currentPreset].name})` : "Fahrzeug 2 (Gegner)";
+    playerIdx === 0 ? `Fahrzeug 1 (${PRESETS[currentPreset].name})` : "Fahrzeug 2 (V8 Muscle)";
   document.getElementById("hudDriveMode").textContent =
     `${PRESETS[currentPreset].drive} Auto`;
 }
 
-// ============================================================================
-// Input Handling (Keyboard + On-Screen Touch/Mouse Pads + Camera Orbit)
-// ============================================================================
 const keys = {};
 const padState = { left: false, right: false, gas: false, brake: false, drift: false };
 
@@ -1323,7 +2069,6 @@ function updateControls(dt) {
   const right = (keys["d"] || keys["arrowright"] || padState.right) ? 1.0 : 0.0;
   const hbk = (keys[" "] || padState.drift) ? 1.0 : 0.0;
 
-  // In high-speed crash demos, auto-apply throttle for the first 0.65 s unless user touches keys
   if ((currentScenario === "head_on_duel" || currentScenario === "t_bone_arena" || currentScenario === "mega_jump") &&
       simTime < 0.65 && !gas && !brk && !left && !right) {
     player.controls.throttle = 1.0;
@@ -1336,7 +2081,6 @@ function updateControls(dt) {
     player.controls.handbrake = hbk;
   }
 
-  // AI Control for the other vehicle
   const aiIdx = 1 - playerIdx;
   const ai = cars[aiIdx];
   if (!ai) return;
@@ -1357,7 +2101,6 @@ function updateControls(dt) {
   } else if (aiBehavior === "cruise") {
     const [ax, , az] = ai.centerOfMass();
     const [fx, , fz] = ai.forwardDir();
-    // Follow oval loop centered at (12, -2)
     const tx = 12 + 18 * Math.cos(simTime * 0.45);
     const tz = -2 + 12 * Math.sin(simTime * 0.45);
     const dx = tx - ax, dz = tz - az;
@@ -1370,15 +2113,8 @@ function updateControls(dt) {
 }
 
 // ============================================================================
-// 3D Camera & Software/Canvas2D Shaded Renderer (Flexbody + Beams + Terrain)
+// 10. Camera Orbit & Modes
 // ============================================================================
-const canvas = document.getElementById("viewport");
-const ctx = canvas.getContext("2d");
-
-let camYaw = -0.55, camPitch = 0.28, camDist = 7.4;
-let camTarget = [0, 0.8, 0];
-let dragging = false, lastX = 0, lastY = 0;
-
 canvas.addEventListener("pointerdown", e => {
   dragging = true; lastX = e.clientX; lastY = e.clientY;
 });
@@ -1387,12 +2123,12 @@ window.addEventListener("pointermove", e => {
   const dx = e.clientX - lastX, dy = e.clientY - lastY;
   lastX = e.clientX; lastY = e.clientY;
   camYaw -= dx * 0.007;
-  camPitch = Math.max(0.05, Math.min(1.42, camPitch + dy * 0.007));
+  camPitch = Math.max(0.05, Math.min(1.35, camPitch + dy * 0.007));
 });
 window.addEventListener("pointerup", () => dragging = false);
 canvas.addEventListener("wheel", e => {
   e.preventDefault();
-  camDist = Math.max(2.5, Math.min(28.0, camDist * (e.deltaY > 0 ? 1.1 : 0.9)));
+  camDist = Math.max(2.5, Math.min(26.0, camDist * (e.deltaY > 0 ? 1.1 : 0.9)));
 }, { passive: false });
 
 function cycleCamera() {
@@ -1400,299 +2136,63 @@ function cycleCamera() {
   document.getElementById("btnCam").innerHTML = `🎥 Cam: ${CAM_NAMES[camMode]} <span class="kbd">C</span>`;
 }
 
-function buildCamera(w, h, activeCar) {
+function computeCameraEyeTarget(activeCar) {
   const [cx, cy, cz] = activeCar.centerOfMass();
   const [fx, fy, fz] = activeCar.forwardDir();
 
-  let eye, tgt;
   if (camMode === 0) {
-    // Smooth Chase Camera behind car
+    // Smooth 3/4 Chase Camera behind & slightly angled to show the 3D profile of the car
     const carYaw = Math.atan2(-fz, fx);
     if (!dragging) {
-      const desiredYaw = -carYaw - Math.PI * 0.5;
+      const desiredYaw = -carYaw - Math.PI * 0.42;
       const diff = Math.atan2(Math.sin(desiredYaw - camYaw), Math.cos(desiredYaw - camYaw));
       camYaw += diff * 0.08;
     }
-    camTarget[0] += (cx - camTarget[0]) * 0.25;
-    camTarget[1] += (cy + 0.35 - camTarget[1]) * 0.2;
-    camTarget[2] += (cz - camTarget[2]) * 0.25;
-    tgt = camTarget;
+    camTarget[0] += (cx + fx * 0.5 - camTarget[0]) * 0.25;
+    camTarget[1] += (cy + 0.32 - camTarget[1]) * 0.2;
+    camTarget[2] += (cz + fz * 0.5 - camTarget[2]) * 0.25;
     const cp = Math.cos(camPitch), sp = Math.sin(camPitch);
-    eye = [tgt[0] + camDist * cp * Math.sin(camYaw), tgt[1] + camDist * sp, tgt[2] + camDist * cp * Math.cos(camYaw)];
+    const eye = [
+      camTarget[0] + camDist * cp * Math.sin(camYaw),
+      Math.max(env.sampleTerrainHeight(camTarget[0], camTarget[2]) + 0.35, camTarget[1] + camDist * sp),
+      camTarget[2] + camDist * cp * Math.cos(camYaw)
+    ];
+    return [eye, camTarget];
   } else if (camMode === 1) {
-    // Cockpit / Hood Camera
-    eye = [cx + fx * 0.35, cy + 0.52, cz + fz * 0.35];
-    tgt = [cx + fx * 8.0, cy + 0.35 + fy * 4.0, cz + fz * 8.0];
+    // Hood / Cockpit View
+    const eye = [cx + fx * 0.45, cy + 0.62, cz + fz * 0.45];
+    const tgt = [cx + fx * 9.0, cy + 0.45 + fy * 4.0, cz + fz * 9.0];
+    return [eye, tgt];
   } else if (camMode === 2) {
-    // Free Orbit Camera
-    camTarget[0] += (cx - camTarget[0]) * 0.15;
-    camTarget[1] += (cy + 0.3 - camTarget[1]) * 0.15;
-    camTarget[2] += (cz - camTarget[2]) * 0.15;
-    tgt = camTarget;
+    // Free Orbit
+    camTarget[0] += (cx - camTarget[0]) * 0.18;
+    camTarget[1] += (cy + 0.3 - camTarget[1]) * 0.18;
+    camTarget[2] += (cz - camTarget[2]) * 0.18;
     const cp = Math.cos(camPitch), sp = Math.sin(camPitch);
-    eye = [tgt[0] + camDist * cp * Math.sin(camYaw), tgt[1] + camDist * sp, tgt[2] + camDist * cp * Math.cos(camYaw)];
+    const eye = [
+      camTarget[0] + camDist * cp * Math.sin(camYaw),
+      Math.max(0.3, camTarget[1] + camDist * sp),
+      camTarget[2] + camDist * cp * Math.cos(camYaw)
+    ];
+    return [eye, camTarget];
   } else {
-    // Action Side Camera
-    camTarget = [cx, cy + 0.25, cz];
-    tgt = camTarget;
-    eye = [cx - fz * 6.2, cy + 1.4, cz + fx * 6.2];
-  }
-
-  let fdx = tgt[0] - eye[0], fdy = tgt[1] - eye[1], fdz = tgt[2] - eye[2];
-  const fl = Math.hypot(fdx, fdy, fdz) || 1;
-  fdx /= fl; fdy /= fl; fdz /= fl;
-
-  // right = normalize(cross(fwd, [0,1,0]))
-  let rx = -fdz, ry = 0, rz = fdx;
-  const rl = Math.hypot(rx, ry, rz) || 1;
-  rx /= rl; rz /= rl;
-
-  // up = cross(right, fwd)
-  const ux = ry*fdz - rz*fdy, uy = rz*fdx - rx*fdz, uz = rx*fdy - ry*fdx;
-  const focal = h * 0.92;
-
-  return {
-    eye, fwd: [fdx, fdy, fdz],
-    project(x, y, z) {
-      const dx = x - eye[0], dy = y - eye[1], dz = z - eye[2];
-      const depth = dx*fdx + dy*fdy + dz*fdz;
-      if (depth <= 0.18) return null;
-      const sx = dx*rx + dy*ry + dz*rz;
-      const sy = dx*ux + dy*uy + dz*uz;
-      return [w * 0.5 + (sx / depth) * focal, h * 0.5 - (sy / depth) * focal, depth];
-    }
-  };
-}
-
-function renderScene() {
-  const dpr = window.devicePixelRatio || 1;
-  const w = canvas.clientWidth, h = canvas.clientHeight;
-  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
-    canvas.width = Math.round(w * dpr);
-    canvas.height = Math.round(h * dpr);
-  }
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  // Sky gradient
-  const sky = ctx.createLinearGradient(0, 0, 0, h * 0.65);
-  sky.addColorStop(0, "#060b16");
-  sky.addColorStop(1, "#111c33");
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, w, h);
-
-  const activeCar = cars[playerIdx] || cars[0];
-  const cam = buildCamera(w, h, activeCar);
-  const [acx, , acz] = activeCar.centerOfMass();
-
-  // 1) Render 3D Proving Grounds Grid & Heightfield Terrain
-  const step = 3.0;
-  const gx0 = Math.floor((acx - 36) / step) * step;
-  const gx1 = Math.ceil((acx + 42) / step) * step;
-  const gz0 = Math.floor((acz - 30) / step) * step;
-  const gz1 = Math.ceil((acz + 30) / step) * step;
-
-  for (let x = gx0; x < gx1; x += step) {
-    for (let z = gz0; z < gz1; z += step) {
-      const h00 = env.sampleTerrainHeight(x, z);
-      const h10 = env.sampleTerrainHeight(x + step, z);
-      const h11 = env.sampleTerrainHeight(x + step, z + step);
-      const h01 = env.sampleTerrainHeight(x, z + step);
-      const p00 = cam.project(x, h00, z);
-      const p10 = cam.project(x + step, h10, z);
-      const p11 = cam.project(x + step, h11, z + step);
-      const p01 = cam.project(x, h01, z + step);
-      if (!p00 || !p10 || !p11 || !p01) continue;
-
-      const avgH = 0.25 * (h00 + h10 + h11 + h01);
-      if (avgH > 0.03) {
-        const t = Math.min(1, avgH / 3.0);
-        ctx.fillStyle = `rgba(${Math.round(22 + t*45)}, ${Math.round(65 + t*85)}, ${Math.round(55 + t*35)}, 0.34)`;
-      } else if (Math.abs(z) < 3.2) {
-        ctx.fillStyle = "rgba(30, 41, 59, 0.55)"; // Asphalt main strip
-      } else {
-        ctx.fillStyle = "rgba(15, 23, 42, 0.35)";
-      }
-      ctx.beginPath();
-      ctx.moveTo(p00[0], p00[1]); ctx.lineTo(p10[0], p10[1]);
-      ctx.lineTo(p11[0], p11[1]); ctx.lineTo(p01[0], p01[1]);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = avgH > 0.03 ? "rgba(52, 211, 153, 0.22)" : "rgba(148, 163, 184, 0.13)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
-  }
-
-  // Gather depth-sorted 3D drawables (Static Boxes + Vehicle Flexbody Quads + Wheel Treads + Beams)
-  const drawQueue = [];
-  const light = [0.42, 0.82, 0.38];
-
-  // 2) Add Static Box Colliders to drawQueue
-  const boxFaces = [[0,1,3,2],[4,6,7,5],[0,4,5,1],[2,3,7,6],[0,2,6,4],[1,5,7,3]];
-  for (const b of env.boxes) {
-    const r = b.rot;
-    const corners = [];
-    for (let i = 0; i < 8; ++i) {
-      const lx = (i&1)?b.hx:-b.hx, ly = (i&2)?b.hy:-b.hy, lz = (i&4)?b.hz:-b.hz;
-      corners.push([
-        b.cx + r[0]*lx + r[1]*ly + r[2]*lz,
-        b.cy + r[3]*lx + r[4]*ly + r[5]*lz,
-        b.cz + r[6]*lx + r[7]*ly + r[8]*lz
-      ]);
-    }
-    for (const f of boxFaces) {
-      const pts = f.map(k => cam.project(corners[k][0], corners[k][1], corners[k][2]));
-      if (pts.some(p => !p)) continue;
-      const zAvg = 0.25 * (pts[0][2] + pts[1][2] + pts[2][2] + pts[3][2]);
-      drawQueue.push({
-        kind: "poly", pts, z: zAvg,
-        fill: `rgba(${b.color[0]},${b.color[1]},${b.color[2]},0.65)`,
-        stroke: `rgba(${b.color[0]},${b.color[1]},${b.color[2]},0.95)`
-      });
-    }
-  }
-
-  // 3) Add Vehicles (Flexbody 3D Skin + 3D Wheels + Optional X-Ray Node-Beam Skeleton)
-  for (let ci = 0; ci < cars.length; ++ci) {
-    const car = cars[ci];
-    const isBraking = car.controls.brake > 0.1 || car.controls.handbrake > 0.1;
-
-    // 3a) Flexbody 3D Car Shell
-    if (showFlexbody) {
-      const alpha = showBeams ? 0.34 : 0.92;
-      for (let fi = 0; fi < car.flexFaces.length; ++fi) {
-        const ff = car.flexFaces[fi];
-        const i0 = ff.n0, i1 = ff.n1, i2 = ff.n2, i3 = ff.n3;
-        const p0 = cam.project(car.px[i0], car.py[i0], car.pz[i0]);
-        const p1 = cam.project(car.px[i1], car.py[i1], car.pz[i1]);
-        const p2 = cam.project(car.px[i2], car.py[i2], car.pz[i2]);
-        const p3 = cam.project(car.px[i3], car.py[i3], car.pz[i3]);
-        if (!p0 || !p1 || !p2 || !p3) continue;
-
-        const ux = car.px[i1] - car.px[i0], uy = car.py[i1] - car.py[i0], uz = car.pz[i1] - car.pz[i0];
-        const vx = car.px[i2] - car.px[i0], vy = car.py[i2] - car.py[i0], vz = car.pz[i2] - car.pz[i0];
-        const wx = car.px[i3] - car.px[i0], wy = car.py[i3] - car.py[i0], wz = car.pz[i3] - car.pz[i0];
-        if (ux*ux + uy*uy + uz*uz > 0.36 || vx*vx + vy*vy + vz*vz > 0.68 || wx*wx + wy*wy + wz*wz > 0.36) continue;
-        let nx = uy*vz - uz*vy, ny = uz*vx - ux*vz, nz = ux*vy - uy*vx;
-        const nl = Math.hypot(nx, ny, nz) || 1;
-        nx /= nl; ny /= nl; nz /= nl;
-        const shade = 0.45 + 0.55 * Math.max(0, nx*light[0] + ny*light[1] + nz*light[2]);
-
-        let fill, stroke;
-        if (ff.mat === "glass") {
-          fill = `rgba(15, 23, 42, ${showBeams ? 0.25 : 0.72})`;
-          stroke = "rgba(148, 163, 184, 0.35)";
-        } else if (ff.mat === "headlight") {
-          fill = "rgba(254, 249, 195, 0.95)";
-          stroke = "#fde047";
-        } else if (ff.mat === "taillight") {
-          fill = isBraking ? "rgba(255, 40, 60, 1.0)" : "rgba(185, 28, 28, 0.9)";
-          stroke = isBraking ? "#fecdd3" : "#991b1b";
-        } else if (ff.mat === "grille" || ff.mat === "underbody") {
-          fill = `rgba(30, 41, 59, ${alpha})`;
-          stroke = "rgba(71, 85, 105, 0.5)";
-        } else {
-          const r = Math.round(car.color[0] * shade);
-          const g = Math.round(car.color[1] * shade);
-          const b = Math.round(car.color[2] * shade);
-          fill = `rgba(${r},${g},${b},${alpha})`;
-          stroke = `rgba(${Math.min(255, r+30)},${Math.min(255, g+30)},${Math.min(255, b+30)},${alpha * 0.7})`;
-        }
-
-        drawQueue.push({
-          kind: "poly", pts: [p0, p1, p2, p3],
-          z: 0.25 * (p0[2] + p1[2] + p2[2] + p3[2]),
-          fill, stroke
-        });
-      }
-
-      // 3b) 3D Tire Treads & Alloy Rims
-      for (const w of car.wheels) {
-        const N = w.numRays;
-        for (let r = 0; r < N; ++r) {
-          const r0 = w.treadNodes[r], r1 = w.treadNodes[(r + 1) % N];
-          const l0 = w.treadNodes[N + r], l1 = w.treadNodes[N + ((r + 1) % N)];
-          if ((car.px[r1]-car.px[r0])**2 + (car.py[r1]-car.py[r0])**2 + (car.pz[r1]-car.pz[r0])**2 > 0.22) continue;
-          if ((car.px[l1]-car.px[l0])**2 + (car.py[l1]-car.py[l0])**2 + (car.pz[l1]-car.pz[l0])**2 > 0.22) continue;
-          const pr0 = cam.project(car.px[r0], car.py[r0], car.pz[r0]);
-          const pr1 = cam.project(car.px[r1], car.py[r1], car.pz[r1]);
-          const pl1 = cam.project(car.px[l1], car.py[l1], car.pz[l1]);
-          const pl0 = cam.project(car.px[l0], car.py[l0], car.pz[l0]);
-          if (pr0 && pr1 && pl1 && pl0) {
-            drawQueue.push({
-              kind: "poly", pts: [pr0, pr1, pl1, pl0],
-              z: 0.25 * (pr0[2] + pr1[2] + pl1[2] + pl0[2]),
-              fill: r % 2 === 0 ? "rgba(24, 24, 27, 0.92)" : "rgba(39, 39, 42, 0.92)",
-              stroke: "rgba(82, 82, 91, 0.6)"
-            });
-          }
-        }
-      }
-    }
-
-    // 3c) Node-Beam Skeleton (Always drawn when showBeams is on, or for high-strain/damaged beams!)
-    for (let bi = 0; bi < car.beamCount; ++bi) {
-      if (car.bBroken[bi]) continue;
-      const a = car.ba[bi], b = car.bb[bi];
-      const len = Math.hypot(car.px[b]-car.px[a], car.py[b]-car.py[a], car.pz[b]-car.pz[a]);
-      const strain = Math.abs(len - car.bBaseRest[bi]) / car.bBaseRest[bi];
-      if (!showBeams && showFlexbody && strain < 0.035) continue;
-
-      const pa = cam.project(car.px[a], car.py[a], car.pz[a]);
-      const pb = cam.project(car.px[b], car.py[b], car.pz[b]);
-      if (!pa || !pb) continue;
-
-      let col = "#38bdf8";
-      if (strain > 0.08) col = "#f43f5e";
-      else if (strain > 0.025) col = "#fbbf24";
-      else if (car.bZone[bi] >= ZONE_WHEEL_FL) col = "#34d399";
-      else if (ci === 1) col = "#c084fc";
-
-      drawQueue.push({
-        kind: "line", x0: pa[0], y0: pa[1], x1: pb[0], y1: pb[1],
-        z: 0.5 * (pa[2] + pb[2]) - 0.05,
-        color: col, w: strain > 0.03 ? 2.2 : 1.35
-      });
-    }
-  }
-
-  // Painter's Algorithm back-to-front sort
-  drawQueue.sort((a, b) => b.z - a.z);
-  for (let i = 0; i < drawQueue.length; ++i) {
-    const d = drawQueue[i];
-    if (d.kind === "poly") {
-      ctx.fillStyle = d.fill;
-      ctx.beginPath();
-      ctx.moveTo(d.pts[0][0], d.pts[0][1]);
-      for (let k = 1; k < d.pts.length; ++k) ctx.lineTo(d.pts[k][0], d.pts[k][1]);
-      ctx.closePath();
-      ctx.fill();
-      if (d.stroke) {
-        ctx.strokeStyle = d.stroke;
-        ctx.lineWidth = 0.85;
-        ctx.stroke();
-      }
-    } else {
-      ctx.strokeStyle = d.color;
-      ctx.lineWidth = d.w;
-      ctx.beginPath();
-      ctx.moveTo(d.x0, d.y0);
-      ctx.lineTo(d.x1, d.y1);
-      ctx.stroke();
-    }
+    // Cinematic Side Action Camera
+    const tgt = [cx, cy + 0.28, cz];
+    const eye = [cx - fz * 5.8 - fx * 1.4, cy + 1.35, cz + fx * 5.8 - fz * 1.4];
+    return [eye, tgt];
   }
 }
 
 // ============================================================================
-// HUD & Damage Silhouette Updater
+// 11. HUD & Damage Silhouette Updater
 // ============================================================================
 const gCanvas = document.getElementById("gMeter");
 const gCtx = gCanvas.getContext("2d");
 
 function zoneHealthColor(ratio) {
-  if (ratio < 0.03) return "#10b981"; // Emerald
-  if (ratio < 0.18) return "#f59e0b"; // Amber
-  return "#ef4444";                   // Red
+  if (ratio < 0.03) return "#10b981";
+  if (ratio < 0.18) return "#f59e0b";
+  return "#ef4444";
 }
 
 function updateHUD(car) {
@@ -1714,7 +2214,6 @@ function updateHUD(car) {
   document.getElementById("hudHbk").textContent = `${hbkPct}%`;
   document.getElementById("barHbk").style.width = `${hbkPct}%`;
 
-  // Per-zone damage analysis
   const zTot = new Uint16Array(7), zDmg = new Uint16Array(7);
   let deformed = 0, broken = 0;
   for (let i = 0; i < car.beamCount; ++i) {
@@ -1729,7 +2228,7 @@ function updateHUD(car) {
 
   document.getElementById("stNodes").textContent = car.nodeCount;
   document.getElementById("stBeams").textContent = car.beamCount;
-  document.getElementById("stTris").textContent = car.colTris.length;
+  document.getElementById("stTris").textContent = car.flexTris.length + 192;
   document.getElementById("stDeform").textContent = deformed;
   document.getElementById("stBroken").textContent = broken;
 
@@ -1746,7 +2245,6 @@ function updateHUD(car) {
   document.getElementById("svgWheelRL").setAttribute("fill", car.wheels[2].burst ? "#ef4444" : zoneHealthColor(zDmg[ZONE_WHEEL_RL] / (zTot[ZONE_WHEEL_RL] || 1)));
   document.getElementById("svgWheelRR").setAttribute("fill", car.wheels[3].burst ? "#ef4444" : zoneHealthColor(zDmg[ZONE_WHEEL_RR] / (zTot[ZONE_WHEEL_RR] || 1)));
 
-  // G-Force Meter Circle
   gCtx.clearRect(0, 0, 54, 54);
   gCtx.strokeStyle = "rgba(148, 163, 184, 0.35)";
   gCtx.lineWidth = 1;
@@ -1759,7 +2257,7 @@ function updateHUD(car) {
 }
 
 // ============================================================================
-// UI Event Listeners
+// 12. UI Event Listeners & Main Loop
 // ============================================================================
 document.querySelectorAll(".scnBtn").forEach(btn => {
   btn.onclick = () => { simTime = 0; spawnScenario(btn.dataset.scn); };
@@ -1800,7 +2298,6 @@ document.getElementById("btnAudio").onclick = e => {
   e.currentTarget.classList.toggle("active", on);
 };
 
-// Tuning drawer
 const drawer = document.getElementById("tuningDrawer");
 document.getElementById("btnTuning").onclick = () => drawer.classList.toggle("open");
 document.getElementById("closeTuning").onclick = () => drawer.classList.remove("open");
@@ -1829,9 +2326,6 @@ document.getElementById("btnApplyTuning").onclick = () => {
   drawer.classList.remove("open");
 };
 
-// ============================================================================
-// Main 2000 Hz Simulation Loop + URL Query Support for Browser Testing
-// ============================================================================
 let simTime = 0;
 let lastFrameTs = performance.now();
 
@@ -1847,7 +2341,32 @@ function stepWorldFrame(frameDt) {
     simTime += DT;
   }
 
-  // Update G-Force & Audio for active car
+  for (const car of cars) {
+    if (car.sparkPos && car.impactImpulse > 0.35) {
+      const [sx, sy, sz] = car.sparkPos;
+      for (let k = 0; k < 5; ++k) {
+        particles.spawn(
+          sx, sy, sz,
+          (Math.random() - 0.5) * 9, 2 + Math.random() * 5, (Math.random() - 0.5) * 9,
+          [1.0, 0.72 + Math.random() * 0.25, 0.15, 0.95], 0.045, 0.28 + Math.random() * 0.2
+        );
+      }
+      car.sparkPos = null;
+    }
+    if (car.controls.handbrake > 0.5 || (car.controls.throttle > 0.8 && Math.abs(car.controls.steer) > 0.5)) {
+      for (let wi = 2; wi < 4; ++wi) {
+        const w = car.wheels[wi];
+        if (!w || !w._center) continue;
+        particles.spawn(
+          w._center[0], w._center[1] - 0.22, w._center[2],
+          (Math.random() - 0.5) * 1.2, 0.5 + Math.random() * 0.8, (Math.random() - 0.5) * 1.2,
+          [0.85, 0.88, 0.92, 0.38], 0.14, 0.45
+        );
+      }
+    }
+  }
+  particles.update(scaledDt);
+
   const active = cars[playerIdx];
   if (active) {
     const v = active.velocityVec();
@@ -1864,18 +2383,24 @@ function stepWorldFrame(frameDt) {
   }
 }
 
+function renderFrame() {
+  const activeCar = cars[playerIdx] || cars[0];
+  const [eye, tgt] = computeCameraEyeTarget(activeCar);
+  renderer.render(env, cars, eye, tgt, camPitch);
+  updateHUD(activeCar);
+}
+
 function mainLoop(ts) {
   const frameDt = (ts - lastFrameTs) * 0.001;
   lastFrameTs = ts;
   stepWorldFrame(frameDt);
-  renderScene();
-  if (cars[playerIdx]) updateHUD(cars[playerIdx]);
+  renderFrame();
   requestAnimationFrame(mainLoop);
 }
 
 spawnScenario("proving_grounds");
 
-// Support ?scn=...&steps=...&xray=1 for automated Chromium inspection
+// Support ?scn=...&steps=...&xray=1&preset=... for automated Chromium inspection
 const q = new URLSearchParams(window.location.search);
 if (q.has("preset")) {
   currentPreset = q.get("preset");
@@ -1896,10 +2421,9 @@ if (q.has("steps")) {
     if (cars.length >= 2) collideVehicles(cars[0], cars[1]);
     simTime += DT;
   }
-  timeScale = 0; // Pause at exact step for screenshot
+  timeScale = 0;
 }
-for (let k = 0; k < 10; ++k) renderScene();
-if (cars[playerIdx]) updateHUD(cars[playerIdx]);
+for (let k = 0; k < 12; ++k) renderFrame();
 requestAnimationFrame(mainLoop);
 </script>
 </body>
