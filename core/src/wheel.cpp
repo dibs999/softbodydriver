@@ -44,15 +44,109 @@ real PressureWheel::measureAngularVelocity(const SoftBody& body, real* outInerti
     return inertia > 1e-6 ? num / inertia : 0.0;
 }
 
+void PressureWheel::resetCondition(SoftBody& body) {
+    burst = false;
+    wear = 0.0;
+    tempC = spec.ambientTempC;
+    coldPressurePsi = spec.pressurePsi;
+    pressurePsi = spec.pressurePsi;
+    leakPsiPerS = 0.0;
+    grip = 1.0;
+    appliedGrip = -1.0;
+    appliedSpokeFactor = -1.0;
+    conditionCounter = 0;
+    auto& beams = body.beams();
+    for (std::size_t i = 0; i < spokeBeams.size() && i < spokeBaseSpring.size(); ++i)
+        beams[spokeBeams[i]].spring = spokeBaseSpring[i];
+    for (std::uint32_t n : treadNodes) body.setNodeFriction(n, spec.friction);
+}
+
+void PressureWheel::puncture(real psiPerSecond) {
+    leakPsiPerS = std::max(leakPsiPerS, psiPerSecond);
+    if (psiPerSecond > 500.0) burst = true;
+}
+
 void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, real dt) {
-    // Check if any wheel beam broke -> tire deflates.
-    if (!burst) {
+    // ------------------------------------------------------------- structural damage
+    if (conditionCounter-- <= 0) {
+        conditionCounter = 19;  // ~100 Hz
         const auto& beams = body.beams();
+        real worstDent = 0.0;
         for (std::uint32_t bi : beamIndices) {
-            if (beams[bi].broken) {
+            const Beam& b = beams[bi];
+            if (b.broken) {
                 burst = true;
                 break;
             }
+            worstDent = std::max(worstDent, std::abs(b.restLength - b.baseRestLength) / b.baseRestLength);
+        }
+        // A bent rim / cut sidewall lets the air out slowly.
+        if (worstDent > 0.02) leakPsiPerS = std::max(leakPsiPerS, std::min<real>(6.0, 60.0 * (worstDent - 0.02)));
+    }
+
+    // ------------------------------------------------------------- load, slip, heat, wear
+    {
+        const auto& pos = body.positions();
+        const auto& vel = body.velocities();
+        const Vec3 a0 = axis(body);
+        const Vec3 c0 = center(body);
+        real minR = spec.radius;
+        for (std::uint32_t idx : treadNodes) {
+            const Vec3 rel = pos[idx] - c0;
+            minR = std::min(minR, length(rel - a0 * dot(rel, a0)));
+        }
+        const real deflection = std::max<real>(0.0, spec.radius - minR);
+        const real pressureFactor = std::clamp<real>(pressurePsi / std::max<real>(1.0, spec.pressurePsi), 0.15, 1.3);
+        load = deflection * 2.6e5 * pressureFactor;
+        const Vec3 vh = (vel[spec.hubLeft] + vel[spec.hubRight]) * 0.5;
+        const Vec3 fwd = normalize(cross(Vec3{0, 1, 0}, a0) * -1.0);
+        const real vLong = dot(vh, fwd);
+        const real vLat = dot(vh, a0);
+        const real vRoll = angularVelocity * spec.radius;
+        slipSpeed = load > 50.0 ? std::sqrt((vRoll - vLong) * (vRoll - vLong) + vLat * vLat) : 0.0;
+        // The node-beam tyre always creeps a little; only real sliding heats and wears the rubber.
+        const real sliding = std::max<real>(0.0, slipSpeed - 1.0);
+        const real slipPower = spec.friction * grip * load * sliding;            // W into the rubber
+        const real rollPower = 0.012 * load * std::abs(vLong);                   // hysteresis
+        const real heatCap = 1500.0 * spec.tireMass;
+        const real cooling = (8.0 + 2.5 * std::abs(vLong)) * (tempC - spec.ambientTempC);
+        tempC += (0.9 * slipPower + rollPower - cooling) / heatCap * dt;
+        const real hotWear = 1.0 + std::max<real>(0.0, tempC - 110.0) / 35.0;
+        wear += spec.wearRate * slipPower * hotWear / 1.2e7 * dt;
+        if (wear >= 1.0 || tempC >= spec.burstTempC) burst = true;
+        wear = std::min<real>(wear, 1.0);
+    }
+
+    // ------------------------------------------------------------- pressure (ideal gas + leaks)
+    if (burst) {
+        coldPressurePsi = 0.0;
+    } else if (leakPsiPerS > 0.0) {
+        coldPressurePsi = std::max<real>(0.0, coldPressurePsi - leakPsiPerS * dt);
+    }
+    {
+        const real absCold = coldPressurePsi + 14.7;
+        const real absHot = absCold * (tempC + 273.15) / (spec.ambientTempC + 273.15);
+        pressurePsi = coldPressurePsi > 0.0 ? std::max<real>(0.0, absHot - 14.7) : 0.0;
+    }
+
+    // ------------------------------------------------------------- stiffness + grip (throttled)
+    if (conditionCounter == 0) {
+        const real pf = std::clamp<real>(pressurePsi / std::max<real>(1.0, spec.pressurePsi), 0.0, 1.35);
+        const real spokeFactor = 0.08 + 0.92 * pf;
+        if (std::abs(spokeFactor - appliedSpokeFactor) > 0.01) {
+            auto& beams = body.beams();
+            for (std::size_t i = 0; i < spokeBeams.size() && i < spokeBaseSpring.size(); ++i)
+                beams[spokeBeams[i]].spring = spokeBaseSpring[i] * spokeFactor;
+            appliedSpokeFactor = spokeFactor;
+        }
+        real g = 1.0 - 0.3 * std::pow(wear, 1.5);
+        if (tempC < 70.0) g *= 0.95 + 0.05 * std::clamp<real>((tempC - 20.0) / 50.0, 0.0, 1.0);
+        else if (tempC > 105.0) g *= std::max<real>(0.6, 1.0 - (tempC - 105.0) / 180.0);
+        if (pressurePsi < 8.0) g *= 0.65;  // running on the rim / flat sidewall
+        grip = g;
+        if (std::abs(grip - appliedGrip) > 0.005) {
+            for (std::uint32_t n : treadNodes) body.setNodeFriction(n, spec.friction * grip);
+            appliedGrip = grip;
         }
     }
 
@@ -76,7 +170,7 @@ void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, rea
     // Gauge air pressure force per tread node (if not punctured).
     // Precompression of the spoke beams already carries the static inflation tension;
     // this dynamic radial term increases stiffness with pressure and vanishes on a flat tire.
-    const real pressurePa = (!burst && spec.pressurePsi > 0) ? spec.pressurePsi * kPsiToPa : 0.0;
+    const real pressurePa = (!burst && pressurePsi > 0) ? pressurePsi * kPsiToPa : 0.0;
     const real patchAreaPerNode = (2.0 * kPi * spec.radius * spec.width) / static_cast<real>(treadNodes.size());
     // Scaled so 32 PSI adds a realistic ~180 N outward radial preload per tread node.
     const real radialPressureForce = 0.02 * pressurePa * patchAreaPerNode;
@@ -100,6 +194,21 @@ void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, rea
     // Equal and opposite reaction on the spindle nodes -> exact linear momentum conservation.
     force[spec.hubLeft] -= sumForce * 0.5;
     force[spec.hubRight] -= sumForce * 0.5;
+
+    // Reaction couples (angular momentum conservation): drive torque into the engine / diff,
+    // brake torque into the upright.
+    auto couple = [&](std::int64_t na, std::int64_t nb, real torque) {
+        if (na < 0 || nb < 0 || torque == 0.0) return;
+        const Vec3 d = pos[static_cast<std::size_t>(na)] - pos[static_cast<std::size_t>(nb)];
+        const real d2 = lengthSq(d);
+        if (d2 < 1e-6) return;
+        const Vec3 tau = a * (-torque);
+        const Vec3 f = cross(tau, d) / d2;
+        force[static_cast<std::size_t>(na)] += f;
+        force[static_cast<std::size_t>(nb)] -= f;
+    };
+    couple(spec.driveReactionA, spec.driveReactionB, driveTorque);
+    couple(spec.brakeReactionA, spec.brakeReactionB, signedBrake);
 }
 
 PressureWheel addPressureWheel(SoftBody& body, const PressureWheelSpec& spec) {
@@ -169,10 +278,12 @@ PressureWheel addPressureWheel(SoftBody& body, const PressureWheelSpec& spec) {
         const std::uint32_t l0 = nodeAt(1, i), l1 = nodeAt(1, i + 1);
 
         // Spokes from both rings to BOTH hub nodes -> locks axial & camber, free rotation around spindle!
-        addWheelBeam(r0, spec.hubRight, spoke);
-        addWheelBeam(r0, spec.hubLeft, spoke);
-        addWheelBeam(l0, spec.hubLeft, spoke);
-        addWheelBeam(l0, spec.hubRight, spoke);
+        for (auto pr : {std::pair{r0, spec.hubRight}, std::pair{r0, spec.hubLeft}, std::pair{l0, spec.hubLeft},
+                        std::pair{l0, spec.hubRight}}) {
+            addWheelBeam(pr.first, pr.second, spoke);
+            w.spokeBeams.push_back(w.beamIndices.back());
+            w.spokeBaseSpring.push_back(spoke.spring);
+        }
 
         // Circumferential tread edges
         addWheelBeam(r0, r1, tread);
@@ -188,6 +299,9 @@ PressureWheel addPressureWheel(SoftBody& body, const PressureWheelSpec& spec) {
         addWheelBeam(l0, nodeAt(1, i + 2), belt);
     }
 
+    w.tempC = spec.ambientTempC;
+    w.pressurePsi = spec.pressurePsi;
+    w.coldPressurePsi = spec.pressurePsi;
     return w;
 }
 

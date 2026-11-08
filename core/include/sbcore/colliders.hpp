@@ -33,6 +33,11 @@ struct StaticCollider {
     real cellSizeX = 1.0, cellSizeZ = 1.0;
     std::vector<real> heights;  ///< Size nx * nz, row-major: heights[ix * nz + iz].
 
+    // Broadphase bounds (world space). Planes are unbounded.
+    bool unbounded = true;
+    Vec3 boundsLo{-kInf, -kInf, -kInf}, boundsHi{kInf, kInf, kInf};
+    void computeBounds();
+
     static StaticCollider plane(const Vec3& point, const Vec3& normal, real friction = 1.0,
                                 const std::string& name = "ground");
     static StaticCollider box(const Vec3& center, const Vec3& halfExtents, const Vec3& eulerRadians = {},

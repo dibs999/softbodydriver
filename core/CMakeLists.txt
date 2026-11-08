@@ -1,5 +1,9 @@
 set(SBCORE_SOURCES
   src/builders.cpp
+  src/car_build.cpp
+  src/car_json.cpp
+  src/car_systems.cpp
+  src/car_visual.cpp
   src/c_api.cpp
   src/colliders.cpp
   src/powertrain.cpp
@@ -29,3 +33,6 @@ target_include_directories(sbcore_shared PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/incl
 target_include_directories(sbcore_shared SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/third_party)
 target_link_libraries(sbcore_shared PRIVATE sb_warnings)
 set_target_properties(sbcore_shared PROPERTIES OUTPUT_NAME "sbcore")
+# On Windows the DLL's import library would otherwise be called sbcore.lib too and overwrite
+# the static library of the same name.
+set_target_properties(sbcore_shared PROPERTIES ARCHIVE_OUTPUT_NAME "sbcore_dll")

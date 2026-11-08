@@ -1,61 +1,189 @@
 # SoftBodyDriver
 
-Soft-Body-Fahrzeugphysik nach dem Node-Beam-Prinzip (inspiriert von *Rigs of Rods* und *BeamNG.drive*): Fahrzeuge sind keine starren Körper, sondern Gitter aus Massepunkten (**Nodes**) und Feder-Dämpfern (**Beams**), die mit **2000 Hz** berechnet werden, sich plastisch verbeulen und samt Bruchgruppen (`breakGroup`) abreißen können. Auch die Räder (**Pressure Wheels**), die Radaufhängung und die Lenkung (`hydro`-Spurstangen) bestehen vollständig aus Nodes und Beams.
+Soft-Body-Fahrzeugsimulation als **native Desktop-App für Windows, macOS und Linux**. Autos sind keine starren Körper, sondern Strukturen aus Massepunkten (**Nodes**) und Feder-Dämpfern (**Beams**). Berechnet wird mit **2000 Hz** in C++. Karosserie, Fahrwerk, Reifen, Motor und Kühler bestehen aus dieser Struktur, verformen sich bleibend und können brechen. Der Schaden wirkt sich auf die Technik aus: Ein eingedrückter Kühler verliert Kühlmittel, der Motor überhitzt und frisst sich fest.
 
-## Projektstruktur
+## Architektur
 
-| Pfad | Inhalt |
+```
+┌────────────────────────────── game/ (Godot 4.5, GDScript) ─────────────────────────────┐
+│  Hauptmenü · Karten · Kameras · HUD · Sound · KI-Verkehr · Eingabe (Tastatur/Gamepad)   │
+└───────────────▲─────────────────────────────────────────────────────────┬──────────────┘
+                │ Telemetrie, verformte Meshes                             │ Steuerung
+┌───────────────┴──────────── gdextension/ (C++, GDExtension) ────────────▼──────────────┐
+│  SBWorld: Physik-Thread (2000 Hz, Echtzeit-Takt)  ·  SBVehicle: Flexbody-Skinning,      │
+│  Räder, Node-Beam-Röntgenansicht, Steuerung → Physik, Telemetrie → Spiel                 │
+└───────────────▲────────────────────────────────────────────────────────────────────────┘
+┌───────────────┴──────────── core/ (sbcore, C++20, engine-unabhängig) ──────────────────┐
+│  Nodes/Beams (normal, support, anisotropic, hydro, shock), Torsionsstäbe, Plastizität,  │
+│  Bruch, Pressure Wheels, Antriebsstrang, Traktionskontrolle/ABS, Kollisionen, Terrain,  │
+│  Fahrzeug-Generator (*.car.json → Struktur + Render-Mesh), CarSystems (Kühlung, Öl,     │
+│  Motorschaden, Kraftstoff, Bremstemperatur, Schadenszonen)                               │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Warum nicht mehr im Browser?** Die Physik läuft jetzt nativ in C++ auf einem eigenen Thread statt in JavaScript. Dadurch reicht die Leistung für detailliertere Autos und mehrere Fahrzeuge gleichzeitig: 3 Autos brauchen etwa 15 % eines CPU-Kerns. Godot übernimmt Rendering, Eingabe, Audio und den Export als `.exe` (Windows) und `.app` (macOS, Universal).
+
+## Fahrzeuge
+
+Jedes Auto ist eine Datendatei in `game/cars/*.car.json` mit realen Werten:
+
+- Abmessungen und Karosserieform: Länge, Breite, Höhe, Radstand, Überhänge, Spurweiten, Haubenlänge, Neigung von Front- und Heckscheibe, Dachlänge
+- Masse und Gewichtsverteilung
+- Fahrwerk: Radrate, Druck- und Zugstufe, Stabilisator, Federwege
+- Reifen
+- Motor: Drehmomentkurve, Getriebe, Achsübersetzung, Antriebsart
+- Kühler, Tank
+
+Aus einer Datei erzeugt der Generator:
+
+- **Karosserie-Struktur** mit Knautschzonen vorne und hinten und steifer Fahrgastzelle
+- **Doppelquerlenker-Fahrwerk** an allen vier Rädern mit steifem Radträger, Schraubenfeder, Stoßdämpfer (getrennte Druck- und Zugstufe), Anschlagpuffer, Fangband, Spurstange (vorne gelenkt) und Stabilisator als Torsionsstab
+- **Motorblock** (8 schwere Nodes) auf brechbaren Motorlagern, **Kühler** hinter der Stoßstange, **Ölwanne** unter dem Motor, **Tank** unter der Rückbank, **Kardanwelle** (bei Heck- und Allradantrieb)
+- **Pressure-Wheels**: Reifen aus Nodes mit Innendruck, die platzen können
+- **Render-Mesh**: Lack, Glas, Scheinwerfer, Rückleuchten, Grill, Spiegel, Türfugen und -griffe, Innenraum mit Sitzen, Armaturenbrett und Lenkrad. Dazu sichtbare Querlenker, Schraubenfedern, Dämpfer, Bremssättel, Motor und Wellen. Das Mesh ist an die Nodes gebunden (Flexbody), deshalb erscheint jede Delle der Physik auch am sichtbaren Auto.
+
+| Datei | Fahrzeug | Antrieb | Leistung | Masse |
+|---|---|---|---|---|
+| `concept_gt` | Concept-GT mit **importiertem Detail-Modell** (glTF, CC-BY 4.0) | RWD | 4,0 l V8 Biturbo, 456 kW | 1580 kg |
+| `kestrel_hatch` | Kompakt-Fließheck (C-Segment) | FWD | 1,5 l Turbo, 110 kW | 1290 kg |
+| `aurora_sedan` | Mittelklasse-Limousine | RWD | 2,0 l Turbo, 190 kW | 1590 kg |
+| `vortex_gt` | V8-Sportcoupé | RWD, Sperre | 5,0 l V8, 335 kW | 1720 kg |
+| `basalt_suv` | Mittelgroßer SUV | AWD | 3,5 l V6, 220 kW | 2050 kg |
+
+Marken und Modelle sind frei erfunden, Maße und Fahrleistungen entsprechen echten Autos der jeweiligen Klasse.
+
+### Echte 3D-Automodelle importieren (Flexbody)
+
+Jede Fahrzeugdatei kann über `visualModel` auf ein **glTF/GLB-Modell** verweisen. Das Spiel richtet das Modell automatisch aus (Achsen, Länge, Bodenhöhe) und bindet jeden Vertex an die nächsten Nodes der Physik-Struktur, wie die Flexbodies in BeamNG. Dellen, abgerissene Frontpartien und platte Reifen erscheinen dadurch am Detail-Modell. Die Räder des Modells werden als drehende Räder übernommen, auch wenn sie im Modell eingelenkt gespeichert sind. Beispiel: `game/cars/concept_gt.car.json` mit dem frei lizenzierten Modell [„Car Concept“ (Khronos, CC-BY 4.0)](game/models/carconcept/LICENSE.md).
+
+So kommt ein eigenes Auto ins Spiel:
+
+1. `.glb` nach `game/models/<name>/` legen.
+2. Eine vorhandene `.car.json` kopieren und Maße, Radstand, Spur und Reifenradius an das Modell anpassen.
+3. `visualModel` eintragen: Pfad, Vorwärts- und Hochachse, Namen der vier Rad-Nodes, auszublendende Teile. Details in [docs/CAR_FORMAT.md](docs/CAR_FORMAT.md).
+
+> **Echte Marken (Mercedes, BMW, …):** Freie Modelle solcher Autos gibt es zum Beispiel auf Sketchfab, meist unter CC-BY oder mit „Editorial Use“. Das Urheberrecht am 3D-Modell ist aber nur ein Teil. Name, Logo und Design gehören den Herstellern, und ein veröffentlichtes Spiel braucht dafür deren Lizenz. Deshalb nutzt auch BeamNG erfundene Marken. Für **private Nutzung** kannst du solche Modelle über den Import-Weg oben einbinden, ins Repository oder in Releases sollten sie nicht. Neue Autos legst du an, indem du eine `.car.json` kopierst und anpasst. Das Spiel findet sie automatisch. Das Format ist in [docs/CAR_FORMAT.md](docs/CAR_FORMAT.md) beschrieben.
+
+### Schadensmodell (aus der Physik abgeleitet, nicht geskriptet)
+
+| Bauteil | Ursache | Folge |
+|---|---|---|
+| Kühler | Verformung oder Bruch der Kühler-Beams | Kühlmittelleck → weniger Kühlleistung → Überhitzung → Leistungsverlust → Zylinderkopfdichtung → Motor fest |
+| Ölwanne | Aufsetzen, Bordstein | Ölverlust → kein Öldruck → Lagerverschleiß → Motor fest |
+| Motorblock | Verformung bei schwerem Frontcrash | Leistungsverlust und mehr Reibung, bei Totalschaden fest |
+| Motorlager / Kardanwelle | Bruch | Kraftfluss unterbrochen |
+| Tank | Beschädigung | Kraftstoffleck |
+| Bremsen | Scheibentemperatur | Fading ab ca. 450 °C |
+| Reifen | Rutschen erzeugt Wärme und Abrieb, Hitze erhöht den Luftdruck. Verbeulte Felge oder Flanke führt zu schleichendem Luftverlust | Weniger Grip bei kalten, überhitzten oder abgefahrenen Reifen. Platzen bei abgefahrener Lauffläche (Verschleiß 100 %) oder über 175 °C. Ein platter Reifen sackt sichtbar zusammen |
+| Fahrwerk | Verformung von Lenkern und Radträger | Schiefe Räder, Spur und Sturz verstellt |
+
+Weitere Systeme: Thermostat, elektrischer Lüfter, Fahrtwind am Kühler, Öltemperatur, Kraftstoffverbrauch nach spezifischem Verbrauch (BSFC), Abwürgen, Anlasser, Traktionskontrolle mit Motor- und Bremseingriff, ABS.
+
+## Spielen
+
+### Fertige Builds
+
+Die CI erzeugt bei jedem Push ins Repository ladbare Builds als Artefakte:
+
+- `SoftBodyDriver-windows-x64`
+- `SoftBodyDriver-macos-universal` (Apple Silicon und Intel)
+- `SoftBodyDriver-linux-x64`
+
+Der macOS-Build ist nicht signiert. Öffne ihn beim ersten Start per Rechtsklick → *Öffnen*.
+
+### Aus dem Quellcode (Windows / macOS / Linux)
+
+Du brauchst CMake ≥ 3.20, einen C++20-Compiler (MSVC 2022, Xcode/Clang oder GCC), Python 3 (für den godot-cpp-Generator) und [Godot 4.5](https://godotengine.org/download).
+
+```bash
+# 1. GDExtension bauen (lädt godot-cpp automatisch); landet in game/bin/
+cmake -S . -B build-gd -DCMAKE_BUILD_TYPE=Release -DSB_BUILD_GDEXTENSION=ON -DSB_BUILD_TESTS=OFF -DSB_BUILD_APPS=OFF
+cmake --build build-gd --config Release --parallel
+
+# 2. Spiel starten (oder game/project.godot im Godot-Editor öffnen und F5 drücken)
+godot --path game
+```
+
+Für exportierte Release-Builds zusätzlich `-DGODOTCPP_TARGET=template_release` bauen und dann im Editor *Projekt → Exportieren* wählen. Die Presets für Windows, macOS und Linux liegen bereits in `game/export_presets.cfg`.
+
+### Steuerung
+
+| Taste | Funktion |
 |---|---|
-| `core/` | **`sbcore`** – engine-unabhängige C++20-Physikbibliothek (Nodes, Beams, Plastizität, Bruch, Pressure-Wheels, 5-Gang-Antriebsstrang, ColTri-Kollisionsdreiecke, Heightfield-Terrain, `.sbeam.json`-Loader, C-ABI, Replay-Recorder). |
-| `core/tests/` | Unit-Tests (doctest): 27 Test-Suites (freier Fall, Feder-Schwingung, Plastizität, Bruchgruppen, Pressure-Wheels, Getriebe/Schaltung, Hydro-Lenkung, Auto-gegen-Auto ColTri-Crash, Aerodynamik, Heightfield, C-ABI). |
-| `web/index.html` | **Live spielbares WebGL-3D-Spiel im Browser (2000 Hz Echtzeit)** – Hardwarebeschleunigter WebGL-PBR-Renderer, in **Blender 4.2** modellierte 3D-Flexbody-Fahrzeuge & Strecken-Assets, Röntgen-Node-Beam-Ansicht (`B`), Live-Steuerung (`WASD`/Pfeiltasten, `Space`, `R`, `C`, `Tab`), 5 Szenarien, 3 Fahrzeug-Presets, KI-Gegner, Tuning-Menü, Schadens-Silhouette-HUD & WebAudio-Motorsound. |
-| `content/models/` | **Blender 4.2 3D-Assets (`.blend` & `.glb`)** – Master-Szene `softbodydriver_assets.blend` sowie Einzel-glTF-Modelle (`etk_coupe.glb`, `bruckell_muscle.glb`, `gavril_offroad.glb`, `euroncap_barrier.glb`, `jersey_barrier.glb`, `steel_bollard.glb`, `traffic_cone.glb`, `tire_stack.glb`, `pine_tree.glb`). |
-| `tools/blender_build_models.py` | **Blender-4.2-Modellierungs-Pipeline (`bpy` + `bmesh`)** – Erzeugt alle 3D-Fahrzeuge und Umgebungs-Assets samt EdgeSplit-Normalen und PBR-Materialien und exportiert `.blend`, `.glb` sowie `web/blender_models.js`. |
-| `apps/sbsim/` | Kommandozeilen-Simulator zum Ausführen, Benchmarken und Aufzeichnen von Szenen. |
-| `tools/make_viewer.py` | Packt aufgezeichnete C++-Simulationen in einen interaktiven 3D-Replay-Viewer (`.html`). |
-| `tools/test_c_api.py` | Testet die dynamische Bibliothek (`libsbcore.so` / `sbcore.dll` / `libsbcore.dylib`) über die C-ABI. |
-| `game/` | Godot-4-Projektgerüst mit vorkonfigurierten Eingaben (WASD / Pfeiltasten, Leertaste, R). |
-| `content/vehicles/` | Beispiel-Objekte & Fahrzeuge im `.sbeam.json`-Format (`drivable_car.sbeam.json`, `test_car.sbeam.json`, `test_box.sbeam.json`). |
-| `docs/` | [SBEAM_FORMAT.md](docs/SBEAM_FORMAT.md) und [GODOT_INTEGRATION.md](docs/GODOT_INTEGRATION.md). |
-| `.github/workflows/ci.yml` | Baut und testet automatisch für **Windows (x64)**, **macOS (Universal: Apple Silicon + Intel)** und **Linux**. |
+| `W` / `S` | Gas / Bremse (im Stand halten = Rückwärtsgang) |
+| `A` / `D` | Lenken |
+| `Leertaste` | Handbremse |
+| `Q` / `E`, `M` | Gang runter / hoch, Automatik oder Manuell (`Shift` = Kupplung) |
+| `I` | Motor starten / abstellen |
+| `T` / `Z` | Traktionskontrolle / ABS ein/aus |
+| `C`, `V` | Kamera wechseln (Verfolger, Orbit, Cockpit, Motorhaube, Streckenrand), Rückblick |
+| Rechte Maustaste, Mausrad | Umsehen, Zoom |
+| `R` / `Rücktaste` | Zurücksetzen / an Ort und Stelle reparieren |
+| `B` | Node-Beam-Röntgenansicht (verformte Beams gelb bis rot) |
+| `J`, `P` | Zeitlupe (×0,5 / ×0,25 / ×0,1), Physik pausieren |
+| `Tab` | Fahrzeug wechseln |
+| `F6` | Hindernis-Auto vor dir abstellen |
+| `F1`, `Esc` | Hilfe, Pausenmenü |
+| Gamepad | RT/LT Gas/Bremse, linker Stick lenken, A Handbremse, LB/RB schalten, Y Kamera, B Reset |
 
-## Sofort live spielen (Windows, macOS, Linux)
+### Karten
 
-Öffne einfach `web/index.html` direkt in einem modernen Browser (Chrome, Edge, Safari, Firefox) – ohne Installation:
-- **`WASD` / Pfeiltasten:** Gas, Bremse/Rückwärts, Lenken
-- **`Leertaste`:** Handbremse (Drift)
-- **`R` / `Shift+R`:** Szene zurücksetzen / Fahrzeug vor Ort reparieren
-- **`B`:** Röntgen-Modus (Node-Beam-Skelett live unter der 3D-Karosserie einblenden)
-- **`C`:** Kamera wechseln (Verfolger, Cockpit, Freier Orbit, Action-Seite)
-- **`Tab`:** Zwischen Spieler-Fahrzeug und KI-Fahrzeug umschalten
+- **Testgelände**: Asphaltfläche mit Oval (KI-Verkehr), Sprungrampen, Bodenwellen, Schlaglochpiste, Leitplanken, Crash-Wand, Mast für Seitenaufprall, Slalom und Hügel
+- **Autobahn**: 6 km Ring mit 2×3 Spuren, Beton-Mittelleitplanke, Schutzplanken, Brücken, Schilderbrücken, Beleuchtung und Gegenverkehr
+- **Stadt**: Straßenraster mit echten Bordsteinkanten, Hochhäusern mit Fensterfassaden, Ampeln, Laternen, Park und Stadtverkehr
+- **Wüste**: 1 km² Dünen und Tafelberge, Schotterpiste mit Sprüngen, Felsbrocken und Kakteen
+- **Hügelland**: prozedurales Terrain mit kurviger Landstraße über Kuppen und durch Senken, dazu Wald
 
-## C++20-Kern selbst bauen (Windows, macOS, Linux)
+Statische Hindernisse laufen über eine Broadphase. Deshalb bremsen auch Karten mit über 600 Kollisionsobjekten (Leitplanken, Gebäude) die 2000-Hz-Physik nicht aus.
 
-Voraussetzungen: CMake ≥ 3.20, C++20-Compiler (MSVC, Clang oder GCC), optional Python 3 für den HTML-Viewer.
+### HUD
+
+Kombiinstrument mit Drehzahlmesser und Tacho als Rundinstrumente, dazu Digitaltempo, Gang und Getriebemodus, Tank- und Temperaturanzeige. Warnleuchten gibt es für Motor, Öldruck, Temperatur, Kühlmittel, Tank, Reifen, TCS, ABS und Handbremse. Daneben zeigen Panels Kühlwasser, Öl und Kraftstoff, die Reifen (Verschleiß, Temperatur, Luftdruck) und die Schäden in der Draufsicht.
+
+## Entwicklung
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --parallel
-ctest --test-dir build -C Release --output-on-failure
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure                       # Unit-Tests (Physik, Fahrwerk, Kühlung, Crash, ...)
+./build/apps/sbsim/cartest game/cars/aurora_sedan.car.json       # Prüfstand: Einfedern, 0-100, Bremsen, Kurve, Crash + Kühlsystem
+./build/apps/sbsim/sbsim --list                                  # klassische Physik-Testszenen + Replay-Viewer (tools/make_viewer.py)
+godot --headless --path game -s res://tests/smoke_test.gd        # GDExtension-Smoke-Test
 ```
 
-## C++-Szenen ausführen & im 3D-Replay-Viewer ansehen
+Beispielausgabe des Prüfstands:
 
-```bash
-# Alle eingebauten Szenen auflisten / benchmarken:
-./build/apps/sbsim/sbsim --list
-./build/apps/sbsim/sbsim --bench
-
-# Mehrere Crash- & Fahrszenen simulieren und als 3D-Replay speichern:
-./build/apps/sbsim/sbsim --scene head_on_crash --record head_on.json
-./build/apps/sbsim/sbsim --scene t_bone_crash  --record t_bone.json
-./build/apps/sbsim/sbsim --scene hill_climb    --record hill_climb.json
-python3 tools/make_viewer.py -o softbody_replay.html head_on.json t_bone.json hill_climb.json
 ```
+== Aurora 330t Sedan (aurora_sedan)
+   nodes 367, beams 1887, coltris 332, torsionbars 2, mass 1590 kg (+tyres), stability 0.87
+   settle: floor 0.157 m (design 0.195, delta -0.038), 24.1x real time
+   accel: 0-100 km/h 7.2 s
+   brake: 100 -> 0 km/h: 35.9 m
+   corner: steer +0.35 @ 49 km/h -> yaw 26 deg/s, lateral 0.63 g
+   crash (50 km/h): front 33%, radiator 43%
+     +10s coolant 94 C, level 73%   ...   +60s coolant 145 C, level 0%, 'ENGINE SEIZED'
+```
+
+| Pfad | Inhalt |
+|---|---|
+| `core/` | Physik-Kern `sbcore` mit Fahrzeug-Generator und CarSystems |
+| `core/tests/` | doctest-Unit-Tests |
+| `gdextension/` | Godot-Anbindung (`SBWorld`, `SBVehicle`) |
+| `game/` | Godot-Projekt: Szenen, Skripte, Autos (`cars/`), Export-Presets, Headless-Tests (`tests/`) |
+| `apps/sbsim/` | `sbsim` (Szenen, Benchmarks, Replays) und `cartest` (Fahrzeug-Prüfstand) |
+| `content/vehicles/` | Beispiel-Strukturen im Low-Level-Format `.sbeam.json` |
+| `docs/` | [CAR_FORMAT.md](docs/CAR_FORMAT.md), [SBEAM_FORMAT.md](docs/SBEAM_FORMAT.md), [GODOT_INTEGRATION.md](docs/GODOT_INTEGRATION.md) |
 
 ## Roadmap
 
-- [x] **Phase 0 & 1:** C++20-Physik-Kern (2000 Hz), Beam-Typen (`normal`, `support`, `anisotropic`, `hydro`), plastische Verformung + Bruchgruppen, Ebenen- & Box-Kollision mit Reibung, `.sbeam.json`-Format, 3D-Replay-Viewer, Windows/macOS/Linux-CI.
-- [x] **Phase 2:** **Pressure Wheels** (Node-Beam-Reifen mit Innendruck & Reifenplatzer), Einzelradaufhängung (Querlenker + Federbeine + Bump-Stops), **Hydro-Spurstangen-Lenkung**, **Antriebsstrang** (Motorkennlinie, Leerlaufregler, Drehzahlbegrenzer, Kupplung, 5-Gang-Automatik/Manuell, Sperrdifferential, Bremskraftverteilung), C-ABI (`sbcore.dll` / `.dylib` / `.so`) & Godot-4-Projektgerüst.
-- [x] **Phase 3:** Kollisions-Dreiecke (`ColTri`), Auto-gegen-Auto-Crash (`head_on_crash`, `t_bone_crash`), Aerodynamik (Luftwiderstand & Abtrieb pro Dreieck), Terrain-Heightfield (`hill_climb`).
-- [x] **Phase 4 & 5:** Live spielbares 3D-Spiel (`web/index.html`) mit **3D-Flexbody-Karosserie** + umschaltbarem **Node-Beam-Röntgenblick (`B`)**, **Echtzeit-Steuerung (`WASD`, Handbremse, Zeitlupe, Reset `R`, 4 Kameras `C`)**, **3 Fahrzeug-Presets + Live-Tuning-Menü**, **KI-Gegnern**, **BeamNG-Schadens-Silhouette-App**, **G-Kräfte-Sensor** und **WebAudio-Synthesizer**.
+- [x] C++20-Physik-Kern mit 2000 Hz, Plastizität, Bruch, Pressure-Wheels, Antriebsstrang, Kollisionen, Terrain
+- [x] Datengetriebener Generator für realistische Autos mit Doppelquerlenker-Fahrwerk, Stabilisatoren und Stoßdämpfern mit Zug- und Druckstufe
+- [x] Fahrzeugsysteme: Kühlung, Öl, Motorschaden, Kraftstoff, Bremsen, Traktionskontrolle und ABS
+- [x] Native Desktop-App (Godot 4.5 + GDExtension) für Windows, macOS und Linux, inklusive CI-Export
+- [ ] Abnehmbare Teile (Türen, Motorhaube, Stoßstangen als eigene Bruchgruppen) und splitterndes Glas
+- [ ] Bewegliche Requisiten (Pylonen, Fässer), Kollision mit Bäumen auf allen Karten
+- [ ] Reifenmodell mit Lastabhängigkeit und Schräglaufkurve, Oberflächen (Schotter, Gras, Nässe)
+- [x] Import detaillierter glTF-Automodelle als Flexbody
+- [x] Reifenverschleiß, -temperatur, Luftdruck, Plattfuß und Platzen
+- [x] Karten Autobahn, Stadt und Wüste, Kombiinstrument im HUD
+- [ ] Multithreading über mehrere Fahrzeuge

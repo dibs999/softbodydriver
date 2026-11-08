@@ -10,6 +10,10 @@ std::size_t World::addBody(SoftBody body) {
     return bodies_.size() - 1;
 }
 
+void World::removeBody(std::size_t i) {
+    if (i < bodies_.size()) bodies_.erase(bodies_.begin() + static_cast<std::ptrdiff_t>(i));
+}
+
 void World::accumulateAerodynamicForces(SoftBody& b) {
     if (settings_.airDensity <= 0.0 || b.triangleCount() == 0) return;
     const auto& pos = b.positions();
@@ -73,9 +77,29 @@ std::size_t World::collideBody(SoftBody& b) {
     const auto& collision = b.collisionFlags();
     std::size_t contacts = 0;
 
+    // Broadphase: only colliders whose bounds overlap the body's bounds.
+    Vec3 lo, hi;
+    b.aabb(lo, hi);
+    const Vec3 margin{0.1, 0.1, 0.1};
+    lo -= margin;
+    hi += margin;
+    candidates_.clear();
+    for (const StaticCollider& c : colliders_) {
+        if (!c.unbounded &&
+            (c.boundsHi.x < lo.x || c.boundsLo.x > hi.x || c.boundsHi.y < lo.y || c.boundsLo.y > hi.y ||
+             c.boundsHi.z < lo.z || c.boundsLo.z > hi.z))
+            continue;
+        candidates_.push_back(&c);
+    }
+    if (candidates_.empty()) return 0;
+
     for (std::size_t i = 0; i < pos.size(); ++i) {
         if (!collision[i] || invMass[i] == 0) continue;
-        for (const StaticCollider& c : colliders_) {
+        for (const StaticCollider* cp : candidates_) {
+            const StaticCollider& c = *cp;
+            if (!c.unbounded && (pos[i].x < c.boundsLo.x || pos[i].x > c.boundsHi.x || pos[i].y < c.boundsLo.y ||
+                                 pos[i].y > c.boundsHi.y || pos[i].z < c.boundsLo.z || pos[i].z > c.boundsHi.z))
+                continue;
             Vec3 n;
             real depth;
             if (!c.contact(pos[i], n, depth)) continue;

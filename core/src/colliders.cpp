@@ -27,6 +27,7 @@ StaticCollider StaticCollider::box(const Vec3& center, const Vec3& halfExtents, 
     c.rotation = Mat3::fromEuler(eulerRadians.x, eulerRadians.y, eulerRadians.z);
     c.invRotation = c.rotation.transposed();
     c.friction = friction;
+    c.computeBounds();
     return c;
 }
 
@@ -49,7 +50,31 @@ StaticCollider StaticCollider::heightfield(real originX, real originZ,
     c.nz = nz;
     c.heights = std::move(heights);
     c.friction = friction;
+    c.computeBounds();
     return c;
+}
+
+void StaticCollider::computeBounds() {
+    if (kind == Kind::Plane) {
+        unbounded = true;
+        return;
+    }
+    unbounded = false;
+    if (kind == Kind::Heightfield) {
+        real lo = kInf, hi = -kInf;
+        for (real h : heights) {
+            lo = std::min(lo, h);
+            hi = std::max(hi, h);
+        }
+        boundsLo = {originX, lo - 1.0, originZ};
+        boundsHi = {originX + (nx - 1) * cellSizeX, hi + 0.05, originZ + (nz - 1) * cellSizeZ};
+        return;
+    }
+    Vec3 ext{0, 0, 0};
+    for (int r = 0; r < 3; ++r)
+        for (int k = 0; k < 3; ++k) ext[r] += std::abs(rotation.m[r][k]) * halfExtents[k];
+    boundsLo = center - ext;
+    boundsHi = center + ext;
 }
 
 real StaticCollider::sampleHeight(real x, real z, Vec3* outNormal) const {

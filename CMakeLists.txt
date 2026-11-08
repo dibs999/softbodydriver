@@ -14,10 +14,18 @@ endif()
 option(SB_BUILD_TESTS "Build unit tests" ON)
 option(SB_BUILD_APPS "Build command line tools (sbsim)" ON)
 option(SB_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+option(SB_BUILD_GDEXTENSION "Build the Godot 4 GDExtension (downloads godot-cpp)" OFF)
 
 # macOS: build universal binaries (Apple Silicon + Intel) unless overridden.
 if(APPLE AND NOT CMAKE_OSX_ARCHITECTURES)
   set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "" FORCE)
+endif()
+
+# The GDExtension links godot-cpp, which uses the static MSVC runtime (/MT). Every target that
+# ends up in the same DLL (sbcore included) must use the same runtime, so set it before any
+# target is created.
+if(MSVC AND SB_BUILD_GDEXTENSION)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded" CACHE STRING "MSVC runtime" FORCE)
 endif()
 
 add_library(sb_warnings INTERFACE)
@@ -34,6 +42,10 @@ else()
 endif()
 
 add_subdirectory(core)
+
+if(SB_BUILD_GDEXTENSION)
+  add_subdirectory(gdextension)
+endif()
 
 if(SB_BUILD_APPS)
   add_subdirectory(apps/sbsim)

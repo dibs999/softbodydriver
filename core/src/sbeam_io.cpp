@@ -34,6 +34,7 @@ void applyNodeProps(NodeParams& p, const json& obj, const std::string& ctx) {
         else if (k == "friction") p.friction = readReal(*it, k);
         else if (k == "fixed") p.fixed = it->get<bool>();
         else if (k == "collision") p.collision = it->get<bool>();
+        else if (k == "group") p.group = it->get<std::string>();
         else throw std::runtime_error(ctx + ": unknown node property '" + k + "'");
     }
 }
@@ -56,6 +57,7 @@ void applyBeamProps(BeamParams& p, const json& obj, const std::string& ctx) {
         else if (k == "dampExpansion") p.dampExpansion = readReal(*it, k);
         else if (k == "hydroInput") p.hydroInput = it->get<int>();
         else if (k == "hydroRatio") p.hydroRatio = readReal(*it, k);
+        else if (k == "dampRebound") p.dampRebound = readReal(*it, k);
         else if (k == "breakGroup") p.breakGroup = it->is_null() ? "" : it->get<std::string>();
         else throw std::runtime_error(ctx + ": unknown beam property '" + k + "'");
     }
@@ -67,6 +69,7 @@ json nodePropsToJson(const NodeParams& p) {
     o["friction"] = writeReal(p.friction);
     if (p.fixed) o["fixed"] = true;
     if (!p.collision) o["collision"] = false;
+    if (!p.group.empty()) o["group"] = p.group;
     return o;
 }
 
@@ -88,6 +91,7 @@ json beamPropsToJson(const BeamParams& p) {
         o["hydroInput"] = p.hydroInput;
         o["hydroRatio"] = p.hydroRatio;
     }
+    if (p.dampRebound >= 0) o["dampRebound"] = writeReal(p.dampRebound);
     if (!p.breakGroup.empty()) o["breakGroup"] = p.breakGroup;
     return o;
 }

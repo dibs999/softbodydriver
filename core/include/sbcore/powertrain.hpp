@@ -49,6 +49,14 @@ struct PowertrainSpec {
     real handbrakeTorque = 1800.0;   ///< Nm per handbraked wheel
 };
 
+/// Condition of the engine as determined by the vehicle systems (damage, overheating ...).
+struct EngineCondition {
+    real torqueScale = 1.0;        ///< Multiplier on the torque curve (damage, overheating, misfires).
+    real extraFrictionNm = 0.0;    ///< Additional internal friction (worn bearings, seized pistons).
+    bool seized = false;           ///< Crankshaft locked.
+    bool driveConnected = true;    ///< False when the driveshaft / engine mounts are torn off.
+};
+
 struct PowertrainInputs {
     real throttle = 0.0;    ///< [0, 1]
     real brake = 0.0;       ///< [0, 1]
@@ -80,6 +88,17 @@ public:
               std::vector<real>& outBrakeTorque,
               real dt);
 
+    void setCondition(const EngineCondition& c) { cond_ = c; }
+    const EngineCondition& condition() const { return cond_; }
+    bool running() const { return running_; }
+    void setRunning(bool r);
+    /// Brake power of the engine in the last step (W, >= 0).
+    real lastEnginePower() const { return lastEnginePower_; }
+    void setAutomatic(bool a) { spec_.automatic = a; }
+    /// Sum of the rotational inertias (kg*m^2) of the driven wheels; used to keep the explicit
+    /// clutch coupling numerically stable in low gears.
+    void setDrivenInertia(real i) { drivenInertia_ = i; }
+
     real engineRpm() const { return engineOmega_ * (60.0 / (2.0 * 3.14159265358979323846)); }
     real engineOmega() const { return engineOmega_; }
     int gear() const { return gear_; }
@@ -97,6 +116,10 @@ private:
     real shiftTimer_ = 0.0;
     real cooldownTimer_ = 0.0;
     real lastEngineTorque_ = 0.0;
+    real lastEnginePower_ = 0.0;
+    bool running_ = true;
+    real drivenInertia_ = 0.0;
+    EngineCondition cond_;
 };
 
 }  // namespace sb

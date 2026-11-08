@@ -1,0 +1,32 @@
+{
+  "_comment": "Mid-size premium sedan, rear-wheel drive, 2.0 turbo, 8-speed automatic.",
+  "id": "aurora_sedan",
+  "name": "Aurora 330t Sedan",
+  "brand": "Aurora",
+  "description": "Mittelklasse-Limousine mit Hinterradantrieb, 2.0-l-Turbo, 190 kW, 8-Gang-Automatik.",
+  "body": {
+    "style": "sedan", "doors": 4,
+    "length": 4.71, "width": 1.83, "height": 1.44,
+    "wheelbase": 2.85, "frontOverhang": 0.82,
+    "trackFront": 1.58, "trackRear": 1.60, "groundClearance": 0.135,
+    "noseHeight": 0.70, "hoodHeight": 0.97, "beltHeight": 1.00, "tailHeight": 1.03,
+    "hoodLength": 1.38, "windshieldRun": 0.80, "roofLength": 1.10, "rearWindowRun": 0.62,
+    "roofWidthRatio": 0.77, "cornerRadiusFront": 0.30, "cornerRadiusRear": 0.26,
+    "paint": [0.04, 0.10, 0.28], "paintMetallic": 0.7
+  },
+  "chassis": { "curbMass": 1590, "frontWeight": 0.51, "bodyStiffness": 1.1, "bodyStrength": 1.1 },
+  "suspension": {
+    "front": { "wheelRate": 31000, "bumpDamping": 2300, "reboundDamping": 4600, "antiRollRate": 13000, "bumpTravel": 0.08, "droopTravel": 0.10 },
+    "rear":  { "wheelRate": 33000, "bumpDamping": 2400, "reboundDamping": 4800, "antiRollRate": 9000,  "bumpTravel": 0.08, "droopTravel": 0.11 }
+  },
+  "tires": { "radius": 0.329, "width": 0.225, "rimRadius": 0.216, "pressurePsi": 35, "friction": 1.18, "tireMass": 10.0, "rimMass": 10.5, "rays": 16 },
+  "engine": {
+    "name": "2.0 I4 Turbo", "layout": "RWD", "cylinders": 4,
+    "torqueCurve": [[750, 160], [1350, 360], [1550, 400], [4400, 400], [5200, 360], [6300, 270], [6800, 0]],
+    "idleRpm": 750, "redlineRpm": 6500, "inertia": 0.18, "friction": 18, "engineBraking": 0.035, "mass": 175,
+    "gears": [4.71, 3.14, 2.11, 1.67, 1.29, 1.00, 0.84, 0.67], "reverse": -3.30, "finalDrive": 2.81,
+    "automatic": true, "shiftUpRpm": 6000, "shiftDownRpm": 1700,
+    "maxBrakeTorque": 2700, "frontBrakeBias": 0.64, "handbrakeTorque": 1900, "lsd": 10,
+    "fuelCapacity": 59, "bsfc": 235, "radiatorUA": 1700
+  }
+}

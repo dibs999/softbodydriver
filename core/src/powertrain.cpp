@@ -36,6 +36,11 @@ real Powertrain::currentTotalRatio() const {
     return spec_.forwardGears[static_cast<std::size_t>(idx)] * spec_.finalDrive;
 }
 
+void Powertrain::setRunning(bool r) {
+    if (r && !running_ && !cond_.seized) engineOmega_ = std::max(engineOmega_, rpmToRad(spec_.idleRpm));
+    running_ = r && !cond_.seized;
+}
+
 void Powertrain::setGear(int g) {
     gear_ = std::clamp(g, -1, static_cast<int>(spec_.forwardGears.size()));
 }
@@ -92,23 +97,31 @@ void Powertrain::step(const PowertrainInputs& in,
     const real curRatio = currentTotalRatio();
     const real rpm = radToRpm(engineOmega_);
 
+    if (cond_.seized) running_ = false;
+
     // Idle governor + rev limiter.
     real idleAssist = 0.0;
-    if (rpm < spec_.idleRpm) {
+    if (running_ && rpm < spec_.idleRpm) {
         idleAssist = std::clamp((spec_.idleRpm - rpm) / 220.0, 0.0, 0.45);
     }
-    real effThrottle = std::max(throttle, idleAssist);
+    real effThrottle = running_ ? std::max(throttle, idleAssist) : 0.0;
     if (rpm >= spec_.redlineRpm) effThrottle = 0.0;
     if (shiftTimer_ > 0.0) effThrottle *= 0.15;  // torque cut during auto shift
 
-    const real grossTorque = effThrottle * maxEngineTorqueAt(rpm);
-    const real lossTorque = spec_.engineFrictionNm + spec_.engineBraking * std::max<real>(0.0, engineOmega_);
-    const real netEngineTorque = grossTorque - (1.0 - 0.7 * effThrottle) * lossTorque;
+    const real grossTorque = effThrottle * maxEngineTorqueAt(rpm) * std::max<real>(0.0, cond_.torqueScale);
+    const real lossTorque = spec_.engineFrictionNm + cond_.extraFrictionNm +
+                            spec_.engineBraking * std::max<real>(0.0, engineOmega_);
+    real netEngineTorque = grossTorque - (1.0 - 0.7 * effThrottle) * lossTorque;
+    // Friction never drives the crank backwards.
+    if (engineOmega_ <= 0.0 && netEngineTorque < 0.0) netEngineTorque = 0.0;
     lastEngineTorque_ = netEngineTorque;
+    lastEnginePower_ = std::max<real>(0.0, grossTorque * engineOmega_);
 
     // Clutch engagement: manual if >= 0, otherwise automatic launch curve.
     if (in.clutch >= 0.0) {
         clutchEngagement_ = std::clamp(in.clutch, 0.0, 1.0);
+    } else if (cond_.seized || (!running_ && rpm < spec_.idleRpm * 0.5)) {
+        clutchEngagement_ = 0.0;
     } else if (curRatio == 0.0 || shiftTimer_ > 0.0) {
         clutchEngagement_ = 0.0;
     } else {
@@ -120,21 +133,36 @@ void Powertrain::step(const PowertrainInputs& in,
 
     // Coupling between engine and driven axle.
     real clutchTorque = 0.0;
-    if (curRatio != 0.0 && drivenCount > 0 && clutchEngagement_ > 0.0) {
+    if (curRatio != 0.0 && drivenCount > 0 && clutchEngagement_ > 0.0 && cond_.driveConnected) {
         const real targetEngineOmega = avgDrivenOmega * curRatio;
         const real slip = engineOmega_ - targetEngineOmega;
         const real cap = clutchEngagement_ * spec_.clutchMaxTorque;
-        // Damped spring-damper / Coulomb clutch model.
-        const real raw = slip * spec_.clutchStiffness * clutchEngagement_ + 0.5 * clutchEngagement_ * netEngineTorque;
+        // Viscous clutch coupling. Explicit integration is only stable while
+        // dt * k * (ratio^2 / I_wheels + 1 / I_engine) stays well below 1, so the coupling is
+        // softened automatically in low gears with light wheels.
+        real k = spec_.clutchStiffness * clutchEngagement_;
+        const real r2 = curRatio * curRatio * spec_.drivetrainEfficiency;
+        const real invI = (drivenInertia_ > 1e-6 ? r2 / drivenInertia_ : 0.0) + 1.0 / spec_.engineInertia;
+        k = std::min(k, 0.45 / (dt * invI));
+        const real raw = slip * k + 0.5 * clutchEngagement_ * netEngineTorque;
         clutchTorque = std::clamp(raw, -cap, cap);
     }
 
-    engineOmega_ += ((netEngineTorque - clutchTorque) / spec_.engineInertia) * dt;
-    const real minOmega = rpmToRad(spec_.idleRpm * 0.65);
-    if (engineOmega_ < minOmega) engineOmega_ = minOmega;
+    if (cond_.seized) {
+        engineOmega_ = 0.0;
+    } else {
+        engineOmega_ += ((netEngineTorque - clutchTorque) / spec_.engineInertia) * dt;
+        if (running_) {
+            // A running engine can still be stalled by lugging it with the clutch engaged.
+            if (engineOmega_ < rpmToRad(spec_.idleRpm * 0.30) && clutchEngagement_ > 0.6) running_ = false;
+            const real minOmega = rpmToRad(spec_.idleRpm * 0.65);
+            if (running_ && engineOmega_ < minOmega && clutchEngagement_ < 0.6) engineOmega_ = minOmega;
+        }
+        if (engineOmega_ < 0.0) engineOmega_ = 0.0;
+    }
 
     // Distribute axle torque across driven wheels + viscous LSD between left/right pairs.
-    if (drivenCount > 0 && curRatio != 0.0) {
+    if (drivenCount > 0 && curRatio != 0.0 && cond_.driveConnected) {
         const real totalAxleTorque = clutchTorque * curRatio * spec_.drivetrainEfficiency;
         const real perWheel = totalAxleTorque / static_cast<real>(drivenCount);
         for (std::size_t i = 0; i < n; ++i) {
