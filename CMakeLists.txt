@@ -21,6 +21,13 @@ if(APPLE AND NOT CMAKE_OSX_ARCHITECTURES)
   set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "" FORCE)
 endif()
 
+# The GDExtension links godot-cpp, which uses the static MSVC runtime (/MT). Every target that
+# ends up in the same DLL (sbcore included) must use the same runtime, so set it before any
+# target is created.
+if(MSVC AND SB_BUILD_GDEXTENSION)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded" CACHE STRING "MSVC runtime" FORCE)
+endif()
+
 add_library(sb_warnings INTERFACE)
 if(MSVC)
   target_compile_options(sb_warnings INTERFACE /W4 /permissive- /utf-8)

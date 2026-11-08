@@ -49,7 +49,7 @@ func _ready() -> void:
 			var v := world.spawn_car(others[i]["path"], spawns[i])
 			if v:
 				vehicles.append(v)
-				ai[v] = AIDriver.new(v, map_data["waypoints"], map_data["speeds"], 0.85 + 0.1 * i)
+				ai[v] = AIDriver.new(v, map_data["waypoints"], map_data["speeds"], 0.9)
 
 	cam = CameraRig.new()
 	cam.current = true

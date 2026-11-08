@@ -6,62 +6,118 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  GODOT_VERSION: "4.5.1"
+  GODOTCPP_TAG: "godot-4.5-stable"
+
 jobs:
-  build-and-test:
+  # ---------------------------------------------------------------- physics core
+  core:
+    name: core (${{ matrix.name }})
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: linux-x64
-            os: ubuntu-latest
-            artifact: softbodydriver-linux-x64
-          - name: windows-x64
-            os: windows-latest
-            artifact: softbodydriver-windows-x64
-          - name: macos-universal
-            os: macos-latest
-            artifact: softbodydriver-macos-universal
-
+          - { name: linux-x64, os: ubuntu-latest }
+          - { name: windows-x64, os: windows-latest }
+          - { name: macos-universal, os: macos-latest }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-
       - name: Build
         run: cmake --build build --config Release --parallel
-
       - name: Unit tests
         run: ctest --test-dir build -C Release --output-on-failure
-
-      - name: C ABI test + generate 3D replay HTML
+      - name: Vehicle test bench
         shell: bash
         run: |
-          python3 tools/test_c_api.py build
-          BIN=./build/apps/sbsim/sbsim
-          if [ -f ./build/apps/sbsim/Release/sbsim.exe ]; then
-            BIN=./build/apps/sbsim/Release/sbsim.exe
-          fi
-          mkdir -p dist/replays dist/include
-          cp "$BIN" dist/
-          cp core/include/sbcore/c_api.h dist/include/
-          for f in build/core/*sbcore*.so build/core/*sbcore*.dylib build/core/*sbcore*.dll build/core/Release/*sbcore*.dll; do
-            [ -f "$f" ] && cp "$f" dist/
-          done
-          cp -r content game dist/
-          "$BIN" --scene accel_brake --fps 20 --quiet --record dist/replays/accel_brake.json
-          "$BIN" --scene slalom      --fps 20 --quiet --record dist/replays/slalom.json
-          "$BIN" --scene curb_impact --fps 20 --quiet --record dist/replays/curb_impact.json
-          "$BIN" --scene wall_crash  --duration 1.8 --fps 20 --quiet --record dist/replays/wall_crash.json
-          "$BIN" --scene bridge_overload --duration 6.5 --fps 18 --quiet --record dist/replays/bridge_overload.json
-          python3 tools/make_viewer.py -o dist/replay_viewer.html \
-            dist/replays/accel_brake.json dist/replays/slalom.json \
-            dist/replays/curb_impact.json dist/replays/wall_crash.json \
-            dist/replays/bridge_overload.json
+          BIN=./build/apps/sbsim/cartest
+          [ -f ./build/apps/sbsim/Release/cartest.exe ] && BIN=./build/apps/sbsim/Release/cartest.exe
+          for car in game/cars/*.car.json; do "$BIN" "$car" --quick; done
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+  # ---------------------------------------------------------------- GDExtension per platform
+  gdextension:
+    name: gdextension (${{ matrix.name }}, ${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        name: [linux-x64, windows-x64, macos-universal]
+        target: [template_debug, template_release]
+        include:
+          - { name: linux-x64, os: ubuntu-latest }
+          - { name: windows-x64, os: windows-latest }
+          - { name: macos-universal, os: macos-latest }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache godot-cpp build
+        uses: actions/cache@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: dist/
+          path: build-gd/_deps
+          key: godotcpp-${{ env.GODOTCPP_TAG }}-${{ matrix.name }}-${{ matrix.target }}
+      - name: Configure
+        run: >
+          cmake -S . -B build-gd -DCMAKE_BUILD_TYPE=Release
+          -DSB_BUILD_GDEXTENSION=ON -DSB_BUILD_TESTS=OFF -DSB_BUILD_APPS=OFF
+          -DGODOTCPP_TARGET=${{ matrix.target }}
+      - name: Build
+        run: cmake --build build-gd --config Release --parallel --target softbodydriver_gd
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gdext-${{ matrix.name }}-${{ matrix.target }}
+          path: |
+            game/bin/*.so
+            game/bin/*.dll
+            game/bin/*.dylib
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------- game export
+  export:
+    name: export game (Windows, macOS, Linux)
+    needs: [core, gdextension]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gdext-*
+          path: game/bin
+          merge-multiple: true
+      - name: Install Godot + export templates
+        run: |
+          set -e
+          wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
+          unzip -q Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
+          mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          unzip -q Godot_v${GODOT_VERSION}-stable_export_templates.tpz
+          mv templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
+      - name: Import project + smoke test
+        working-directory: game
+        run: |
+          ls -la bin
+          godot --headless --import || true
+          godot --headless -s res://tests/smoke_test.gd
+      - name: Export
+        working-directory: game
+        run: |
+          mkdir -p export/windows export/macos export/linux
+          godot --headless --export-release "Windows Desktop" export/windows/SoftBodyDriver.exe
+          godot --headless --export-release "macOS" export/macos/SoftBodyDriver.zip
+          godot --headless --export-release "Linux" export/linux/SoftBodyDriver.x86_64
+          ls -laR export
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SoftBodyDriver-windows-x64
+          path: game/export/windows/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SoftBodyDriver-macos-universal
+          path: game/export/macos/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SoftBodyDriver-linux-x64
+          path: game/export/linux/

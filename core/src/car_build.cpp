@@ -480,7 +480,7 @@ CarBuild buildCar(const CarDefinition& def) {
         for (int iy = 0; iy < 2; ++iy)
             for (int iz = 0; iz < 2; ++iz)
                 rig.radiator.push_back(car.addNode("rad" + std::to_string(iy * 2 + iz), {rx, iy ? ry1 : ry0, iz ? rz : -rz}, rad));
-        BeamParams core = makeBeam(2.5e5, 40.0, 2.2e3, 2.2e4);
+        BeamParams core = makeBeam(2.5e5, 40.0, 4.5e3, 2.6e4);
         connectAll(car, rig.radiator, core, &sys.radiatorBeams);
         BeamParams radMount = makeBeam(2.0e5, 50.0, 6.0e3, 3.0e4);
         for (std::uint32_t n : rig.radiator) attach(n, 3, radMount);
