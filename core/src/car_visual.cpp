@@ -618,30 +618,30 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         const real xf = L;
         const real hwF = prof.halfW(L - 0.04);
         const real yH = bd.noseHeight - 0.075;
-        const real lightW = std::min<real>(0.17, 0.26 * hwF);
+        const real lightW = std::min<real>(0.20, 0.30 * hwF);
         for (int side = 0; side < 2; ++side) {
             const real sg = side ? 1.0 : -1.0;
             const real zc = sg * (hwF - lightW - 0.05);
             // Lens slightly yawed to follow the rounded corner.
             const Vec3 ax = normalize(Vec3{1.0, 0.0, sg * 0.35});
             const Vec3 az = normalize(cross(ax, Vec3{0, 1, 0})) * -1.0;
-            vb.box("chrome", {xf - 0.035, yH, zc}, {0.03, 0.058, lightW + 0.012}, bodyNodes, ax, {0, 1, 0}, az);
-            vb.box("headlight", {xf - 0.012, yH, zc}, {0.025, 0.048, lightW}, bodyNodes, ax, {0, 1, 0}, az);
+            vb.box("chrome", {xf - 0.035, yH, zc}, {0.03, 0.066, lightW + 0.012}, bodyNodes, ax, {0, 1, 0}, az);
+            vb.box("headlight", {xf - 0.012, yH, zc}, {0.025, 0.056, lightW}, bodyNodes, ax, {0, 1, 0}, az);
         }
         // Grille between the headlights.
-        const real gw = std::max<real>(0.2, hwF - 2.0 * (0.26 * hwF) - 0.12);
+        const real gw = std::max<real>(0.18, hwF - 2.0 * lightW - 0.14);
         vb.box("grille", {xf - 0.02, yH - 0.03, 0.0}, {0.03, 0.065, gw}, bodyNodes);
         vb.box("chrome", {xf - 0.008, yH + 0.04, 0.0}, {0.012, 0.008, gw}, bodyNodes);
         // Tail lights.
         const real hwR = prof.halfW(0.04);
         const real yT = bd.tailHeight - 0.11;
-        const real tw = std::min<real>(0.19, 0.3 * hwR);
+        const real tw = std::min<real>(0.22, 0.34 * hwR);
         for (int side = 0; side < 2; ++side) {
             const real sg = side ? 1.0 : -1.0;
             const real zc = sg * (hwR - tw - 0.04);
             const Vec3 ax = normalize(Vec3{1.0, 0.0, -sg * 0.3});
             const Vec3 az = normalize(cross(ax, Vec3{0, 1, 0})) * -1.0;
-            vb.box("taillight", {0.012, yT, zc}, {0.022, 0.05, tw}, bodyNodes, ax, {0, 1, 0}, az);
+            vb.box("taillight", {0.012, yT, zc}, {0.022, 0.058, tw}, bodyNodes, ax, {0, 1, 0}, az);
         }
     }
 

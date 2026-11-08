@@ -27,7 +27,7 @@ jobs:
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
       - name: Build
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --config Release --parallel 4
       - name: Unit tests
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Vehicle test bench
@@ -63,7 +63,7 @@ jobs:
           -DSB_BUILD_GDEXTENSION=ON -DSB_BUILD_TESTS=OFF -DSB_BUILD_APPS=OFF
           -DGODOTCPP_TARGET=${{ matrix.target }}
       - name: Build
-        run: cmake --build build-gd --config Release --parallel --target softbodydriver_gd
+        run: cmake --build build-gd --config Release --parallel 4 --target softbodydriver_gd
       - uses: actions/upload-artifact@v4
         with:
           name: gdext-${{ matrix.name }}-${{ matrix.target }}

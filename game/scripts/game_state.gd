@@ -63,6 +63,7 @@ func scan_cars() -> void:
 		info["power"] = peak_p
 		cars.append(info)
 	cars.sort_custom(func(a, b): return a["name"] < b["name"])
+	print("SoftBodyDriver: %d vehicles found in %s" % [cars.size(), CARS_DIR])
 
 
 # --------------------------------------------------------------------------- input
