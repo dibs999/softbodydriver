@@ -46,7 +46,7 @@ func _setup() -> void:
 	world.add_ground_plane(1.0)
 	var i := 0
 	for c in game.cars:
-		var v: SBVehicle = world.spawn_car(c["path"], Transform3D(Basis.IDENTITY, Vector3(0, 0, i * 3.2)))
+		var v: SBVehicle = game.spawn_vehicle(world, c["path"], Transform3D(Basis.IDENTITY, Vector3(0, 0, i * 3.2)))
 		v.set_input(0, 1, 0, 1)
 		cars.append(v)
 		i += 1

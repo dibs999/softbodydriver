@@ -398,6 +398,89 @@ void deformSurface(const std::vector<Vec3>& pos, const std::vector<float>& frame
     computeNormals(outPositions, surf.indices, outNormals);
 }
 
+VertexSkin bindToNodes(const std::vector<Vec3>& nodes, const std::vector<std::uint32_t>& candidates, const Vec3& p) {
+    std::array<std::pair<real, std::uint32_t>, 4> best;
+    best.fill({1e30, 0});
+    for (std::uint32_t c : candidates) {
+        const real d = lengthSq(nodes[c] - p);
+        if (d < best[3].first) {
+            best[3] = {d, c};
+            std::sort(best.begin(), best.end());
+        }
+    }
+    VertexSkin s;
+    real wsum = 0;
+    const std::size_t kk = std::min<std::size_t>(4, candidates.size());
+    for (std::size_t i = 0; i < kk; ++i) {
+        const real d = std::sqrt(best[i].first);
+        const real w = 1.0 / ((d + 0.08) * (d + 0.08));
+        s.node[i] = best[i].second;
+        s.weight[i] = static_cast<float>(w);
+        wsum += w;
+    }
+    for (std::size_t i = 0; i < kk; ++i) s.weight[i] = static_cast<float>(s.weight[i] / wsum);
+    s.local[0][0] = static_cast<float>(p.x);
+    s.local[0][1] = static_cast<float>(p.y);
+    s.local[0][2] = static_cast<float>(p.z);
+    return s;
+}
+
+void deformSurfaceBlended(const std::vector<Vec3>& pos, const std::vector<float>& frames, const MeshSurface& surf,
+                          std::vector<float>& outPositions, std::vector<float>& outNormals) {
+    const std::size_t nv = surf.skin.size();
+    outPositions.resize(nv * 3);
+    std::vector<float> dent(nv, 0.0f);
+    bool anyDent = false;
+    const float* R = frames.data();
+    for (std::size_t i = 0; i < nv; ++i) {
+        const VertexSkin& sk = surf.skin[i];
+        const Vec3 p = evalSkin(pos, frames, sk);
+        outPositions[i * 3] = static_cast<float>(p.x);
+        outPositions[i * 3 + 1] = static_cast<float>(p.y);
+        outPositions[i * 3 + 2] = static_cast<float>(p.z);
+        if (sk.weight[0] >= 0.0f) {
+            float dx = 0, dy = 0, dz = 0;
+            for (int k = 0; k < 4; ++k) {
+                if (sk.weight[k] <= 0.0f) continue;
+                const float* d = &frames[12 + static_cast<std::size_t>(sk.node[k]) * 3];
+                dx += sk.weight[k] * d[0];
+                dy += sk.weight[k] * d[1];
+                dz += sk.weight[k] * d[2];
+            }
+            const float m = std::sqrt(dx * dx + dy * dy + dz * dz);
+            dent[i] = std::clamp((m - 0.012f) / 0.03f, 0.0f, 1.0f);
+            if (dent[i] > 0.0f) anyDent = true;
+        }
+    }
+    std::vector<float> geo;
+    if (anyDent) computeNormals(outPositions, surf.indices, geo);
+    outNormals.resize(nv * 3);
+    for (std::size_t i = 0; i < nv; ++i) {
+        const float nx = surf.normals[i * 3], ny = surf.normals[i * 3 + 1], nz = surf.normals[i * 3 + 2];
+        float rx = R[0] * nx + R[1] * ny + R[2] * nz;
+        float ry = R[3] * nx + R[4] * ny + R[5] * nz;
+        float rz = R[6] * nx + R[7] * ny + R[8] * nz;
+        if (anyDent && dent[i] > 0.0f) {
+            const float t = dent[i];
+            float gx = geo[i * 3], gy = geo[i * 3 + 1], gz = geo[i * 3 + 2];
+            // Imported meshes may have mirrored parts / either winding: keep the rest normal's side.
+            if (gx * rx + gy * ry + gz * rz < 0.0f) {
+                gx = -gx;
+                gy = -gy;
+                gz = -gz;
+            }
+            rx += (gx - rx) * t;
+            ry += (gy - ry) * t;
+            rz += (gz - rz) * t;
+        }
+        const float l = std::sqrt(rx * rx + ry * ry + rz * rz);
+        const float inv = l > 1e-8f ? 1.0f / l : 0.0f;
+        outNormals[i * 3] = rx * inv;
+        outNormals[i * 3 + 1] = ry * inv;
+        outNormals[i * 3 + 2] = rz * inv;
+    }
+}
+
 // ============================================================================== visual generation
 
 void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {

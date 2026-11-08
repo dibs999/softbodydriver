@@ -339,7 +339,7 @@ CarBuild buildCar(const CarDefinition& def) {
         // The coilover acts directly on the knuckle at the lower ball joint (motion ratio ~0.95),
         // which keeps the spring path rigid under bump-stop loads.
         cn.armMid = cn.lbj;
-        cn.tower = node("tower", {xa, R + 0.43, tr - 0.29}, 4.0, "subframe");
+        cn.tower = node("tower", {xa, R + 0.43, tr - 0.29}, 10.0, "subframe");
         unsprungMass[static_cast<std::size_t>(c)] = 2 * hubMass + 6 + 5 + 5 + tire.tireMass;
 
         // Subframe nodes are bolted to the body.
@@ -764,14 +764,24 @@ CarBuild buildCar(const CarDefinition& def) {
     }
 
     // ------------------------------------------------------------------ stability guard
+    // Explicit integration limit: soften only the shell beams, and only if a shell node is the problem.
     {
         const real dt = 1.0 / 2000.0;
-        real ratio = car.stabilityRatio(dt);
+        auto shellRatio = [&]() {
+            std::vector<real> sumK(car.nodeCount(), 0.0);
+            for (const Beam& bm : car.beams()) {
+                const real k = std::max(bm.spring, bm.springExp);
+                sumK[bm.a] += k;
+                sumK[bm.b] += k;
+            }
+            real worst = 0.0;
+            for (std::uint32_t n : rig.bodyNodes)
+                worst = std::max(worst, dt * std::sqrt(2.0 * sumK[n] * car.invMasses()[n]) * 0.5);
+            return worst;
+        };
         int guard = 0;
-        while (ratio > 0.8 && guard++ < 6) {
-            for (std::size_t bi = 0; bi < shellBeamEnd; ++bi) car.beams()[bi].spring *= 0.85;
-            ratio = car.stabilityRatio(dt);
-        }
+        while (shellRatio() > 0.8 && guard++ < 6)
+            for (std::size_t bi = 0; bi < shellBeamEnd; ++bi) car.beams()[bi].spring *= 0.9;
     }
 
     // ------------------------------------------------------------------ layout + visuals

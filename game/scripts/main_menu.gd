@@ -184,7 +184,7 @@ func _on_car_selected(i: int) -> void:
 		world.remove_vehicle(preview_car)
 		preview_car = null
 	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(-30)), Vector3.ZERO)
-	preview_car = world.spawn_car(c["path"], xf)
+	preview_car = Game.spawn_vehicle(world, c["path"], xf)
 	if preview_car:
 		preview_car.set_input(0, 1, 0, 1)
 

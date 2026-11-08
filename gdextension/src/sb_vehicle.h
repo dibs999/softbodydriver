@@ -67,6 +67,10 @@ public:
     Vector3 get_right() const;
     Vector3 get_velocity() const;
     double get_speed_kmh() const;
+    /// Replaces the procedural body with an imported model (e.g. a glTF scene). `to_build` maps model
+    /// coordinates to the car's build frame (rear bumper at x = 0, ground y = 0, +x forward, +z right).
+    /// options: wheels {"FL": node name, ...}, hide [name substrings], keep_procedural [material names].
+    void attach_model(Node3D* root, const Transform3D& to_build, const Dictionary& options);
     PackedFloat32Array get_wheel_slip() const;   ///< m/s sliding speed per wheel
     PackedFloat32Array get_wheel_load() const;   ///< contact indicator 0..1 per wheel
     double take_impact();                         ///< Damage events since the last call (0 = none)
@@ -124,11 +128,29 @@ private:
     // Rendering.
     std::vector<SurfaceGpu> surfaces_;
     std::vector<float> frames_, tmpPos_, tmpNrm_;
+    struct WheelSurf {
+        Ref<ArrayMesh> mesh;
+        MeshInstance3D* instance = nullptr;
+        std::vector<float> restPos, restNrm;   // wheel-local
+        uint32_t vertexStride = 12, normalOffset = 0, normalStride = 4;
+        PackedByteArray buffer;
+        bool deformed = false;                 // currently uploaded in deformed state
+    };
     struct WheelGpu {
         Node3D* node = nullptr;
         std::uint32_t hubL = 0, hubR = 0, tread0 = 0;
+        std::vector<std::uint32_t> tread;      // 2 * rays tread nodes
         bool right = false;
+        std::vector<WheelSurf> surfs;
+        sb::Vec3 restX{1, 0, 0};               // rest frame (build coordinates) for imported meshes
     };
+    void addWheelSurface(WheelGpu& wg, const PackedVector3Array& v, const PackedVector3Array& n, const Array& extra,
+                         const PackedInt32Array& idxGodotOrder, const Ref<Material>& mat);
+    void updateWheelMeshes(WheelGpu& w, const sb::Vec3& c, const sb::Vec3& rx, const sb::Vec3& ry, const sb::Vec3& out);
+    // Imported (glTF) body meshes.
+    std::vector<sb::MeshSurface> importedSurf_;
+    std::vector<SurfaceGpu> importedGpu_;
+    bool hasImportedModel_ = false;
     std::vector<WheelGpu> wheels_;
     bool debugView_ = false;
     MeshInstance3D* debugInstance_ = nullptr;

@@ -35,7 +35,7 @@ func _ready() -> void:
 	else:
 		map_data = MapBuilder.build_proving_grounds(world, maproot)
 
-	player = world.spawn_car(Game.selected_car, map_data["spawns"][0])
+	player = Game.spawn_vehicle(world, Game.selected_car, map_data["spawns"][0])
 	if player == null:
 		push_error("Failed to spawn %s" % Game.selected_car)
 		get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
@@ -46,7 +46,7 @@ func _ready() -> void:
 		var others := Game.cars.filter(func(c): return c["path"] != Game.selected_car)
 		var spawns: Array = map_data.get("ai_spawns", [])
 		for i in mini(spawns.size(), others.size()):
-			var v := world.spawn_car(others[i]["path"], spawns[i])
+			var v := Game.spawn_vehicle(world, others[i]["path"], spawns[i])
 			if v:
 				vehicles.append(v)
 				ai[v] = AIDriver.new(v, map_data["waypoints"], map_data["speeds"], 0.9)
@@ -237,7 +237,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		pos.y = maxf(0.0, pos.y - 0.4)
 		var right := player.get_right()
 		var path: String = Game.cars[randi() % Game.cars.size()]["path"]
-		var v := world.spawn_car(path, MapBuilder.car_xform(pos, Vector3(right.x, 0, right.z)))
+		var v := Game.spawn_vehicle(world, path, MapBuilder.car_xform(pos, Vector3(right.x, 0, right.z)))
 		if v:
 			v.set_input(0, 1, 0, 1)
 			vehicles.append(v)

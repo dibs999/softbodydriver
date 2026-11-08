@@ -181,6 +181,13 @@ void deformSurface(const std::vector<Vec3>& positions, const std::vector<float>&
 /// Evaluates a single skin binding (camera anchors).
 Vec3 evalSkin(const std::vector<Vec3>& positions, const std::vector<float>& frames, const VertexSkin& s);
 
+/// Binds a point (in the car's build coordinates) to the 4 nearest candidate nodes.
+VertexSkin bindToNodes(const std::vector<Vec3>& restNodes, const std::vector<std::uint32_t>& candidates, const Vec3& p);
+/// Like deformSurface, but normals come from the rigidly rotated rest normals and only switch to the
+/// recomputed geometric normals where the surface is actually dented (for imported meshes with UV seams).
+void deformSurfaceBlended(const std::vector<Vec3>& positions, const std::vector<float>& frames, const MeshSurface& surf,
+                          std::vector<float>& outPositions, std::vector<float>& outNormals);
+
 inline void computeNodeFrames(const SoftBody& body, const CarVisual& vis, std::vector<float>& frames) {
     computeNodeFrames(body.positions(), vis, frames);
 }

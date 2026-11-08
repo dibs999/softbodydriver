@@ -78,6 +78,7 @@ CarDefinition parseCarDefinition(const std::string& text, const std::string& sou
     try {
         forEach(j, source, [&](const std::string& k, const json& v) {
             SB_STR("id", d.id) SB_STR("name", d.name) SB_STR("brand", d.brand) SB_STR("description", d.description)
+            if (k == "visualModel" || k == "credits") return true;  // handled by the game (render model)
             if (k == "body") { parseBody(d.body, v); return true; }
             if (k == "chassis") {
                 forEach(v, "chassis", [&](const std::string& k2, const json& v2) {

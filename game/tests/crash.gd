@@ -53,7 +53,7 @@ func _setup() -> void:
 	wall.position = Vector3(41, 1.5, 1.0)
 	scene.add_child(wall)
 	world.add_box(Vector3(41, 1.5, 1.0), Vector3(1, 1.5, 4), Vector3.ZERO, 0.8)
-	car = world.spawn_car(path, Transform3D(Basis.IDENTITY, Vector3(0, 0, 0)))
+	car = game.spawn_vehicle(world, path, Transform3D(Basis.IDENTITY, Vector3(0, 0, 0)))
 	car.set_tcs(true)
 	cam = Camera3D.new()
 	scene.add_child(cam)

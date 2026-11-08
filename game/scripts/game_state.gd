@@ -53,6 +53,9 @@ func scan_cars() -> void:
 			"mass": data.get("chassis", {}).get("curbMass", 0.0),
 			"paint": data.get("body", {}).get("paint", [0.5, 0.5, 0.5]),
 			"style": data.get("body", {}).get("style", ""),
+			"length": data.get("body", {}).get("length", 4.3),
+			"visual_model": data.get("visualModel", {}),
+			"credits": data.get("credits", ""),
 		}
 		var peak_t := 0.0
 		var peak_p := 0.0
@@ -64,6 +67,85 @@ func scan_cars() -> void:
 		cars.append(info)
 	cars.sort_custom(func(a, b): return a["name"] < b["name"])
 	print("SoftBodyDriver: %d vehicles found in %s" % [cars.size(), CARS_DIR])
+
+
+func car_info(path: String) -> Dictionary:
+	for c in cars:
+		if c["path"] == path:
+			return c
+	return {}
+
+
+## Spawns a car and, if its definition references a 3D model, replaces the procedural body with
+## that model (bound to the soft-body nodes as a flexbody).
+func spawn_vehicle(world: SBWorld, path: String, xform: Transform3D) -> SBVehicle:
+	var v := world.spawn_car(path, xform)
+	if v:
+		apply_visual_model(v, car_info(path))
+	return v
+
+
+static func _axis(s: String) -> Vector3:
+	var sign := -1.0 if s.begins_with("-") else 1.0
+	match s.trim_prefix("-").trim_prefix("+"):
+		"x": return Vector3(sign, 0, 0)
+		"y": return Vector3(0, sign, 0)
+	return Vector3(0, 0, sign)
+
+
+func apply_visual_model(v: SBVehicle, info: Dictionary) -> void:
+	var cfg: Dictionary = info.get("visual_model", {})
+	if cfg.is_empty() or not cfg.has("path"):
+		return
+	var res = load(cfg["path"])
+	if res == null or not (res is PackedScene):
+		push_warning("Cannot load visual model %s" % cfg["path"])
+		return
+	var root: Node3D = res.instantiate()
+	# Model axes -> car build axes (+x forward, +y up, +z right).
+	var f := _axis(cfg.get("forward", "+z"))
+	var u := _axis(cfg.get("up", "+y"))
+	var r := f.cross(u)
+	var rot := Basis(f, u, r).transposed()
+	var wheel_names: Array = cfg.get("wheels", {}).values()
+	var hide: Array = cfg.get("hide", [])
+	var bounds := [Vector3.INF, -Vector3.INF]
+	var wheel_bounds := [Vector3.INF, -Vector3.INF]
+	_measure(root, Transform3D(rot, Vector3.ZERO), wheel_names, hide, false, bounds, wheel_bounds, true)
+	var lo: Vector3 = bounds[0]
+	var hi: Vector3 = bounds[1]
+	var scale := float(cfg.get("scale", 1.0))
+	if cfg.get("fitLength", false) and hi.x > lo.x:
+		scale = float(info.get("length", 4.3)) / (hi.x - lo.x)
+	var ground: float = wheel_bounds[0].y if wheel_bounds[0].y < INF else lo.y
+	var offset := Vector3(-lo.x, -ground, -(lo.z + hi.z) * 0.5) * scale
+	var xf := Transform3D(rot.scaled(Vector3(scale, scale, scale)), offset)
+	var overrides := {}
+	var lib := material_library()
+	for k in cfg.get("materialOverrides", {}).keys():
+		var target: String = cfg["materialOverrides"][k]
+		if lib.has(target):
+			overrides[k] = lib[target]
+	v.attach_model(root, xf, {"wheels": cfg.get("wheels", {}), "hide": hide, "keep_procedural": cfg.get("keepProcedural", []),
+		"material_overrides": overrides})
+	root.free()
+
+
+func _measure(n: Node, xf: Transform3D, wheel_names: Array, hide: Array, in_wheel: bool, bounds: Array, wheel_bounds: Array, is_root := false) -> void:
+	var x := xf
+	if n is Node3D and not is_root:
+		x = xf * (n as Node3D).transform
+	for h in hide:
+		if not is_root and String(n.name).findn(h) >= 0:
+			return
+	var w := in_wheel or wheel_names.has(String(n.name))
+	if n is MeshInstance3D and n.mesh:
+		var a: AABB = x * (n as MeshInstance3D).mesh.get_aabb()
+		var target: Array = wheel_bounds if w else bounds
+		target[0] = target[0].min(a.position)
+		target[1] = target[1].max(a.end)
+	for c in n.get_children():
+		_measure(c, x, wheel_names, hide, w, bounds, wheel_bounds)
 
 
 # --------------------------------------------------------------------------- input
@@ -120,6 +202,14 @@ func _setup_input() -> void:
 
 
 # --------------------------------------------------------------------------- materials
+var _material_library := {}
+
+func material_library() -> Dictionary:
+	if _material_library.is_empty():
+		_material_library = make_material_library()
+	return _material_library
+
+
 ## Shared PBR material library handed to SBWorld (names match the C++ car generator).
 func make_material_library() -> Dictionary:
 	var lib := {}
