@@ -37,6 +37,7 @@ Color fallbackColor(const std::string& n) {
 void SBVehicle::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_input", "throttle", "brake", "steer", "handbrake"), &SBVehicle::set_input);
     ClassDB::bind_method(D_METHOD("set_clutch", "clutch"), &SBVehicle::set_clutch);
+    ClassDB::bind_method(D_METHOD("set_surface_grip", "grip"), &SBVehicle::set_surface_grip);
     ClassDB::bind_method(D_METHOD("set_gear", "gear"), &SBVehicle::set_gear);
     ClassDB::bind_method(D_METHOD("shift_up"), &SBVehicle::shift_up);
     ClassDB::bind_method(D_METHOD("shift_down"), &SBVehicle::shift_down);
@@ -59,14 +60,19 @@ void SBVehicle::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_position_ws"), &SBVehicle::get_position_ws);
     ClassDB::bind_method(D_METHOD("get_chase_target"), &SBVehicle::get_chase_target);
     ClassDB::bind_method(D_METHOD("get_driver_eye"), &SBVehicle::get_driver_eye);
+    ClassDB::bind_method(D_METHOD("get_dashboard_transform"), &SBVehicle::get_dashboard_transform);
+    ClassDB::bind_method(D_METHOD("get_visual_basis"), &SBVehicle::get_visual_basis);
     ClassDB::bind_method(D_METHOD("get_forward"), &SBVehicle::get_forward);
     ClassDB::bind_method(D_METHOD("get_up"), &SBVehicle::get_up);
     ClassDB::bind_method(D_METHOD("get_right"), &SBVehicle::get_right);
     ClassDB::bind_method(D_METHOD("get_velocity"), &SBVehicle::get_velocity);
     ClassDB::bind_method(D_METHOD("get_speed_kmh"), &SBVehicle::get_speed_kmh);
+    ClassDB::bind_method(D_METHOD("get_engine_rpm"), &SBVehicle::get_engine_rpm);
     ClassDB::bind_method(D_METHOD("get_wheel_slip"), &SBVehicle::get_wheel_slip);
     ClassDB::bind_method(D_METHOD("attach_model", "root", "to_build", "options"), &SBVehicle::attach_model);
     ClassDB::bind_method(D_METHOD("get_wheel_load"), &SBVehicle::get_wheel_load);
+    ClassDB::bind_method(D_METHOD("get_effect_anchors"), &SBVehicle::get_effect_anchors);
+    ClassDB::bind_method(D_METHOD("puncture_tire", "wheel", "leak_psi_per_second"), &SBVehicle::puncture_tire);
     ClassDB::bind_method(D_METHOD("take_impact"), &SBVehicle::take_impact);
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "debug_view"), "set_debug_view", "get_debug_view");
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "tcs"), "set_tcs", "get_tcs");
@@ -106,6 +112,7 @@ void SBVehicle::applyTransform(const Transform3D& xform) {
         p[i] = toS(w);
     }
     body.repair(p);
+    visualResetPending_ = true;
 }
 
 Ref<Material> SBVehicle::materialFor(const std::string& name, const Dictionary& lib) const {
@@ -196,7 +203,6 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
         wg.hubL = pw.spec.hubLeft;
         wg.hubR = pw.spec.hubRight;
         wg.tread0 = pw.treadNodes.empty() ? pw.spec.hubLeft : pw.treadNodes[0];
-        wg.right = body.positions()[pw.spec.hubRight].z > body.positions()[pw.spec.hubLeft].z ? false : true;
         // "right" here = wheel on the +z side of the car (outward = -axis).
         const sb::Vec3 c = pw.center(body);
         const sb::Vec3 com = body.centerOfMass();
@@ -206,6 +212,13 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
         wg.node->set_name(String(pw.spec.name.c_str()));
         add_child(wg.node);
         wg.tread = pw.treadNodes;
+        wg.visualRimRadius = std::min(def_.tires.rimRadius + 0.012, 0.85 * def_.tires.radius);
+        const std::size_t rays = wg.tread.size() / 2;
+        wg.spinWeights.reserve(rays);
+        for (std::size_t i = 0; i < rays; ++i) {
+            const double angle = (wg.right ? -1.0 : 1.0) * 6.283185307179586 * static_cast<double>(i) / static_cast<double>(rays);
+            wg.spinWeights.emplace_back(std::cos(angle), std::sin(angle));
+        }
         {
             // Rest frame of the wheel in build coordinates (for imported wheel meshes).
             const sb::Vec3 cr = (restPositions_[wg.hubL] + restPositions_[wg.hubR]) * 0.5;
@@ -231,14 +244,14 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
                 idx[static_cast<int64_t>(i + 1)] = static_cast<int32_t>(s.indices[i + 2]);
                 idx[static_cast<int64_t>(i + 2)] = static_cast<int32_t>(s.indices[i + 1]);
             }
-            addWheelSurface(wg, v, n, Array(), idx, materialFor(s.material, materials));
+            addWheelSurface(wg, v, n, Array(), idx, materialFor(s.material, materials), s.material == "tire");
         }
         wheels_.push_back(wg);
     }
 }
 
 void SBVehicle::addWheelSurface(WheelGpu& wg, const PackedVector3Array& v, const PackedVector3Array& n, const Array& extra,
-                                const PackedInt32Array& idx, const Ref<Material>& mat) {
+                                const PackedInt32Array& idx, const Ref<Material>& mat, bool deformable) {
     RenderingServer* rs = RenderingServer::get_singleton();
     WheelSurf ws;
     ws.mesh.instantiate();
@@ -256,9 +269,9 @@ void SBVehicle::addWheelSurface(WheelGpu& wg, const PackedVector3Array& v, const
     ws.vertexStride = rs->mesh_surface_get_format_vertex_stride(fmt, nv);
     ws.normalStride = rs->mesh_surface_get_format_normal_tangent_stride(fmt, nv);
     ws.normalOffset = rs->mesh_surface_get_format_offset(fmt, nv, Mesh::ARRAY_NORMAL);
-    ws.restPos.resize(static_cast<std::size_t>(nv) * 3);
-    ws.restNrm.resize(static_cast<std::size_t>(nv) * 3);
-    for (int i = 0; i < nv; ++i) {
+    ws.restPos.resize(deformable ? static_cast<std::size_t>(nv) * 3 : 0);
+    ws.restNrm.resize(ws.restPos.size());
+    for (int i = 0; deformable && i < nv; ++i) {
         const Vector3 p = v[i], q = n[i];
         ws.restPos[static_cast<std::size_t>(i) * 3] = p.x;
         ws.restPos[static_cast<std::size_t>(i) * 3 + 1] = p.y;
@@ -273,30 +286,40 @@ void SBVehicle::addWheelSurface(WheelGpu& wg, const PackedVector3Array& v, const
     wg.surfs.push_back(ws);
 }
 
-void SBVehicle::updateWheelMeshes(WheelGpu& w, const sb::Vec3& c, const sb::Vec3& rx, const sb::Vec3& ry, const sb::Vec3& out) {
+void SBVehicle::updateWheelMeshes(WheelGpu& w, const sb::Vec3& c, const sb::Vec3& rx, const sb::Vec3& ry, const sb::Vec3& out,
+                                  double retention) {
     // Radius of the tread ring around the wheel (from the tread nodes): flat spots, bursts and
     // impacts squash the rendered tyre accordingly.
     const std::size_t nn = w.tread.size();
     if (nn < 12 || pos_.empty()) return;
     const std::size_t rays = nn / 2;
     const double R = def_.tires.radius;
-    const double rim = std::min(def_.tires.rimRadius + 0.012, 0.85 * R);
-    std::vector<double> r0(rays), r1(rays);
-    double z0 = 0.0, worst = 0.0;
+    const double rim = w.visualRimRadius;
+    const auto wi = static_cast<std::size_t>(&w - wheels_.data());
+    const double pressure = wi < tel_.wheelPressurePsi.size() ? tel_.wheelPressurePsi[wi] : def_.tires.pressurePsi;
+    const double flat = 1.0 - std::clamp(pressure / (def_.tires.pressurePsi * 0.65), 0.0, 1.0);
+    if (w.treadRadii.size() != nn) w.treadRadii.assign(nn, R);
+    auto* r0 = w.treadRadii.data();
+    auto* r1 = r0 + rays;
+    const auto filter = [retention](double previous, double radius) {
+        const double change = previous - radius;
+        return radius + change * retention * (1.0 - std::clamp(std::abs(change) / 0.032, 0.0, 1.0));
+    };
+    double z0 = 0.0, worst = 0.0, bottomDepth = rim + 0.01;
     for (std::size_t j = 0; j < rays; ++j) {
         const sb::Vec3 p0 = pos_[w.tread[j]] - c, p1 = pos_[w.tread[rays + j]] - c;
-        r0[j] = std::sqrt(sb::dot(p0, rx) * sb::dot(p0, rx) + sb::dot(p0, ry) * sb::dot(p0, ry));
-        r1[j] = std::sqrt(sb::dot(p1, rx) * sb::dot(p1, rx) + sb::dot(p1, ry) * sb::dot(p1, ry));
+        r0[j] = filter(r0[j], std::hypot(sb::dot(p0, rx), sb::dot(p0, ry)));
+        r1[j] = filter(r1[j], std::hypot(sb::dot(p1, rx), sb::dot(p1, ry)));
         z0 += sb::dot(p0, out);
+        bottomDepth = std::max({bottomDepth, -p0.y, -p1.y});
         worst = std::max({worst, std::abs(r0[j] - R), std::abs(r1[j] - R)});
     }
     const bool ring0Outside = z0 > 0.0;
-    // Direction in which the node index increases (angle of node 1 relative to node 0 = rx).
-    const sb::Vec3 p1 = pos_[w.tread[1]] - c;
-    const double sgn = std::atan2(sb::dot(p1, ry), sb::dot(p1, rx)) >= 0.0 ? 1.0 : -1.0;
-    const bool deformed = worst > 0.006;
+    const double sgn = w.right ? -1.0 : 1.0;
+    const bool deformed = worst > 0.006 || flat > 0.01;
     const double halfW = 0.5 * def_.tires.width;
     for (WheelSurf& ws : w.surfs) {
+        if (ws.restPos.empty()) continue;  // rims and brake discs are rigid
         if (!deformed && !ws.deformed) continue;
         const std::size_t nv = ws.restPos.size() / 3;
         uint8_t* dst = ws.buffer.size() ? ws.buffer.ptrw() : nullptr;
@@ -306,7 +329,7 @@ void SBVehicle::updateWheelMeshes(WheelGpu& w, const sb::Vec3& c, const sb::Vec3
         }
         for (std::size_t i = 0; i < nv; ++i) {
             float x = ws.restPos[i * 3], y = ws.restPos[i * 3 + 1];
-            const float z = ws.restPos[i * 3 + 2];
+            float z = ws.restPos[i * 3 + 2];
             const double rv = std::sqrt(static_cast<double>(x) * x + static_cast<double>(y) * y);
             if (deformed && rv > rim && rv > 1e-4) {
                 double ang = std::atan2(static_cast<double>(y), static_cast<double>(x)) * sgn;
@@ -318,10 +341,17 @@ void SBVehicle::updateWheelMeshes(WheelGpu& w, const sb::Vec3& c, const sb::Vec3
                 const double rb = r1[j0] + (r1[j1] - r1[j0]) * t;
                 double u = std::clamp(static_cast<double>(z) / (2.0 * halfW) + 0.5, 0.0, 1.0);
                 if (!ring0Outside) u = 1.0 - u;
-                const double rr = rb + (ra - rb) * u;  // ring 0 at u = 1 (outside) when ring0Outside
+                double rr = rb + (ra - rb) * u;  // ring 0 at u = 1 (outside) when ring0Outside
+                // Flatten towards the measured ground-contact plane. Do not shrink the
+                // rubber above its physics contact point (which made flats look airborne).
+                const double down = std::max(0.0, -(rx.y * x + ry.y * y) / rv);
+                const double patch = flat * std::clamp((down - 0.55) / 0.35, 0.0, 1.0);
+                const double contactRadius = std::clamp(bottomDepth / std::max(0.01, down), rim + 0.01, R * 1.06);
+                rr += (contactRadius - rr) * patch;
                 const double scale = (rim + (rv - rim) * std::max(0.05, (rr - rim) / (R - rim))) / rv;
                 x = static_cast<float>(x * scale);
                 y = static_cast<float>(y * scale);
+                z *= static_cast<float>(1.0 + 0.38 * patch * std::clamp((rv - rim) / (R - rim), 0.0, 1.0));
             }
             float* pv = reinterpret_cast<float*>(dst + i * ws.vertexStride);
             pv[0] = x;
@@ -387,6 +417,21 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
     };
     std::vector<ModelPart> parts;
     collectParts(root, toBuild, wheels, hide, -1, parts, true);
+    const Variant driverEye = options.get("driver_eye", Variant());
+    if (driverEye.get_type() == Variant::VECTOR3) {
+        visual_.driverEye = sb::bindToNodes(restPositions_, layout_.bodyNodes, toS(static_cast<Vector3>(driverEye)));
+    }
+    const Variant dashboard = options.get("dashboard", Variant());
+    dashboardAvailable_ = dashboard.get_type() == Variant::VECTOR3;
+    if (dashboardAvailable_) {
+        visual_.dashboard = sb::bindToNodes(restPositions_, layout_.bodyNodes, toS(static_cast<Vector3>(dashboard)));
+    }
+    const Dictionary steering = options.get("steering_wheel", Dictionary());
+    const Array steeringParts = steering.get("parts", Array());
+    if (!steeringParts.is_empty()) {
+        visual_.steeringPivot = sb::bindToNodes(restPositions_, layout_.bodyNodes, toS(steering["pivot"]));
+        visual_.steeringAxis = sb::normalize(toS(steering["axis"]));
+    }
 
     // Hide the procedural body (keep e.g. suspension / calipers).
     for (std::size_t si = 0; si < surfaces_.size() && si < visual_.skinned.size(); ++si) {
@@ -397,19 +442,33 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
     }
 
     RenderingServer* rs = RenderingServer::get_singleton();
+    struct WheelPart {
+        const ModelPart* part;
+        int surface;
+        bool rubber;
+    };
     struct WheelAcc {
-        std::vector<std::pair<const ModelPart*, int>> surfs;
-        std::vector<Vector3> pts;
+        std::vector<WheelPart> surfs;
+        std::vector<Vector3> pts, rubberPts;
     };
     std::vector<WheelAcc> wacc(wheels_.size());
     for (const ModelPart& part : parts) {
         Ref<Mesh> mesh = part.mi->get_mesh();
         for (int s = 0; s < mesh->get_surface_count(); ++s) {
             if (part.wheel >= 0 && static_cast<std::size_t>(part.wheel) < wheels_.size()) {
-                wacc[static_cast<std::size_t>(part.wheel)].surfs.push_back({&part, s});
+                WheelAcc& acc = wacc[static_cast<std::size_t>(part.wheel)];
+                Ref<Material> mat = part.mi->get_surface_override_material(s);
+                if (mat.is_null()) mat = mesh->surface_get_material(s);
+                const String name = String(part.mi->get_name()) + (mat.is_valid() ? mat->get_name() : String());
+                const bool rubber = name.containsn("tire") || name.containsn("tyre") || name.containsn("rubber");
+                acc.surfs.push_back({&part, s, rubber});
                 const Array arr = mesh->surface_get_arrays(s);
                 const PackedVector3Array v = arr[Mesh::ARRAY_VERTEX];
-                for (int i = 0; i < v.size(); ++i) wacc[static_cast<std::size_t>(part.wheel)].pts.push_back(part.xf.xform(v[i]));
+                for (int i = 0; i < v.size(); ++i) {
+                    const Vector3 p = part.xf.xform(v[i]);
+                    acc.pts.push_back(p);
+                    if (rubber) acc.rubberPts.push_back(p);
+                }
                 continue;
             }
             const Array arr = mesh->surface_get_arrays(s);
@@ -423,6 +482,13 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
             }
             sb::MeshSurface ms;
             ms.material = "imported";
+            const String partName = part.mi->get_name();
+            for (int i = 0; i < steeringParts.size(); ++i) {
+                if (partName.begins_with(String(steeringParts[i]))) {
+                    ms.steeringWheel = true;
+                    break;
+                }
+            }
             const int nv = static_cast<int>(v.size());
             ms.positions.resize(static_cast<std::size_t>(nv) * 3);
             ms.normals.resize(static_cast<std::size_t>(nv) * 3);
@@ -487,14 +553,15 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
         WheelAcc& acc = wacc[wi];
         if (acc.surfs.empty() || acc.pts.size() < 10) continue;
         WheelGpu& wg = wheels_[wi];
-        Vector3 lo = acc.pts[0], hi = acc.pts[0];
-        for (const Vector3& p : acc.pts) {
+        const auto& points = acc.rubberPts.empty() ? acc.pts : acc.rubberPts;
+        Vector3 lo = points[0], hi = points[0];
+        for (const Vector3& p : points) {
             lo = lo.min(p);
             hi = hi.max(p);
         }
-        const Vector3 cm = (lo + hi) * 0.5;
+        Vector3 cm = (lo + hi) * 0.5;
         double C[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
-        for (const Vector3& p : acc.pts) {
+        for (const Vector3& p : points) {
             const Vector3 d = p - cm;
             const double dv[3] = {d.x, d.y, d.z};
             for (int i = 0; i < 3; ++i)
@@ -507,6 +574,7 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
             double ne[3];
             for (int i = 0; i < 3; ++i) ne[i] = tr * e[i] - (C[i][0] * e[0] + C[i][1] * e[1] + C[i][2] * e[2]);
             const double l = std::sqrt(ne[0] * ne[0] + ne[1] * ne[1] + ne[2] * ne[2]);
+            if (l < 1e-12) break;
             for (int i = 0; i < 3; ++i) e[i] = ne[i] / l;
         }
         Vector3 zm(static_cast<real_t>(e[0]), static_cast<real_t>(e[1]), static_cast<real_t>(e[2]));
@@ -515,12 +583,34 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
         Vector3 xm = toG(wg.restX);
         xm = (xm - zm * xm.dot(zm)).normalized();
         const Vector3 ym = zm.cross(xm);
+        const Basis toWheel = Basis(xm, ym, zm).transposed();
+        lo = hi = toWheel.xform(points.front() - cm);
+        for (const Vector3& p : points) {
+            const Vector3 q = toWheel.xform(p - cm);
+            lo = lo.min(q);
+            hi = hi.max(q);
+        }
+        cm += toWheel.transposed().xform((lo + hi) * 0.5f);
+        double maxRadius = 0.0, minRadius = sb::kInf;
+        for (const Vector3& p : points) {
+            const Vector3 q = toWheel.xform(p - cm);
+            const double radius = std::hypot(q.x, q.y);
+            maxRadius = std::max(maxRadius, radius);
+            minRadius = std::min(minRadius, radius);
+        }
+        const double radialScale = maxRadius > 1e-4 ? def_.tires.radius / maxRadius : 1.0;
+        const double width = hi.z - lo.z;
+        const double widthScale = width > 1e-4 ? def_.tires.width / width : 1.0;
+        const Vector3 scale(radialScale, radialScale, widthScale);
+        if (!acc.rubberPts.empty()) {
+            wg.visualRimRadius = std::clamp(minRadius * radialScale, 0.50 * def_.tires.radius, 0.88 * def_.tires.radius);
+        }
         // Remove the procedural wheel meshes.
         for (WheelSurf& ws : wg.surfs) ws.instance->queue_free();
         wg.surfs.clear();
         for (const auto& ps : acc.surfs) {
-            Ref<Mesh> mesh = ps.first->mi->get_mesh();
-            const Array arr = mesh->surface_get_arrays(ps.second);
+            Ref<Mesh> mesh = ps.part->mi->get_mesh();
+            const Array arr = mesh->surface_get_arrays(ps.surface);
             const PackedVector3Array v = arr[Mesh::ARRAY_VERTEX];
             const PackedVector3Array n = arr[Mesh::ARRAY_NORMAL];
             PackedInt32Array idx = arr[Mesh::ARRAY_INDEX];
@@ -528,23 +618,23 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
                 idx.resize(v.size());
                 for (int i = 0; i < v.size(); ++i) idx[i] = i;
             }
-            const Basis nb = ps.first->xf.basis.inverse().transposed();
+            const Basis nb = ps.part->xf.basis.inverse().transposed();
             PackedVector3Array lv, ln;
             lv.resize(v.size());
             ln.resize(v.size());
             for (int i = 0; i < v.size(); ++i) {
-                const Vector3 d = ps.first->xf.xform(v[i]) - cm;
-                lv[i] = Vector3(d.dot(xm), d.dot(ym), d.dot(zm));
+                const Vector3 d = ps.part->xf.xform(v[i]) - cm;
+                lv[i] = toWheel.xform(d) * scale;
                 const Vector3 q = n.size() == v.size() ? nb.xform(n[i]).normalized() : Vector3(0, 0, 1);
-                ln[i] = Vector3(q.dot(xm), q.dot(ym), q.dot(zm));
+                ln[i] = (toWheel.xform(q) / scale).normalized();
             }
             Array extra;
             extra.resize(Mesh::ARRAY_MAX);
             for (int k : {static_cast<int>(Mesh::ARRAY_COLOR), static_cast<int>(Mesh::ARRAY_TEX_UV), static_cast<int>(Mesh::ARRAY_TEX_UV2)})
                 if (arr[k].get_type() != Variant::NIL) extra[k] = arr[k];
-            Ref<Material> mat = ps.first->mi->get_surface_override_material(ps.second);
-            if (mat.is_null()) mat = mesh->surface_get_material(ps.second);
-            addWheelSurface(wg, lv, ln, extra, idx, pickMaterial(mat));
+            Ref<Material> mat = ps.part->mi->get_surface_override_material(ps.surface);
+            if (mat.is_null()) mat = mesh->surface_get_material(ps.surface);
+            addWheelSurface(wg, lv, ln, extra, idx, pickMaterial(mat), ps.rubber || acc.rubberPts.empty());
         }
     }
     hasImportedModel_ = true;
@@ -559,11 +649,17 @@ void SBVehicle::pre_step(double dt) {
         applyTransform(phys_.resetXform);
     }
     sb::VehicleControls& c = body.controls();
+    if (phys_.puncture >= 0 && static_cast<std::size_t>(phys_.puncture) < body.wheels().size()) {
+        body.wheels()[static_cast<std::size_t>(phys_.puncture)].puncture(phys_.punctureLeak);
+        phys_.puncture = -1;
+    }
     c.throttle = phys_.throttle;
     c.brake = phys_.brake;
     c.steer = phys_.steer;
     c.handbrake = phys_.handbrake;
     c.clutch = phys_.clutch;
+    for (std::size_t i = 0; i < body.wheels().size() && i < 4; ++i)
+        body.wheels()[i].surfaceGrip = phys_.surfaceGrip[i];
     c.steerRate = phys_.steerRate;
     c.gear = -99;
     c.ignition = phys_.ignition;
@@ -582,7 +678,7 @@ void SBVehicle::pre_step(double dt) {
         sb::Powertrain& pt = body.powertrain();
         if (phys_.automatic != pt.spec().automatic) pt.setAutomatic(phys_.automatic);
         if (phys_.gear != -99) {
-            pt.setGear(phys_.gear);
+            c.gear = phys_.gear;
             phys_.gear = -99;
         }
     }
@@ -593,11 +689,15 @@ void SBVehicle::sync_from_world() {
     {
         const bool keepStarter = phys_.starter, keepReset = phys_.reset;
         const int keepGear = phys_.gear;
+        const int keepPuncture = phys_.puncture;
+        const double keepLeak = phys_.punctureLeak;
         const Transform3D keepXf = phys_.resetXform;
         phys_ = ctl_;
         if (!ctl_.starter) phys_.starter = keepStarter;
         if (!ctl_.reset) { phys_.reset = keepReset; phys_.resetXform = keepXf; }
         if (ctl_.gear == -99) phys_.gear = keepGear;
+        if (ctl_.puncture < 0) { phys_.puncture = keepPuncture; phys_.punctureLeak = keepLeak; }
+        ctl_.puncture = -1;
         ctl_.starter = false;
         ctl_.reset = false;
         ctl_.gear = -99;
@@ -605,29 +705,22 @@ void SBVehicle::sync_from_world() {
     const sb::SoftBody& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     pos_ = body.positions();
     vel_ = body.velocities();
+    visualReset_ = visualReset_ || visualResetPending_;
+    visualResetPending_ = false;
     tel_ = body.telemetry();
     if (body.hasSystems()) sys_ = body.systems().state();
     // Wheel slip / contact.
     const std::size_t nw = body.wheels().size();
     slip_.assign(nw, 0.0f);
     contact_.assign(nw, 0.0f);
+    contactPoints_.resize(nw);
+    contactNormals_.resize(nw);
     for (std::size_t i = 0; i < nw; ++i) {
         const sb::PressureWheel& w = body.wheels()[i];
-        const sb::Vec3 c = w.center(body);
-        const sb::Vec3 vh = (vel_[w.spec.hubLeft] + vel_[w.spec.hubRight]) * 0.5;
-        const sb::Vec3 a = w.axis(body);
-        const sb::Vec3 fwd = sb::normalize(sb::cross(sb::Vec3{0, 1, 0}, a) * -1.0);
-        const double vRoll = w.angularVelocity * w.spec.radius;
-        const double vLong = sb::dot(vh, fwd);
-        const double vLat = sb::dot(vh, a);
-        slip_[i] = static_cast<float>(std::sqrt((vRoll - vLong) * (vRoll - vLong) + vLat * vLat));
-        double minR = 1e9;
-        for (std::uint32_t t : w.treadNodes) {
-            const sb::Vec3 rel = pos_[t] - c;
-            const sb::Vec3 r = rel - a * sb::dot(rel, a);
-            minR = std::min(minR, sb::length(r));
-        }
-        contact_[i] = static_cast<float>(std::clamp((w.spec.radius - minR) / 0.02, 0.0, 1.0));
+        slip_[i] = static_cast<float>(w.slipSpeed);
+        contact_[i] = w.contactAge < 0.025 ? static_cast<float>(std::clamp(w.load / 2200.0, 0.0, 1.0)) : 0.0f;
+        contactPoints_.set(i, toG(w.contactPoint));
+        contactNormals_.set(i, toG(w.contactNormal));
     }
     // Damage events for crash audio / camera shake.
     const std::size_t d = tel_.deformedBeams, b = tel_.brokenBeams;
@@ -641,9 +734,7 @@ void SBVehicle::sync_from_world() {
         beamStrain_.resize(body.beamCount());
         for (std::size_t i = 0; i < body.beamCount(); ++i) {
             const sb::Beam& bm = body.beams()[i];
-            beamStrain_[i] = bm.broken ? -1.0f
-                                       : static_cast<float>(std::abs(bm.restLength - bm.hydroOffset - bm.baseRestLength) /
-                                                            std::max(1e-6, bm.baseRestLength));
+            beamStrain_[i] = bm.broken ? -1.0f : static_cast<float>(bm.plasticStrain());
         }
     }
     snapshotValid_ = true;
@@ -651,9 +742,35 @@ void SBVehicle::sync_from_world() {
 
 // ============================================================================ rendering
 
-void SBVehicle::update_visual() {
+void SBVehicle::update_visual(double delta) {
     if (!snapshotValid_ || pos_.empty()) return;
-    sb::computeNodeFrames(pos_, visual_, frames_);
+    const sb::Vec3 reference = (pos_[layout_.refFL] + pos_[layout_.refFR] + pos_[layout_.refRL] + pos_[layout_.refRR]) * 0.25;
+    const sb::Vec3 movement = reference - renderReference_;
+    const bool snap = visualReset_ || delta <= 0.0 || renderPos_.size() != pos_.size() || sb::lengthSq(movement) > 16.0;
+    visualReset_ = false;
+    if (snap) {
+        renderPos_ = pos_;
+    } else {
+        const double bodyRetention = std::exp(-24.0 * delta);
+        // Follow horizontal travel immediately. Filter only short vertical and relative movements.
+        const sb::Vec3 advance{movement.x, 0.0, movement.z};
+        for (std::size_t i = 0; i < pos_.size(); ++i) {
+            const sb::Vec3 residual = renderPos_[i] + advance - pos_[i];
+            const double distance = sb::length(residual);
+            // Large displacements (impacts, detached parts) pass straight through.
+            const double weight = bodyRetention * (1.0 - std::clamp(distance / 0.20, 0.0, 1.0));
+            renderPos_[i] = pos_[i] + residual * weight;
+        }
+    }
+    renderReference_ = reference;
+    sb::computeNodeFrames(renderPos_, visual_, frames_);
+    const auto& axis = visual_.steeringAxis;
+    const Vector3 steeringAxis = toG({frames_[0] * axis.x + frames_[1] * axis.y + frames_[2] * axis.z,
+                                     frames_[3] * axis.x + frames_[4] * axis.y + frames_[5] * axis.z,
+                                     frames_[6] * axis.x + frames_[7] * axis.y + frames_[8] * axis.z}).normalized();
+    const Vector3 steeringPivot = toG(sb::evalSkin(renderPos_, frames_, visual_.steeringPivot));
+    const Basis steeringRotation(steeringAxis, tel_.steer * 4.71238898038469);
+    const Transform3D steeringTransform(steeringRotation, steeringPivot - steeringRotation.xform(steeringPivot));
 
     // AABB of the whole car (vertices are in world space; this node stays at the origin).
     Vector3 lo = toG(pos_[0]), hi = lo;
@@ -667,7 +784,10 @@ void SBVehicle::update_visual() {
         SurfaceGpu& g = surfaces_[si];
         if (!g.instance->is_visible()) continue;
         const sb::MeshSurface& s = visual_.skinned[si];
-        sb::deformSurface(pos_, frames_, s, tmpPos_, tmpNrm_);
+        if (s.steeringWheel) g.instance->set_transform(steeringTransform);
+        if (s.material == "paint" || s.material == "glass" || s.material == "interior" || s.material == "trim")
+            sb::deformSurfaceBlended(renderPos_, frames_, s, tmpPos_, tmpNrm_);
+        else sb::deformSurface(renderPos_, frames_, s, tmpPos_, tmpNrm_);
         const std::size_t nv = s.skin.size();
         uint8_t* dst = g.buffer.ptrw();
         for (std::size_t i = 0; i < nv; ++i) {
@@ -684,27 +804,46 @@ void SBVehicle::update_visual() {
         g.mesh->set_custom_aabb(box);
     }
 
-    // Wheels: origin at the spindle centre, Z = outward axle, X = towards tread node 0.
+    // Wheels: origin at the spindle centre, Z = outward axle. Fit the spin phase to both tread rings.
+    const double tireRetention = snap ? 0.0 : std::exp(-36.0 * delta);
     for (WheelGpu& w : wheels_) {
         const sb::Vec3 hl = pos_[w.hubL], hr = pos_[w.hubR];
         const sb::Vec3 c = (hl + hr) * 0.5;
         const sb::Vec3 axis = sb::normalize(hl - hr);
         const sb::Vec3 out = w.right ? axis * -1.0 : axis;
-        sb::Vec3 rx = pos_[w.tread0] - c;
-        rx = sb::normalize(rx - out * sb::dot(rx, out));
+        const std::size_t rays = w.spinWeights.size();
+        sb::Vec3 along{}, across{};
+        for (std::size_t i = 0; i < rays; ++i) {
+            const sb::Vec3 pair = (pos_[w.tread[i]] - c) + (pos_[w.tread[rays + i]] - c);
+            along += pair * w.spinWeights[i].first;
+            across += pair * w.spinWeights[i].second;
+        }
+        sb::Vec3 rx = along - sb::cross(out, across);
+        rx -= out * sb::dot(rx, out);
+        if (sb::lengthSq(rx) < 1e-8) {
+            rx = pos_[w.tread0] - c;
+            rx -= out * sb::dot(rx, out);
+        }
+        rx = sb::normalize(rx);
         const sb::Vec3 ry = sb::cross(out, rx);
+        const sb::Vec3& hubL = renderPos_[w.hubL];
+        const sb::Vec3& hubR = renderPos_[w.hubR];
+        const sb::Vec3 axle = w.right ? hubR - hubL : hubL - hubR;
+        const sb::Vec3 renderOut = sb::lengthSq(axle) > 1e-8 ? sb::normalize(axle) : out;
+        const sb::Vec3 renderRx = sb::normalize(rx - renderOut * sb::dot(rx, renderOut));
         Basis bs;
-        bs.set_column(0, toG(rx));
-        bs.set_column(1, toG(ry));
-        bs.set_column(2, toG(out));
-        w.node->set_transform(Transform3D(bs, toG(c)));
-        updateWheelMeshes(w, c, rx, ry, out);
+        bs.set_column(0, toG(renderRx));
+        bs.set_column(1, toG(sb::cross(renderOut, renderRx)));
+        bs.set_column(2, toG(renderOut));
+        w.node->set_transform(Transform3D(bs, toG((hubL + hubR) * 0.5)));
+        updateWheelMeshes(w, c, rx, ry, out, tireRetention);
     }
 
     for (std::size_t si = 0; si < importedGpu_.size(); ++si) {
         SurfaceGpu& g = importedGpu_[si];
         const sb::MeshSurface& s = importedSurf_[si];
-        sb::deformSurfaceBlended(pos_, frames_, s, tmpPos_, tmpNrm_);
+        if (s.steeringWheel) g.instance->set_transform(steeringTransform);
+        sb::deformSurfaceBlended(renderPos_, frames_, s, tmpPos_, tmpNrm_);
         const std::size_t nv = s.skin.size();
         uint8_t* dst = g.buffer.ptrw();
         for (std::size_t i = 0; i < nv; ++i) {
@@ -749,6 +888,12 @@ void SBVehicle::set_input(double throttle, double brake, double steer, double ha
 }
 
 void SBVehicle::set_clutch(double clutch) { ctl_.clutch = clutch; }
+
+void SBVehicle::set_surface_grip(const PackedFloat32Array& grip) {
+    if (grip.size() != 4) return;
+    for (int i = 0; i < 4; ++i)
+        if (std::isfinite(grip[i])) ctl_.surfaceGrip[static_cast<std::size_t>(i)] = std::clamp<double>(grip[i], 0.35, 1.2);
+}
 
 void SBVehicle::set_gear(int gear) { ctl_.gear = gear; }
 
@@ -823,6 +968,12 @@ Dictionary SBVehicle::get_telemetry() const {
     d["rpm"] = tel_.engineRpm;
     d["gear"] = tel_.gear;
     d["clutch"] = tel_.clutch;
+    d["clutch_temp"] = tel_.clutchTempC;
+    d["clutch_wear"] = tel_.clutchWear;
+    d["gearbox_damage"] = tel_.gearboxDamage;
+    d["shift_remaining"] = tel_.shiftRemaining;
+    d["clutch_slip_rpm"] = tel_.clutchSlipRpm;
+    d["gear_grind"] = tel_.gearGrind;
     d["throttle"] = tel_.throttle;
     d["brake"] = tel_.brake;
     d["steer"] = tel_.steer;
@@ -860,6 +1011,11 @@ Dictionary SBVehicle::get_telemetry() const {
     d["engine_damage"] = std::max(sys_.blockDamage, sys_.wear);
     d["power_kw"] = sys_.powerKw;
     d["status"] = String(sys_.status.c_str());
+    if (!sys_.seized && !sys_.driveshaftBroken) {
+        if (tel_.gearboxDamage >= 1.0) d["status"] = "GEARBOX FAILED";
+        else if (tel_.clutchWear >= 1.0) d["status"] = "CLUTCH FAILED";
+        else if (tel_.clutchTempC > 200.0) d["status"] = "CLUTCH OVERHEATING";
+    }
     Array zones;
     for (double z : sys_.zoneDamage) zones.push_back(z);
     d["zones"] = zones;
@@ -868,6 +1024,29 @@ Dictionary SBVehicle::get_telemetry() const {
     for (double s : sys_.suspensionDamage) susp.push_back(s);
     d["brake_temps"] = brakes;
     d["suspension_damage"] = susp;
+    return d;
+}
+
+void SBVehicle::puncture_tire(int wheel, double leak) {
+    if (wheel < 0 || static_cast<std::size_t>(wheel) >= wheels_.size() || !std::isfinite(leak)) return;
+    ctl_.puncture = wheel;
+    ctl_.punctureLeak = std::clamp(leak, 0.1, 100.0);
+}
+
+Dictionary SBVehicle::get_effect_anchors() const {
+    Dictionary d;
+    PackedVector3Array centers;
+    for (const auto& w : wheels_) centers.push_back(w.node->get_global_position());
+    d["wheels"] = centers;
+    d["contacts"] = contactPoints_;
+    d["normals"] = contactNormals_;
+    d["radius"] = def_.tires.radius;
+    const auto& points = renderPos_.empty() ? pos_ : renderPos_;
+    sb::Vec3 engine{};
+    for (auto i : layout_.engineNodes) if (i < points.size()) engine += points[i];
+    if (!layout_.engineNodes.empty()) engine *= 1.0 / static_cast<double>(layout_.engineNodes.size());
+    d["engine"] = toG(engine) + get_up() * 0.3;
+    d["exhaust"] = get_position_ws() - get_forward() * (def_.body.length * 0.48) + get_up() * 0.12;
     return d;
 }
 
@@ -909,14 +1088,26 @@ Vector3 SBVehicle::get_position_ws() const {
 
 Vector3 SBVehicle::get_chase_target() const {
     if (pos_.empty() || frames_.empty()) return get_position_ws();
-    return toG(sb::evalSkin(pos_, frames_, visual_.chaseTarget));
+    return toG(sb::evalSkin(renderPos_, frames_, visual_.chaseTarget));
 }
 
 Vector3 SBVehicle::get_driver_eye() const {
     if (pos_.empty() || frames_.empty()) return get_position_ws();
-    return toG(sb::evalSkin(pos_, frames_, visual_.driverEye));
+    return toG(sb::evalSkin(renderPos_, frames_, visual_.driverEye));
 }
 
+Variant SBVehicle::get_dashboard_transform() const {
+    if (!dashboardAvailable_ || frames_.empty()) return Variant();
+    return Transform3D(get_visual_basis(), toG(sb::evalSkin(renderPos_, frames_, visual_.dashboard)));
+}
+
+Basis SBVehicle::get_visual_basis() const {
+    if (renderPos_.empty()) return Basis(get_right(), get_up(), -get_forward()).orthonormalized();
+    const Vector3 forward = toG(forwardOf(renderPos_));
+    const Vector3 right = toG(sb::normalize((renderPos_[layout_.refFR] + renderPos_[layout_.refRR]) -
+                                           (renderPos_[layout_.refFL] + renderPos_[layout_.refRL])));
+    return Basis(right, right.cross(forward).normalized(), -forward).orthonormalized();
+}
 Vector3 SBVehicle::get_forward() const {
     if (pos_.empty()) return Vector3(1, 0, 0);
     return toG(forwardOf(pos_));
@@ -934,6 +1125,7 @@ Vector3 SBVehicle::get_up() const {
 Vector3 SBVehicle::get_velocity() const { return toG(tel_.velocity); }
 
 double SBVehicle::get_speed_kmh() const { return tel_.speedKmh; }
+double SBVehicle::get_engine_rpm() const { return tel_.engineRpm; }
 
 PackedFloat32Array SBVehicle::get_wheel_slip() const {
     PackedFloat32Array a;

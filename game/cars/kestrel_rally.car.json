@@ -1,0 +1,31 @@
+{
+  "id": "kestrel_rally",
+  "name": "Kestrel RS Gravel",
+  "brand": "Kestrel",
+  "description": "Kurzer Allrad-Rallyewagen mit 2.0-l-Turbo, Schotterreifen und langen Federwegen.",
+  "body": {
+    "style": "hatchback", "doors": 2,
+    "length": 4.02, "width": 1.84, "height": 1.52,
+    "wheelbase": 2.53, "frontOverhang": 0.80,
+    "trackFront": 1.58, "trackRear": 1.56, "groundClearance": 0.21,
+    "noseHeight": 0.80, "hoodHeight": 1.04, "beltHeight": 1.10, "tailHeight": 1.11,
+    "hoodLength": 1.04, "windshieldRun": 0.66, "roofLength": 1.57, "rearWindowRun": 0.42,
+    "roofWidthRatio": 0.80, "cornerRadiusFront": 0.24, "cornerRadiusRear": 0.20,
+    "paint": [0.055, 0.51, 0.62], "paintMetallic": 0.32
+  },
+  "chassis": { "curbMass": 1310, "frontWeight": 0.55, "bodyStiffness": 1.2, "bodyStrength": 1.3 },
+  "suspension": {
+    "front": { "wheelRate": 33000, "bumpDamping": 2500, "reboundDamping": 4700, "antiRollRate": 9000, "bumpTravel": 0.12, "droopTravel": 0.13 },
+    "rear": { "wheelRate": 31000, "bumpDamping": 2400, "reboundDamping": 4500, "antiRollRate": 6500, "bumpTravel": 0.12, "droopTravel": 0.14 }
+  },
+  "tires": { "radius": 0.329, "width": 0.220, "rimRadius": 0.195, "pressurePsi": 30, "friction": 1.23, "tireMass": 10.5, "rimMass": 8.5, "rays": 18 },
+  "engine": {
+    "name": "2.0 I4 Rally Turbo", "layout": "AWD", "cylinders": 4,
+    "torqueCurve": [[750, 128], [1800, 260], [2600, 365], [4400, 392], [5800, 358], [6800, 305], [7350, 0]],
+    "idleRpm": 820, "redlineRpm": 7100, "inertia": 0.17, "friction": 19, "engineBraking": 0.05, "mass": 162,
+    "gears": [3.24, 2.16, 1.62, 1.28, 1.03, 0.82], "reverse": -3.18, "finalDrive": 4.29,
+    "automatic": true, "shiftUpRpm": 6750, "shiftDownRpm": 2800,
+    "maxBrakeTorque": 3000, "frontBrakeBias": 0.60, "handbrakeTorque": 2300, "lsd": 24,
+    "fuelCapacity": 52, "bsfc": 268, "radiatorUA": 2150
+  }
+}

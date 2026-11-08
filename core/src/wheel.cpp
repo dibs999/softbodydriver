@@ -55,6 +55,8 @@ void PressureWheel::resetCondition(SoftBody& body) {
     appliedGrip = -1.0;
     appliedSpokeFactor = -1.0;
     conditionCounter = 0;
+    load = slipSpeed = 0.0;
+    contactAge = 1.0;
     auto& beams = body.beams();
     for (std::size_t i = 0; i < spokeBeams.size() && i < spokeBaseSpring.size(); ++i)
         beams[spokeBeams[i]].spring = spokeBaseSpring[i];
@@ -89,21 +91,37 @@ void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, rea
         const auto& pos = body.positions();
         const auto& vel = body.velocities();
         const Vec3 a0 = axis(body);
-        const Vec3 c0 = center(body);
-        real minR = spec.radius;
+        real impulse = 0.0;
+        real slidingImpulse = 0.0;
+        Vec3 normal{}, patch{};
         for (std::uint32_t idx : treadNodes) {
-            const Vec3 rel = pos[idx] - c0;
-            minR = std::min(minR, length(rel - a0 * dot(rel, a0)));
+            const Vec3 j = body.contactImpulses()[idx];
+            const real amount = length(j);
+            impulse += amount;
+            normal += j;
+            patch += pos[idx] * amount;
+            if (amount > 1e-8) {
+                const Vec3 n = j / amount;
+                // Measure the rubber at the contact patch. Hub omega * radius is
+                // misleading when a soft tyre flattens, flexes or grows at speed.
+                slidingImpulse += amount * length(vel[idx] - n * dot(vel[idx], n));
+            }
         }
-        const real deflection = std::max<real>(0.0, spec.radius - minR);
-        const real pressureFactor = std::clamp<real>(pressurePsi / std::max<real>(1.0, spec.pressurePsi), 0.15, 1.3);
-        load = deflection * 2.6e5 * pressureFactor;
+        contactAge += dt;
+        if (impulse > 1e-8) {
+            contactAge = 0.0;
+            contactNormal = normalize(normal);
+            contactPoint = patch / impulse;
+        }
+        // Actual normal impulses capture load transfer and slopes, and don't mistake
+        // free-spinning tyre deformation for road contact. Filter polygon contact pulses.
+        load += (impulse / dt - load) * (1.0 - std::exp(-dt / 0.025));
         const Vec3 vh = (vel[spec.hubLeft] + vel[spec.hubRight]) * 0.5;
-        const Vec3 fwd = normalize(cross(Vec3{0, 1, 0}, a0) * -1.0);
+        const Vec3 fwd = normalize(cross(contactNormal, a0) * -1.0);
         const real vLong = dot(vh, fwd);
-        const real vLat = dot(vh, a0);
-        const real vRoll = angularVelocity * spec.radius;
-        slipSpeed = load > 50.0 ? std::sqrt((vRoll - vLong) * (vRoll - vLong) + vLat * vLat) : 0.0;
+        if (impulse > 1e-8)
+            slipSpeed += (slidingImpulse / impulse - slipSpeed) * (1.0 - std::exp(-dt / 0.015));
+        if (contactAge >= 0.025 || load < 50.0) slipSpeed = 0.0;
         // The node-beam tyre always creeps a little; only real sliding heats and wears the rubber.
         const real sliding = std::max<real>(0.0, slipSpeed - 1.0);
         const real slipPower = spec.friction * grip * load * sliding;            // W into the rubber
@@ -143,6 +161,7 @@ void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, rea
         if (tempC < 70.0) g *= 0.95 + 0.05 * std::clamp<real>((tempC - 20.0) / 50.0, 0.0, 1.0);
         else if (tempC > 105.0) g *= std::max<real>(0.6, 1.0 - (tempC - 105.0) / 180.0);
         if (pressurePsi < 8.0) g *= 0.65;  // running on the rim / flat sidewall
+        g *= std::clamp(surfaceGrip, 0.35, 1.2);
         grip = g;
         if (std::abs(grip - appliedGrip) > 0.005) {
             for (std::uint32_t n : treadNodes) body.setNodeFriction(n, spec.friction * grip);

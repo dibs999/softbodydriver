@@ -1,0 +1,31 @@
+{
+  "id": "vortex_sprint",
+  "name": "Vortex Sprint 2.4",
+  "brand": "Vortex",
+  "description": "Leichtes Zweisitzer-Coupé mit hochdrehendem 2.4-l-Saugmotor und Hinterradantrieb.",
+  "body": {
+    "style": "coupe", "doors": 2,
+    "length": 3.98, "width": 1.75, "height": 1.25,
+    "wheelbase": 2.35, "frontOverhang": 0.82,
+    "trackFront": 1.49, "trackRear": 1.50, "groundClearance": 0.13,
+    "noseHeight": 0.58, "hoodHeight": 0.83, "beltHeight": 0.87, "tailHeight": 0.86,
+    "hoodLength": 1.30, "windshieldRun": 0.72, "roofLength": 0.64, "rearWindowRun": 0.83,
+    "roofWidthRatio": 0.72, "cornerRadiusFront": 0.34, "cornerRadiusRear": 0.26,
+    "paint": [0.24, 0.13, 0.63], "paintMetallic": 0.58
+  },
+  "chassis": { "curbMass": 1120, "frontWeight": 0.51, "bodyStiffness": 1.14, "bodyStrength": 1.08 },
+  "suspension": {
+    "front": { "wheelRate": 26500, "bumpDamping": 2050, "reboundDamping": 3900, "antiRollRate": 11500, "bumpTravel": 0.08, "droopTravel": 0.095 },
+    "rear": { "wheelRate": 25500, "bumpDamping": 1950, "reboundDamping": 3750, "antiRollRate": 7700, "bumpTravel": 0.085, "droopTravel": 0.10 }
+  },
+  "tires": { "radius": 0.311, "width": 0.205, "rimRadius": 0.205, "pressurePsi": 33, "friction": 1.24, "tireMass": 8.5, "rimMass": 8.0, "rays": 16 },
+  "engine": {
+    "name": "2.4 I4", "layout": "RWD", "cylinders": 4,
+    "torqueCurve": [[750, 105], [2200, 177], [3900, 216], [5200, 232], [6900, 215], [7700, 192], [8250, 0]],
+    "idleRpm": 850, "redlineRpm": 8000, "inertia": 0.13, "friction": 16, "engineBraking": 0.04, "mass": 143,
+    "gears": [3.35, 2.19, 1.60, 1.23, 1.0, 0.82], "reverse": -3.22, "finalDrive": 4.10,
+    "automatic": true, "shiftUpRpm": 7650, "shiftDownRpm": 2500,
+    "maxBrakeTorque": 2460, "frontBrakeBias": 0.59, "handbrakeTorque": 1600, "lsd": 22,
+    "fuelCapacity": 46, "bsfc": 252, "radiatorUA": 1780
+  }
+}

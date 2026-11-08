@@ -65,6 +65,7 @@ protected:
     static void _bind_methods();
 
 private:
+    void sync_visuals_with_delta(double delta);
     void threadMain();
     void startThread();
     void stopThread();

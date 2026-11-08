@@ -2,10 +2,21 @@ extends RefCounted
 ## Shared helpers for the procedural maps: materials, colliding boxes, fast terrain meshes,
 ## road ribbons with lane markings, guard rails and simple props.
 
+static var _noise_textures: Dictionary = {}
+const SURFACE_PATH := "res://materials/surfaces/"
+const ROAD_SHADER := preload("res://materials/surfaces/road.gdshader")
+
 static func car_xform(pos: Vector3, heading: Vector3) -> Transform3D:
 	var f := Vector3(heading.x, 0, heading.z).normalized()
 	var r := f.cross(Vector3.UP)
 	return Transform3D(Basis(f, Vector3.UP, r), pos)
+
+
+static func closed_route(points: PackedVector3Array) -> PackedVector3Array:
+	var route := points.duplicate()
+	if not route.is_empty():
+		route.append(route[0])
+	return route
 
 
 static func mat(color: Color, rough := 0.9, metallic := 0.0) -> StandardMaterial3D:
@@ -16,26 +27,58 @@ static func mat(color: Color, rough := 0.9, metallic := 0.0) -> StandardMaterial
 	return m
 
 
+static func surface_material(kind: String, tile_metres: float, tint := Color.WHITE,
+		normal_strength := 0.0) -> StandardMaterial3D:
+	var m := mat(tint)
+	m.albedo_texture = load(SURFACE_PATH + kind + ".jpg")
+	m.uv1_scale = Vector3.ONE / tile_metres
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = true
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	if normal_strength > 0.0:
+		m.normal_enabled = true
+		m.normal_texture = load(SURFACE_PATH + kind + "_normal.jpg")
+		m.normal_scale = normal_strength
+	return m
+
+
+static func terrain_material(kind: String, tile_metres: float) -> StandardMaterial3D:
+	var m := surface_material(kind, tile_metres)
+	# Heightfield UVs are already world-aligned and repeat every ten metres.
+	m.uv1_scale *= 10.0
+	m.uv1_triplanar = false
+	m.vertex_color_use_as_albedo = true
+	return m
+
+
 static func noise_mat(base: Color, variation: float, scale: float, rough := 0.95, freq := 0.05, vertex_color := false) -> StandardMaterial3D:
-	var m := mat(base if not vertex_color else Color.WHITE, rough)
-	var n := FastNoiseLite.new()
-	n.frequency = freq
-	var tex := NoiseTexture2D.new()
-	tex.width = 512
-	tex.height = 512
-	tex.seamless = true
-	tex.noise = n
-	var g := Gradient.new()
-	var c := base if not vertex_color else Color(0.85, 0.85, 0.85)
-	g.set_color(0, c.darkened(variation))
-	g.set_color(1, c.lightened(variation))
-	tex.color_ramp = g
-	m.albedo_texture = tex
+	var m := mat(Color.WHITE, rough)
+	var tint := Color(0.85, 0.85, 0.85) if vertex_color else base
+	var key := [tint, variation, freq]
+	if not _noise_textures.has(key):
+		_noise_textures[key] = _make_noise_texture(tint, variation, freq)
+	m.albedo_texture = _noise_textures[key]
 	m.uv1_scale = Vector3(scale, scale, scale)
 	m.uv1_triplanar = true
 	m.vertex_color_use_as_albedo = vertex_color
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	return m
+
+
+static func _make_noise_texture(tint: Color, variation: float, frequency: float) -> ImageTexture:
+	# Finish small, reusable tiles during map loading so they need no upload during driving.
+	const SIZE := 128
+	var noise := FastNoiseLite.new()
+	noise.frequency = frequency
+	var samples := noise.get_seamless_image(SIZE, SIZE).get_data()
+	var image := Image.create(SIZE, SIZE, false, Image.FORMAT_RGB8)
+	var dark := tint.darkened(variation)
+	var light := tint.lightened(variation)
+	for y in SIZE:
+		for x in SIZE:
+			image.set_pixel(x, y, dark.lerp(light, samples[y * SIZE + x] / 255.0))
+	image.generate_mipmaps()
+	return ImageTexture.create_from_image(image)
 
 
 static func box(parent: Node3D, world: SBWorld, center: Vector3, half: Vector3, euler: Vector3, material: Material,
@@ -79,33 +122,33 @@ static func sample(h: PackedFloat32Array, nx: int, nz: int, ox: float, oz: float
 ## Flattens the terrain along a path (points with y): within half_w the height is the path height,
 ## blended back to the terrain over `blend` metres. Only cells near the path are visited.
 static func carve_path(h: PackedFloat32Array, nx: int, nz: int, ox: float, oz: float, cell: float,
-		path: PackedVector3Array, half_w: float, blend: float, depth := 0.06) -> void:
+		path: PackedVector3Array, half_w: float, blend: float, depth := 0.06, closed := true) -> void:
 	var reach := half_w + blend
 	var best := PackedFloat32Array()
 	best.resize(nx * nz)
 	best.fill(1e9)
 	var by := PackedFloat32Array()
 	by.resize(nx * nz)
-	var rc := int(ceil(reach / cell)) + 1
 	var n := path.size()
-	for i in n:
-		# Sample the segment densely enough for the grid resolution.
+	for i in (n if closed else n - 1):
 		var a := path[i]
 		var b := path[(i + 1) % n]
-		var steps := maxi(1, int(a.distance_to(b) / (cell * 0.5)))
-		for s in steps:
-			var p := a.lerp(b, float(s) / steps)
-			var cx := int(round((p.x - ox) / cell))
-			var cz := int(round((p.z - oz) / cell))
-			for ix in range(maxi(cx - rc, 0), mini(cx + rc + 1, nx)):
-				for iz in range(maxi(cz - rc, 0), mini(cz + rc + 1, nz)):
-					var dx := ox + ix * cell - p.x
-					var dz := oz + iz * cell - p.z
-					var d := dx * dx + dz * dz
-					var k := ix * nz + iz
-					if d < best[k]:
-						best[k] = d
-						by[k] = p.y
+		var start := Vector2(a.x, a.z)
+		var segment := Vector2(b.x, b.z) - start
+		var length_sq := maxf(segment.length_squared(), 0.000001)
+		var min_x := maxi(0, ceili((minf(a.x, b.x) - reach - ox) / cell))
+		var max_x := mini(nx - 1, floori((maxf(a.x, b.x) + reach - ox) / cell))
+		var min_z := maxi(0, ceili((minf(a.z, b.z) - reach - oz) / cell))
+		var max_z := mini(nz - 1, floori((maxf(a.z, b.z) + reach - oz) / cell))
+		for ix in range(min_x, max_x + 1):
+			for iz in range(min_z, max_z + 1):
+				var offset := Vector2(ox + ix * cell, oz + iz * cell) - start
+				var along := clampf(offset.dot(segment) / length_sq, 0.0, 1.0)
+				var d := (offset - segment * along).length_squared()
+				var k := ix * nz + iz
+				if d < best[k]:
+					best[k] = d
+					by[k] = lerpf(a.y, b.y, along)
 	for k in nx * nz:
 		if best[k] < reach * reach:
 			var t := clampf((sqrt(best[k]) - half_w) / blend, 0.0, 1.0)
@@ -115,30 +158,42 @@ static func carve_path(h: PackedFloat32Array, nx: int, nz: int, ox: float, oz: f
 
 ## Terrain mesh straight from packed arrays (fast). `colors` (optional, nx * nz) gives vertex colours.
 static func terrain_mesh(ox: float, oz: float, cell: float, nx: int, nz: int, h: PackedFloat32Array,
-		material: Material, colors := PackedColorArray()) -> MeshInstance3D:
+		material: Material, colors := PackedColorArray(), region := Rect2i()) -> MeshInstance3D:
+	if not region.has_area():
+		region = Rect2i(0, 0, nx, nz)
+	var rows := region.size.y
+	var columns := region.size.x
+	var count := rows * columns
 	var verts := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var uvs := PackedVector2Array()
-	verts.resize(nx * nz)
-	normals.resize(nx * nz)
-	uvs.resize(nx * nz)
-	for ix in nx:
-		for iz in nz:
-			var i := ix * nz + iz
-			verts[i] = Vector3(ox + ix * cell, h[i], oz + iz * cell)
+	var tint := PackedColorArray()
+	verts.resize(count)
+	normals.resize(count)
+	uvs.resize(count)
+	if colors.size() == nx * nz:
+		tint.resize(count)
+	for x in columns:
+		var ix := region.position.x + x
+		for z in rows:
+			var iz := region.position.y + z
+			var i := x * rows + z
+			verts[i] = Vector3(ox + ix * cell, h[ix * nz + iz], oz + iz * cell)
 			var hx0 := h[maxi(ix - 1, 0) * nz + iz]
 			var hx1 := h[mini(ix + 1, nx - 1) * nz + iz]
 			var hz0 := h[ix * nz + maxi(iz - 1, 0)]
 			var hz1 := h[ix * nz + mini(iz + 1, nz - 1)]
 			normals[i] = Vector3(hx0 - hx1, 2.0 * cell, hz0 - hz1).normalized()
 			uvs[i] = Vector2(verts[i].x, verts[i].z) * 0.1
+			if not tint.is_empty():
+				tint[i] = colors[ix * nz + iz]
 	var idx := PackedInt32Array()
-	idx.resize((nx - 1) * (nz - 1) * 6)
+	idx.resize((columns - 1) * (rows - 1) * 6)
 	var k := 0
-	for ix in nx - 1:
-		for iz in nz - 1:
-			var a := ix * nz + iz
-			var b := (ix + 1) * nz + iz
+	for ix in columns - 1:
+		for iz in rows - 1:
+			var a := ix * rows + iz
+			var b := (ix + 1) * rows + iz
 			var c := a + 1
 			var d := b + 1
 			idx[k] = a; idx[k + 1] = b; idx[k + 2] = d
@@ -149,8 +204,8 @@ static func terrain_mesh(ox: float, oz: float, cell: float, nx: int, nz: int, h:
 	arrays[Mesh.ARRAY_VERTEX] = verts
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
-	if colors.size() == nx * nz:
-		arrays[Mesh.ARRAY_COLOR] = colors
+	if not tint.is_empty():
+		arrays[Mesh.ARRAY_COLOR] = tint
 	arrays[Mesh.ARRAY_INDEX] = idx
 	var am := ArrayMesh.new()
 	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
@@ -160,48 +215,54 @@ static func terrain_mesh(ox: float, oz: float, cell: float, nx: int, nz: int, h:
 	return mi
 
 
-## Lane-marking texture: `lanes` lanes, `style` = "rural" | "autobahn" | "city" | "dirt".
-static func road_material(lanes: int, style: String) -> StandardMaterial3D:
-	var w := 32 * lanes + 16
-	var img := Image.create(w, 128, false, Image.FORMAT_RGB8)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = lanes * 31 + style.length()
-	var base := Color(0.16, 0.16, 0.17)
-	if style == "dirt":
-		base = Color(0.55, 0.43, 0.3)
-	for y in 128:
-		for x in w:
-			var c := base.lerp(base.lightened(0.15), rng.randf() * 0.7)
-			img.set_pixel(x, y, c)
-	if style != "dirt":
-		var white := Color(0.92, 0.92, 0.88)
-		for y in 128:
-			for x in [2, 3, w - 4, w - 3]:
-				img.set_pixel(x, y, white)
-			for l in range(1, lanes):
-				var lx := 8 + l * 32
-				var dashed := (y % 64) < (24 if style == "autobahn" else 32)
-				if style == "rural" and l == lanes / 2:
-					dashed = (y % 64) < 32
-				if dashed:
-					img.set_pixel(lx, y, white if not (style == "rural" and l == lanes / 2) else Color(0.95, 0.85, 0.45))
-					img.set_pixel(lx + 1, y, white if not (style == "rural" and l == lanes / 2) else Color(0.95, 0.85, 0.45))
-	img.generate_mipmaps()
-	var m := StandardMaterial3D.new()
-	m.albedo_texture = ImageTexture.create_from_image(img)
-	m.roughness = 0.88 if style != "dirt" else 0.98
-	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+static func terrain_tiles(parent: Node3D, ox: float, oz: float, cell: float, nx: int, nz: int,
+		heights: PackedFloat32Array, material: Material, colors := PackedColorArray()) -> void:
+	const TILE := 96
+	for x in range(0, nx - 1, TILE):
+		for z in range(0, nz - 1, TILE):
+			# Adjacent tiles share border samples, including normals and colors.
+			var region := Rect2i(x, z, mini(TILE + 1, nx - x), mini(TILE + 1, nz - z))
+			parent.add_child(terrain_mesh(ox, oz, cell, nx, nz, heights, material, colors, region))
+
+
+static func road_material(lanes: int, width: float, texture_length: float, style: String) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = ROAD_SHADER
+	var dirt := style == "dirt"
+	var kind := "gravel" if dirt else "asphalt"
+	m.set_shader_parameter("surface_color", load(SURFACE_PATH + kind + ".jpg"))
+	m.set_shader_parameter("surface_normal", load(SURFACE_PATH + kind + "_normal.jpg"))
+	m.set_shader_parameter("texture_repeats", Vector2(width, texture_length) / (2.1 if dirt else 2.0))
+	m.set_shader_parameter("road_width", width)
+	m.set_shader_parameter("lanes", lanes)
+	m.set_shader_parameter("dirt", dirt)
+	if style == "rural":
+		m.set_shader_parameter("divider_color", Color(0.93, 0.82, 0.44))
 	return m
 
 
 ## Road ribbon along a polyline (points with y). Closed loop if `closed`.
 static func road_mesh(points: PackedVector3Array, half_w: float, material: Material, closed := true, lift := 0.04,
-		v_scale := 12.0) -> MeshInstance3D:
+		v_scale := 12.0, height_at := Callable()) -> MeshInstance3D:
+	if height_at.is_valid() and points.size() >= 2:
+		# Follow the terrain between waypoints as well, especially at the shoulders.
+		var samples := PackedVector3Array()
+		var segments := points.size() if closed else points.size() - 1
+		for i in segments:
+			var a := points[i]
+			var b := points[(i + 1) % points.size()]
+			var count := maxi(1, ceili(a.distance_to(b) / 2.0))
+			for j in count:
+				samples.append(a.lerp(b, float(j) / count))
+		if not closed:
+			samples.append(points[-1])
+		points = samples
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var n := points.size()
 	var segs := n if closed else n - 1
 	var v := 0.0
+	var strips := 4 if height_at.is_valid() else 1
 	for i in segs:
 		var a := points[i]
 		var b := points[(i + 1) % n]
@@ -212,14 +273,26 @@ static func road_mesh(points: PackedVector3Array, half_w: float, material: Mater
 		var na := Vector3(-da.z, 0, da.x).normalized() * half_w
 		var nb := Vector3(-db.z, 0, db.x).normalized() * half_w
 		var v2 := v + a.distance_to(b) / v_scale
-		var up := Vector3(0, lift, 0)
-		var q := [[a - na + up, Vector2(0, v)], [b + nb + up, Vector2(1, v2)], [a + na + up, Vector2(1, v)],
-			[a - na + up, Vector2(0, v)], [b - nb + up, Vector2(0, v2)], [b + nb + up, Vector2(1, v2)]]
-		for e in q:
-			st.set_uv(e[1])
-			st.set_normal(Vector3.UP)
-			st.add_vertex(e[0])
+		for j in strips:
+			var left := float(j) / strips
+			var right := float(j + 1) / strips
+			var al := a + na * (2.0 * left - 1.0)
+			var ar := a + na * (2.0 * right - 1.0)
+			var bl := b + nb * (2.0 * left - 1.0)
+			var br := b + nb * (2.0 * right - 1.0)
+			var q := [[al, Vector2(left, v)], [br, Vector2(right, v2)], [ar, Vector2(right, v)],
+				[al, Vector2(left, v)], [bl, Vector2(left, v2)], [br, Vector2(right, v2)]]
+			for vertex in q:
+				var p: Vector3 = vertex[0]
+				if height_at.is_valid():
+					p.y = height_at.call(p.x, p.z)
+				p.y += lift
+				st.set_uv(vertex[1])
+				st.set_normal(Vector3.UP)
+				st.add_vertex(p)
 		v = v2
+	if material is ShaderMaterial:
+		st.generate_tangents()
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
 	mi.material_override = material
@@ -269,6 +342,24 @@ static func barrier(parent: Node3D, world: SBWorld, points: PackedVector3Array, 
 
 
 static func scatter_multimesh(parent: Node3D, mesh: Mesh, material: Material, xforms: Array[Transform3D], shadow := true) -> void:
+	if xforms.is_empty():
+		return
+	# Whole-map batches defeat frustum culling. Partition repeated props spatially;
+	# the physics colliders remain active independently of these visual batches.
+	if xforms.size() > 64:
+		var chunks: Dictionary = {}
+		for xf in xforms:
+			var key := Vector2i(floori(xf.origin.x / 192), floori(xf.origin.z / 192))
+			if not chunks.has(key):
+				var transforms: Array[Transform3D] = []
+				chunks[key] = transforms
+			chunks[key].append(xf)
+		for chunk: Array[Transform3D] in chunks.values():
+			_scatter_chunk(parent, mesh, material, chunk, shadow)
+	else:
+		_scatter_chunk(parent, mesh, material, xforms, shadow)
+
+static func _scatter_chunk(parent: Node3D, mesh: Mesh, material: Material, xforms: Array[Transform3D], shadow: bool) -> void:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = mesh
@@ -278,9 +369,30 @@ static func scatter_multimesh(parent: Node3D, mesh: Mesh, material: Material, xf
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
 	mmi.material_override = material
+	var largest := 0.0
+	for xf in xforms:
+		largest = maxf(largest, (mesh.get_aabb().size * xf.basis.get_scale().abs()).length())
+	# Buildings, trees and pavement preserve the skyline. Small props have a shorter range.
+	if largest < 9.0:
+		mmi.visibility_range_end = 600.0
+		mmi.visibility_range_end_margin = 30.0
 	if not shadow:
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(mmi)
+
+
+static func roadside_markers(parent: Node3D, bases: Array[Transform3D]) -> void:
+	var post := BoxMesh.new()
+	post.size = Vector3(0.12, 0.95, 0.2)
+	var reflector := BoxMesh.new()
+	reflector.size = Vector3(0.13, 0.15, 0.21)
+	var posts: Array[Transform3D] = []
+	var reflectors: Array[Transform3D] = []
+	for base in bases:
+		posts.append(base.translated(Vector3.UP * 0.475))
+		reflectors.append(base.translated(Vector3.UP * 0.78))
+	scatter_multimesh(parent, post, mat(Color(0.9, 0.9, 0.86)), posts, false)
+	scatter_multimesh(parent, reflector, mat(Color(0.23, 0.18, 0.13)), reflectors, false)
 
 
 static func speeds_from_curvature(path: PackedVector3Array, vmax: float, vmin: float, k := 60.0) -> PackedFloat32Array:

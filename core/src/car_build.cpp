@@ -294,7 +294,9 @@ CarBuild buildCar(const CarDefinition& def) {
             if (out) out->push_back(bi);
         }
     };
-    const BeamParams mountBeam = makeBeam(9.0e5, 150.0, 5.0e4, 1.4e5);
+    BeamParams mountBeam = makeBeam(9.0e5, 150.0, 7.0e4, 1.8e5);
+    mountBeam.deformLimit = 0.20;
+    mountBeam.deformLimitExpansion = 0.20;
 
     // ------------------------------------------------------------------ suspension
     CarSystemsSpec sys;
@@ -353,9 +355,26 @@ CarBuild buildCar(const CarDefinition& def) {
         std::vector<std::uint32_t> upr = {cn.hubIn, cn.hubOut, cn.lbj, cn.ubj, cn.steerArm};
         connectAll(car, upr, knuckle, &sb);
         // Wishbones.
-        const BeamParams arm = makeBeam(1.6e6, 140.0, 4.5e4, 1.2e5);
+        BeamParams arm = makeBeam(1.6e6, 140.0, 9.5e4, 2.4e5);
+        arm.deformLimit = 0.14;
+        arm.deformLimitExpansion = 0.14;
         for (std::uint32_t p : {cn.lowerF, cn.lowerR}) sb.push_back(car.addBeam(p, cn.lbj, arm));
         for (std::uint32_t p : {cn.upperF, cn.upperR}) sb.push_back(car.addBeam(p, cn.ubj, arm));
+        // The wishbone lengths alone also admit a folded pose with the spindle tucked under the car.
+        // Inward stops engage beyond normal steering and travel, like contact with the upright housing.
+        BeamParams inwardStop = makeBeam(1.6e6, 180.0, kInf, 1.8e5);
+        inwardStop.type = BeamType::Support;
+        inwardStop.precompression = 0.87;
+        for (std::uint32_t p : {cn.lowerF, cn.lowerR}) sb.push_back(car.addBeam(p, cn.hubOut, inwardStop));
+        // The upper links need more clearance for full steering lock and normal camber gain.
+        inwardStop.precompression = 0.80;
+        for (std::uint32_t p : {cn.upperF, cn.upperR}) sb.push_back(car.addBeam(p, cn.hubOut, inwardStop));
+        BeamParams hubDroop = makeBeam(0.0, 0.0, kInf, 1.8e5);
+        hubDroop.type = BeamType::Anisotropic;
+        hubDroop.springExpansion = 1.6e6;
+        hubDroop.dampExpansion = 180.0;
+        hubDroop.precompression = 1.24;
+        sb.push_back(car.addBeam(cn.tower, cn.hubOut, hubDroop));
         // Tie rod (hydro steering on the front axle, fixed toe link on the rear).
         BeamParams tie = arm;
         tie.spring = 2.2e6;

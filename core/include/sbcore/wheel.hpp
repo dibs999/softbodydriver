@@ -65,7 +65,10 @@ struct PressureWheel {
     real leakPsiPerS = 0.0;                 ///< Slow puncture leak rate
     real load = 0.0;                        ///< Estimated vertical load (N)
     real slipSpeed = 0.0;                   ///< Sliding speed of the contact patch (m/s)
+    real contactAge = 1.0;
+    Vec3 contactPoint{}, contactNormal{0, 1, 0};
     real grip = 1.0;                        ///< Friction multiplier from wear and temperature
+    real surfaceGrip = 1.0;                 ///< Additional loose-surface factor, set by the road classifier.
     int conditionCounter = 0;
     real appliedSpokeFactor = 1.0;
     real appliedGrip = 1.0;

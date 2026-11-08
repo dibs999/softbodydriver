@@ -5,7 +5,9 @@ var frame := 0
 var actions := ["camera_next", "camera_next", "debug_view", "toggle_tcs", "toggle_abs", "toggle_gearbox", "shift_up",
 	"shift_down", "toggle_gearbox", "slow_motion", "slow_motion", "pause_physics", "pause_physics", "switch_vehicle",
 	"switch_vehicle", "spawn_obstacle_car", "repair_vehicle", "reset_vehicle", "ignition", "ignition", "toggle_help",
-	"menu", "menu", "camera_next", "camera_next", "camera_next", "debug_view"]
+	"toggle_diagnostics", "toggle_diagnostics", "map_compact", "map_compact", "map_overview", "map_overview",
+	"menu", "menu", "camera_next", "camera_next", "camera_next", "debug_view",
+	"activity_next", "activity_start", "activity_start", "activity_next", "activity_start", "repair_vehicle", "activity_next"]
 
 func _process(_d: float) -> bool:
 	frame += 1

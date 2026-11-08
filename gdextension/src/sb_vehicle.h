@@ -2,6 +2,8 @@
 // optional node-beam debug view, and exposes controls + telemetry to GDScript.
 #pragma once
 
+#include <utility>
+#include <array>
 #include <vector>
 
 #include <godot_cpp/classes/array_mesh.hpp>
@@ -30,13 +32,14 @@ public:
     void setup(SBWorld* world, sb::CarBuild&& build, const Transform3D& xform, const Dictionary& materials);  // locked
     void pre_step(double dt);       // locked, physics thread
     void sync_from_world();         // locked, main thread
-    void update_visual();           // main thread, not locked
+    void update_visual(double delta); // main thread, not locked
     int body_index() const { return bodyIndex_; }
     void set_body_index(int i) { bodyIndex_ = i; }
 
     // ---- GDScript API
     void set_input(double throttle, double brake, double steer, double handbrake);
     void set_clutch(double clutch);  ///< < 0 = automatic
+    void set_surface_grip(const PackedFloat32Array& grip);
     void set_gear(int gear);         ///< -1 R, 0 N, 1.. forward (one-shot)
     void shift_up();
     void shift_down();
@@ -58,15 +61,20 @@ public:
     void set_body_visible(bool on);
 
     Dictionary get_telemetry() const;
+    Dictionary get_effect_anchors() const;
+    void puncture_tire(int wheel, double leak_psi_per_second);
     Dictionary get_info() const;
     Vector3 get_position_ws() const;   ///< Centre between the axles at floor level
     Vector3 get_chase_target() const;
     Vector3 get_driver_eye() const;
+    Variant get_dashboard_transform() const;
+    Basis get_visual_basis() const;
     Vector3 get_forward() const;
     Vector3 get_up() const;
     Vector3 get_right() const;
     Vector3 get_velocity() const;
     double get_speed_kmh() const;
+    double get_engine_rpm() const;
     /// Replaces the procedural body with an imported model (e.g. a glTF scene). `to_build` maps model
     /// coordinates to the car's build frame (rear bumper at x = 0, ground y = 0, +x forward, +z right).
     /// options: wheels {"FL": node name, ...}, hide [name substrings], keep_procedural [material names].
@@ -100,15 +108,20 @@ private:
 
     // Snapshot of the physics state (main thread side).
     std::vector<sb::Vec3> pos_;
+    std::vector<sb::Vec3> renderPos_;
+    sb::Vec3 renderReference_;
     std::vector<sb::Vec3> vel_;
     sb::VehicleTelemetry tel_;
     sb::CarSystemsState sys_;
     std::vector<float> slip_, contact_;
+    PackedVector3Array contactPoints_, contactNormals_;
     std::vector<float> beamStrain_;
     std::vector<std::uint32_t> beamPairs_;
     double impactAccum_ = 0.0;
     std::size_t lastDeformed_ = 0, lastBroken_ = 0;
     bool snapshotValid_ = false;
+    bool visualResetPending_ = false; // Set by physics under the world lock.
+    bool visualReset_ = false;
 
     // Controls: written by GDScript into ctl_, copied to phys_ under the world lock once per frame.
     struct Controls {
@@ -119,7 +132,10 @@ private:
         bool ignition = true;
         bool starter = false;    // one-shot: crank the engine
         bool tcs = true, abs = true;
+        std::array<double, 4> surfaceGrip{1.0, 1.0, 1.0, 1.0};
         bool reset = false;      // one-shot
+        int puncture = -1;
+        double punctureLeak = 4.0;
         Transform3D resetXform;
     };
     Controls ctl_, phys_;
@@ -140,17 +156,22 @@ private:
         Node3D* node = nullptr;
         std::uint32_t hubL = 0, hubR = 0, tread0 = 0;
         std::vector<std::uint32_t> tread;      // 2 * rays tread nodes
+        std::vector<std::pair<double, double>> spinWeights;
+        std::vector<double> treadRadii;
         bool right = false;
+        double visualRimRadius = 0.0;
         std::vector<WheelSurf> surfs;
         sb::Vec3 restX{1, 0, 0};               // rest frame (build coordinates) for imported meshes
     };
     void addWheelSurface(WheelGpu& wg, const PackedVector3Array& v, const PackedVector3Array& n, const Array& extra,
-                         const PackedInt32Array& idxGodotOrder, const Ref<Material>& mat);
-    void updateWheelMeshes(WheelGpu& w, const sb::Vec3& c, const sb::Vec3& rx, const sb::Vec3& ry, const sb::Vec3& out);
+                         const PackedInt32Array& idxGodotOrder, const Ref<Material>& mat, bool deformable);
+    void updateWheelMeshes(WheelGpu& w, const sb::Vec3& c, const sb::Vec3& rx, const sb::Vec3& ry, const sb::Vec3& out,
+                           double retention);
     // Imported (glTF) body meshes.
     std::vector<sb::MeshSurface> importedSurf_;
     std::vector<SurfaceGpu> importedGpu_;
     bool hasImportedModel_ = false;
+    bool dashboardAvailable_ = true;
     std::vector<WheelGpu> wheels_;
     bool debugView_ = false;
     MeshInstance3D* debugInstance_ = nullptr;

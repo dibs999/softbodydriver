@@ -3,6 +3,7 @@ extends RefCounted
 ## Returns {"spawns": Array[Transform3D], "waypoints": PackedVector3Array, "speeds": PackedFloat32Array}.
 
 const FACE_POS_X := 0.0           # yaw that makes a car (local +X forward) face world +X
+const C := preload("res://scripts/maps/common.gd")
 
 
 static func car_xform(pos: Vector3, heading: Vector3) -> Transform3D:
@@ -18,26 +19,6 @@ static func _mat(color: Color, rough := 0.9, metallic := 0.0) -> StandardMateria
 	m.albedo_color = color
 	m.roughness = rough
 	m.metallic = metallic
-	return m
-
-
-static func _noise_material(base: Color, variation: float, scale: float, rough := 0.95) -> StandardMaterial3D:
-	var m := _mat(base, rough)
-	var n := FastNoiseLite.new()
-	n.frequency = 0.05
-	var tex := NoiseTexture2D.new()
-	tex.width = 512
-	tex.height = 512
-	tex.seamless = true
-	tex.noise = n
-	var grad := Gradient.new()
-	grad.set_color(0, base.darkened(variation))
-	grad.set_color(1, base.lightened(variation))
-	tex.color_ramp = grad
-	m.albedo_texture = tex
-	m.uv1_scale = Vector3(scale, scale, scale)
-	m.uv1_triplanar = true
-	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	return m
 
 
@@ -78,6 +59,8 @@ static func _cone(parent: Node3D, pos: Vector3) -> void:
 	cm.top_radius = 0.03
 	cm.bottom_radius = 0.17
 	cm.height = 0.7
+	cm.radial_segments = 12
+	cm.rings = 0
 	mi.mesh = cm
 	mi.material_override = _mat(Color(1.0, 0.38, 0.05), 0.6)
 	mi.position = pos + Vector3(0, 0.35, 0)
@@ -87,22 +70,22 @@ static func _cone(parent: Node3D, pos: Vector3) -> void:
 # =========================================================================== proving grounds
 static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 	world.add_ground_plane(1.0)
-	var grass := _noise_material(Color(0.22, 0.36, 0.14), 0.25, 0.08)
-	var asphalt := _noise_material(Color(0.2, 0.2, 0.21), 0.18, 0.25, 0.85)
-	var concrete := _noise_material(Color(0.62, 0.61, 0.58), 0.12, 0.5, 0.8)
+	var grass := C.surface_material("grass", 3.1, Color(0.76, 0.94, 0.69))
+	var asphalt := C.surface_material("asphalt", 2.0, Color.WHITE, 0.30)
+	var concrete := C.surface_material("pavement", 2.1, Color(0.86, 0.86, 0.85), 0.25)
 	var line := _mat(Color(0.92, 0.92, 0.88), 0.6)
 	var red := _mat(Color(0.75, 0.1, 0.08), 0.6)
 
 	_flat_quad(parent, Vector3(0, -0.01, 0), Vector2(3000, 3000), grass)
-	_flat_quad(parent, Vector3(0, 0.0, 0), Vector2(520, 360), asphalt)
+	_flat_quad(parent, Vector3(0, 0.0, 0), Vector2(750, 440), asphalt)
 
 	# Oval track painted on the pad (straights along X).
 	var waypoints := PackedVector3Array()
 	var speeds := PackedFloat32Array()
-	var straight := 180.0
-	var radius := 70.0
-	var cz := 80.0
-	var steps := 72
+	var straight := 340.0
+	var radius := 76.0
+	var cz := 94.0
+	var steps := 128
 	for i in steps:
 		var t := float(i) / steps
 		var p := Vector3.ZERO
@@ -123,6 +106,9 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 			spd = 19.0
 		waypoints.append(p)
 		speeds.append(spd)
+	var paint := PlaneMesh.new()
+	paint.size = Vector2.ONE
+	var white_marks: Array[Transform3D] = []
 	for i in waypoints.size():
 		var a := waypoints[i]
 		var b := waypoints[(i + 1) % waypoints.size()]
@@ -131,11 +117,55 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 		var yaw := atan2(-d.z, d.x)
 		for side: float in [-6.5, 6.5]:
 			var n := Vector3(-d.z, 0, d.x).normalized() * side
-			_flat_quad(parent, mid + n + Vector3(0, 0.012, 0), Vector2(d.length(), 0.2), line, yaw)
+			var basis := Basis(Vector3.UP, yaw).scaled_local(Vector3(d.length(), 1.0, 0.2))
+			white_marks.append(Transform3D(basis, mid + n + Vector3(0, 0.012, 0)))
 
 	# Start grid lines.
 	for i in 6:
-		_flat_quad(parent, Vector3(-20 + i * 9, 0.012, -40), Vector2(0.3, 4.0), line)
+		white_marks.append(Transform3D(Basis.from_scale(Vector3(0.3, 1, 4)), Vector3(-20 + i * 9, 0.012, -40)))
+	for row in 2:
+		for col in 10:
+			if (row + col) % 2 == 0:
+				white_marks.append(Transform3D(Basis.from_scale(Vector3(0.65, 1, 0.65)),
+					Vector3(8.0 + row * 0.65, 0.012, -43.0 + col * 0.65)))
+	C.scatter_multimesh(parent, paint, line, white_marks, false)
+	var amber_marks: Array[Transform3D] = []
+	for x in range(-30, 223, 7):
+		for z: float in [-44.2, -35.8]:
+			amber_marks.append(Transform3D(Basis.from_scale(Vector3(4.6, 1, 0.19)), Vector3(x, 0.013, z)))
+	C.scatter_multimesh(parent, paint, _mat(Color(0.95, 0.68, 0.11)), amber_marks, false)
+	var steel := _mat(Color(0.32, 0.36, 0.39), 0.55, 0.6)
+	var blue := _mat(Color(0.10, 0.24, 0.41), 0.65)
+	_flat_quad(parent, Vector3(20, 0.005, -130), Vector2(330, 98), concrete)
+	var training := PackedVector3Array()
+	for i in 96:
+		var a := TAU * i / 96
+		training.append(Vector3(20.0 + cos(a) * 142.0, 0, -130.0 + sin(a) * 37.0))
+	parent.add_child(C.road_mesh(training, 4.5, C.road_material(2, 9.0, 12.0, "rural"), true, 0.015))
+	var handling := _handling_course(world, parent, line, blue)
+	# A separate, smooth braking lane with metre marks and a mild 5 cm bump strip.
+	for metres in range(0, 101, 10):
+		var x := -95.0 + metres
+		_flat_quad(parent, Vector3(x, 0.019, -5), Vector2(0.16, 7.0), line)
+		C.label3d(parent, "%d m" % metres, Vector3(x, 0.6, -10), 0, 0.26)
+	for i in 3:
+		_box(parent, world, Vector3(30 + i * 8, 0, -5), Vector3(0.5, 0.05, 3.4), Vector3.ZERO, concrete)
+	C.label3d(parent, "BREMSWEG  /  100 m", Vector3(-103, 1.5, -10), 0, 0.42)
+	var workshop := Vector3(182, 0, -74)
+	for i in 4:
+		var p := workshop + Vector3(0, 0, -i * 10.0)
+		_box(parent, world, p + Vector3(-7.0, 2.7, 0), Vector3(0.24, 2.7, 4.9), Vector3.ZERO, steel)
+		_box(parent, world, p + Vector3(0, 5.4, 0), Vector3(7.4, 0.18, 4.9), Vector3.ZERO, blue, 0.8, false)
+		_box(parent, world, p + Vector3(0, 2.7, -4.8), Vector3(7.0, 2.7, 0.13), Vector3.ZERO, concrete)
+	C.label3d(parent, "FAHRDYNAMIK   /   BOXEN", workshop + Vector3(7.45, 5.27, -15), PI * 0.5, 0.56)
+	for z: float in [-57.2, -50.8]:
+		_box(parent, world, Vector3(24, 1.0, z), Vector3(0.12, 1.0, 0.12), Vector3.ZERO, steel)
+	_box(parent, world, Vector3(24, 2.05, -54), Vector3(0.10, 0.48, 3.7), Vector3.ZERO, blue, 0.8, false)
+	C.label3d(parent, "TESTGELÄNDE  /  01", Vector3(23.89, 2.05, -54), -PI * 0.5, 0.58)
+	for x: float in [32.0, 47.0, 62.0]:
+		for offset: float in [-5.3, 5.3]:
+			_box(parent, world, Vector3(x + offset, 1.5, -65), Vector3(0.16, 1.5, 0.18), Vector3.ZERO, steel)
+		_box(parent, world, Vector3(x, 3.03, -65), Vector3(5.8, 0.12, 3.3), Vector3.ZERO, blue, 0.8, false)
 
 	# Feature lane along +X starting at the spawn (z = -40).
 	# Ramps: rotated slabs whose leading top edge sits exactly on the ground.
@@ -188,7 +218,7 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 			var r2 := dx * dx + dz * dz
 			heights[ix * nz + iz] = maxf(0.0, 7.0 * (1.0 - r2)) if r2 < 1.0 else 0.0
 	world.add_heightfield(ox, oz, hcell, nx, nz, heights, 1.0)
-	parent.add_child(_terrain_mesh(ox, oz, hcell, nx, nz, heights, grass))
+	parent.add_child(C.terrain_mesh(ox, oz, hcell, nx, nz, heights, grass))
 
 	var spawns: Array[Transform3D] = [
 		car_xform(Vector3(0, 0, -40), Vector3(1, 0, 0)),
@@ -196,19 +226,45 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 		car_xform(Vector3(-30, 0, -32), Vector3(1, 0, 0)),
 	]
 	return {"spawns": spawns, "waypoints": waypoints, "speeds": speeds,
-		"ai_spawns": [car_xform(waypoints[0], waypoints[1] - waypoints[0]), car_xform(waypoints[36], waypoints[37] - waypoints[36])]}
+		"surface_regions": [{"rect": Rect2(-200, -150, 80, 80), "surface": "grass"}],
+		"map_paths": [C.closed_route(waypoints), C.closed_route(training), handling],
+		"map_places": [{"name": "Sprung- und Crashbahn", "position": Vector3(124, 0, -40)},
+			{"name": "Fahrdynamik-Oval", "position": Vector3(20, 0, -130)},
+			{"name": "Handling-Parcours", "position": handling[3]},
+			{"name": "Werkstatt und Boxen", "position": workshop}],
+		"ai_spawns": [car_xform(waypoints[0], waypoints[1] - waypoints[0]), car_xform(waypoints[64], waypoints[65] - waypoints[64])]}
+
+
+static func _handling_course(world: SBWorld, parent: Node3D, paint: Material, sign_mat: Material) -> PackedVector3Array:
+	var route := PackedVector3Array([Vector3(-25, 0, 39)])
+	var yellow := _mat(Color(0.93, 0.63, 0.13))
+	for i in 9:
+		var p := Vector3(-13 + i * 14.0, 0, 44 + (i % 2) * 9.0)
+		route.append(p)
+		for sign: float in [-1.0, 1.0]:
+			var cone := p + Vector3(0, 0, sign * 3.1)
+			_cone(parent, cone)
+			_flat_quad(parent, cone + Vector3.UP * 0.013, Vector2(0.34, 1.1), yellow)
+	route.append(Vector3(110, 0, 53))
+	for z: float in [45.0, 51.0]:
+		_flat_quad(parent, Vector3(-24, 0.015, z), Vector2(0.15, 5.8), paint)
+	var sign := Vector3(-27, 1.4, 55)
+	_box(parent, world, sign, Vector3(0.12, 0.40, 2.6), Vector3.ZERO, sign_mat, 0.75, false)
+	_box(parent, world, sign - Vector3.UP * 0.68, Vector3(0.07, 0.68, 0.08), Vector3.ZERO, sign_mat)
+	C.label3d(parent, "HANDLING  /  09 TORE", sign - Vector3.RIGHT * 0.13, -PI * 0.5, 0.37)
+	return route
 
 
 # =========================================================================== hill roads
 static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
-	var nx := 257
-	var nz := 257
-	var cell := 2.0
-	var ox := -256.0
-	var oz := -256.0
+	var nx := 385
+	var nz := 385
+	var cell := 3.5
+	var ox := -672.0
+	var oz := -672.0
 	var noise := FastNoiseLite.new()
 	noise.seed = 7
-	noise.frequency = 0.006
+	noise.frequency = 0.0036
 	noise.fractal_octaves = 4
 	var heights := PackedFloat32Array()
 	heights.resize(nx * nz)
@@ -216,21 +272,22 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 		for iz in nz:
 			var x := ox + ix * cell
 			var z := oz + iz * cell
-			var edge := clampf((Vector2(x, z).length() - 200.0) / 50.0, 0.0, 1.0)
-			heights[ix * nz + iz] = (noise.get_noise_2d(x, z) * 0.5 + 0.5) * 26.0 + edge * 25.0
+			var edge := smoothstep(430.0, 710.0, Vector2(x, z).length())
+			var hillside := noise.get_noise_2d(x, z) * 0.5 + 0.5
+			heights[ix * nz + iz] = hillside * (40.0 + edge * 44.0) + edge * 26.0
 
 	# Closed road loop.
 	var road := PackedVector3Array()
-	var n_road := 360
+	var n_road := 576
 	for i in n_road:
 		var a := TAU * i / n_road
-		var r := 150.0 + 32.0 * sin(3.0 * a) + 14.0 * cos(5.0 * a + 0.7)
-		road.append(Vector3(cos(a) * r, 0, sin(a) * r))
+		var r := 400.0 + 64.0 * sin(3.0 * a) + 33.0 * cos(5.0 * a + 0.7)
+		road.append(Vector3(cos(a) * r, 0, sin(a) * r * 0.89))
 	# Road elevation = terrain sampled along the loop, heavily smoothed for drivable grades.
 	var elev := PackedFloat32Array()
 	elev.resize(n_road)
 	for i in n_road:
-		elev[i] = _sample(heights, nx, nz, ox, oz, cell, road[i].x, road[i].z)
+		elev[i] = C.sample(heights, nx, nz, ox, oz, cell, road[i].x, road[i].z)
 	for _iter in 30:
 		var e2 := elev.duplicate()
 		for i in n_road:
@@ -240,41 +297,47 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 		road[i].y = elev[i]
 	# Carve the road into the terrain.
 	var half_w := 4.5
-	var blend := 12.0
-	for ix in nx:
-		for iz in nz:
-			var p := Vector2(ox + ix * cell, oz + iz * cell)
-			var best := 1e9
-			var by := 0.0
-			for i in range(0, n_road, 2):
-				var q := Vector2(road[i].x, road[i].z)
-				var d := p.distance_squared_to(q)
-				if d < best:
-					best = d
-					by = road[i].y
-			var dist := sqrt(best)
-			if dist < half_w + blend:
-				var t := clampf((dist - half_w) / blend, 0.0, 1.0)
-				t = t * t * (3.0 - 2.0 * t)
-				heights[ix * nz + iz] = lerpf(by - 0.05, heights[ix * nz + iz], t)
+	C.carve_path(heights, nx, nz, ox, oz, cell, road, half_w + 0.75, 13.0, 0.05)
 	world.add_heightfield(ox, oz, cell, nx, nz, heights, 1.0)
-	var grass := _noise_material(Color(0.25, 0.38, 0.15), 0.3, 0.05)
-	parent.add_child(_terrain_mesh(ox, oz, cell, nx, nz, heights, grass))
-	parent.add_child(_road_mesh(road, half_w))
+	var grass := C.terrain_material("grass", 3.4)
+	var colors := PackedColorArray()
+	colors.resize(nx * nz)
+	for x in nx:
+		for z in nz:
+			var meadow := smoothstep(-0.24, 0.28, noise.get_noise_2d(x * 7.2, z * 7.2))
+			colors[x * nz + z] = Color(0.65, 0.72, 0.49).lerp(Color(1.0, 1.0, 0.75), meadow)
+	C.terrain_tiles(parent, ox, oz, cell, nx, nz, heights, grass, colors)
+	var ground_height := func(x: float, z: float) -> float:
+		return C.sample(heights, nx, nz, ox, oz, cell, x, z)
+	parent.add_child(C.road_mesh(road, half_w, C.road_material(2, half_w * 2.0, 12.0, "rural"), true, 0.05, 12.0, ground_height))
+	var markers: Array[Transform3D] = []
+	for i in range(3, n_road, 8):
+		var heading := (road[(i + 1) % n_road] - road[i - 1]).normalized()
+		var side := Vector3(-heading.z, 0, heading.x).normalized()
+		var basis := Basis(Vector3.UP, atan2(-heading.z, heading.x))
+		for sign: float in [-1.0, 1.0]:
+			var p := road[i] + side * sign * (half_w + 0.8)
+			p.y = C.sample(heights, nx, nz, ox, oz, cell, p.x, p.z)
+			markers.append(Transform3D(basis, p))
+	C.roadside_markers(parent, markers)
 
 	# Trees (visual) away from the road.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 3
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
 	var tree := CylinderMesh.new()
 	tree.top_radius = 0.0
 	tree.bottom_radius = 1.6
-	tree.height = 7.0
-	mm.mesh = tree
+	tree.height = 5.5
+	tree.radial_segments = 9
+	tree.rings = 0
 	var xforms: Array[Transform3D] = []
-	for i in 900:
-		var p := Vector2(rng.randf_range(-240, 240), rng.randf_range(-240, 240))
+	var crowns: Array[Transform3D] = []
+	for i in 1950:
+		var p := Vector2(rng.randf_range(-636, 636), rng.randf_range(-636, 636))
+		if noise.get_noise_2d(p.x * 2.0, p.y * 2.0) < -0.18:
+			continue
+		if p.distance_to(Vector2(road[12].x, road[12].z)) < 42.0:
+			continue
 		var near := false
 		for j in range(0, n_road, 6):
 			if p.distance_to(Vector2(road[j].x, road[j].z)) < 14.0:
@@ -282,16 +345,27 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 				break
 		if near:
 			continue
-		var y := _sample(heights, nx, nz, ox, oz, cell, p.x, p.y)
+		var y := C.sample(heights, nx, nz, ox, oz, cell, p.x, p.y)
 		var s := rng.randf_range(0.7, 1.4)
-		xforms.append(Transform3D(Basis().scaled(Vector3(s, s, s)), Vector3(p.x, y + 3.5 * s, p.y)))
-	mm.instance_count = xforms.size()
-	for i in xforms.size():
-		mm.set_instance_transform(i, xforms[i])
-	var mmi := MultiMeshInstance3D.new()
-	mmi.multimesh = mm
-	mmi.material_override = _mat(Color(0.1, 0.24, 0.1), 0.9)
-	parent.add_child(mmi)
+		xforms.append(Transform3D(Basis.from_scale(Vector3.ONE * s), Vector3(p.x, y + 2.75 * s, p.y)))
+		crowns.append(Transform3D(Basis.from_scale(Vector3(0.72, 0.74, 0.72) * s), Vector3(p.x, y + 4.8 * s, p.y)))
+	C.scatter_multimesh(parent, tree, _mat(Color(0.1, 0.24, 0.1)), xforms, false)
+	C.scatter_multimesh(parent, tree, _mat(Color(0.15, 0.31, 0.13)), crowns, false)
+	var hedge := SphereMesh.new()
+	hedge.radial_segments = 7
+	hedge.rings = 3
+	var hedges: Array[Transform3D] = []
+	for i in range(0, n_road, 3):
+		var tangent := road[(i + 1) % n_road] - road[(i - 1 + n_road) % n_road]
+		var side := Vector3(-tangent.z, 0, tangent.x).normalized()
+		for sign: float in [-1.0, 1.0]:
+			var p := road[i] + side * sign * rng.randf_range(6.4, 11.5)
+			var s := rng.randf_range(0.8, 2.4)
+			p.y = ground_height.call(p.x, p.z) + 0.25 * s
+			hedges.append(Transform3D(Basis.from_scale(Vector3(1.5, 0.75, 0.93) * s), p))
+	C.scatter_multimesh(parent, hedge, _mat(Color(0.28, 0.41, 0.15)), hedges, false)
+	_hill_landmarks(world, parent, road, ground_height)
+	var lookout := _hill_lookout(world, parent, road, ground_height)
 
 	var speeds := PackedFloat32Array()
 	speeds.resize(n_road)
@@ -305,82 +379,73 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	var s1 := road[1]
 	return {"spawns": [car_xform(s0, s1 - s0), car_xform(road[n_road - 6], road[n_road - 5] - road[n_road - 6])],
 		"waypoints": road, "speeds": speeds,
-		"ai_spawns": [car_xform(road[90], road[91] - road[90]), car_xform(road[200], road[201] - road[200])]}
+		"map_paths": [C.closed_route(road), lookout],
+		"map_places": [{"name": "Waldhof", "position": road[12]}, {"name": "Aussichtspunkt", "position": lookout[4]},
+			{"name": "Bergweide", "position": road[194]}, {"name": "Talblick", "position": road[410]}],
+		"ai_spawns": [car_xform(road[144], road[145] - road[144]), car_xform(road[320], road[321] - road[320])],
+		"environment": {"sky_top": Color(0.26, 0.48, 0.75), "horizon": Color(0.68, 0.76, 0.80),
+			"fog": Color(0.70, 0.78, 0.81), "fog_density": 0.00060, "sun": Vector3(-34, -54, 0), "sun_energy": 1.25}}
 
 
-static func _sample(h: PackedFloat32Array, nx: int, nz: int, ox: float, oz: float, cell: float, x: float, z: float) -> float:
-	var fx := clampf((x - ox) / cell, 0.0, nx - 1.001)
-	var fz := clampf((z - oz) / cell, 0.0, nz - 1.001)
-	var ix := int(fx)
-	var iz := int(fz)
-	var tx := fx - ix
-	var tz := fz - iz
-	var h00 := h[ix * nz + iz]
-	var h10 := h[(ix + 1) * nz + iz]
-	var h01 := h[ix * nz + iz + 1]
-	var h11 := h[(ix + 1) * nz + iz + 1]
-	return lerpf(lerpf(h00, h10, tx), lerpf(h01, h11, tx), tz)
+static func _hill_landmarks(world: SBWorld, parent: Node3D, road: PackedVector3Array, height: Callable) -> void:
+	var plaster := _mat(Color(0.70, 0.63, 0.47))
+	var tile := _mat(Color(0.46, 0.17, 0.10))
+	var wood := _mat(Color(0.26, 0.17, 0.10))
+	var glass := _mat(Color(0.13, 0.25, 0.29), 0.35, 0.15)
+	var gravel := C.surface_material("gravel", 2.1, Color(0.80, 0.78, 0.71))
+	for index: int in [12, 194, 410]:
+		var point := road[index]
+		var tangent := road[index + 1] - road[index - 1]
+		var forward := Vector3(tangent.x, 0, tangent.z).normalized()
+		var side := Vector3(-forward.z, 0, forward.x)
+		var yaw := atan2(-forward.z, forward.x)
+		var center := point + side * 23.0
+		center.y = height.call(center.x, center.z)
+		var rotation := Vector3(0, yaw, 0)
+		_box(parent, world, center + Vector3.UP * 1.15, Vector3(6.7, 2.0, 3.5), rotation, plaster)
+		for slope: float in [-1.0, 1.0]:
+			_box(parent, world, center + side * (1.95 * slope) + Vector3.UP * 3.62, Vector3(7.0, 0.14, 2.20),
+				Vector3(0.37 * slope, yaw, 0), tile, 0.85, false)
+		for window_x: float in [-4.5, 0.0, 4.5]:
+			var window := center + forward * window_x - side * 3.52 + Vector3.UP * 1.7
+			_box(parent, world, window, Vector3(0.57, 0.66, 0.04), rotation, glass, 0.8, false)
+		var approach := PackedVector3Array([point - forward * 17.0, point - forward * 11.0 + side * 6.0,
+			point - forward * 4.0 + side * 11.0, center - side * 7.0, point + forward * 16.0 + side * 11.0,
+			point + forward * 25.0 + side * 3.5])
+		parent.add_child(C.road_mesh(approach, 2.4, gravel, false, 0.026, 12.0, height))
+		var sign := point + forward * 7.0 - side * 6.3
+		sign.y = height.call(sign.x, sign.z)
+		_box(parent, world, sign + Vector3.UP * 0.89, Vector3(0.09, 0.89, 0.09), rotation, wood)
+		_box(parent, world, sign + Vector3.UP * 1.70, Vector3(0.11, 0.36, 1.40), rotation, wood, 0.7, false)
+		C.label3d(parent, "WALDHOF" if index == 12 else ("BERGWEIDE" if index == 194 else "TALBLICK"),
+			sign + Vector3.UP * 1.70 - forward * 0.12, yaw - PI * 0.5, 0.40)
 
 
-static func _terrain_mesh(ox: float, oz: float, cell: float, nx: int, nz: int, h: PackedFloat32Array, mat: Material) -> MeshInstance3D:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for ix in nx - 1:
-		for iz in nz - 1:
-			var p00 := Vector3(ox + ix * cell, h[ix * nz + iz], oz + iz * cell)
-			var p10 := Vector3(ox + (ix + 1) * cell, h[(ix + 1) * nz + iz], oz + iz * cell)
-			var p01 := Vector3(ox + ix * cell, h[ix * nz + iz + 1], oz + (iz + 1) * cell)
-			var p11 := Vector3(ox + (ix + 1) * cell, h[(ix + 1) * nz + iz + 1], oz + (iz + 1) * cell)
-			for p: Vector3 in [p00, p10, p11, p00, p11, p01]:
-				st.set_uv(Vector2(p.x, p.z) * 0.1)
-				st.add_vertex(p)
-	st.generate_normals()
-	var mi := MeshInstance3D.new()
-	mi.mesh = st.commit()
-	mi.material_override = mat
-	return mi
-
-
-static func _road_mesh(road: PackedVector3Array, half_w: float) -> MeshInstance3D:
-	var img := Image.create(64, 64, false, Image.FORMAT_RGB8)
-	img.fill(Color(0.17, 0.17, 0.18))
-	for y in 64:
-		for x in 64:
-			var c := Color(0.17, 0.17, 0.18).lerp(Color(0.21, 0.21, 0.22), randf() * 0.6)
-			if x < 3 or x > 60:
-				c = Color(0.9, 0.9, 0.86)
-			elif x >= 31 and x <= 32 and y < 32:
-				c = Color(0.9, 0.85, 0.5)
-			img.set_pixel(x, y, c)
-	img.generate_mipmaps()
-	var tex := ImageTexture.create_from_image(img)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_texture = tex
-	mat.roughness = 0.85
-	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var n := road.size()
-	var v := 0.0
-	for i in n:
-		var a := road[i]
-		var b := road[(i + 1) % n]
-		var da := (road[(i + 1) % n] - road[(i - 1 + n) % n]).normalized()
-		var db := (road[(i + 2) % n] - road[i]).normalized()
-		var na := Vector3(-da.z, 0, da.x).normalized() * half_w
-		var nb := Vector3(-db.z, 0, db.x).normalized() * half_w
-		var len := a.distance_to(b)
-		var v2 := v + len / 12.0
-		var lift := Vector3(0, 0.04, 0)
-		var q := [[a - na + lift, Vector2(0, v)], [b + nb + lift, Vector2(1, v2)], [a + na + lift, Vector2(1, v)],
-			[a - na + lift, Vector2(0, v)], [b - nb + lift, Vector2(0, v2)], [b + nb + lift, Vector2(1, v2)]]
-		for e in q:
-			st.set_uv(e[1])
-			st.set_normal(Vector3.UP)
-			st.add_vertex(e[0])
-		v = v2
-	var mi := MeshInstance3D.new()
-	mi.mesh = st.commit()
-	mi.material_override = mat
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return mi
+static func _hill_lookout(world: SBWorld, parent: Node3D, road: PackedVector3Array, height: Callable) -> PackedVector3Array:
+	var point := road[94]
+	var tangent := road[95] - road[93]
+	var forward := Vector3(tangent.x, 0, tangent.z).normalized()
+	var side := Vector3(-forward.z, 0, forward.x)
+	var yaw := atan2(-forward.z, forward.x)
+	var route := PackedVector3Array([point - forward * 16.0, point - forward * 9.0 + side * 6.0,
+		point + side * 12.0, point + forward * 13.0 + side * 19.0, point + forward * 28.0 + side * 20.0,
+		point + forward * 42.0 + side * 12.0, point + forward * 52.0 + side * 4.0])
+	for i in route.size():
+		route[i].y = height.call(route[i].x, route[i].z)
+	parent.add_child(C.road_mesh(route, 3.8, C.surface_material("gravel", 2.1), false, 0.06, 12.0, height))
+	var wood := _mat(Color(0.40, 0.29, 0.17))
+	var rail := _mat(Color(0.58, 0.48, 0.31))
+	for i in 5:
+		var p := point + forward * (11.0 + i * 4.5) + side * 25.0
+		p.y = height.call(p.x, p.z)
+		_box(parent, world, p + Vector3.UP * 0.58, Vector3(0.1, 0.58, 0.1), Vector3(0, yaw, 0), wood)
+		if i < 4:
+			p += forward * 2.25
+			p.y = height.call(p.x, p.z)
+			_box(parent, world, p + Vector3.UP * 0.94, Vector3(2.28, 0.09, 0.09), Vector3(0, yaw, 0), rail)
+	var sign := point + side * 11.0 + forward * 11.0
+	sign.y = float(height.call(sign.x, sign.z))
+	_box(parent, world, sign + Vector3.UP * 0.84, Vector3(0.09, 0.84, 0.09), Vector3(0, yaw, 0), wood)
+	_box(parent, world, sign + Vector3.UP * 1.76, Vector3(0.1, 0.43, 2.0), Vector3(0, yaw, 0), wood, 0.75, false)
+	C.label3d(parent, "AUSSICHTSPUNKT", sign + Vector3.UP * 1.76 - forward * 0.11, yaw - PI * 0.5, 0.47)
+	return route

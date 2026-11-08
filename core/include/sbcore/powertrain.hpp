@@ -32,6 +32,8 @@ struct PowertrainSpec {
     // Clutch
     real clutchMaxTorque = 420.0;    ///< Nm capacity at full engagement
     real clutchStiffness = 18.0;     ///< Nm per (rad/s) of clutch slip
+    real clutchHeatCapacity = 12000.0; ///< J/K, friction plate + flywheel
+    real clutchCooling = 40.0;      ///< W/K at rest
     // Gearbox
     real reverseRatio = -3.20;
     std::vector<real> forwardGears = {3.50, 2.15, 1.48, 1.12, 0.89};
@@ -104,6 +106,13 @@ public:
     int gear() const { return gear_; }
     void setGear(int g);
     real clutchEngagement() const { return clutchEngagement_; }
+    real clutchTemperature() const { return clutchTempC_; }
+    real clutchWear() const { return clutchWear_; }
+    real gearboxDamage() const { return gearboxDamage_; }
+    real shiftRemaining() const { return shiftTimer_; }
+    real clutchSlipRpm() const { return clutchSlipRpm_; }
+    real gearGrind() const { return grind_; }
+    void repair();
     real lastEngineTorque() const { return lastEngineTorque_; }
     const PowertrainSpec& spec() const { return spec_; }
     PowertrainSpec& spec() { return spec_; }
@@ -117,6 +126,8 @@ private:
     real cooldownTimer_ = 0.0;
     real lastEngineTorque_ = 0.0;
     real lastEnginePower_ = 0.0;
+    real clutchTempC_ = 45.0, clutchWear_ = 0.0, gearboxDamage_ = 0.0;
+    real clutchSlipRpm_ = 0.0, grind_ = 0.0;
     bool running_ = true;
     real drivenInertia_ = 0.0;
     EngineCondition cond_;

@@ -140,6 +140,7 @@ struct MeshSurface {
     std::vector<std::uint32_t> indices;
     std::vector<VertexSkin> skin;  ///< Empty for wheel meshes.
     bool doubleSided = false;
+    bool steeringWheel = false;
 };
 
 struct CarVisual {
@@ -150,6 +151,9 @@ struct CarVisual {
     std::vector<Vec3> restNodes;
     std::uint32_t frameRefs[4] = {0, 0, 0, 0};
     VertexSkin driverEye;                          ///< Cockpit camera anchor
+    VertexSkin dashboard;                          ///< Instrument cluster centre
+    VertexSkin steeringPivot;
+    Vec3 steeringAxis{-1, 0, 0};                   ///< Points toward the driver in the build frame
     VertexSkin chaseTarget;                        ///< Look-at point for chase cameras
 };
 
