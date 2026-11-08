@@ -1,0 +1,32 @@
+{
+  "_comment": "Front-engine V8 sports coupe, rear-wheel drive.",
+  "id": "vortex_gt",
+  "name": "Vortex GT 5.0 V8",
+  "brand": "Vortex",
+  "description": "Frontmittelmotor-Sportcoupé, 5.0-l-V8 mit 335 kW, Hinterradantrieb, Sperrdifferenzial.",
+  "body": {
+    "style": "coupe", "doors": 2,
+    "length": 4.62, "width": 1.92, "height": 1.33,
+    "wheelbase": 2.72, "frontOverhang": 0.95,
+    "trackFront": 1.62, "trackRear": 1.65, "groundClearance": 0.12,
+    "noseHeight": 0.66, "hoodHeight": 0.90, "beltHeight": 0.93, "tailHeight": 0.96,
+    "hoodLength": 1.65, "windshieldRun": 0.85, "roofLength": 0.80, "rearWindowRun": 0.75,
+    "roofWidthRatio": 0.72, "cornerRadiusFront": 0.36, "cornerRadiusRear": 0.30,
+    "paint": [0.95, 0.60, 0.04], "paintMetallic": 0.35
+  },
+  "chassis": { "curbMass": 1720, "frontWeight": 0.53, "bodyStiffness": 1.25, "bodyStrength": 1.15 },
+  "suspension": {
+    "front": { "wheelRate": 42000, "bumpDamping": 2900, "reboundDamping": 5600, "antiRollRate": 22000, "bumpTravel": 0.07, "droopTravel": 0.09 },
+    "rear":  { "wheelRate": 40000, "bumpDamping": 2800, "reboundDamping": 5400, "antiRollRate": 14000, "bumpTravel": 0.07, "droopTravel": 0.09 }
+  },
+  "tires": { "radius": 0.351, "width": 0.265, "rimRadius": 0.241, "pressurePsi": 36, "friction": 1.28, "tireMass": 12.0, "rimMass": 11.5, "rays": 18 },
+  "engine": {
+    "name": "5.0 V8", "layout": "RWD", "cylinders": 8,
+    "torqueCurve": [[700, 280], [1500, 400], [3000, 480], [4250, 530], [5500, 510], [7000, 440], [7600, 0]],
+    "idleRpm": 750, "redlineRpm": 7400, "inertia": 0.24, "friction": 26, "engineBraking": 0.05, "mass": 230,
+    "gears": [3.66, 2.43, 1.69, 1.32, 1.00, 0.65], "reverse": -3.07, "finalDrive": 3.55,
+    "automatic": true, "shiftUpRpm": 7000, "shiftDownRpm": 2400,
+    "maxBrakeTorque": 3400, "frontBrakeBias": 0.62, "handbrakeTorque": 2200, "lsd": 30,
+    "fuelCapacity": 61, "bsfc": 260, "radiatorUA": 2300
+  }
+}

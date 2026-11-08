@@ -1,5 +1,9 @@
 set(SBCORE_SOURCES
   src/builders.cpp
+  src/car_build.cpp
+  src/car_json.cpp
+  src/car_systems.cpp
+  src/car_visual.cpp
   src/c_api.cpp
   src/colliders.cpp
   src/powertrain.cpp

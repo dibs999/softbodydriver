@@ -1,0 +1,32 @@
+{
+  "_comment": "Compact 5-door hatchback, front-wheel drive. Dimensions and masses typical of the C segment.",
+  "id": "kestrel_hatch",
+  "name": "Kestrel Hatch 1.5 TSX",
+  "brand": "Kestrel",
+  "description": "Kompakter Fronttriebler (C-Segment), 1.5-l-Turbo-Vierzylinder, 110 kW, 7-Gang-Doppelkupplung.",
+  "body": {
+    "style": "hatchback", "doors": 4,
+    "length": 4.28, "width": 1.79, "height": 1.46,
+    "wheelbase": 2.63, "frontOverhang": 0.89,
+    "trackFront": 1.54, "trackRear": 1.51, "groundClearance": 0.14,
+    "noseHeight": 0.72, "hoodHeight": 0.99, "beltHeight": 1.01, "tailHeight": 1.02,
+    "hoodLength": 1.18, "windshieldRun": 0.78, "roofLength": 1.72, "rearWindowRun": 0.45,
+    "roofWidthRatio": 0.78, "cornerRadiusFront": 0.32, "cornerRadiusRear": 0.24,
+    "paint": [0.62, 0.05, 0.04], "paintMetallic": 0.5
+  },
+  "chassis": { "curbMass": 1290, "frontWeight": 0.61, "bodyStiffness": 1.0, "bodyStrength": 1.0 },
+  "suspension": {
+    "front": { "wheelRate": 28000, "bumpDamping": 2000, "reboundDamping": 4000, "antiRollRate": 9000,  "bumpTravel": 0.085, "droopTravel": 0.10 },
+    "rear":  { "wheelRate": 25000, "bumpDamping": 1800, "reboundDamping": 3600, "antiRollRate": 6000,  "bumpTravel": 0.090, "droopTravel": 0.11 }
+  },
+  "tires": { "radius": 0.317, "width": 0.225, "rimRadius": 0.216, "pressurePsi": 34, "friction": 1.15, "tireMass": 9.5, "rimMass": 9.0, "rays": 16 },
+  "engine": {
+    "name": "1.5 I4 Turbo", "layout": "FWD", "cylinders": 4,
+    "torqueCurve": [[700, 120], [1300, 215], [1600, 250], [3500, 250], [5000, 228], [6000, 190], [6500, 0]],
+    "idleRpm": 780, "redlineRpm": 6200, "inertia": 0.15, "friction": 16, "engineBraking": 0.032, "mass": 140,
+    "gears": [3.76, 2.27, 1.52, 1.13, 0.92, 0.81, 0.69], "reverse": -3.45, "finalDrive": 4.06,
+    "automatic": true, "shiftUpRpm": 5600, "shiftDownRpm": 1800,
+    "maxBrakeTorque": 2300, "frontBrakeBias": 0.68, "handbrakeTorque": 1600, "lsd": 4,
+    "fuelCapacity": 50, "bsfc": 238, "radiatorUA": 1450
+  }
+}

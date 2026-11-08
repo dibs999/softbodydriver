@@ -17,6 +17,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "sbcore/car_systems.hpp"
 #include "sbcore/powertrain.hpp"
 #include "sbcore/vec3.hpp"
 #include "sbcore/wheel.hpp"
@@ -29,6 +30,7 @@ enum class BeamType : std::uint8_t {
     Support,      ///< Only resists compression (anti-clipping limiter between parts).
     Anisotropic,  ///< Separate spring/damp for expansion vs. compression (tyres, ropes).
     Hydro,        ///< Rest length driven by an input channel (steering racks, actuators).
+    Shock,        ///< Coilover / damper: separate bump (compression) and rebound damping.
 };
 
 const char* beamTypeToString(BeamType t);
@@ -40,6 +42,7 @@ struct NodeParams {
     real friction = 1.0;    ///< Coulomb friction coefficient (multiplied with the surface's).
     bool fixed = false;     ///< Pinned in space (infinite mass).
     bool collision = true;  ///< Collides with static world geometry.
+    std::string group;      ///< Part / flexbody group (e.g. "body", "bumper_f", "engine"). Empty = "default".
 };
 
 /// Authoring parameters of a beam (what you write in a .sbeam file).
@@ -59,7 +62,27 @@ struct BeamParams {
     // Hydro only: restLength = base * (1 + hydroRatio * input[hydroInput]).
     int hydroInput = -1;
     real hydroRatio = 0.0;
+    // Shock only: damping while the beam extends (rebound). <0 -> same as `damp` (bump).
+    real dampRebound = -1.0;
     std::string breakGroup;       ///< Empty = none.
+};
+
+/// Torsion bar (anti-roll bar / torsion spring) acting on the dihedral angle of 4 nodes:
+/// the planes (n1, n2, n3) and (n2, n3, n4) rotate about the axis n2 -> n3.
+struct TorsionbarParams {
+    real spring = 2.0e4;     ///< Nm / rad
+    real damp = 30.0;        ///< Nm*s / rad
+    real deform = kInf;      ///< Nm; torque above which the bar takes a permanent set.
+    real strength = kInf;    ///< Nm; torque above which the bar breaks.
+};
+
+struct Torsionbar {
+    std::uint32_t n[4] = {0, 0, 0, 0};
+    real spring = 0, damp = 0, deform = kInf, strength = kInf;
+    real restAngle = 0;
+    bool broken = false;
+    real lastTorque = 0;
+    TorsionbarParams params;
 };
 
 /// Runtime beam state.
@@ -71,7 +94,7 @@ struct Beam {
     std::int32_t hydroInput = -1;
 
     real spring = 0, damp = 0;
-    real springExp = 0, dampExp = 0;
+    real springExp = 0, dampExp = 0;  ///< Anisotropic expansion values; Shock: dampExp = rebound damping.
     real restLength = 0;      ///< Current (possibly plastically changed) rest length.
     real baseRestLength = 0;  ///< Rest length at spawn (incl. precompression). Reference for limits.
     real deformThreshold = kInf;
@@ -124,6 +147,10 @@ struct VehicleControls {
     real clutch = -1.0;      ///< < 0: automatic clutch; [0, 1]: manual override
     int gear = -99;          ///< -99: automatic / keep; -1 = R, 0 = N, 1..5 = forward
     real steerRate = 4.5;    ///< Max steering change per second (0 = instant)
+    bool ignition = true;    ///< Engine allowed to run.
+    bool tcs = true;         ///< Traction control (engine torque + brake intervention on spinning wheels).
+    bool abs = true;         ///< Anti-lock brakes.
+    bool starter = false;    ///< Crank the engine (restarts a stalled engine).
 };
 
 struct VehicleTelemetry {
@@ -139,6 +166,8 @@ struct VehicleTelemetry {
     std::vector<bool> wheelBurst;
     std::size_t deformedBeams = 0;
     std::size_t brokenBeams = 0;
+    bool tcsActive = false;
+    bool absActive = false;
 };
 
 class SoftBody {
@@ -157,7 +186,11 @@ public:
     std::uint32_t addTriangle(const std::string& a, const std::string& b, const std::string& c,
                               const ColTriParams& p = {});
 
-    /// Generates and registers a BeamNG-style PressureWheel on this body.
+    /// Adds a 4-node torsion bar (anti-roll bar). Rest angle is taken from the current positions.
+    std::uint32_t addTorsionbar(std::uint32_t n1, std::uint32_t n2, std::uint32_t n3, std::uint32_t n4,
+                                const TorsionbarParams& p = {});
+
+    /// Generates and registers a node-beam PressureWheel on this body.
     std::size_t addWheel(const PressureWheelSpec& spec);
     void setPowertrain(const PowertrainSpec& spec);
     bool hasPowertrain() const { return powertrain_.has_value(); }
@@ -180,6 +213,16 @@ public:
     /// Hydro input channels (e.g. steering in [-1, 1]).
     void setInput(int channel, real value);
     real input(int channel) const;
+
+    /// Optional higher-level vehicle systems (cooling, engine damage, oil, fuel, brake thermals ...).
+    void setSystems(const CarSystemsSpec& spec);
+    bool hasSystems() const { return systems_.has_value(); }
+    CarSystems& systems() { return *systems_; }
+    const CarSystems& systems() const { return *systems_; }
+
+    /// Resets all plastic deformation, broken beams/triangles/torsion bars and wheel bursts and
+    /// moves every node back to `restPositions` (an earlier snapshot of positions()).
+    void repair(const std::vector<Vec3>& restPositions);
 
     // ---------------------------------------------------------------- utilities
     void translate(const Vec3& d);
@@ -226,6 +269,13 @@ public:
     std::vector<ColTri>& triangles() { return triangles_; }
     const std::vector<ColTri>& triangles() const { return triangles_; }
     const std::vector<std::string>& breakGroupNames() const { return breakGroupNames_; }
+    std::vector<Torsionbar>& torsionbars() { return torsionbars_; }
+    const std::vector<Torsionbar>& torsionbars() const { return torsionbars_; }
+    /// Group index per node (see groupNames()).
+    const std::vector<std::uint16_t>& nodeGroups() const { return nodeGroup_; }
+    const std::vector<std::string>& groupNames() const { return groupNames_; }
+    /// Index of a group name or -1.
+    int findGroup(const std::string& name) const;
     std::vector<PressureWheel>& wheels() { return wheels_; }
     const std::vector<PressureWheel>& wheels() const { return wheels_; }
 
@@ -238,6 +288,7 @@ private:
     std::int32_t findBeamBetween(std::uint32_t u, std::uint32_t v) const;
     void processPendingBreaks();
     void stepDrivetrain(real dt);
+    void accumulateTorsionbars();
 
     std::string name_;
     // Node data, structure-of-arrays for cache / SIMD friendliness.
@@ -246,10 +297,13 @@ private:
     std::vector<std::uint8_t> collision_;
     std::vector<std::string> nodeIds_;
     std::vector<NodeParams> nodeParams_;
+    std::vector<std::uint16_t> nodeGroup_;
+    std::vector<std::string> groupNames_;
     std::unordered_map<std::string, std::uint32_t> nodeLookup_;
 
     std::vector<Beam> beams_;
     std::vector<ColTri> triangles_;
+    std::vector<Torsionbar> torsionbars_;
     std::vector<std::string> breakGroupNames_;
     std::vector<std::vector<std::uint32_t>> breakGroupMembers_;
     std::vector<std::uint32_t> pendingBreaks_;
@@ -259,6 +313,9 @@ private:
     std::optional<Powertrain> powertrain_;
     VehicleControls controls_;
     real smoothedSteer_ = 0.0;
+    real tcsFactor_ = 1.0;       ///< Throttle multiplier commanded by the traction control.
+    bool tcsActive_ = false, absActive_ = false;
+    std::optional<CarSystems> systems_;
 };
 
 }  // namespace sb

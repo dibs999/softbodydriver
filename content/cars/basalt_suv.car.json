@@ -1,0 +1,32 @@
+{
+  "_comment": "Mid-size SUV, permanent all-wheel drive, V6.",
+  "id": "basalt_suv",
+  "name": "Basalt Ridge 3.5 V6 AWD",
+  "brand": "Basalt",
+  "description": "Mittelgroßer SUV mit Allradantrieb, 3.5-l-V6 mit 220 kW, 8-Gang-Automatik, viel Bodenfreiheit.",
+  "body": {
+    "style": "suv", "doors": 4,
+    "length": 4.75, "width": 1.92, "height": 1.75,
+    "wheelbase": 2.84, "frontOverhang": 0.92,
+    "trackFront": 1.64, "trackRear": 1.65, "groundClearance": 0.21,
+    "noseHeight": 0.94, "hoodHeight": 1.18, "beltHeight": 1.20, "tailHeight": 1.17,
+    "hoodLength": 1.30, "windshieldRun": 0.68, "roofLength": 2.25, "rearWindowRun": 0.40,
+    "roofWidthRatio": 0.84, "cornerRadiusFront": 0.28, "cornerRadiusRear": 0.20,
+    "paint": [0.22, 0.27, 0.25], "paintMetallic": 0.6
+  },
+  "chassis": { "curbMass": 2050, "frontWeight": 0.55, "bodyStiffness": 1.15, "bodyStrength": 1.2 },
+  "suspension": {
+    "front": { "wheelRate": 33000, "bumpDamping": 2600, "reboundDamping": 5200, "antiRollRate": 14000, "bumpTravel": 0.10, "droopTravel": 0.13 },
+    "rear":  { "wheelRate": 35000, "bumpDamping": 2700, "reboundDamping": 5400, "antiRollRate": 10000, "bumpTravel": 0.10, "droopTravel": 0.14 }
+  },
+  "tires": { "radius": 0.381, "width": 0.255, "rimRadius": 0.241, "pressurePsi": 36, "friction": 1.1, "tireMass": 13.0, "rimMass": 12.5, "rays": 18 },
+  "engine": {
+    "name": "3.5 V6", "layout": "AWD", "cylinders": 6,
+    "torqueCurve": [[650, 200], [1500, 290], [3000, 335], [4700, 360], [5800, 345], [6600, 300], [7000, 0]],
+    "idleRpm": 680, "redlineRpm": 6600, "inertia": 0.22, "friction": 24, "engineBraking": 0.045, "mass": 205,
+    "gears": [4.70, 3.13, 2.10, 1.67, 1.29, 1.00, 0.84, 0.67], "reverse": -3.30, "finalDrive": 3.70,
+    "automatic": true, "shiftUpRpm": 6000, "shiftDownRpm": 1700,
+    "maxBrakeTorque": 3200, "frontBrakeBias": 0.62, "handbrakeTorque": 2200, "lsd": 12,
+    "fuelCapacity": 72, "bsfc": 265, "radiatorUA": 2100
+  }
+}

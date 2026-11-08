@@ -2,6 +2,8 @@
 #pragma once
 
 #include "sbcore/builders.hpp"
+#include "sbcore/car.hpp"
+#include "sbcore/car_systems.hpp"
 #include "sbcore/c_api.h"
 #include "sbcore/colliders.hpp"
 #include "sbcore/powertrain.hpp"
@@ -15,5 +17,5 @@
 #include "sbcore/world.hpp"
 
 #define SBCORE_VERSION_MAJOR 0
-#define SBCORE_VERSION_MINOR 2
+#define SBCORE_VERSION_MINOR 3
 #define SBCORE_VERSION_PATCH 0

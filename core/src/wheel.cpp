@@ -100,6 +100,21 @@ void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, rea
     // Equal and opposite reaction on the spindle nodes -> exact linear momentum conservation.
     force[spec.hubLeft] -= sumForce * 0.5;
     force[spec.hubRight] -= sumForce * 0.5;
+
+    // Reaction couples (angular momentum conservation): drive torque into the engine / diff,
+    // brake torque into the upright.
+    auto couple = [&](std::int64_t na, std::int64_t nb, real torque) {
+        if (na < 0 || nb < 0 || torque == 0.0) return;
+        const Vec3 d = pos[static_cast<std::size_t>(na)] - pos[static_cast<std::size_t>(nb)];
+        const real d2 = lengthSq(d);
+        if (d2 < 1e-6) return;
+        const Vec3 tau = a * (-torque);
+        const Vec3 f = cross(tau, d) / d2;
+        force[static_cast<std::size_t>(na)] += f;
+        force[static_cast<std::size_t>(nb)] -= f;
+    };
+    couple(spec.driveReactionA, spec.driveReactionB, driveTorque);
+    couple(spec.brakeReactionA, spec.brakeReactionB, signedBrake);
 }
 
 PressureWheel addPressureWheel(SoftBody& body, const PressureWheelSpec& spec) {

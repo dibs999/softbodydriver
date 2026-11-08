@@ -35,6 +35,11 @@ struct PressureWheelSpec {
     bool steered = false;
     bool braked = true;
     bool handbraked = false;
+    /// Optional node pairs that receive the reaction couple of the drive torque (engine block /
+    /// differential) and of the brake torque (upright / caliper). Their separation should be roughly
+    /// perpendicular to the wheel axis. -1 = no reaction (torque is "external").
+    std::int64_t driveReactionA = -1, driveReactionB = -1;
+    std::int64_t brakeReactionA = -1, brakeReactionB = -1;
 };
 
 struct PressureWheel {

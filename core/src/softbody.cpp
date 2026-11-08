@@ -13,6 +13,7 @@ const char* beamTypeToString(BeamType t) {
         case BeamType::Support: return "support";
         case BeamType::Anisotropic: return "anisotropic";
         case BeamType::Hydro: return "hydro";
+        case BeamType::Shock: return "shock";
     }
     return "normal";
 }
@@ -25,6 +26,7 @@ bool beamTypeFromString(const std::string& s, BeamType& out) {
     if (l == "support") { out = BeamType::Support; return true; }
     if (l == "anisotropic") { out = BeamType::Anisotropic; return true; }
     if (l == "hydro") { out = BeamType::Hydro; return true; }
+    if (l == "shock") { out = BeamType::Shock; return true; }
     return false;
 }
 
@@ -47,7 +49,133 @@ std::uint32_t SoftBody::addNode(const std::string& id, const Vec3& pos, const No
     nodeIds_.push_back(name);
     nodeParams_.push_back(p);
     nodeLookup_[name] = idx;
+    const std::string g = p.group.empty() ? std::string("default") : p.group;
+    int gi = findGroup(g);
+    if (gi < 0) {
+        groupNames_.push_back(g);
+        gi = static_cast<int>(groupNames_.size() - 1);
+    }
+    nodeGroup_.push_back(static_cast<std::uint16_t>(gi));
     return idx;
+}
+
+int SoftBody::findGroup(const std::string& name) const {
+    for (std::size_t i = 0; i < groupNames_.size(); ++i)
+        if (groupNames_[i] == name) return static_cast<int>(i);
+    return -1;
+}
+
+namespace {
+// Dihedral angle of (p1, p2, p3, p4) about axis p2->p3 and its gradients (standard MD formulation).
+struct Dihedral {
+    real phi = 0;
+    Vec3 g1, g2, g3, g4;
+    bool valid = false;
+};
+
+Dihedral computeDihedral(const Vec3& p1, const Vec3& p2, const Vec3& p3, const Vec3& p4) {
+    Dihedral d;
+    const Vec3 b1 = p2 - p1, b2 = p3 - p2, b3 = p4 - p3;
+    const Vec3 m = cross(b1, b2), n = cross(b2, b3);
+    const real m2 = lengthSq(m), n2 = lengthSq(n), b2l2 = lengthSq(b2);
+    if (m2 < 1e-12 || n2 < 1e-12 || b2l2 < 1e-12) return d;
+    const real b2l = std::sqrt(b2l2);
+    d.phi = std::atan2(dot(cross(m, n), b2) / b2l, dot(m, n));
+    d.g1 = m * (-b2l / m2);
+    d.g4 = n * (b2l / n2);
+    const real s12 = dot(b1, b2) / b2l2, s32 = dot(b3, b2) / b2l2;
+    d.g2 = d.g1 * (s12 - 1.0) - d.g4 * s32;
+    d.g3 = d.g4 * (s32 - 1.0) - d.g1 * s12;
+    d.valid = true;
+    return d;
+}
+
+real wrapAngle(real a) {
+    constexpr real kPi = 3.14159265358979323846;
+    while (a > kPi) a -= 2.0 * kPi;
+    while (a < -kPi) a += 2.0 * kPi;
+    return a;
+}
+}  // namespace
+
+std::uint32_t SoftBody::addTorsionbar(std::uint32_t n1, std::uint32_t n2, std::uint32_t n3, std::uint32_t n4,
+                                      const TorsionbarParams& p) {
+    const std::size_t N = pos_.size();
+    if (n1 >= N || n2 >= N || n3 >= N || n4 >= N) throw std::invalid_argument("torsionbar node index out of range");
+    const Dihedral d = computeDihedral(pos_[n1], pos_[n2], pos_[n3], pos_[n4]);
+    if (!d.valid) throw std::invalid_argument("degenerate torsionbar geometry");
+    Torsionbar t;
+    t.n[0] = n1; t.n[1] = n2; t.n[2] = n3; t.n[3] = n4;
+    t.spring = p.spring;
+    t.damp = p.damp;
+    t.deform = p.deform;
+    t.strength = p.strength;
+    t.restAngle = d.phi;
+    t.params = p;
+    torsionbars_.push_back(t);
+    return static_cast<std::uint32_t>(torsionbars_.size() - 1);
+}
+
+void SoftBody::accumulateTorsionbars() {
+    for (Torsionbar& t : torsionbars_) {
+        if (t.broken) continue;
+        const Dihedral d = computeDihedral(pos_[t.n[0]], pos_[t.n[1]], pos_[t.n[2]], pos_[t.n[3]]);
+        if (!d.valid) continue;
+        real dphi = wrapAngle(d.phi - t.restAngle);
+        real torque = t.spring * dphi;
+        if (std::abs(torque) > t.deform && t.spring > 0) {
+            const real excess = (std::abs(torque) - t.deform) / t.spring;
+            t.restAngle = wrapAngle(t.restAngle + (dphi > 0 ? excess : -excess));
+            dphi = wrapAngle(d.phi - t.restAngle);
+            torque = t.spring * dphi;
+        }
+        if (std::abs(torque) > t.strength) {
+            t.broken = true;
+            t.lastTorque = 0;
+            continue;
+        }
+        const real rate = dot(d.g1, vel_[t.n[0]]) + dot(d.g2, vel_[t.n[1]]) + dot(d.g3, vel_[t.n[2]]) +
+                          dot(d.g4, vel_[t.n[3]]);
+        const real tq = torque + t.damp * rate;
+        t.lastTorque = tq;
+        force_[t.n[0]] -= d.g1 * tq;
+        force_[t.n[1]] -= d.g2 * tq;
+        force_[t.n[2]] -= d.g3 * tq;
+        force_[t.n[3]] -= d.g4 * tq;
+    }
+}
+
+void SoftBody::setSystems(const CarSystemsSpec& spec) {
+    systems_.emplace(spec);
+}
+
+void SoftBody::repair(const std::vector<Vec3>& restPositions) {
+    if (restPositions.size() == pos_.size()) pos_ = restPositions;
+    for (auto& v : vel_) v = {};
+    for (Beam& b : beams_) {
+        b.broken = false;
+        b.hydroOffset = 0;
+        b.restLength = b.baseRestLength;
+        b.deformThreshold = b.params.deform;
+        b.lastForce = 0;
+    }
+    for (ColTri& t : triangles_) t.broken = false;
+    for (Torsionbar& t : torsionbars_) {
+        t.broken = false;
+        const Dihedral d = computeDihedral(pos_[t.n[0]], pos_[t.n[1]], pos_[t.n[2]], pos_[t.n[3]]);
+        if (d.valid) t.restAngle = d.phi;
+    }
+    for (PressureWheel& w : wheels_) {
+        w.burst = false;
+        w.angularVelocity = 0;
+    }
+    if (powertrain_) {
+        powertrain_->setCondition({});
+        powertrain_->setRunning(true);
+        powertrain_->setGear(1);
+    }
+    if (systems_) systems_->repair();
+    smoothedSteer_ = 0;
 }
 
 std::int64_t SoftBody::findNode(const std::string& id) const {
@@ -78,6 +206,7 @@ std::uint32_t SoftBody::addBeam(std::uint32_t a, std::uint32_t b, const BeamPara
     bm.damp = p.damp;
     bm.springExp = p.springExpansion >= 0 ? p.springExpansion : p.spring;
     bm.dampExp = p.dampExpansion >= 0 ? p.dampExpansion : p.damp;
+    if (p.type == BeamType::Shock) bm.dampExp = p.dampRebound >= 0 ? p.dampRebound : p.damp;
     bm.baseRestLength = len * p.precompression;
     bm.restLength = bm.baseRestLength;
     bm.deformThreshold = p.deform;
@@ -214,28 +343,85 @@ void SoftBody::stepDrivetrain(real dt) {
     const std::size_t nw = wheels_.size();
     std::vector<real> omega(nw, 0.0);
     std::vector<bool> driven(nw, false), steered(nw, false), braked(nw, false), handbraked(nw, false);
+    real drivenInertia = 0.0;
     for (std::size_t i = 0; i < nw; ++i) {
-        omega[i] = wheels_[i].measureAngularVelocity(*this);
+        real inertia = 0.0;
+        omega[i] = wheels_[i].measureAngularVelocity(*this, &inertia);
+        if (wheels_[i].spec.driven) drivenInertia += inertia;
         driven[i] = wheels_[i].spec.driven;
         steered[i] = wheels_[i].spec.steered;
         braked[i] = wheels_[i].spec.braked;
         handbraked[i] = wheels_[i].spec.handbraked;
     }
 
+    // Reference vehicle speed from the spindle velocities (for TCS / ABS slip estimates).
+    real refSpeed = 0.0;
+    if (nw > 0) {
+        Vec3 v{0, 0, 0};
+        for (const PressureWheel& w : wheels_) v += (vel_[w.spec.hubLeft] + vel_[w.spec.hubRight]) * 0.5;
+        refSpeed = length(v / static_cast<real>(nw));
+    }
+
+    // Traction control: cut engine torque when the driven wheels spin faster than the car moves.
+    real throttle = std::clamp(controls_.throttle, 0.0, 1.0);
+    tcsActive_ = false;
+    if (controls_.tcs && powertrain_ && nw > 0) {
+        // Allowed wheel speed: 12 % slip plus a small absolute margin for launches.
+        real worstExcess = 0.0;
+        for (std::size_t i = 0; i < nw; ++i) {
+            if (!driven[i]) continue;
+            const real ws = std::abs(omega[i]) * wheels_[i].spec.radius;
+            worstExcess = std::max(worstExcess, ws - (refSpeed * 1.2 + 2.6));
+        }
+        if (worstExcess > 0.0) {
+            tcsFactor_ = std::max<real>(0.08, tcsFactor_ - dt * 5.0 * std::min<real>(3.0, worstExcess / 1.5));
+            tcsActive_ = throttle > 0.05;
+        } else {
+            tcsFactor_ = std::min<real>(1.0, tcsFactor_ + dt * 2.0);
+        }
+        throttle *= tcsFactor_;
+    } else {
+        tcsFactor_ = 1.0;
+    }
+
     std::vector<real> driveTorque(nw, 0.0), brakeTorque(nw, 0.0);
     if (powertrain_) {
         PowertrainInputs pin;
-        pin.throttle = controls_.throttle;
+        pin.throttle = throttle;
         pin.brake = controls_.brake;
         pin.handbrake = controls_.handbrake;
         pin.clutch = controls_.clutch;
         pin.requestedGear = controls_.gear;
+        powertrain_->setDrivenInertia(drivenInertia);
         powertrain_->step(pin, omega, driven, steered, braked, handbraked, driveTorque, brakeTorque, dt);
     } else {
         for (std::size_t i = 0; i < nw; ++i) {
             if (braked[i]) brakeTorque[i] += std::clamp(controls_.brake, 0.0, 1.0) * 1800.0;
             if (handbraked[i]) brakeTorque[i] += std::clamp(controls_.handbrake, 0.0, 1.0) * 1500.0;
         }
+    }
+
+    // Brake-based traction control (acts like a locking differential on a single spinning wheel)
+    // and ABS (releases a wheel that is about to lock).
+    absActive_ = false;
+    for (std::size_t i = 0; i < nw; ++i) {
+        const real ws = std::abs(omega[i]) * wheels_[i].spec.radius;
+        if (controls_.tcs && driven[i] && throttle > 0.05 && refSpeed < 40.0) {
+            const real excess = ws - refSpeed * 1.15 - 1.8;
+            if (excess > 0.0) brakeTorque[i] += std::min<real>(1500.0, excess * 220.0);
+        }
+        if (controls_.abs && brakeTorque[i] > 0.0 && refSpeed > 2.0 && controls_.handbrake < 0.1) {
+            const real slip = (refSpeed - ws) / refSpeed;
+            if (slip > 0.14) {
+                brakeTorque[i] *= std::clamp<real>(1.0 - (slip - 0.14) * 4.0, 0.15, 1.0);
+                absActive_ = true;
+            }
+        }
+    }
+
+    if (systems_) {
+        systems_->step(*this, powertrain_ ? &*powertrain_ : nullptr, driveTorque, brakeTorque, omega,
+                       controls_.ignition, controls_.starter, controls_.throttle, dt);
     }
 
     for (std::size_t i = 0; i < nw; ++i) {
@@ -283,6 +469,8 @@ void SoftBody::accumulateBeamForces(real dt) {
         } else if (bm.type == BeamType::Support && ext > 0) {
             bm.lastForce = 0;  // support beams never pull
             continue;
+        } else if (bm.type == BeamType::Shock && lenRate > 0) {
+            c = bm.dampExp;  // rebound
         }
 
         real fs = k * ext;
@@ -313,6 +501,7 @@ void SoftBody::accumulateBeamForces(real dt) {
         force[bm.b] -= fv;
     }
     if (!pendingBreaks_.empty()) processPendingBreaks();
+    if (!torsionbars_.empty()) accumulateTorsionbars();
     if (!wheels_.empty() || powertrain_) stepDrivetrain(dt);
 }
 
@@ -374,6 +563,8 @@ VehicleTelemetry SoftBody::telemetry() const {
     t.throttle = controls_.throttle;
     t.brake = controls_.brake;
     t.steer = smoothedSteer_;
+    t.tcsActive = tcsActive_;
+    t.absActive = absActive_;
     for (const PressureWheel& w : wheels_) {
         t.wheelOmega.push_back(w.angularVelocity);
         t.wheelBurst.push_back(w.burst);
