@@ -10,6 +10,7 @@
 //              takes its whole break group with it (e.g. a door hinge).
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <optional>
@@ -105,6 +106,11 @@ struct Beam {
     real hydroRatio = 0;
     real hydroOffset = 0;     ///< Plastic offset preserved while hydro input changes rest length.
 
+    real plasticStrain() const {
+        const real change = hydroInput >= 0 ? hydroOffset : restLength - baseRestLength;
+        return baseRestLength > 0.0 ? std::abs(change) / baseRestLength : 0.0;
+    }
+
     real lastForce = 0;       ///< Signed axial force of the last step (+ tension), diagnostics.
     BeamParams params;        ///< Original authoring parameters (for saving / tooling).
 };
@@ -159,6 +165,8 @@ struct VehicleTelemetry {
     real engineRpm = 0.0;
     int gear = 0;
     real clutch = 0.0;
+    real clutchTempC = 45.0, clutchWear = 0.0, gearboxDamage = 0.0;
+    real shiftRemaining = 0.0, clutchSlipRpm = 0.0, gearGrind = 0.0;
     real throttle = 0.0;
     real brake = 0.0;
     real steer = 0.0;
@@ -262,6 +270,9 @@ public:
     const std::vector<real>& masses() const { return mass_; }
     const std::vector<real>& invMasses() const { return invMass_; }
     const std::vector<real>& frictions() const { return friction_; }
+    const std::vector<Vec3>& contactImpulses() const { return contactImpulse_; }
+    void clearContacts() { std::fill(contactImpulse_.begin(), contactImpulse_.end(), Vec3{}); }
+    void addContact(std::size_t i, const Vec3& impulse) { contactImpulse_[i] += impulse; }
     const std::vector<std::uint8_t>& collisionFlags() const { return collision_; }
     const std::vector<std::string>& nodeIds() const { return nodeIds_; }
     const NodeParams& nodeParams(std::uint32_t i) const { return nodeParams_[i]; }
@@ -296,6 +307,7 @@ private:
     // Node data, structure-of-arrays for cache / SIMD friendliness.
     std::vector<Vec3> pos_, vel_, force_;
     std::vector<real> mass_, invMass_, friction_;
+    std::vector<Vec3> contactImpulse_; // Static-surface normal impulse from the previous solver step.
     std::vector<std::uint8_t> collision_;
     std::vector<std::string> nodeIds_;
     std::vector<NodeParams> nodeParams_;

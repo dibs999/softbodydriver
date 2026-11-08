@@ -208,6 +208,38 @@ TEST_CASE("hydro beams follow their input channel") {
     CHECK(w.body(0).positions()[1].x == doctest::Approx(0.9).epsilon(0.001));
 }
 
+TEST_CASE("hydro movement is elastic and plastic limits follow the commanded length") {
+    BeamParams bp;
+    bp.type = BeamType::Hydro;
+    bp.spring = 1e4;
+    bp.deform = 100.0;
+    bp.deformLimit = 0.03;
+    bp.deformLimitExpansion = 0.03;
+    bp.hydroInput = 0;
+    bp.hydroRatio = 0.2;
+    World w = springPair(bp, 1.0);
+    auto& body = w.body(0);
+    const auto& beam = body.beams()[0];
+
+    body.setInput(0, 1.0);
+    body.positions()[1].x = 1.20;
+    body.accumulateBeamForces(0.0005);
+    CHECK(beam.plasticStrain() == 0.0);
+    CHECK(body.stats().deformedBeams == 0);
+
+    body.positions()[1].x = 1.30;
+    body.accumulateBeamForces(0.0005);
+    CHECK(beam.restLength == doctest::Approx(1.23));
+    CHECK(beam.plasticStrain() == doctest::Approx(0.03));
+    CHECK(body.stats().deformedBeams == 1);
+
+    body.setInput(0, -1.0);
+    body.positions()[1].x = 0.83;
+    body.accumulateBeamForces(0.0005);
+    CHECK(beam.restLength == doctest::Approx(0.83));
+    CHECK(beam.plasticStrain() == doctest::Approx(0.03));
+}
+
 TEST_CASE("lattice builder produces expected topology") {
     LatticeSpec s;
     s.cellsX = 2;

@@ -2,6 +2,21 @@ extends Node
 ## Global game state (autoload "Game"): selected vehicle / map, settings and the input map.
 
 const CARS_DIR := "res://cars"
+const GRAPHICS_CONFIG := "user://graphics.cfg"
+
+signal graphics_preset_changed
+signal driving_help_changed(visible: bool)
+
+enum GraphicsPreset { PERFORMANCE, BALANCED, HIGH, NATIVE }
+
+const GRAPHICS_PRESETS := [
+	{"name": "Leistung", "scale": 0.60, "hint": "60 % 3D-Auflösung, ohne Schatten und Kantenglättung"},
+	{"name": "Ausgewogen", "scale": 0.80, "hint": "80 % 3D-Auflösung mit FSR-Schärfung und Schatten"},
+	{"name": "Hoch", "scale": 1.0, "hint": "Volle 3D-Auflösung, 4× MSAA, SSAO und Leuchteffekte"},
+	{"name": "Scharf (nativ)", "scale": 1.0, "hint": "Volle 3D-Auflösung, Schatten und FXAA"},
+]
+
+var _graphics_preset: int = GraphicsPreset.BALANCED
 
 var cars: Array[Dictionary] = []          # {path, id, name, brand, description, ...}
 var selected_car := "res://cars/kestrel_hatch.car.json"
@@ -12,22 +27,130 @@ var settings := {
 	"automatic": true,
 	"steering_assist": true,     # speed sensitive steering limit
 	"traffic": true,             # AI cars on the map
-	"show_help": true,
+	"show_help": false,
 	"master_volume": 0.8,
+	"engine_volume": 0.8,
 }
 
 const MAPS := [
-	{"id": "proving_grounds", "name": "Testgelände", "description": "Asphaltfläche mit Oval, Sprungrampen, Crash-Wand, Schlaglochpiste, Slalom und Hügel."},
-	{"id": "autobahn", "name": "Autobahn", "description": "6 km Autobahn-Ring: 2×3 Spuren, Mittelleitplanke, Brücken, Schilderbrücken und Gegenverkehr."},
-	{"id": "city", "name": "Stadt", "description": "Innenstadt mit Straßenraster, Bordsteinen, Hochhäusern, Ampeln, Laternen, Park und Stadtverkehr."},
-	{"id": "desert", "name": "Wüste", "description": "Dünen, Tafelberge und eine Schotterpiste mit Sprüngen, Felsbrocken und Kakteen."},
-	{"id": "hill_roads", "name": "Hügelland", "description": "Prozedurales Hügel-Terrain mit kurviger Landstraße, Kuppen, Senken und Wald."},
+	{"id": "offroad", "name": "Wald & Weide · Offroad", "description": "Feldwege statt Asphalt: große Rundstrecke, Waldpfade, Höhenweg und Geröllpassage. Hof, Holzlager und Weideland. SUV oder Rallye-Auto empfohlen."},
+	{"id": "proving_grounds", "name": "Testgelände", "description": "Über 1 km Oval, Handling-Parcours, Boxen, Sprungrampen und Crashwand."},
+	{"id": "autobahn", "name": "Autobahn", "description": "8,5 km Autobahnring mit Raststätte, Lkw-Stellplatz, Windpark und Gegenverkehr."},
+	{"id": "city", "name": "Stadt", "description": "Altstadtgasse, Werkstatthöfe, Hochstraße, Parkdeck und Markt. Mit Zeitfahren, Drifts und Lieferfahrten (F3)."},
+	{"id": "desert", "name": "Wüste", "description": "Knapp 4 km Rallye-Schleife mit Sprüngen, Red-Mesa-Lager und Nebenroute zur alten Mine."},
+	{"id": "hill_roads", "name": "Hügelland", "description": "Rund 2,5 km Landstraße durch Wald und Wiesen mit Gehöften und Aussichtspunkt."},
 ]
 
 
 func _ready() -> void:
+	var config := ConfigFile.new()
+	if config.load(GRAPHICS_CONFIG) == OK:
+		var saved: Variant = config.get_value("graphics", "preset", _graphics_preset)
+		if saved is int and saved >= 0 and saved < GRAPHICS_PRESETS.size():
+			_graphics_preset = saved
+		var show_help: Variant = config.get_value("interface", "show_help", false)
+		if show_help is bool:
+			settings["show_help"] = show_help
+		for key in ["master_volume", "engine_volume"]:
+			var volume: Variant = config.get_value("audio", key, settings[key])
+			if volume is float or volume is int:
+				settings[key] = clampf(float(volume), 0.0, 1.0)
+	_apply_viewport_graphics()
 	_setup_input()
 	scan_cars()
+
+
+func make_graphics_options() -> HBoxContainer:
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = "Grafikqualität"
+	row.add_child(label)
+	var options := OptionButton.new()
+	options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for preset in GRAPHICS_PRESETS:
+		options.add_item(preset["name"])
+		options.set_item_tooltip(options.item_count - 1, preset["hint"])
+	options.select(_graphics_preset)
+	options.item_selected.connect(_set_graphics_preset)
+	row.add_child(options)
+	return row
+
+
+func make_audio_options() -> VBoxContainer:
+	var box := VBoxContainer.new()
+	for entry in [["master_volume", "Gesamtlautstärke"], ["engine_volume", "Motorlautstärke"]]:
+		var row := HBoxContainer.new()
+		box.add_child(row)
+		var label := Label.new()
+		label.text = entry[1]
+		label.custom_minimum_size.x = 140
+		row.add_child(label)
+		var slider := HSlider.new()
+		slider.min_value = 0
+		slider.max_value = 1
+		slider.step = 0.01
+		slider.value = settings[entry[0]]
+		slider.custom_minimum_size.x = 100
+		slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var key: String = entry[0]
+		slider.value_changed.connect(func(value: float): settings[key] = value)
+		slider.drag_ended.connect(func(_changed: bool): _save_display_settings())
+		slider.focus_exited.connect(_save_display_settings)
+		row.add_child(slider)
+	return box
+
+
+func _set_graphics_preset(preset: int) -> void:
+	_graphics_preset = preset
+	_apply_viewport_graphics()
+	graphics_preset_changed.emit()
+	_save_display_settings()
+
+
+func make_driving_help_option() -> CheckBox:
+	var option := CheckBox.new()
+	option.text = "Steuerung einblenden (F1)"
+	option.set_pressed_no_signal(settings["show_help"])
+	option.toggled.connect(set_driving_help)
+	driving_help_changed.connect(option.set_pressed_no_signal)
+	return option
+
+
+func set_driving_help(visible: bool) -> void:
+	if settings["show_help"] == visible:
+		return
+	settings["show_help"] = visible
+	driving_help_changed.emit(visible)
+	_save_display_settings()
+
+
+func _save_display_settings() -> void:
+	var config := ConfigFile.new()
+	config.load(GRAPHICS_CONFIG)
+	config.set_value("graphics", "preset", _graphics_preset)
+	config.set_value("interface", "show_help", settings["show_help"])
+	for key in ["master_volume", "engine_volume"]:
+		config.set_value("audio", key, settings[key])
+	var err := config.save(GRAPHICS_CONFIG)
+	if err != OK:
+		push_warning("Could not save display settings: %s" % error_string(err))
+
+
+func _apply_viewport_graphics() -> void:
+	var viewport := get_viewport()
+	var high := _graphics_preset == GraphicsPreset.HIGH
+	var balanced := _graphics_preset == GraphicsPreset.BALANCED
+	viewport.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if balanced else Viewport.SCALING_3D_MODE_BILINEAR
+	viewport.scaling_3d_scale = GRAPHICS_PRESETS[_graphics_preset]["scale"]
+	viewport.msaa_3d = Viewport.MSAA_4X if high else Viewport.MSAA_DISABLED
+	viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if balanced or _graphics_preset == GraphicsPreset.NATIVE else Viewport.SCREEN_SPACE_AA_DISABLED
+
+
+func apply_environment_graphics(environment: Environment, sun: DirectionalLight3D) -> void:
+	var high := _graphics_preset == GraphicsPreset.HIGH
+	environment.ssao_enabled = high
+	environment.glow_enabled = high
+	sun.shadow_enabled = _graphics_preset != GraphicsPreset.PERFORMANCE
 
 
 func scan_cars() -> void:
@@ -85,6 +208,12 @@ func spawn_vehicle(world: SBWorld, path: String, xform: Transform3D) -> SBVehicl
 	var v := world.spawn_car(path, xform)
 	if v:
 		apply_visual_model(v, car_info(path))
+		var effects := preload("res://scripts/vehicle_effects.gd").new()
+		effects.name = "VehicleEffects"
+		effects.vehicle = v
+		effects.world = world
+		effects.dirt = selected_map == "desert"
+		v.add_child(effects)
 	return v
 
 
@@ -94,6 +223,12 @@ static func _axis(s: String) -> Vector3:
 		"x": return Vector3(sign, 0, 0)
 		"y": return Vector3(0, sign, 0)
 	return Vector3(0, 0, sign)
+
+
+static func _model_point(value: Variant) -> Variant:
+	if value is Array and value.size() == 3 and value.all(func(component): return component is float or component is int):
+		return Vector3(value[0], value[1], value[2])
+	return null
 
 
 func apply_visual_model(v: SBVehicle, info: Dictionary) -> void:
@@ -129,8 +264,22 @@ func apply_visual_model(v: SBVehicle, info: Dictionary) -> void:
 		var target: String = cfg["materialOverrides"][k]
 		if lib.has(target):
 			overrides[k] = lib[target]
-	v.attach_model(root, xf, {"wheels": cfg.get("wheels", {}), "hide": hide, "keep_procedural": cfg.get("keepProcedural", []),
-		"material_overrides": overrides})
+	var options := {"wheels": cfg.get("wheels", {}), "hide": hide, "keep_procedural": cfg.get("keepProcedural", []),
+		"material_overrides": overrides}
+	var eye: Variant = _model_point(cfg.get("driverEye"))
+	if eye is Vector3:
+		options["driver_eye"] = xf * eye
+	var dashboard: Variant = _model_point(cfg.get("dashboard"))
+	if dashboard is Vector3:
+		options["dashboard"] = xf * dashboard
+	var steering: Variant = cfg.get("steeringWheel")
+	if steering is Dictionary:
+		var pivot: Variant = _model_point(steering.get("pivot"))
+		var axis: Variant = _model_point(steering.get("axis"))
+		var parts: Variant = steering.get("parts")
+		if pivot is Vector3 and axis is Vector3 and not axis.is_zero_approx() and parts is Array:
+			options["steering_wheel"] = {"pivot": xf * pivot, "axis": rot * axis, "parts": parts}
+	v.attach_model(root, xf, options)
 	root.free()
 
 
@@ -200,6 +349,11 @@ func _setup_input() -> void:
 	_action("switch_vehicle"); _key("switch_vehicle", [KEY_TAB])
 	_action("spawn_obstacle_car"); _key("spawn_obstacle_car", [KEY_F6])
 	_action("toggle_help"); _key("toggle_help", [KEY_F1])
+	_action("toggle_diagnostics"); _key("toggle_diagnostics", [KEY_F2])
+	_action("activity_next"); _key("activity_next", [KEY_F3])
+	_action("activity_start"); _key("activity_start", [KEY_F4])
+	_action("map_overview"); _key("map_overview", [KEY_K])
+	_action("map_compact"); _key("map_compact", [KEY_N])
 	_action("menu"); _key("menu", [KEY_ESCAPE]); _joy_button("menu", JOY_BUTTON_START)
 	_action("look_back"); _key("look_back", [KEY_V])
 
@@ -243,6 +397,7 @@ func make_material_library() -> Dictionary:
 	lib["seam"] = _plastic(Color(0.01, 0.01, 0.01), 0.9)
 	lib["grille"] = _plastic(Color(0.02, 0.02, 0.025), 0.35)
 	lib["interior"] = _plastic(Color(0.07, 0.07, 0.075), 0.85)
+	lib["upholstery"] = _plastic(Color(0.24, 0.19, 0.145), 0.94)
 	lib["tire"] = _plastic(Color(0.035, 0.035, 0.035), 0.92)
 	lib["radiator"] = _metal(Color(0.15, 0.15, 0.16), 0.6, 0.5)
 	lib["spring"] = _plastic(Color(0.75, 0.08, 0.06), 0.35)

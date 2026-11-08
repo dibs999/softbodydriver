@@ -18,13 +18,15 @@ public:
     VisBuilder(const SoftBody& body, CarVisual& vis, const std::vector<float>& frames)
         : body_(body), vis_(vis), frames_(frames) {}
 
-    MeshSurface& surf(const std::string& material) {
-        auto it = index_.find(material);
+    MeshSurface& surf(const std::string& material, bool steeringWheel = false) {
+        const auto key = std::make_pair(material, steeringWheel);
+        auto it = index_.find(key);
         if (it != index_.end()) return vis_.skinned[it->second];
         vis_.skinned.emplace_back();
         vis_.skinned.back().material = material;
+        vis_.skinned.back().steeringWheel = steeringWheel;
         if (material == "glass") vis_.skinned.back().doubleSided = true;
-        index_[material] = vis_.skinned.size() - 1;
+        index_[key] = vis_.skinned.size() - 1;
         return vis_.skinned.back();
     }
 
@@ -93,8 +95,8 @@ public:
 
     /// Box with given centre, half extents along axes ax, ay, az (unit vectors); skinned to candidates.
     void box(const std::string& mat, const Vec3& c, const Vec3& h, const std::vector<std::uint32_t>& cand,
-             const Vec3& ax = {1, 0, 0}, const Vec3& ay = {0, 1, 0}, const Vec3& az = {0, 0, 1}) {
-        MeshSurface& m = surf(mat);
+             const Vec3& ax = {1, 0, 0}, const Vec3& ay = {0, 1, 0}, const Vec3& az = {0, 0, 1}, bool steeringWheel = false) {
+        MeshSurface& m = surf(mat, steeringWheel);
         const int faces[6][4] = {{0, 1, 3, 2}, {4, 6, 7, 5}, {0, 4, 5, 1}, {2, 3, 7, 6}, {0, 2, 6, 4}, {1, 5, 7, 3}};
         Vec3 corner[8];
         for (int i = 0; i < 8; ++i)
@@ -180,7 +182,7 @@ private:
     const SoftBody& body_;
     CarVisual& vis_;
     const std::vector<float>& frames_;
-    std::map<std::string, std::size_t> index_;
+    std::map<std::pair<std::string, bool>, std::size_t> index_;
 };
 
 void computeNormals(const std::vector<float>& pos, const std::vector<std::uint32_t>& idx, std::vector<float>& nrm) {
@@ -254,7 +256,7 @@ struct LocalMesh {
     }
 };
 
-std::vector<MeshSurface> buildWheelMeshes(const TireDef& tire) {
+std::vector<MeshSurface> buildWheelMeshes(const TireDef& tire, BodyStyle style) {
     std::vector<MeshSurface> out(4);
     out[0].material = "tire";
     out[1].material = "rim";
@@ -268,30 +270,32 @@ std::vector<MeshSurface> buildWheelMeshes(const TireDef& tire) {
                     {R - 0.016, -hwid * 0.95}, {R - 0.002, -hwid * 0.78}, {R, -hwid * 0.40}, {R, 0.0},
                     {R, hwid * 0.40}, {R - 0.002, hwid * 0.78}, {R - 0.016, hwid * 0.95}, {R - 0.05, hwid * 1.03},
                     {Rr + 0.03, hwid * 0.99}, {Rr + 0.006, hwid * 0.90}},
-                   56, true);
+                   56);
     }
     {
         LocalMesh lm{&out[1]};
         // Outer lip + dish, then inner barrel (faces the axis).
         lm.revolve({{Rr - 0.045, hwid * 0.60}, {Rr - 0.012, hwid * 0.86}, {Rr + 0.004, hwid * 0.92}, {Rr + 0.012, hwid * 0.86}},
-                   48, false);
-        lm.revolve({{Rr - 0.004, -hwid * 0.92}, {Rr - 0.004, hwid * 0.84}}, 48, false);
-        // Hub and five spokes.
+                   48, true);
+        lm.revolve({{Rr - 0.004, -hwid * 0.92}, {Rr - 0.004, hwid * 0.84}}, 48, true);
+        // Match the rim design to the vehicle class.
         lm.revolve({{0.0, hwid * 0.74}, {0.072, hwid * 0.74}, {0.08, hwid * 0.55}}, 20, true);
-        const int spokes = 5;
+        const int spokes = style == BodyStyle::SUV ? 6 : (style == BodyStyle::Sedan ? 8 : 5);
+        const real spokeHalf = style == BodyStyle::SUV ? 0.031 : (style == BodyStyle::Sedan ? 0.016 : 0.023);
         for (int s = 0; s < spokes; ++s) {
             const real a = 2.0 * kPi * s / spokes;
             const real len = Rr - 0.05 - 0.07;
-            lm.boxLocal({0.07 + 0.5 * len, 0.0, hwid * 0.66}, {0.5 * len, 0.024, 0.016}, a);
-            lm.boxLocal({0.07 + 0.5 * len, 0.0, hwid * 0.66}, {0.5 * len, 0.012, 0.016}, a + kPi / spokes);
+            lm.boxLocal({0.07 + 0.5 * len, 0.0, hwid * 0.66}, {0.5 * len, spokeHalf, 0.016}, a);
+            if (style == BodyStyle::Coupe)
+                lm.boxLocal({0.07 + 0.5 * len, 0.0, hwid * 0.66}, {0.5 * len, 0.011, 0.016}, a + kPi / spokes);
         }
     }
     {
         LocalMesh lm{&out[2]};
         const real dr = Rr - 0.035;
-        lm.revolve({{0.06, -0.035}, {dr, -0.035}, {dr, -0.01}, {0.06, -0.01}}, 40, true);
+        lm.revolve({{0.06, -0.035}, {dr, -0.035}, {dr, -0.01}, {0.06, -0.01}}, 40);
         // Ventilation slots ring hint: darker inner hat.
-        lm.revolve({{0.06, -0.005}, {0.11, -0.005}, {0.11, 0.03}, {0.0, 0.03}}, 24, true);
+        lm.revolve({{0.06, -0.005}, {0.11, -0.005}, {0.11, 0.03}, {0.0, 0.03}}, 24);
     }
     {
         LocalMesh lm{&out[3]};
@@ -709,19 +713,26 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         const real hwF = prof.halfW(L - 0.04);
         const real yH = bd.noseHeight - 0.075;
         const real lightW = std::min<real>(0.20, 0.30 * hwF);
+        const bool sport = bd.style == BodyStyle::Coupe;
         for (int side = 0; side < 2; ++side) {
             const real sg = side ? 1.0 : -1.0;
             const real zc = sg * (hwF - lightW - 0.05);
             // Lens slightly yawed to follow the rounded corner.
             const Vec3 ax = normalize(Vec3{1.0, 0.0, sg * 0.35});
             const Vec3 az = normalize(cross(ax, Vec3{0, 1, 0})) * -1.0;
-            vb.box("chrome", {xf - 0.035, yH, zc}, {0.03, 0.066, lightW + 0.012}, bodyNodes, ax, {0, 1, 0}, az);
-            vb.box("headlight", {xf - 0.012, yH, zc}, {0.025, 0.056, lightW}, bodyNodes, ax, {0, 1, 0}, az);
+            const real housing = sport ? 0.045 : 0.058;
+            vb.box("grille", {xf - 0.035, yH, zc}, {0.030, housing, lightW + 0.015}, bodyNodes, ax, {0, 1, 0}, az);
+            vb.box("headlight", {xf + 0.002, yH + housing * 0.60, zc}, {0.016, 0.009, lightW}, bodyNodes, ax, {0, 1, 0}, az);
+            for (real lens : {-0.48, 0.40})
+                vb.box("chrome", Vec3{xf + 0.006, yH - 0.012, zc} + az * (lens * lightW),
+                       {0.012, housing * 0.30, lightW * 0.26}, bodyNodes, ax, {0, 1, 0}, az);
         }
         // Grille between the headlights.
         const real gw = std::max<real>(0.18, hwF - 2.0 * lightW - 0.14);
         vb.box("grille", {xf - 0.02, yH - 0.03, 0.0}, {0.03, 0.065, gw}, bodyNodes);
-        vb.box("chrome", {xf - 0.008, yH + 0.04, 0.0}, {0.012, 0.008, gw}, bodyNodes);
+        for (int slat = 0; slat < 3; ++slat)
+            vb.box("trim", {xf + 0.014, yH - 0.065 + slat * 0.032, 0.0}, {0.010, 0.005, gw * 0.94}, bodyNodes);
+        vb.box("chrome", {xf + 0.002, yH + 0.048, 0.0}, {0.011, 0.008, gw}, bodyNodes);
         // Tail lights.
         const real hwR = prof.halfW(0.04);
         const real yT = bd.tailHeight - 0.11;
@@ -731,8 +742,11 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             const real zc = sg * (hwR - tw - 0.04);
             const Vec3 ax = normalize(Vec3{1.0, 0.0, -sg * 0.3});
             const Vec3 az = normalize(cross(ax, Vec3{0, 1, 0})) * -1.0;
-            vb.box("taillight", {0.012, yT, zc}, {0.022, 0.058, tw}, bodyNodes, ax, {0, 1, 0}, az);
+            vb.box("grille", {0.009, yT, zc}, {0.023, sport ? 0.034 : 0.048, tw + 0.015}, bodyNodes, ax, {0, 1, 0}, az);
+            for (real stripe : {-0.015, 0.017})
+                vb.box("taillight", {-0.011, yT + stripe, zc}, {0.010, 0.009, tw}, bodyNodes, ax, {0, 1, 0}, az);
         }
+        vb.box("plate", {-0.020, yT - 0.145, 0.0}, {0.013, 0.046, 0.23}, bodyNodes);
     }
 
     // ---- mirrors
@@ -751,14 +765,89 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         const real yFloor = prof.yBottom(prof.xB) + 0.10;
         const real beltY = bd.beltHeight;
         const real dashX = prof.xCowl - 0.22;
-        vb.box("interior", {dashX, beltY - 0.10, 0.0}, {0.16, 0.09, prof.shoulderHalf(dashX) - 0.10}, bodyNodes);
+        const real dashHalf = prof.shoulderHalf(dashX) - 0.10;
+        // Continuous footwell, headliner and two-tone door cards close the cabin.
+        vb.box("interior", {prof.xB - 0.10, yFloor - 0.03, 0}, {0.72, 0.035, dashHalf}, bodyNodes);
+        vb.box("upholstery", {(prof.xWsTop + prof.xRwTop) * 0.5, bd.height - 0.055, 0},
+               {std::abs(prof.xWsTop - prof.xRwTop) * 0.48, 0.018, hw * bd.roofWidthRatio * 0.94}, bodyNodes);
+        vb.box("interior", {dashX, beltY - 0.10, 0.0}, {0.16, 0.09, dashHalf}, bodyNodes);
+        vb.box("trim", {dashX + 0.03, beltY - 0.008, 0.0}, {0.17, 0.027, dashHalf}, bodyNodes);
+        vb.box("chrome", {dashX - 0.162, beltY - 0.051, 0.0}, {0.010, 0.008, dashHalf - 0.014}, bodyNodes);
+        vb.box("upholstery", {dashX - 0.164, beltY - 0.094, 0.0}, {0.008, 0.024, dashHalf - 0.015}, bodyNodes);
+        // Centre display bezel; its live face is attached to the dashboard anchor in Godot.
+        vb.box("trim", {dashX - 0.169, beltY + 0.025, 0.025}, {0.022, 0.075, 0.128}, bodyNodes);
+        for (real ventZ : {-dashHalf + 0.085, dashHalf - 0.085}) {
+            vb.box("chrome", {dashX - 0.168, beltY - 0.01, ventZ}, {0.012, 0.044, 0.065}, bodyNodes);
+            vb.box("seam", {dashX - 0.182, beltY - 0.01, ventZ}, {0.006, 0.036, 0.057}, bodyNodes);
+            for (int slot = 0; slot < 4; ++slot)
+                vb.box("trim", {dashX - 0.190, beltY - 0.035 + slot * 0.016, ventZ}, {0.004, 0.002, 0.054}, bodyNodes);
+        }
+        vb.box("seam", {dashX - 0.163, beltY - 0.117, 0.37}, {0.009, 0.049, 0.15}, bodyNodes);
+        vb.box("trim", {dashX - 0.173, beltY - 0.093, 0.37}, {0.006, 0.009, 0.044}, bodyNodes);
+        const real clusterY = beltY + 0.080;
+        vb.box("trim", {dashX - 0.055, clusterY + 0.006, -0.36}, {0.10, 0.052, 0.179}, bodyNodes);
+        vb.box("seam", {dashX - 0.158, clusterY, -0.36}, {0.008, 0.046, 0.163}, bodyNodes);
+        vis.dashboard = vb.skinNearest({dashX - 0.170, clusterY, -0.36}, bodyNodes);
+        MeshSurface& bezels = vb.surf("chrome");
+        for (real lateral : {-0.444, -0.276}) {
+            const Vec3 face{dashX - 0.168, clusterY, lateral};
+            for (int segment = 0; segment < 16; ++segment) {
+                const real a = 2.0 * kPi * segment / 16;
+                const real b = 2.0 * kPi * (segment + 1) / 16;
+                const Vec3 u{0.0, std::cos(a), std::sin(a)}, v{0.0, std::cos(b), std::sin(b)};
+                const auto add = [&](const Vec3& p) { return vb.vertex(bezels, p, vb.skinNearest(p, bodyNodes)); };
+                const auto aOuter = add(face + u * 0.042), aInner = add(face + u * 0.039);
+                const auto bOuter = add(face + v * 0.042), bInner = add(face + v * 0.039);
+                VisBuilder::tri(bezels, aOuter, aInner, bOuter);
+                VisBuilder::tri(bezels, aInner, bInner, bOuter);
+            }
+        }
+        const real pillarFootX = prof.xCowl - 0.075;
+        const Section pillarFoot = prof.section(pillarFootX), pillarTop = prof.section(prof.xWsTop);
+        for (real side : {-1.0, 1.0}) {
+            const Vec3 foot{pillarFootX, pillarFoot.y[8] - 0.02, side * (pillarFoot.z[8] - 0.025)};
+            const Vec3 top{prof.xWsTop, pillarTop.y[8] - 0.018, side * (pillarTop.z[8] - 0.024)};
+            const Vec3 axis = normalize(top - foot);
+            const Vec3 width = normalize(cross(axis, Vec3{0, 1, 0}));
+            vb.box("interior", (foot + top) * 0.5, {length(top - foot) * 0.5, 0.018, 0.016}, bodyNodes,
+                   axis, cross(width, axis), width);
+        }
+        vb.box("interior", {dashX - 0.17, beltY - 0.15, 0.02}, {0.032, 0.11, 0.135}, bodyNodes);
+        vb.box("seam", {dashX - 0.207, beltY - 0.126, 0.02}, {0.009, 0.041, 0.102}, bodyNodes);
+        for (int slat = 0; slat < 3; ++slat) {
+            vb.box("trim", {dashX - 0.218, beltY - 0.147 + slat * 0.018, 0.02}, {0.007, 0.004, 0.091}, bodyNodes);
+        }
         vb.box("trim", {dashX - 0.25, yFloor + 0.20, 0.0}, {0.30, 0.10, 0.09}, bodyNodes);  // console
+        vb.box("chrome", {dashX - 0.24, yFloor + 0.303, 0.0}, {0.11, 0.005, 0.073}, bodyNodes);
+        vb.box("seam", {dashX - 0.24, yFloor + 0.313, 0.0}, {0.072, 0.014, 0.048}, bodyNodes);
+        vb.box("trim", {dashX - 0.24, yFloor + 0.353, 0.0}, {0.025, 0.045, 0.020}, bodyNodes);
+        vb.box("chrome", {dashX - 0.24, yFloor + 0.401, 0.0}, {0.034, 0.012, 0.026}, bodyNodes);
         const real seatX = prof.xB + 0.10;
         for (real zs : {-0.36, 0.36}) {
             vb.box("interior", {seatX + 0.05, yFloor + 0.16, zs}, {0.24, 0.07, 0.24}, bodyNodes);
             vb.box("interior", {seatX - 0.20, yFloor + 0.48, zs}, {0.06, 0.32, 0.23}, bodyNodes, normalize(Vec3{1, 0.25, 0}),
                    normalize(Vec3{-0.25, 1, 0}), {0, 0, 1});
             vb.box("interior", {seatX - 0.26, yFloor + 0.86, zs}, {0.05, 0.09, 0.13}, bodyNodes);  // headrest
+            vb.box("upholstery", {seatX + 0.05, yFloor + 0.232, zs}, {0.19, 0.008, 0.145}, bodyNodes);
+            vb.box("upholstery", {seatX - 0.126, yFloor + 0.48, zs}, {0.008, 0.25, 0.145}, bodyNodes,
+                   normalize(Vec3{1, 0.25, 0}), normalize(Vec3{-0.25, 1, 0}), {0, 0, 1});
+            for (real side : {-1.0, 1.0}) {
+                vb.box("trim", {seatX + 0.075, yFloor + 0.225, zs + side * 0.18}, {0.20, 0.036, 0.045}, bodyNodes);
+                vb.box("trim", {seatX - 0.145, yFloor + 0.48, zs + side * 0.17}, {0.042, 0.25, 0.04},
+                       bodyNodes, normalize(Vec3{1, 0.25, 0}), normalize(Vec3{-0.25, 1, 0}), {0, 0, 1});
+            }
+            const real doorSide = zs < 0 ? -1.0 : 1.0;
+            const real doorX = (dashX + seatX) * 0.5;
+            const real doorZ = doorSide * (prof.shoulderHalf(doorX) - 0.090);
+            vb.box("interior", {doorX, beltY - 0.16, doorZ}, {0.31, 0.12, 0.040}, bodyNodes);
+            vb.box("trim", {doorX, beltY - 0.12, doorZ - doorSide * 0.045}, {0.23, 0.028, 0.034}, bodyNodes);
+            vb.box("chrome", {doorX + 0.11, beltY - 0.053, doorZ - doorSide * 0.047}, {0.060, 0.011, 0.012}, bodyNodes);
+            vb.box("upholstery", {doorX, beltY - 0.24, doorZ - doorSide * 0.044}, {0.25, 0.055, 0.008}, bodyNodes);
+            // Window switches and a visible speaker grille.
+            for (int key = 0; key < 3; ++key)
+                vb.box("seam", {doorX + 0.08 - key * 0.035, beltY - 0.088, doorZ - doorSide * 0.055}, {0.012, 0.004, 0.012}, bodyNodes);
+            for (int slat = 0; slat < 5; ++slat)
+                vb.box("seam", {doorX + 0.15, beltY - 0.28 + slat * 0.014, doorZ - doorSide * 0.055}, {0.065, 0.003, 0.003}, bodyNodes);
         }
         if (bd.doors >= 4 || bd.style != BodyStyle::Coupe) {
             const real benchX = prof.xB - 0.55;
@@ -767,9 +856,11 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                    normalize(Vec3{1, 0.3, 0}), normalize(Vec3{-0.3, 1, 0}), {0, 0, 1});
         }
         // Steering wheel ring (LHD -> driver on the left, -z).
-        MeshSurface& m = vb.surf("trim");
+        MeshSurface& m = vb.surf("trim", true);
         const Vec3 c{dashX - 0.22, beltY + 0.02, -0.36};
         const Vec3 ax = normalize(Vec3{-1.0, 0.45, 0.0});
+        vis.steeringPivot = vb.skinNearest(c, bodyNodes);
+        vis.steeringAxis = ax;
         const Vec3 u{0, 0, 1};
         const Vec3 v = cross(ax, u);
         const int seg = 24, ring = 6;
@@ -792,7 +883,14 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                 VisBuilder::tri(m, a, c2, d);
                 VisBuilder::tri(m, a, d, b);
             }
-        vb.box("trim", c - ax * 0.05, {0.04, 0.04, 0.04}, bodyNodes);  // hub
+        vb.box("interior", c, {0.026, 0.047, 0.075}, bodyNodes, ax, v, u, true);
+        vb.box("trim", c - ax * 0.012, {0.014, 0.018, 0.16}, bodyNodes, ax, v, u, true);
+        vb.box("trim", c - ax * 0.012 - v * 0.084, {0.013, 0.084, 0.020}, bodyNodes, ax, v, u, true);
+        vb.box("chrome", c + ax * 0.027, {0.002, 0.011, 0.014}, bodyNodes, ax, v, u, true);
+        for (real side : {-1.0, 1.0}) {
+            vb.box("chrome", c + ax * 0.005 + u * (side * 0.113), {0.006, 0.011, 0.030}, bodyNodes, ax, v, u, true);
+            vb.box("seam", c + ax * 0.015 + u * (side * 0.112), {0.004, 0.008, 0.015}, bodyNodes, ax, v, u, true);
+        }
     }
 
     // ---- exhaust
@@ -877,13 +975,13 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
     for (MeshSurface& m : vis.skinned) computeNormals(m.positions, m.indices, m.normals);
 
     // ---- wheels
-    vis.wheelFront = buildWheelMeshes(build.def.tires);
+    vis.wheelFront = buildWheelMeshes(build.def.tires, bd.style);
     vis.wheelRear = vis.wheelFront;
 
     // ---- camera anchors
     {
-        const real ex = prof.xB + 0.20;
-        const real ey = std::min(bd.beltHeight + 0.26, prof.yRoofRail(ex) - 0.11);
+        const real ex = prof.xB + 0.12;
+        const real ey = std::min(bd.beltHeight + 0.29, prof.yRoofRail(ex) - 0.10);
         vis.driverEye = vb.skinNearest({ex, ey, -0.36}, bodyNodes);
         vis.chaseTarget = vb.skinNearest({0.5 * (prof.xFA + prof.xRA), 0.5 * bd.height + 0.2, 0.0}, bodyNodes);
     }

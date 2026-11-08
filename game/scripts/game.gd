@@ -6,6 +6,13 @@ const AIDriver := preload("res://scripts/ai_driver.gd")
 const CameraRig := preload("res://scripts/camera_rig.gd")
 const Hud := preload("res://scripts/hud.gd")
 const VehicleAudio := preload("res://scripts/vehicle_audio.gd")
+const Minimap := preload("res://scripts/minimap.gd")
+const RoadSurface := preload("res://scripts/road_surface.gd")
+const RoadMarks := preload("res://scripts/road_marks.gd")
+const DrivingActivity := preload("res://scripts/driving_activity.gd")
+var activity: DrivingActivity
+var surfaces := RoadSurface.new()
+var road_marks: RoadMarks
 
 var world: SBWorld
 var map_data: Dictionary
@@ -14,23 +21,35 @@ var ai: Dictionary = {}            # SBVehicle -> AIDriver
 var player: SBVehicle
 var cam: Camera3D
 var hud: Control
+var minimap: Minimap
+var _paused_before_map := false
+var _paused_before_menu := false
 var audio: Node
 var pause_menu: Control
+var _loading_overlay: CanvasLayer
 var _reverse_hold := 0.0
 var _time_scales := [1.0, 0.5, 0.25, 0.1]
 var _time_idx := 0
 
 
 func _ready() -> void:
+	if DisplayServer.get_name() != "headless":
+		_show_loading_screen()
+		await RenderingServer.frame_post_draw
 	_build_environment()
+	_apply_graphics()
+	Game.graphics_preset_changed.connect(_apply_graphics)
 	world = SBWorld.new()
 	world.name = "SBWorld"
+	world.paused = true
 	world.material_library = Game.make_material_library()
 	add_child(world)
 	var maproot := Node3D.new()
 	maproot.name = "Map"
 	add_child(maproot)
 	match Game.selected_map:
+		"offroad":
+			map_data = preload("res://scripts/maps/offroad.gd").build(world, maproot)
 		"hill_roads":
 			map_data = MapBuilder.build_hill_roads(world, maproot)
 		"desert":
@@ -42,6 +61,10 @@ func _ready() -> void:
 		_:
 			map_data = MapBuilder.build_proving_grounds(world, maproot)
 	_apply_map_environment(map_data.get("environment", {}))
+	surfaces.configure(Game.selected_map, map_data)
+	road_marks = RoadMarks.new()
+	road_marks.world = world
+	add_child(road_marks)
 
 	player = Game.spawn_vehicle(world, Game.selected_car, map_data["spawns"][0])
 	if player == null:
@@ -73,12 +96,74 @@ func _ready() -> void:
 	hud.world = world
 	ui.add_child(hud)
 	hud.show_help = Game.settings["show_help"]
+	Game.driving_help_changed.connect(hud.set_driving_help)
+	minimap = Minimap.new()
+	ui.add_child(minimap)
+	var map_title: String = Game.selected_map
+	for entry in Game.MAPS:
+		if entry["id"] == Game.selected_map:
+			map_title = entry["name"]
+			break
+	minimap.configure(map_data, vehicles, map_title)
 	audio = VehicleAudio.new()
+	audio.world = world
+	audio.dirt = Game.selected_map == "desert"
 	add_child(audio)
+	audio.set_process(false)
+	world.sync_visuals()
+	activity = DrivingActivity.new()
+	activity.world = world
+	add_child(activity)
+	activity.configure(Game.selected_map, map_data)
+	hud.activity = activity
+	minimap.activity = activity
+	for v in vehicles:
+		_configure_effects(v)
 	_set_player(player)
 	_build_pause_menu(ui)
-	await get_tree().process_frame
 	cam.snap()
+	if _loading_overlay:
+		await _warm_up_rendering()
+		_loading_overlay.queue_free()
+		_loading_overlay = null
+	audio.set_process(true)
+	world.paused = false
+
+
+func _show_loading_screen() -> void:
+	_loading_overlay = CanvasLayer.new()
+	_loading_overlay.layer = 10
+	add_child(_loading_overlay)
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.06, 0.07, 0.08)
+	_loading_overlay.add_child(backdrop)
+	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var caption := Label.new()
+	caption.text = "Karte wird geladen …"
+	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	caption.add_theme_font_size_override("font_size", 28)
+	backdrop.add_child(caption)
+	caption.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+
+func _warm_up_rendering() -> void:
+	# Draw the spawn view and HUD behind the cover while Godot prepares their pipelines.
+	var deadline := Time.get_ticks_msec() + 4000
+	var quiet_since := Time.get_ticks_msec()
+	var previous := -1
+	var frames := 0
+	while Time.get_ticks_msec() < deadline:
+		await RenderingServer.frame_post_draw
+		var now := Time.get_ticks_msec()
+		var compiled := RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW)
+		compiled += RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_SPECIALIZATION)
+		if compiled != previous:
+			previous = compiled
+			quiet_since = now
+		frames += 1
+		if frames >= 4 and now - quiet_since >= 300:
+			break
 
 
 var _env: Environment
@@ -125,8 +210,6 @@ func _build_environment() -> void:
 	e.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	e.tonemap_white = 6.0
-	e.ssao_enabled = true
-	e.glow_enabled = true
 	e.glow_intensity = 0.4
 	e.fog_enabled = true
 	e.fog_light_color = Color(0.7, 0.76, 0.85)
@@ -136,10 +219,13 @@ func _build_environment() -> void:
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-42, -35, 0)
 	sun.light_energy = 1.25
-	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 180.0
 	add_child(sun)
 	_sun = sun
+
+
+func _apply_graphics() -> void:
+	Game.apply_environment_graphics(_env, _sun)
 
 
 func _apply_settings(v: SBVehicle) -> void:
@@ -149,19 +235,23 @@ func _apply_settings(v: SBVehicle) -> void:
 
 
 func _set_player(v: SBVehicle) -> void:
+	if activity:
+		activity.cancel("")
+		activity.vehicle = v
+		activity._read_best()
 	player = v
 	cam.target = v
 	hud.vehicle = v
+	minimap.player = v
 	hud.info = v.get_info()
-	audio.vehicle = v
-	audio.cylinders = int(hud.info.get("cylinders", 4))
-	audio.redline = float(hud.info.get("redline_rpm", 6500))
+	hud.in_dash_instruments = v.get_dashboard_transform() is Transform3D
+	audio.configure(v, int(hud.info.get("cylinders", 4)))
 	if ai.has(v):
 		ai.erase(v)
 
 
 func _process(delta: float) -> void:
-	if player == null or not is_instance_valid(player):
+	if _loading_overlay or player == null or not is_instance_valid(player):
 		return
 	if not pause_menu.visible:
 		_drive_player(delta)
@@ -171,12 +261,17 @@ func _process(delta: float) -> void:
 		var imp: float = v.take_impact()
 		if imp > 2.0 and v == player:
 			audio.impact(clampf(imp / 120.0, 0.05, 1.5))
+			activity.on_impact(imp)
 			cam.shake = maxf(cam.shake, clampf(imp / 150.0, 0.0, 1.0))
 	if map_data.has("waypoints") and player.get_position_ws().y < -30.0:
+		activity.cancel("Lauf abgebrochen: Fahrzeug zurückgesetzt")
 		player.reset_to(map_data["spawns"][0])
 
 
 func _drive_player(delta: float) -> void:
+	if activity and activity.active and activity.countdown > 0:
+		player.set_input(0, 1, 0, 1)
+		return
 	var t := player.get_telemetry()
 	var kmh := float(t["speed_kmh"])
 	var gear := int(t["gear"])
@@ -216,25 +311,63 @@ func _drive_player(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _loading_overlay or player == null:
+		return
+	if minimap.overview_open:
+		if event.is_action_pressed("menu") or event.is_action_pressed("map_overview"):
+			minimap.toggle_overview()
+			hud.show()
+			world.paused = _paused_before_map
+		return
 	if event.is_action_pressed("menu"):
 		_toggle_pause()
 		return
+	if event.is_action_pressed("toggle_help"):
+		Game.set_driving_help(not hud.show_help)
+		if hud.show_help:
+			hud.show_diagnostics = false
+		return
+	if event.is_action_pressed("toggle_diagnostics"):
+		hud.show_diagnostics = not hud.show_diagnostics
+		if hud.show_diagnostics:
+			Game.set_driving_help(false)
+		return
 	if pause_menu.visible:
 		return
-	if event.is_action_pressed("camera_next"):
+	if event.is_action_pressed("map_overview"):
+		_paused_before_map = world.paused
+		world.paused = true
+		hud.hide()
+		minimap.toggle_overview()
+	elif event.is_action_pressed("map_compact"):
+		minimap.toggle_compact()
+	elif event.is_action_pressed("camera_next"):
 		hud.camera_name = cam.cycle()
+		hud.cockpit = cam.mode == CameraRig.Mode.COCKPIT
+		minimap.cockpit = hud.cockpit
+		minimap._layout()
+		audio.cockpit = hud.cockpit
 		hud.toast("Kamera: " + hud.camera_name)
 	elif event.is_action_pressed("reset_vehicle"):
+		activity.cancel("Lauf abgebrochen: Zurücksetzen")
 		player.reset_to(map_data["spawns"][0])
 		cam.snap()
 		hud.toast("Fahrzeug zurückgesetzt")
 	elif event.is_action_pressed("repair_vehicle"):
+		activity.cancel("Lauf abgebrochen: Reparatur")
 		player.repair_in_place()
 		hud.toast("Fahrzeug repariert")
 	elif event.is_action_pressed("debug_view"):
 		var on := not player.get_debug_view()
 		player.set_debug_view(on)
 		hud.toast("Node-Beam-Ansicht " + ("an" if on else "aus"))
+	elif event.is_action_pressed("activity_next"):
+		activity.choose()
+		minimap._layout()
+		hud.toast(DrivingActivity.MODES[activity.mode])
+	elif event.is_action_pressed("activity_start"):
+		activity.start()
+		cam.snap()
 	elif event.is_action_pressed("toggle_tcs"):
 		player.set_tcs(not player.get_tcs())
 		hud.toast("Traktionskontrolle " + ("an" if player.get_tcs() else "aus"))
@@ -243,6 +376,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		hud.toast("ABS " + ("an" if player.get_abs() else "aus"))
 	elif event.is_action_pressed("toggle_gearbox"):
 		player.set_automatic(not player.is_automatic())
+		player.set_clutch(-1.0)
 		hud.toast("Getriebe: " + ("Automatik" if player.is_automatic() else "Manuell (Q/E, Shift = Kupplung)"))
 	elif event.is_action_pressed("shift_up"):
 		player.shift_up()
@@ -280,17 +414,20 @@ func _unhandled_input(event: InputEvent) -> void:
 		if v:
 			v.set_input(0, 1, 0, 1)
 			vehicles.append(v)
+			_configure_effects(v)
 			hud.toast("Hindernis-Fahrzeug abgestellt")
-	elif event.is_action_pressed("toggle_help"):
-		hud.show_help = not hud.show_help
-		Game.settings["show_help"] = hud.show_help
 
 
 func _build_pause_menu(ui: CanvasLayer) -> void:
 	pause_menu = PanelContainer.new()
+	# Share the garage palette and button states with the in-game menu.
+	var palette := preload("res://scripts/main_menu.gd").new()
+	pause_menu.theme = palette._menu_theme()
+	pause_menu.add_theme_stylebox_override("panel", palette._box(Color("0b1820"), Color("29434b"), 18, 24))
+	palette.free()
 	pause_menu.set_anchors_preset(Control.PRESET_CENTER)
-	pause_menu.custom_minimum_size = Vector2(360, 300)
-	pause_menu.position = Vector2(-180, -150)
+	pause_menu.custom_minimum_size = Vector2(420, 450)
+	pause_menu.position = Vector2(-210, -225)
 	pause_menu.visible = false
 	ui.add_child(pause_menu)
 	var v := VBoxContainer.new()
@@ -309,11 +446,25 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 		b.add_theme_font_size_override("font_size", 20)
 		b.pressed.connect(entry[1])
 		v.add_child(b)
+	v.add_child(Game.make_graphics_options())
+	v.add_child(Game.make_driving_help_option())
+	v.add_child(Game.make_audio_options())
+
+
+func _configure_effects(v: SBVehicle) -> void:
+	var effects := v.get_node_or_null("VehicleEffects")
+	if effects:
+		effects.surfaces = surfaces
+		effects.marks = road_marks
 
 
 func _toggle_pause() -> void:
+	if not pause_menu.visible:
+		_paused_before_menu = world.paused
 	pause_menu.visible = not pause_menu.visible
-	world.paused = pause_menu.visible
+	world.paused = true if pause_menu.visible else _paused_before_menu
+	hud.visible = not pause_menu.visible
+	minimap.visible = not pause_menu.visible and minimap._compact_visible
 	if pause_menu.visible:
 		player.set_input(0, 0, 0, 0)
 		(pause_menu.get_child(0).get_child(1) as Button).grab_focus()

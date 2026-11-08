@@ -69,6 +69,7 @@ void World::integrateBody(SoftBody& b) {
 }
 
 std::size_t World::collideBody(SoftBody& b) {
+    b.clearContacts();
     if (colliders_.empty()) return 0;
     auto& pos = b.positions();
     auto& vel = b.velocities();
@@ -110,6 +111,7 @@ std::size_t World::collideBody(SoftBody& b) {
             //    then Coulomb friction as a velocity-level impulse bounded by mu * normal impulse.
             const real vn = dot(vel[i], n);
             if (vn < 0) {
+                b.addContact(i, n * (-vn / invMass[i]));
                 vel[i] -= n * (vn * (1.0 + c.restitution));
                 const real mu = friction[i] * c.friction;
                 const Vec3 vt = vel[i] - n * dot(vel[i], n);

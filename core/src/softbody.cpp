@@ -37,6 +37,7 @@ std::uint32_t SoftBody::addNode(const std::string& id, const Vec3& pos, const No
     pos_.push_back(pos);
     vel_.push_back({});
     force_.push_back({});
+    contactImpulse_.push_back({});
     mass_.push_back(p.mass);
     invMass_.push_back(p.fixed ? 0.0 : 1.0 / p.mass);
     friction_.push_back(p.friction);
@@ -150,6 +151,7 @@ void SoftBody::setSystems(const CarSystemsSpec& spec) {
 }
 
 void SoftBody::repair(const std::vector<Vec3>& restPositions) {
+    clearContacts();
     if (restPositions.size() == pos_.size()) pos_ = restPositions;
     for (auto& v : vel_) v = {};
     for (Beam& b : beams_) {
@@ -170,9 +172,7 @@ void SoftBody::repair(const std::vector<Vec3>& restPositions) {
         w.resetCondition(*this);
     }
     if (powertrain_) {
-        powertrain_->setCondition({});
-        powertrain_->setRunning(true);
-        powertrain_->setGear(1);
+        powertrain_->repair();
     }
     if (systems_) systems_->repair();
     smoothedSteer_ = 0;
@@ -456,9 +456,11 @@ void SoftBody::accumulateBeamForces(real dt) {
         const Vec3 dir = d / len;
         const real lenRate = dot(vel[bm.b] - vel[bm.a], dir);  // dL/dt
 
+        real hydroTravel = 0.0;
         if (bm.hydroInput >= 0) {
             const real in = inputs_[static_cast<std::size_t>(bm.hydroInput)];
-            bm.restLength = bm.baseRestLength * (1.0 + bm.hydroRatio * in) + bm.hydroOffset;
+            hydroTravel = bm.baseRestLength * bm.hydroRatio * in;
+            bm.restLength = bm.baseRestLength + hydroTravel + bm.hydroOffset;
         }
 
         real ext = len - bm.restLength;  // > 0: stretched
@@ -478,7 +480,9 @@ void SoftBody::accumulateBeamForces(real dt) {
         if (k > 0 && std::abs(fs) > bm.deformThreshold) {
             const real oldRest = bm.restLength;
             real newRest = fs > 0 ? len - bm.deformThreshold / k : len + bm.deformThreshold / k;
-            newRest = std::clamp(newRest, bm.minRest, bm.maxRest);
+            // Bound permanent deformation relative to the actuated length.
+            const real minRest = std::max<real>(0.0, bm.minRest + hydroTravel);
+            newRest = std::clamp(newRest, minRest, std::max(minRest, bm.maxRest + hydroTravel));
             const real delta = newRest - oldRest;
             bm.restLength = newRest;
             if (bm.hydroInput >= 0) bm.hydroOffset += delta;
@@ -559,6 +563,12 @@ VehicleTelemetry SoftBody::telemetry() const {
         t.engineRpm = powertrain_->engineRpm();
         t.gear = powertrain_->gear();
         t.clutch = powertrain_->clutchEngagement();
+        t.clutchTempC = powertrain_->clutchTemperature();
+        t.clutchWear = powertrain_->clutchWear();
+        t.gearboxDamage = powertrain_->gearboxDamage();
+        t.shiftRemaining = powertrain_->shiftRemaining();
+        t.clutchSlipRpm = powertrain_->clutchSlipRpm();
+        t.gearGrind = powertrain_->gearGrind();
     }
     t.throttle = controls_.throttle;
     t.brake = controls_.brake;
@@ -622,8 +632,7 @@ BodyStats SoftBody::stats() const {
     s.triangles = triangles_.size();
     for (const Beam& bm : beams_) {
         if (bm.broken) ++s.brokenBeams;
-        else if (std::abs(bm.restLength - bm.hydroOffset - bm.baseRestLength) > 1e-3 * bm.baseRestLength &&
-                 bm.hydroInput < 0)
+        else if (bm.plasticStrain() > 1e-3)
             ++s.deformedBeams;
     }
     for (const ColTri& tri : triangles_) {

@@ -39,6 +39,26 @@
 | `get_info() -> Dictionary` | Name, Motor, Leistung, Drehzahlbereich, Masse, … |
 | `get_position_ws()`, `get_forward()`, `get_right()`, `get_up()`, `get_velocity()`, `get_chase_target()`, `get_driver_eye()` | Für Kameras und KI |
 | `get_wheel_slip()`, `get_wheel_load()`, `take_impact()` | Für Audio (Reifenquietschen, Crash) und Kamerawackeln |
+| `get_effect_anchors()` | `wheels`, `radius`, `engine`, `exhaust`, dazu `contacts` und `normals` aus den tatsächlichen Reifenkontakten. Kontaktpunkte nur bei positiver Radlast verwenden |
+| `set_surface_grip(PackedFloat32Array)` | Vier Untergrundfaktoren, auf 0,35–1,2 begrenzt; wie Eingaben erst bei `pre_step` auf den Physik-Thread übernommen |
+| `puncture_tire(index, leak_psi_per_second)` | Fadenübergreifender einmaliger Druckverlust-Auftrag, Rad 0–3, Rate 0,1–100 PSI/s; keine direkte Änderung am Physik-Thread |
+
+Die Antriebstelemetrie enthält außerdem `clutch_temp` (°C), `clutch_wear` und
+`gearbox_damage` (0–1), `clutch_slip_rpm`, `shift_remaining` (s) und `gear_grind` (0–1).
+Schaltbefehle durchlaufen `Powertrain::step`, damit manuelle und automatische
+Schaltunterbrechungen in Physik, Diagnose und Audio übereinstimmen. Reparieren
+stellt auch Kupplung, Getriebe, Drehzahl und laufende Schalt-Timer zurück.
+
+`get_wheel_load()` ist ein geglätteter, auf 0–1 normierter Kontaktwert; die interne
+`PressureWheel::load` wird aus normalen Kontaktimpulsen in Newton berechnet.
+`get_wheel_slip()` misst die tangentiale Restgeschwindigkeit des belasteten Gummis
+nach dem Kontaktlöser. Das vermeidet den falschen Schlupf einer verformbaren Karkasse,
+der aus `Radwinkelgeschwindigkeit × Nennradius` entstehen würde.
+
+`road_surface.gd` teilt Grip, Audio und Partikeln dieselbe räumliche Klassifikation
+zu. Die Erkennung läuft auch für Fahrzeuge außerhalb der Partikel-Sichtweite.
+`road_marks.gd` verwendet einen Ringpuffer mit 1024 Instanzen und Simulationszeit.
+`driving_activity.gd` verwendet ebenfalls `sim_time`; die UI ist keine Rennuhr.
 
 ## Bauen
 

@@ -43,9 +43,7 @@ real CarSystems::beamGroupDamage(const SoftBody& body, const std::vector<std::ui
             ++broken;
             continue;
         }
-        if (b.baseRestLength <= 0.0) continue;
-        const real rel = std::abs(b.restLength - b.hydroOffset - b.baseRestLength) / b.baseRestLength;
-        sum += clamp01(rel / fullDeform);
+        sum += clamp01(b.plasticStrain() / fullDeform);
     }
     if (outBroken) *outBroken = broken;
     return clamp01(sum / static_cast<real>(beams.size()));

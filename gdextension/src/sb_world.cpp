@@ -59,18 +59,21 @@ void SBWorld::_exit_tree() {
 }
 
 void SBWorld::_process(double delta) {
-    (void)delta;
     if (Engine::get_singleton()->is_editor_hint()) return;
-    sync_visuals();
+    sync_visuals_with_delta(delta);
 }
 
 void SBWorld::sync_visuals() {
+    sync_visuals_with_delta(0.0);
+}
+
+void SBWorld::sync_visuals_with_delta(double delta) {
     // Snapshot every vehicle under one short lock, then rebuild meshes without holding it.
     {
         std::lock_guard<std::mutex> lock(mtx_);
         for (SBVehicle* v : vehicles_) v->sync_from_world();
     }
-    for (SBVehicle* v : vehicles_) v->update_visual();
+    for (SBVehicle* v : vehicles_) v->update_visual(delta);
 }
 
 void SBWorld::startThread() {

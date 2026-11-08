@@ -81,6 +81,10 @@ Koordinaten im Generator: `x` zeigt nach vorne (hintere Stoßstange bei 0), `y` 
   "forward": "+z",            // Modellachse, die nach vorne zeigt (+x, -x, +y, -y, +z, -z)
   "up": "+y",                 // Modellachse nach oben
   "fitLength": true,          // auf body.length skalieren (sonst "scale": 1.0)
+  "driverEye": [0.0, 0.93, 0.48],  // optionaler Cockpit-Kamerapunkt in lokalen Modellkoordinaten
+  "dashboard": [0.0, 0.77, 1.192], // Mitte der Anzeige in lokalen Modellkoordinaten
+  "steeringWheel": { "pivot": [0.0, 0.654, 0.934], "axis": [0.0, 0.38, -0.925],
+    "parts": ["InteriorSteeringWheel", "InteriorSteeringEmblem"] }, // Namenspräfixe beweglicher Teile
   "wheels": { "FL": "WheelFrontL", "FR": "WheelFrontR", "RL": "WheelRearL", "RR": "WheelRearR" },
   "hide": ["BrakePad", "Axles"],                  // Teile (Namens-Teilstrings), die entfallen
   "keepProcedural": ["chassis", "spring", "caliper"],  // eigene Teile, die sichtbar bleiben

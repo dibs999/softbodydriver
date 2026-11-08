@@ -25,6 +25,35 @@ Soft-Body-Fahrzeugsimulation als **native Desktop-App für Windows, macOS und Li
 
 ## Fahrzeuge
 
+### Fahrgefühl, Aktivitäten und Darstellung
+
+- Reifenlast und Schlupf werden an den tatsächlichen Bodenkontakten gemessen. Ein
+  frei drehendes Rad in der Luft erzeugt keinen Reifenrauch. Normales schnelles
+  Rollen wird nicht mit einem Burnout verwechselt.
+- Asphalt, Pflaster, Schotter, Sand und Gras beeinflussen Grip, Rollgeräusch und
+  Partikel gemeinsam. Drifts hinterlassen ausblendende Bremsspuren; Schotter wirft
+  kleine Steinchen auf. Rauch und Staub folgen Fahrtwind und einer leichten Brise.
+- Der Kestrel dient als Referenzwagen: zweifarbiger Innenraum, Lüftungsdüsen,
+  Türdetails und zusätzliches Live-Display für Kühlmittel, Kraftstoff und Verbrauch.
+  Die Minikarte rückt im Cockpit nach oben, damit die Instrumente frei bleiben.
+- `F3` wählt freie Fahrt, Zeitfahren oder eine 60-Sekunden-Drift-Challenge; in der
+  Stadt gibt es zusätzlich Lieferfahrten. `F4` stellt das Auto am Start auf bzw.
+  bricht den Lauf ab. Checkpoints und Ziele erscheinen in Welt und Minikarte.
+  Bestleistungen werden je Karte, Auto und Modus lokal gespeichert. Zurücksetzen,
+  Reparatur und Fahrzeugwechsel beenden einen laufenden Versuch. Pausen stoppen
+  die Uhr; Zeitlupe verwendet die tatsächliche Simulationszeit.
+- Die Stadt enthält befahrbare Werkstatthöfe, eine Altstadtgasse und eine Hochstraße
+  mit Unterführung, zusätzlich zu Parkdeck, Markt und Frachtterminal. Auf dem
+  Testgelände gibt es eine markierte 100-m-Bremsbahn und eine milde Bodenwellenreihe.
+- `F2` zeigt Fahrzeugzustand, mittlere/P95-Bildzeit, Zeichenaufrufe und Physiktempo.
+  Kleine Kartenobjekte werden räumlich gruppiert und in großer Entfernung ausgeblendet;
+  ihre Kollisionen bleiben aktiv. Partikel und Bremsspuren haben feste Speicherbudgets.
+- Jeder Motorsound verwendet jetzt eine zusammenhängende Fahrzeugaufnahme mit
+  getrennten Last-/Ruhebereichen. Der Vierzylinder besitzt echte Ausrollsegmente.
+  Die V6-Aufnahme deckt hohe Drehzahlen nicht direkt ab; diese werden transponiert.
+  Beim V8 ersetzt ein leiserer Aufnahmeabschnitt eine dedizierte Schubaufnahme.
+  Quellen und Lizenzen stehen im Hauptmenü und in [ASSET_CREDITS.md](game/ASSET_CREDITS.md).
+
 Jedes Auto ist eine Datendatei in `game/cars/*.car.json` mit realen Werten:
 
 - Abmessungen und Karosserieform: Länge, Breite, Höhe, Radstand, Überhänge, Spurweiten, Haubenlänge, Neigung von Front- und Heckscheibe, Dachlänge
@@ -72,12 +101,21 @@ So kommt ein eigenes Auto ins Spiel:
 | Ölwanne | Aufsetzen, Bordstein | Ölverlust → kein Öldruck → Lagerverschleiß → Motor fest |
 | Motorblock | Verformung bei schwerem Frontcrash | Leistungsverlust und mehr Reibung, bei Totalschaden fest |
 | Motorlager / Kardanwelle | Bruch | Kraftfluss unterbrochen |
+| Kupplung | Anhaltender Schlupf erzeugt Reibungswärme | Ab 180 °C sinkt das übertragbare Drehmoment, über 230 °C entsteht dauerhafter Verschleiß; vollständig verschlissen kein Vortrieb |
+| Getriebe | Wiederholte Schaltvorgänge unter Last ohne Auskuppeln, extreme Rückschaltungen oder Richtungswechsel | Schleifgeräusch, längere Schaltunterbrechung, Leistungsverlust bis zum Ausfall; Automatik schützt vor destruktiven Gangwechseln |
 | Tank | Beschädigung | Kraftstoffleck |
 | Bremsen | Scheibentemperatur | Fading ab ca. 450 °C |
 | Reifen | Rutschen erzeugt Wärme und Abrieb, Hitze erhöht den Luftdruck. Verbeulte Felge oder Flanke führt zu schleichendem Luftverlust | Weniger Grip bei kalten, überhitzten oder abgefahrenen Reifen. Platzen bei abgefahrener Lauffläche (Verschleiß 100 %) oder über 175 °C. Ein platter Reifen sackt sichtbar zusammen |
 | Fahrwerk | Verformung von Lenkern und Radträger | Schiefe Räder, Spur und Sturz verstellt |
 
 Weitere Systeme: Thermostat, elektrischer Lüfter, Fahrtwind am Kühler, Öltemperatur, Kraftstoffverbrauch nach spezifischem Verbrauch (BSFC), Abwürgen, Anlasser, Traktionskontrolle mit Motor- und Bremseingriff, ABS.
+
+Reifenrauch folgt dem tatsächlichen Radschlupf, auf der Wüstenkarte entsteht Staub.
+Ein heißer, beschädigter Kühler dampft; Motor- und Kupplungsschäden erzeugen Rauch.
+Platte Reifen haben eine verbreiterte, abgeflachte Aufstandsfläche und ein geschwindigkeitsabhängiges Schlaggeräusch.
+Die Partikelzahl ist begrenzt und im Grafikprofil „Leistung“ halbiert.
+Motorgeräusche verwenden aufbereitete echte Aufnahmen mit laufenden Drehzahlübergängen und der simulierten Schaltunterbrechung.
+Die Quellen stehen in [game/ASSET_CREDITS.md](game/ASSET_CREDITS.md).
 
 ## Spielen
 
@@ -123,14 +161,17 @@ Für exportierte Release-Builds zusätzlich `-DGODOTCPP_TARGET=template_release`
 | `J`, `P` | Zeitlupe (×0,5 / ×0,25 / ×0,1), Physik pausieren |
 | `Tab` | Fahrzeug wechseln |
 | `F6` | Hindernis-Auto vor dir abstellen |
-| `F1`, `Esc` | Hilfe, Pausenmenü |
+| `F1`, `F2`, `Esc` | Hilfe, Fahrzeugdiagnose, Pausenmenü |
+| `F3`, `F4` | Aktivität wählen, am Start aufstellen / Lauf abbrechen |
+| `N`, `K` | Minikarte ein/aus, Übersichtskarte |
 | Gamepad | RT/LT Gas/Bremse, linker Stick lenken, A Handbremse, LB/RB schalten, Y Kamera, B Reset |
 
 ### Karten
 
+- **Wald & Weide · Offroad**: etwa 1,5 × 1,5 km Gelände ohne Asphalt. 3,2-km-Feldwegrunde, schmaler Waldpfad, Höhenroute und optionaler Geröllpfad mit kleinen Felsstufen. Bauernhof, Holzlager, Aussichtspunkt und Weiden mit Heuballen. Minikarte und Zeitfahren sind integriert; auf dieser Karte gibt es keinen Straßenverkehr. Empfohlen: Basalt-SUV oder Kestrel Rallye. Die Grasnarbe und Fahrspuren sind festes Terrain, kein dynamisch verformbarer Schlamm.
 - **Testgelände**: Asphaltfläche mit Oval (KI-Verkehr), Sprungrampen, Bodenwellen, Schlaglochpiste, Leitplanken, Crash-Wand, Mast für Seitenaufprall, Slalom und Hügel
-- **Autobahn**: 6 km Ring mit 2×3 Spuren, Beton-Mittelleitplanke, Schutzplanken, Brücken, Schilderbrücken, Beleuchtung und Gegenverkehr
-- **Stadt**: Straßenraster mit echten Bordsteinkanten, Hochhäusern mit Fensterfassaden, Ampeln, Laternen, Park und Stadtverkehr
+- **Autobahn**: 8,5 km Ring mit 2×3 Spuren, Beton-Mittelleitplanke, Schutzplanken, Brücken, Schilderbrücken, Beleuchtung und Gegenverkehr
+- **Stadt**: Straßenraster mit Bordsteinkanten, Hochhäusern, Wohnviertel, Markt, Werkstatthöfen, Altstadtgasse, Hochstraße, Parkdeck und Frachtterminal
 - **Wüste**: 1 km² Dünen und Tafelberge, Schotterpiste mit Sprüngen, Felsbrocken und Kakteen
 - **Hügelland**: prozedurales Terrain mit kurviger Landstraße über Kuppen und durch Senken, dazu Wald
 
@@ -138,7 +179,10 @@ Statische Hindernisse laufen über eine Broadphase. Deshalb bremsen auch Karten 
 
 ### HUD
 
-Kombiinstrument mit Drehzahlmesser und Tacho als Rundinstrumente, dazu Digitaltempo, Gang und Getriebemodus, Tank- und Temperaturanzeige. Warnleuchten gibt es für Motor, Öldruck, Temperatur, Kühlmittel, Tank, Reifen, TCS, ABS und Handbremse. Daneben zeigen Panels Kühlwasser, Öl und Kraftstoff, die Reifen (Verschleiß, Temperatur, Luftdruck) und die Schäden in der Draufsicht.
+Kompakte Fahrdatenkarte mit Tempo, Drehzahl, Gang, Tank und Temperatur. Im Cockpit
+übernehmen die Instrumente diese Aufgabe. Warnungen geben konkrete Handlungshinweise;
+die ausführliche Diagnose für Motor, Kupplung, Getriebe und Reifen ist über `F2`
+ausblendbar. Hilfe: `F1`, Minikarte: `N`, Kartenübersicht: `K`.
 
 ## Entwicklung
 
@@ -149,6 +193,10 @@ ctest --test-dir build --output-on-failure                       # Unit-Tests (P
 ./build/apps/sbsim/cartest game/cars/aurora_sedan.car.json       # Prüfstand: Einfedern, 0-100, Bremsen, Kurve, Crash + Kühlsystem
 ./build/apps/sbsim/sbsim --list                                  # klassische Physik-Testszenen + Replay-Viewer (tools/make_viewer.py)
 godot --headless --path game -s res://tests/smoke_test.gd        # GDExtension-Smoke-Test
+godot --headless --path game -s res://tests/drivetrain_test.gd   # Antrieb, Schaden und Reparatur
+godot --headless --path game -s res://tests/activities_test.gd   # Checkpoints, Untergrund und Laufregeln
+godot --headless --path game -s res://tests/offroad_test.gd      # Offroad-Karte, Grip, Anstiege und Streckenanschlüsse
+godot --headless --path game -s res://tests/actions_test.gd      # Gameplay-Eingaben und Kamerawechsel
 ```
 
 Beispielausgabe des Prüfstands:
