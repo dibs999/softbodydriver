@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>SoftBodyDriver – 3D WebGL Soft-Body Simulator (2000 Hz · Blender 4.2 Models)</title>
+<title>SoftBodyDriver – 3D WebGL Soft-Body Simulator (2000 Hz · High-Res Blender 4.2 Models)</title>
 <script src="blender_models.js"></script>
 <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
 <style>
@@ -24,8 +24,8 @@
     font-size: 12px; overflow: hidden; user-select: none;
     -webkit-font-smoothing: antialiased;
   }
-  #gameWrap { position: relative; width: 100vw; height: 100vh; overflow: hidden; background: #1e293b; }
-  canvas#viewport { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  #gameWrap { position: relative; width: 100vw; height: 100vh; overflow: hidden; background: #1e293b; outline: none; }
+  canvas#viewport { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; outline: none; }
   canvas#viewport:active { cursor: grabbing; }
 
   .hud-panel {
@@ -52,7 +52,7 @@
     background: rgba(30, 41, 59, 0.9); color: var(--foreground);
     border: 1px solid var(--border); border-radius: 7px;
     padding: 5px 9px; font-size: 12px; font-weight: 500;
-    cursor: pointer; transition: all 0.12s ease;
+    cursor: pointer; transition: all 0.10s ease;
     display: inline-flex; align-items: center; gap: 5px;
   }
   .sbtn:hover { background: rgba(51, 65, 85, 0.95); border-color: #64748b; }
@@ -66,7 +66,7 @@
 
   .damage-app {
     position: absolute; bottom: 58px; left: 10px;
-    width: 230px; padding: 10px 12px; z-index: 15;
+    width: 235px; padding: 10px 12px; z-index: 15;
     display: flex; flex-direction: column; gap: 8px;
   }
   .app-title {
@@ -83,7 +83,7 @@
 
   .tacho-app {
     position: absolute; bottom: 58px; right: 10px;
-    width: 265px; padding: 10px 14px; z-index: 15;
+    width: 275px; padding: 10px 14px; z-index: 15;
     display: flex; flex-direction: column; gap: 8px;
   }
   .tacho-main { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -101,8 +101,8 @@
   }
   .rpm-bar-wrap { width: 100%; height: 8px; background: rgba(30, 41, 59, 0.9); border-radius: 4px; overflow: hidden; }
   .rpm-bar-fill { height: 100%; background: linear-gradient(90deg, #38bdf8 0%, #22c55e 55%, #f59e0b 80%, #ef4444 100%); width: 12%; transition: width 0.04s linear; }
-  .pedal-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; font-size: 12px; color: var(--muted); }
-  .pbar-bg { width: 100%; height: 5px; background: rgba(30, 41, 59, 0.9); border-radius: 3px; overflow: hidden; margin-top: 2px; }
+  .pedal-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; font-size: 11px; color: var(--muted); }
+  .pbar-bg { width: 100%; height: 5px; background: rgba(30, 41, 59, 0.9); border-radius: 3px; overflow: hidden; margin-top: 2px; position: relative; }
 
   .bottom-dock {
     position: absolute; bottom: 10px; left: 10px; right: 10px;
@@ -127,14 +127,14 @@
 </style>
 </head>
 <body>
-<div id="gameWrap">
-  <canvas id="viewport"></canvas>
+<div id="gameWrap" tabindex="0">
+  <canvas id="viewport" tabindex="0"></canvas>
 
   <!-- TOP BAR: Scenarios, Vehicles, AI & Tuning -->
   <div class="hud-panel topbar">
     <div class="brand">
       <span class="brand-logo">SoftBodyDriver 3D</span>
-      <span class="brand-sub">WebGL PBR · 3D-Flexbodies · 2000 Hz Physik</span>
+      <span class="brand-sub">Blender 4.2 High-Res · WebGL PBR · 2000 Hz Physik</span>
     </div>
 
     <div class="btn-group">
@@ -153,9 +153,9 @@
         <option value="offroad">🚙 Gavril Offroad 4x4 (AWD · Bullbar)</option>
       </select>
       <select id="aiMode" class="sselect" title="KI-Fahrzeug-Modus">
-        <option value="derby">🤖 KI: Verfolgung / Derby</option>
         <option value="cruise">🤖 KI: Rundkurs</option>
-        <option value="parked">🤖 KI: Crash-Dummy</option>
+        <option value="derby">🤖 KI: Verfolgung / Derby</option>
+        <option value="parked">🤖 KI: Geparkt (Crash-Ziel)</option>
       </select>
       <button id="btnTuning" class="sbtn">🔧 Tuning</button>
       <button id="btnAudio" class="sbtn">🔊 Sound</button>
@@ -219,7 +219,7 @@
     </div>
   </div>
 
-  <!-- BOTTOM-RIGHT: TACHO, RPM, PEDALS & G-METER -->
+  <!-- BOTTOM-RIGHT: TACHO, RPM, PEDALS, STEERING & G-METER -->
   <div class="hud-panel tacho-app">
     <div class="tacho-main">
       <div class="speed-box">
@@ -234,6 +234,10 @@
     </div>
     <div class="pedal-grid">
       <div>
+        <div style="display:flex;justify-content:space-between"><span>Lenk.</span><span id="hudSteer" class="stat-val">0°</span></div>
+        <div class="pbar-bg"><div id="barSteer" style="position:absolute;top:0;height:100%;background:#38bdf8;left:50%;width:0%"></div></div>
+      </div>
+      <div>
         <div style="display:flex;justify-content:space-between"><span>Gas</span><span id="hudThr" class="stat-val">0%</span></div>
         <div class="pbar-bg"><div id="barThr" style="height:100%;background:#22c55e;width:0%"></div></div>
       </div>
@@ -242,7 +246,7 @@
         <div class="pbar-bg"><div id="barBrk" style="height:100%;background:#ef4444;width:0%"></div></div>
       </div>
       <div>
-        <div style="display:flex;justify-content:space-between"><span>Handbr.</span><span id="hudHbk" class="stat-val">0%</span></div>
+        <div style="display:flex;justify-content:space-between"><span>Drift</span><span id="hudHbk" class="stat-val">0%</span></div>
         <div class="pbar-bg"><div id="barHbk" style="height:100%;background:#f59e0b;width:0%"></div></div>
       </div>
     </div>
@@ -251,14 +255,14 @@
   <!-- BOTTOM DOCK: Controls, Slow-Mo, Camera & View Modes -->
   <div class="hud-panel bottom-dock">
     <div class="btn-group">
-      <button id="padLeft" class="sbtn" title="Links lenken (A / ←)">◀</button>
-      <button id="padRight" class="sbtn" title="Rechts lenken (D / →)">▶</button>
-      <button id="padGas" class="sbtn" title="Gas geben (W / ↑)">⬆️ Gas</button>
-      <button id="padBrake" class="sbtn" title="Bremsen / Rückwärts (S / ↓)">⬇️ Bremse</button>
-      <button id="padDrift" class="sbtn" title="Handbremse (Leertaste)">🛑 Drift</button>
-      <button id="btnReset" class="sbtn" title="Fahrzeug zurücksetzen (R)">🔄 Reset <span class="kbd">R</span></button>
+      <button id="padLeft" class="sbtn" title="Links lenken (A / ←)">◀ <span class="kbd">A</span></button>
+      <button id="padRight" class="sbtn" title="Rechts lenken (D / →)">▶ <span class="kbd">D</span></button>
+      <button id="padGas" class="sbtn" title="Gas geben (W / ↑)">⬆️ Gas <span class="kbd">W</span></button>
+      <button id="padBrake" class="sbtn" title="Bremsen / Rückwärts (S / ↓)">⬇️ Bremse <span class="kbd">S</span></button>
+      <button id="padDrift" class="sbtn" title="Handbremse / Drift (Leertaste)">🛑 Drift</button>
+      <button id="btnReset" class="sbtn" title="Szene zurücksetzen (R)">🔄 Reset <span class="kbd">R</span></button>
       <button id="btnRepairHere" class="sbtn" title="Vor Ort reparieren (Shift+R)">🔧 Fix</button>
-      <button id="btnSwitchCar" class="sbtn" title="Zwischen Fahrzeug 1 & 2 wechseln (Tab)">🔀 Auto <span class="kbd">Tab</span></button>
+      <button id="btnSwitchCar" class="sbtn" title="Zwischen Fahrzeug 1 & 2 wechseln (Tab)">🔀 <span class="kbd">Tab</span></button>
     </div>
 
     <div class="btn-group">
@@ -279,7 +283,7 @@
 
 <script>
 // ============================================================================
-// SoftBodyDriver 3D – WebGL PBR-Style Renderer + Sculpted 3D Flexbodies + 2000Hz
+// SoftBodyDriver 3D – High-Res Blender 4.2 Models + WebGL PBR + 2000 Hz Physics
 // ============================================================================
 
 const DT = 1.0 / 2000.0;
@@ -298,20 +302,23 @@ const ZONE_WHEEL_RL = 5;
 const ZONE_WHEEL_RR = 6;
 
 const PRESETS = {
-  coupe:   { name: "ETK-S Coupé",     powerMult: 1.08, ridePrecomp: 1.04, springMult: 1.0, psi: 32, deformMult: 1.0, drive: "AWD", color: [0.08, 0.52, 0.96] },
-  muscle:  { name: "Bruckell V8",     powerMult: 1.48, ridePrecomp: 1.02, springMult: 0.92,psi: 30, deformMult: 0.9, drive: "RWD", color: [0.88, 0.16, 0.22] },
-  offroad: { name: "Gavril 4x4",      powerMult: 1.35, ridePrecomp: 1.18, springMult: 1.25,psi: 28, deformMult: 1.4, drive: "AWD", color: [0.08, 0.68, 0.42] },
+  coupe:   { name: "ETK-S Coupé",     powerMult: 1.15, ridePrecomp: 1.04, springMult: 1.05, psi: 32, deformMult: 1.0, drive: "AWD", color: [0.07, 0.48, 0.96] },
+  muscle:  { name: "Bruckell V8",     powerMult: 1.50, ridePrecomp: 1.02, springMult: 0.96, psi: 30, deformMult: 0.95,drive: "RWD", color: [0.88, 0.14, 0.20] },
+  offroad: { name: "Gavril 4x4",      powerMult: 1.38, ridePrecomp: 1.16, springMult: 1.25, psi: 28, deformMult: 1.35,drive: "AWD", color: [0.06, 0.66, 0.40] },
 };
 
 let currentPreset = "coupe";
 let currentScenario = "proving_grounds";
-let aiBehavior = "derby";
+let aiBehavior = "cruise";
 let timeScale = 1.0;
 let showFlexbody = true;
 let showBeams = false;
 let camMode = 0;
 const CAM_NAMES = ["Verfolger", "Cockpit", "Frei (Orbit)", "Action-Seite"];
 const tuning = { power: 1.0, ride: 1.05, spring: 1.0, psi: 32, deform: 1.0 };
+
+// Cache for bound high-res Blender 4.2 vehicle vertices so spawning is instantaneous
+const FLEX_BIND_CACHE = {};
 
 // ============================================================================
 // 1. 3D Math & Matrix Utilities
@@ -362,12 +369,12 @@ function mat4Multiply(a, b) {
 
 // ============================================================================
 // 2. Mesh Builder Helper (Produces Interleaved Pos(3), Norm(3), Col(4), Mat(2))
-//    Mat: [roughness/specType, metallic/clearcoat]
-//    specType: 0.0 = matte/terrain, 1.0 = metallic car paint, 2.0 = glass, 3.0 = emissive lamp, 4.0 = chrome/alloy
+//    specType: 0.0 = matte/terrain, 1.0 = metallic car paint, 2.0 = glass,
+//              3.0 = emissive lamp, 4.0 = chrome/alloy
 // ============================================================================
 class MeshBuilder {
   constructor() {
-    this.verts = []; // 12 floats per vertex: x,y,z, nx,ny,nz, r,g,b,a, matType,roughness
+    this.verts = [];
   }
 
   pushTri(p0, p1, p2, col, matType = 0.0, rough = 0.5, customNorms = null) {
@@ -412,24 +419,6 @@ class MeshBuilder {
     }
   }
 
-  addCylinderY(cx, y0, cz, rBottom, rTop, height, segs, col, matType = 0.0, rough = 0.5, capTop = true) {
-    const y1 = y0 + height;
-    for (let i = 0; i < segs; ++i) {
-      const a0 = (i / segs) * Math.PI * 2;
-      const a1 = ((i + 1) / segs) * Math.PI * 2;
-      const c0 = Math.cos(a0), s0 = Math.sin(a0);
-      const c1 = Math.cos(a1), s1 = Math.sin(a1);
-      const p00 = [cx + rBottom*c0, y0, cz + rBottom*s0];
-      const p10 = [cx + rBottom*c1, y0, cz + rBottom*s1];
-      const p11 = [cx + rTop*c1,    y1, cz + rTop*s1];
-      const p01 = [cx + rTop*c0,    y1, cz + rTop*s0];
-      this.pushQuad(p00, p01, p11, p10, col, matType, rough);
-      if (capTop && rTop > 0.005) {
-        this.pushTri([cx, y1, cz], p11, p01, col, matType, rough);
-      }
-    }
-  }
-
   addBlenderProp(propKey, cx, cy, cz, yaw = 0.0, scale = 1.0) {
     const bp = window.BLENDER_MODELS && window.BLENDER_MODELS.props && window.BLENDER_MODELS.props[propKey];
     if (!bp) return false;
@@ -440,16 +429,18 @@ class MeshBuilder {
       cy + pt[1] * scale,
       cz + (-s * pt[0] + c * pt[2]) * scale
     ];
-    const xnorm = (n) => [
-      c * n[0] + s * n[2],
-      n[1],
-      -s * n[0] + c * n[2]
-    ];
+    const xnorm = (pt) => {
+      if (pt.length >= 6) {
+        return [c * pt[3] + s * pt[5], pt[4], -s * pt[3] + c * pt[5]];
+      }
+      return [0, 1, 0];
+    };
     for (let i = 0; i < bp.tris.length; ++i) {
       const t = bp.tris[i];
-      const p0 = xform(v[t.a]), p1 = xform(v[t.b]), p2 = xform(v[t.c]);
-      const fn = xnorm(t.n);
-      this.pushTri(p0, p1, p2, t.col, t.type, t.rough, [fn, fn, fn]);
+      const va = v[t.a], vb = v[t.b], vc = v[t.c];
+      const p0 = xform(va), p1 = xform(vb), p2 = xform(vc);
+      const n0 = xnorm(va), n1 = xnorm(vb), n2 = xnorm(vc);
+      this.pushTri(p0, p1, p2, t.col, t.type, t.rough, [n0, n1, n2]);
     }
     return true;
   }
@@ -460,11 +451,11 @@ class MeshBuilder {
 }
 
 // ============================================================================
-// 3. World Environment & Detailed 3D Models for Everything (Blender 4.2 Assets)
+// 3. World Environment & Detailed 3D Models (Blender 4.2 Assets)
 // ============================================================================
 class WorldEnvironment {
   constructor() {
-    this.boxes = []; // Physical OBB colliders
+    this.boxes = [];
     this.staticMeshData = null;
     this.staticVertexCount = 0;
     this.setupProvingGrounds();
@@ -472,7 +463,6 @@ class WorldEnvironment {
 
   sampleTerrainHeight(x, z) {
     let h = 0.0;
-    // Rolling mountains & hills in the east (x > 26) and north/south outer ring
     if (x > 26.0) {
       const ramp = Math.min(1.0, (x - 26.0) / 8.0);
       const h1 = 2.4 * Math.exp(-((x - 45.0) ** 2) / 95.0 - ((z - 0.0) ** 2) / 180.0);
@@ -582,7 +572,7 @@ class WorldEnvironment {
 
     // B) 3D Stunt Launch Ramp & Landing Ramp
     const buildRampModel = (cx, cy, cz, hx, hy, hz, ang, isLaunch) => {
-      const rot = this.addBoxCollider(cx, cy, cz, hx, hy, hz, 0, 0, ang, 0.95, "ramp");
+      const rot = this.addBoxCollider(cx, cy, cz, hx, hy, hz, 0, 0, ang, 0.75, "ramp");
       mb.addBox(cx, cy, cz, hx, hy, hz, rot, [0.24, 0.27, 0.32, 1.0], 0.0, 0.5);
       mb.addBox(cx, cy + hy * 0.92, cz - hz + 0.12, hx, 0.14, 0.12, rot, [0.96, 0.60, 0.08, 1.0], 1.0, 0.3);
       mb.addBox(cx, cy + hy * 0.92, cz + hz - 0.12, hx, 0.14, 0.12, rot, [0.96, 0.60, 0.08, 1.0], 1.0, 0.3);
@@ -664,7 +654,7 @@ class WorldEnvironment {
 }
 
 // ============================================================================
-// 4. Sculpted High-Detail 3D Vehicle Model + Trilinear Flexbody Skinning
+// 4. High-Detail Blender 4.2 Vehicle + Soft-Body Physics + Anisotropic Tire Grip
 // ============================================================================
 class SoftBodyVehicle {
   constructor(name, colorRGB, presetKey = "coupe") {
@@ -710,7 +700,8 @@ class SoftBodyVehicle {
 
     this.colTris = [];
     this.wheels = [];
-    this.flexTris = []; // High-poly sculpted 3D car body triangles skinned to the physics nodes!
+    this.flexVerts = [];
+    this.flexTris = [];
 
     this.controls = { throttle: 0, brake: 0, steer: 0, handbrake: 0 };
     this.smoothedSteer = 0;
@@ -871,12 +862,12 @@ class SoftBodyVehicle {
           if (!cellIncluded(i, j, k+1)) addColQuad(i,j,k+1, i+1,j,k+1, i+1,j+1,k+1, i,j+1,k+1);
         }
 
-    // Build High-Detail Sculpted 3D Flexbody Mesh Bound to Chassis Nodes!
+    // Bind High-Detail Sculpted Blender 4.2 Flexbody Mesh to Chassis Nodes!
     this.buildSculptedFlexbody();
 
-    // 4 Independent Suspension Corners + PressureWheels
-    const mountCorner = (name, iF, iM, iR, kInner, zSign, steered, driven, handbraked, zone) => {
-      const xCenter = ox + iM * sx;
+    // 4 Independent Suspension Corners + PressureWheels + Correct Hydro Steering Linkage
+    const mountCorner = (name, iRear, iMid, iFront, kInner, zSign, steered, driven, handbraked, zone) => {
+      const xCenter = ox + iMid * sx;
       const yHub = oy;
       const zOut = zSign * 0.86;
       const zIn  = zSign * 0.64;
@@ -886,40 +877,50 @@ class SoftBodyVehicle {
       const hubRight = zSign > 0 ? hubOut : hubIn;
       const hubLeft  = zSign > 0 ? hubIn  : hubOut;
 
-      this.addBeam(hubLeft, hubRight, 3.8e5, 160, 5e4, 1.5e5, zone);
+      this.addBeam(hubLeft, hubRight, 3.8e5, 180, 7e4, 1.8e5, zone);
 
-      const nLowF = this.gridNode[gIdx(iF, 0, kInner)];
-      const nLowM = this.gridNode[gIdx(iM, 0, kInner)];
-      const nLowR = this.gridNode[gIdx(iR, 0, kInner)];
-      const nStrutTop = this.gridNode[gIdx(iM, 1, kInner)];
-      const nStrutF   = this.gridNode[gIdx(iF, 1, kInner)];
-      const nStrutR   = this.gridNode[gIdx(iR, 1, kInner)];
+      const nLowRear  = this.gridNode[gIdx(iRear,  0, kInner)];
+      const nLowMid   = this.gridNode[gIdx(iMid,   0, kInner)];
+      const nLowFront = this.gridNode[gIdx(iFront, 0, kInner)];
+      const nStrutTop = this.gridNode[gIdx(iMid,   1, kInner)];
+      const nStrutR   = this.gridNode[gIdx(iRear,  1, kInner)];
+      const nStrutF   = this.gridNode[gIdx(iFront, 1, kInner)];
 
+      // Vertical spring/damper strut + bump-stop support on both hub ends
       for (const h of [hubIn, hubOut]) {
-        this.addBeam(h, nLowF, 2.2e5, 130, 3.8e4, 1.1e5, zone);
-        this.addBeam(h, nLowR, 2.2e5, 130, 3.8e4, 1.1e5, zone);
-        this.addBeam(h, nStrutTop, 4.8e4 * sprMult, 2400, 6e4, 1.5e5, zone, BEAM_NORMAL, ridePre);
+        this.addBeam(h, nStrutTop, 5.2e4 * sprMult, 2500, 7e4, 1.8e5, zone, BEAM_NORMAL, ridePre);
         this.addBeam(h, nStrutTop, 2.6e5, 800, 9e4, 2e5, zone, BEAM_SUPPORT, 0.72);
       }
 
       if (steered) {
-        this.addBeam(hubIn, nLowM, 2.4e5, 130, 3.8e4, 1.1e5, zone);
-        this.addBeam(hubIn, nStrutF, 7.5e4, 140, 3.8e4, 1.1e5, zone);
-        this.addBeam(hubIn, nStrutR, 7.5e4, 140, 3.8e4, 1.1e5, zone);
+        // Inner hub (hubIn) acts as the kingpin ball-joint anchored to the lower wishbone
+        this.addBeam(hubIn, nLowRear,  2.5e5, 150, 5.5e4, 1.5e5, zone);
+        this.addBeam(hubIn, nLowMid,   2.5e5, 150, 5.5e4, 1.5e5, zone);
+        this.addBeam(hubIn, nLowFront, 2.5e5, 150, 5.5e4, 1.5e5, zone);
+        this.addBeam(hubIn, nStrutR,   8.5e4, 150, 5.5e4, 1.5e5, zone);
+        this.addBeam(hubIn, nStrutF,   8.5e4, 150, 5.5e4, 1.5e5, zone);
+
+        // Outer hub (hubOut) is controlled in X exclusively by the Hydro Steering Tie-Rods!
+        // When steering LEFT (steer > 0, toward -Z):
+        //   - Left wheel (zSign = -1): hubOut moves backward (-X, toward nLowRear)
+        //   - Right wheel (zSign = +1): hubOut moves forward (+X, toward nLowFront)
         const sign = zSign > 0 ? 1.0 : -1.0;
-        this.addBeam(hubOut, nLowF, 2.4e5, 220, 4.2e4, 1.2e5, zone, BEAM_HYDRO, 1.0, -0.14 * sign);
-        this.addBeam(hubOut, nLowR, 2.4e5, 220, 4.2e4, 1.2e5, zone, BEAM_HYDRO, 1.0, +0.14 * sign);
+        this.addBeam(hubOut, nLowRear,  2.6e5, 280, 7.5e4, 1.8e5, zone, BEAM_HYDRO, 1.0, +0.18 * sign);
+        this.addBeam(hubOut, nLowFront, 2.6e5, 280, 7.5e4, 1.8e5, zone, BEAM_HYDRO, 1.0, -0.18 * sign);
       } else {
+        // Rear non-steered axle: both hubIn and hubOut are rigidly triangulated to the wishbone
         for (const h of [hubIn, hubOut]) {
-          this.addBeam(h, nLowM, 2.2e5, 130, 3.8e4, 1.1e5, zone);
-          this.addBeam(h, nStrutF, 8.5e4, 140, 3.8e4, 1.1e5, zone);
-          this.addBeam(h, nStrutR, 8.5e4, 140, 3.8e4, 1.1e5, zone);
+          this.addBeam(h, nLowRear,  2.4e5, 150, 5.5e4, 1.5e5, zone);
+          this.addBeam(h, nLowMid,   2.4e5, 150, 5.5e4, 1.5e5, zone);
+          this.addBeam(h, nLowFront, 2.4e5, 150, 5.5e4, 1.5e5, zone);
+          this.addBeam(h, nStrutR,   8.5e4, 150, 5.5e4, 1.5e5, zone);
+          this.addBeam(h, nStrutF,   8.5e4, 150, 5.5e4, 1.5e5, zone);
         }
       }
 
       const numRays = 12;
       const radius = this.presetKey === "offroad" ? 0.36 : 0.32;
-      const width = 0.23;
+      const width = 0.24;
       const treadNodes = [];
       const beamIndices = [];
       const cX = xCenter, cY = yHub, cZ = 0.5 * (zOut + zIn);
@@ -931,7 +932,7 @@ class SoftBodyVehicle {
           const ang = (2 * Math.PI * r) / numRays;
           const tx = cX + radius * Math.cos(ang);
           const ty = cY + radius * Math.sin(ang);
-          treadNodes.push(this.addNode(tx, ty, zRing, tireNodeMass, 1.28));
+          treadNodes.push(this.addNode(tx, ty, zRing, tireNodeMass, 0.85));
         }
       }
 
@@ -939,24 +940,24 @@ class SoftBodyVehicle {
       for (let r = 0; r < numRays; ++r) {
         const r0 = nodeAt(0, r), r1 = nodeAt(0, r + 1);
         const l0 = nodeAt(1, r), l1 = nodeAt(1, r + 1);
-        beamIndices.push(this.addBeam(r0, hubRight, 9e4, 35, 2.8e4, 7.5e4, zone, BEAM_NORMAL, 1.01));
-        beamIndices.push(this.addBeam(r0, hubLeft,  9e4, 35, 2.8e4, 7.5e4, zone, BEAM_NORMAL, 1.01));
-        beamIndices.push(this.addBeam(l0, hubLeft,  9e4, 35, 2.8e4, 7.5e4, zone, BEAM_NORMAL, 1.01));
-        beamIndices.push(this.addBeam(l0, hubRight, 9e4, 35, 2.8e4, 7.5e4, zone, BEAM_NORMAL, 1.01));
+        beamIndices.push(this.addBeam(r0, hubRight, 1.05e5, 42, 3.5e4, 9.0e4, zone, BEAM_NORMAL, 1.01));
+        beamIndices.push(this.addBeam(r0, hubLeft,  1.05e5, 42, 3.5e4, 9.0e4, zone, BEAM_NORMAL, 1.01));
+        beamIndices.push(this.addBeam(l0, hubLeft,  1.05e5, 42, 3.5e4, 9.0e4, zone, BEAM_NORMAL, 1.01));
+        beamIndices.push(this.addBeam(l0, hubRight, 1.05e5, 42, 3.5e4, 9.0e4, zone, BEAM_NORMAL, 1.01));
 
-        beamIndices.push(this.addBeam(r0, r1, 1.2e5, 45, 3.2e4, 8e4, zone));
-        beamIndices.push(this.addBeam(l0, l1, 1.2e5, 45, 3.2e4, 8e4, zone));
-        beamIndices.push(this.addBeam(r0, l0, 1.2e5, 45, 3.2e4, 8e4, zone));
-        beamIndices.push(this.addBeam(r0, l1, 1.2e5, 45, 3.2e4, 8e4, zone));
-        beamIndices.push(this.addBeam(l0, r1, 1.2e5, 45, 3.2e4, 8e4, zone));
-        beamIndices.push(this.addBeam(r0, nodeAt(0, r + 2), 7.8e4, 30, 3.2e4, 8e4, zone));
-        beamIndices.push(this.addBeam(l0, nodeAt(1, r + 2), 7.8e4, 30, 3.2e4, 8e4, zone));
+        beamIndices.push(this.addBeam(r0, r1, 1.3e5, 48, 3.8e4, 9.5e4, zone));
+        beamIndices.push(this.addBeam(l0, l1, 1.3e5, 48, 3.8e4, 9.5e4, zone));
+        beamIndices.push(this.addBeam(r0, l0, 1.3e5, 48, 3.8e4, 9.5e4, zone));
+        beamIndices.push(this.addBeam(r0, l1, 1.3e5, 48, 3.8e4, 9.5e4, zone));
+        beamIndices.push(this.addBeam(l0, r1, 1.3e5, 48, 3.8e4, 9.5e4, zone));
+        beamIndices.push(this.addBeam(r0, nodeAt(0, r + 2), 8.5e4, 35, 3.8e4, 9.5e4, zone));
+        beamIndices.push(this.addBeam(l0, nodeAt(1, r + 2), 8.5e4, 35, 3.8e4, 9.5e4, zone));
       }
 
       this.wheels.push({
         name, hubR: hubRight, hubL: hubLeft, treadNodes, beamIndices,
         radius, width, numRays, steered, driven, braked: true, handbraked,
-        omega: 0, burst: false, zone, zSign
+        omega: 0, spinAngle: 0, grounded: false, burst: false, zone, zSign
       });
     };
 
@@ -967,23 +968,22 @@ class SoftBodyVehicle {
     mountCorner("RR", 1, 2, 3,  5, +1.0, false, true,  true,  ZONE_WHEEL_RR);
   }
 
-  // Bind any 3D rest-space point [x,y,z] to the 4 nearest chassis physics nodes with inverse-distance weights
-  bindVertex(x, y, z) {
+  bindVertex(x, y, z, nx = 0, ny = 1, nz = 0) {
     let i0 = 0, i1 = 1, i2 = 2, i3 = 3;
     let d0 = 1e9, d1 = 1e9, d2 = 1e9, d3 = 1e9;
     const n = this.chassisNodeCount;
     for (let i = 0; i < n; ++i) {
       const dx = x - this.restX[i], dy = y - this.restY[i], dz = z - this.restZ[i];
-      const d = Math.hypot(dx, dy, dz);
+      const d = dx*dx + dy*dy + dz*dz;
       if (d < d0) { d3=d2; i3=i2; d2=d1; i2=i1; d1=d0; i1=i0; d0=d; i0=i; }
       else if (d < d1) { d3=d2; i3=i2; d2=d1; i2=i1; d1=d; i1=i; }
       else if (d < d2) { d3=d2; i3=i2; d2=d; i2=i; }
       else if (d < d3) { d3=d; i3=i; }
     }
-    const w0 = 1.0 / (d0 + 0.04)**2;
-    const w1 = 1.0 / (d1 + 0.04)**2;
-    const w2 = 1.0 / (d2 + 0.04)**2;
-    const w3 = 1.0 / (d3 + 0.04)**2;
+    const w0 = 1.0 / (Math.sqrt(d0) + 0.04)**2;
+    const w1 = 1.0 / (Math.sqrt(d1) + 0.04)**2;
+    const w2 = 1.0 / (Math.sqrt(d2) + 0.04)**2;
+    const w3 = 1.0 / (Math.sqrt(d3) + 0.04)**2;
     const ws = w0 + w1 + w2 + w3;
     const nw0 = w0/ws, nw1 = w1/ws, nw2 = w2/ws, nw3 = w3/ws;
     const ax = nw0*this.restX[i0] + nw1*this.restX[i1] + nw2*this.restX[i2] + nw3*this.restX[i3];
@@ -992,14 +992,14 @@ class SoftBodyVehicle {
     return {
       idx: [i0, i1, i2, i3],
       w: [nw0, nw1, nw2, nw3],
-      off: [x - ax, y - ay, z - az]
+      off: [x - ax, y - ay, z - az],
+      restN: [nx, ny, nz]
     };
   }
 
   evalSkinned(bv, rotMat) {
     const [i0, i1, i2, i3] = bv.idx;
     const [w0, w1, w2, w3] = bv.w;
-    // Check if the supporting nodes have torn far apart
     const spanSq = (this.px[i0] - this.px[i1])**2 + (this.py[i0] - this.py[i1])**2 + (this.pz[i0] - this.pz[i1])**2;
     const ox = bv.off[0], oy = bv.off[1], oz = bv.off[2];
     const rx = rotMat[0]*ox + rotMat[1]*oy + rotMat[2]*oz;
@@ -1014,19 +1014,18 @@ class SoftBodyVehicle {
   }
 
   buildSculptedFlexbody() {
-    this.flexVerts = [];
-    this.flexTris = [];
-
     const bModel = window.BLENDER_MODELS && window.BLENDER_MODELS.vehicles && window.BLENDER_MODELS.vehicles[this.presetKey];
-    if (bModel) {
+    if (!bModel) return;
+    if (!FLEX_BIND_CACHE[this.presetKey]) {
+      const bound = new Array(bModel.verts.length);
       for (let i = 0; i < bModel.verts.length; ++i) {
         const v = bModel.verts[i];
-        this.flexVerts.push(this.bindVertex(v[0], v[1], v[2]));
+        bound[i] = this.bindVertex(v[0], v[1], v[2], v[3] || 0, v[4] || 1, v[5] || 0);
       }
-      for (let i = 0; i < bModel.tris.length; ++i) {
-        this.flexTris.push(bModel.tris[i]);
-      }
+      FLEX_BIND_CACHE[this.presetKey] = bound;
     }
+    this.flexVerts = FLEX_BIND_CACHE[this.presetKey];
+    this.flexTris  = bModel.tris;
   }
 
   translate(dx, dy, dz) {
@@ -1059,6 +1058,7 @@ class SoftBodyVehicle {
       const al = Math.hypot(ax, ay, az) || 1;
       ax /= al; ay /= al; az /= al;
       const omega = speed / w.radius;
+      w.omega = omega;
       for (const idx of w.treadNodes) {
         const rx = this.px[idx] - cx, ry = this.py[idx] - cy, rz = this.pz[idx] - cz;
         this.vx[idx] += (ay * rz - az * ry) * omega;
@@ -1079,7 +1079,6 @@ class SoftBodyVehicle {
     return [x * inv, y * inv, z * inv];
   }
 
-  // Estimate current 3x3 orientation basis of the chassis for normal/offset transformation
   chassisBasis() {
     const nRear = Math.min(this.chassisNodeCount - 1, 55);
     const nFront = Math.min(this.chassisNodeCount - 1, 165);
@@ -1089,7 +1088,6 @@ class SoftBodyVehicle {
     const fl = Math.hypot(fx, fy, fz) || 1;
     fx /= fl; fy /= fl; fz /= fl;
 
-    // Approximate up = [0,1,0] orthogonalized
     let rx = -fz, ry = 0, rz = fx;
     const rl = Math.hypot(rx, ry, rz) || 1;
     rx /= rl; rz /= rl;
@@ -1126,7 +1124,7 @@ class SoftBodyVehicle {
     }
 
     const targetSteer = Math.max(-1, Math.min(1, this.controls.steer));
-    const maxDelta = 4.2 * dt;
+    const maxDelta = 5.5 * dt;
     this.smoothedSteer += Math.max(-maxDelta, Math.min(maxDelta, targetSteer - this.smoothedSteer));
 
     const nb = this.beamCount;
@@ -1169,7 +1167,7 @@ class SoftBodyVehicle {
       if (Math.abs(fs) > this.bStrength[i]) {
         this.bBroken[i] = 1;
         this.impactImpulse = Math.max(this.impactImpulse, 1.5);
-        this.sparkPos = [0.5*(this.px[a]+this.px[b]), 0.5*(this.py[a]+this.py[b]), 0.5*(this.pz[a]+this.pz[b])];
+        this.sparkPos = [0.5*(this.px[a]+this.px[b]), 0.5*(this.py[a]+this.px[b]), 0.5*(this.pz[a]+this.pz[b])];
         continue;
       }
 
@@ -1182,7 +1180,7 @@ class SoftBodyVehicle {
       this.fx[b] -= fx; this.fy[b] -= fy; this.fz[b] -= fz;
     }
 
-    this.stepDrivetrain(dt);
+    this.stepDrivetrain(dt, env);
 
     for (let i = 0; i < n; ++i) {
       const im = this.invMass[i];
@@ -1206,11 +1204,13 @@ class SoftBodyVehicle {
           this.vx[i] -= nx * vn;
           this.vy[i] -= ny * vn;
           this.vz[i] -= nz * vn;
+          // Chassis nodes use standard Coulomb friction; tire nodes use anisotropic tire physics in stepDrivetrain
+          const mu = (i < this.chassisNodeCount) ? this.friction[i] : 0.22;
           const vtx = this.vx[i] - nx * (this.vx[i]*nx + this.vy[i]*ny + this.vz[i]*nz);
           const vty = this.vy[i] - ny * (this.vx[i]*nx + this.vy[i]*ny + this.vz[i]*nz);
           const vtz = this.vz[i] - nz * (this.vx[i]*nx + this.vy[i]*ny + this.vz[i]*nz);
           const vtLen = Math.hypot(vtx, vty, vtz);
-          const maxDv = this.friction[i] * (-vn);
+          const maxDv = mu * (-vn);
           if (vtLen <= maxDv) {
             this.vx[i] -= vtx; this.vy[i] -= vty; this.vz[i] -= vtz;
           } else if (vtLen > 1e-8) {
@@ -1249,7 +1249,7 @@ class SoftBodyVehicle {
         const vn = this.vx[i]*nx + this.vy[i]*ny + this.vz[i]*nz;
         if (vn < 0) {
           this.vx[i] -= nx * vn; this.vy[i] -= ny * vn; this.vz[i] -= nz * vn;
-          const mu = this.friction[i] * bx.friction;
+          const mu = (i < this.chassisNodeCount ? this.friction[i] : 0.18) * bx.friction;
           const vtLen = Math.hypot(this.vx[i], this.vy[i], this.vz[i]);
           const maxDv = mu * (-vn);
           if (vtLen > 1e-8) {
@@ -1261,10 +1261,19 @@ class SoftBodyVehicle {
     }
   }
 
-  stepDrivetrain(dt) {
+  stepDrivetrain(dt, env) {
     const pr = PRESETS[this.presetKey] || PRESETS.coupe;
     const pMult = pr.powerMult * tuning.power;
     const psiVal = tuning.psi;
+
+    // Chassis horizontal forward & right basis vectors
+    const [cfx_raw, , cfz_raw] = this.forwardDir();
+    const cfl = Math.hypot(cfx_raw, cfz_raw) || 1.0;
+    const cfx = cfx_raw / cfl, cfz = cfz_raw / cfl;
+    const crx = -cfz, crz = cfx; // Right (+Z when facing +X)
+
+    const [carVx, , carVz] = this.velocityVec();
+    const vLongChassis = carVx * cfx + carVz * cfz;
 
     let drivenOmegaSum = 0, drivenCount = 0;
     for (const w of this.wheels) {
@@ -1285,8 +1294,10 @@ class SoftBodyVehicle {
       const al = Math.hypot(ax, ay, az) || 1;
       ax /= al; ay /= al; az /= al;
 
-      let num = 0, inertia = 0;
+      let num = 0, inertia = 0, groundedNodes = 0;
+      const thHub = env.sampleTerrainHeight(cx, cz);
       for (const idx of w.treadNodes) {
+        if (this.py[idx] <= thHub + 0.06) groundedNodes++;
         const rx = this.px[idx] - cx, ry = this.py[idx] - cy, rz = this.pz[idx] - cz;
         const d = rx*ax + ry*ay + rz*az;
         const prx = rx - ax*d, pry = ry - ay*d, prz = rz - az*d;
@@ -1296,49 +1307,71 @@ class SoftBodyVehicle {
         num += this.mass[idx] * (crx*ax + cry*ay + crz*az);
         inertia += this.mass[idx] * r2;
       }
+      w.grounded = groundedNodes > 0 || (cy - w.radius <= thHub + 0.06);
       w.omega = inertia > 1e-5 ? num / inertia : 0;
+      w.spinAngle = (w.spinAngle + w.omega * dt) % (Math.PI * 2);
       w._inertia = inertia;
       w._axis = [ax, ay, az];
       w._center = [cx, cy, cz];
+      w._vel = [vcx, vcy, vcz];
       if (w.driven) { drivenOmegaSum += w.omega; ++drivenCount; }
     }
 
     const avgOmega = drivenCount > 0 ? drivenOmegaSum / drivenCount : 0;
-    const gears = [-3.2, 0.0, 3.5, 2.15, 1.48, 1.12, 0.88];
+    const gears = [-3.4, 0.0, 3.6, 2.20, 1.52, 1.15, 0.90];
     this.shiftTimer = Math.max(0, this.shiftTimer - dt);
 
-    let thr = this.controls.throttle;
-    let brk = this.controls.brake;
-    if (this.gear >= 1 && brk > 0.5 && thr < 0.1 && avgOmega < 1.8) {
-      this.gear = -1;
-    } else if (this.gear === -1 && thr > 0.5 && avgOmega > -1.8) {
-      this.gear = 1;
-    }
-    if (this.gear === -1 && brk > 0.05 && thr < 0.05) {
-      thr = brk; brk = 0;
+    // Intuitive Automatic Forward / Brake / Reverse Logic:
+    // - W (throttle > 0): if rolling backward (vLong < -0.9 m/s), brake first; otherwise shift to forward gear (1..5) and accelerate!
+    // - S (brake > 0): if moving forward (vLong > +0.9 m/s), brake; once below 0.9 m/s, shift to Reverse (-1) and drive backward!
+    const rawGas = this.controls.throttle;
+    const rawBrk = this.controls.brake;
+    let thr = 0.0, brk = 0.0;
+
+    if (rawGas > 0.05 && rawBrk < 0.05) {
+      if (vLongChassis < -0.9) {
+        brk = rawGas; thr = 0.0;
+      } else {
+        if (this.gear < 1) this.gear = 1;
+        thr = rawGas; brk = 0.0;
+      }
+    } else if (rawBrk > 0.05 && rawGas < 0.05) {
+      if (vLongChassis > 0.9) {
+        brk = rawBrk; thr = 0.0;
+      } else {
+        this.gear = -1;
+        thr = rawBrk; brk = 0.0;
+      }
+    } else {
+      thr = rawGas;
+      brk = rawBrk;
     }
 
     if (this.gear >= 1 && this.shiftTimer <= 0) {
-      if (this.engineRpm > 6100 && this.gear < 5) { this.gear++; this.shiftTimer = 0.25; }
-      else if (this.engineRpm < 2350 && this.gear > 1) { this.gear--; this.shiftTimer = 0.25; }
+      if (this.engineRpm > 6100 && this.gear < 5) { this.gear++; this.shiftTimer = 0.22; }
+      else if (this.engineRpm < 2350 && this.gear > 1) { this.gear--; this.shiftTimer = 0.22; }
     }
 
     const gRatio = (this.gear === -1 ? gears[0] : gears[this.gear + 1]) * 3.9;
     const wheelEqRpm = Math.abs(avgOmega * gRatio) * (60 / (2 * Math.PI));
-    this.engineRpm = Math.max(850, Math.min(6800, 0.85 * wheelEqRpm + 0.15 * (850 + thr * 5600)));
+    this.engineRpm = Math.max(850, Math.min(6800, 0.82 * wheelEqRpm + 0.18 * (850 + thr * 5600)));
 
-    const peakTorque = 330.0 * pMult;
-    const engTorque = (this.shiftTimer > 0.12 ? 0 : thr * peakTorque) - (1 - thr) * 35.0;
+    const peakTorque = 380.0 * pMult;
+    const engTorque = (this.shiftTimer > 0.10 ? 0 : thr * peakTorque) - (1 - thr) * 28.0;
     const totalDriveTorque = (engTorque * gRatio * 0.92) / Math.max(1, drivenCount);
 
     const radialPressure = (!this.wheels.every(w => w.burst) && psiVal > 0) ? (psiVal * 5.6) : 0;
 
+    // Max steering angle = 32 degrees (0.56 rad) with Ackermann inner-wheel boost
+    const baseSteerAngle = this.smoothedSteer * 0.56;
+
     for (const w of this.wheels) {
       const [ax, ay, az] = w._axis;
       const [cx, cy, cz] = w._center;
+      const [vcx, , vcz] = w._vel;
       const inertia = w._inertia || 1;
       const dTorque = w.driven ? totalDriveTorque : 0;
-      const bTorqueMag = (w.braked ? brk * 2100 : 0) + (w.handbraked ? this.controls.handbrake * 2400 : 0);
+      const bTorqueMag = (w.braked ? brk * 2600 : 0) + (w.handbraked ? this.controls.handbrake * 3200 : 0);
       const maxStop = Math.abs(w.omega) * inertia / dt;
       const clampedBrk = Math.min(bTorqueMag, maxStop) * (w.omega > 0 ? -1 : (w.omega < 0 ? 1 : 0));
       const netTorque = dTorque + clampedBrk;
@@ -1362,6 +1395,64 @@ class SoftBodyVehicle {
       }
       this.fx[w.hubL] -= 0.5 * sfx; this.fy[w.hubL] -= 0.5 * sfy; this.fz[w.hubL] -= 0.5 * sfz;
       this.fx[w.hubR] -= 0.5 * sfx; this.fy[w.hubR] -= 0.5 * sfy; this.fz[w.hubR] -= 0.5 * sfz;
+
+      // Steered Wheel Heading & Anisotropic Tire Cornering / Road Traction Force
+      let wheelAngle = 0.0;
+      if (w.steered) {
+        const isInner = (baseSteerAngle > 0 && w.zSign < 0) || (baseSteerAngle < 0 && w.zSign > 0);
+        wheelAngle = baseSteerAngle * (isInner ? 1.08 : 0.94);
+      }
+      w._steerAngle = wheelAngle;
+
+      // Positive wheelAngle (steer > 0 = Left) rotates forward vector from +cf toward -cr (Left)
+      const ca = Math.cos(wheelAngle), sa = Math.sin(wheelAngle);
+      const wfx = cfx * ca - crx * sa;
+      const wfz = cfz * ca - crz * sa;
+      const wrx = cfx * sa + crx * ca;
+      const wrz = cfz * sa + crz * ca;
+      w._fwd = [wfx, 0, wfz];
+      w._right = [wrx, 0, wrz];
+
+      if (w.grounded && !w.burst) {
+        const vLat = vcx * wrx + vcz * wrz;
+        const vLong = vcx * wfx + vcz * wfz;
+
+        // Cornering stiffness & grip limit (reduced on rear axle during handbrake drift!)
+        const hbkSlip = (w.handbraked && this.controls.handbrake > 0.2) ? 0.28 : 1.0;
+        const maxLatForce = 3900.0 * hbkSlip;
+        const latStiff = 16500.0 * hbkSlip;
+        const fLat = -Math.max(-maxLatForce, Math.min(maxLatForce, vLat * latStiff));
+
+        // Direct longitudinal tire-road traction assist so acceleration, braking & reverse feel crisp
+        let fLong = 0.0;
+        if (w.driven && thr > 0.02 && this.shiftTimer <= 0.10) {
+          const dirSign = this.gear === -1 ? -1.0 : 1.0;
+          fLong += dirSign * thr * 2200.0 * pMult;
+        }
+        if (brk > 0.02) {
+          const brkForce = brk * 3400.0;
+          if (Math.abs(vLong) > 0.15) {
+            fLong -= Math.sign(vLong) * brkForce;
+          }
+        }
+        if (w.handbraked && this.controls.handbrake > 0.2 && Math.abs(vLong) > 0.15) {
+          fLong -= Math.sign(vLong) * this.controls.handbrake * 2800.0;
+        }
+
+        const totalFx = wrx * fLat + wfx * fLong;
+        const totalFz = wrz * fLat + wfz * fLong;
+
+        // Apply 65% to wheel hubs and 35% across tread nodes for authentic suspension roll & dive
+        this.fx[w.hubL] += 0.325 * totalFx;
+        this.fz[w.hubL] += 0.325 * totalFz;
+        this.fx[w.hubR] += 0.325 * totalFx;
+        this.fz[w.hubR] += 0.325 * totalFz;
+        const perTread = 0.35 / w.treadNodes.length;
+        for (const idx of w.treadNodes) {
+          this.fx[idx] += perTread * totalFx;
+          this.fz[idx] += perTread * totalFz;
+        }
+      }
     }
   }
 
@@ -1369,20 +1460,30 @@ class SoftBodyVehicle {
     const isBraking = this.controls.brake > 0.1 || this.controls.handbrake > 0.1;
     const alpha = showWire ? 0.42 : 1.0;
 
-    // 1) Evaluate all skinned Blender 4.2 vertices in current deformed state
+    // 1) Evaluate all 6,300+ skinned Blender 4.2 vertices in current deformed state
     const basis = this.chassisBasis();
-    const pos = new Array(this.flexVerts.length);
-    const torn = new Uint8Array(this.flexVerts.length);
-    for (let i = 0; i < this.flexVerts.length; ++i) {
-      const res = this.evalSkinned(this.flexVerts[i], basis);
+    const nVerts = this.flexVerts.length;
+    const pos = new Array(nVerts);
+    const torn = new Uint8Array(nVerts);
+    const restNormRot = new Array(nVerts);
+
+    for (let i = 0; i < nVerts; ++i) {
+      const bv = this.flexVerts[i];
+      const res = this.evalSkinned(bv, basis);
       pos[i] = [res[0], res[1], res[2]];
       torn[i] = res[3] ? 1 : 0;
+      const rn = bv.restN;
+      restNormRot[i] = [
+        basis[0]*rn[0] + basis[1]*rn[1] + basis[2]*rn[2],
+        basis[3]*rn[0] + basis[4]*rn[1] + basis[5]*rn[2],
+        basis[6]*rn[0] + basis[7]*rn[1] + basis[8]*rn[2]
+      ];
     }
 
-    // 2) Compute deformed normals over Blender's EdgeSplit-prepared vertices
-    const vnx = new Float32Array(this.flexVerts.length);
-    const vny = new Float32Array(this.flexVerts.length);
-    const vnz = new Float32Array(this.flexVerts.length);
+    // 2) Compute deformed geometric normals and blend with Blender's smooth EdgeSplit vertex normals
+    const vnx = new Float32Array(nVerts);
+    const vny = new Float32Array(nVerts);
+    const vnz = new Float32Array(nVerts);
 
     for (let ti = 0; ti < this.flexTris.length; ++ti) {
       const t = this.flexTris[ti];
@@ -1391,21 +1492,21 @@ class SoftBodyVehicle {
       const ux = p1[0]-p0[0], uy = p1[1]-p0[1], uz = p1[2]-p0[2];
       const vx = p2[0]-p0[0], vy = p2[1]-p0[1], vz = p2[2]-p0[2];
       let nx = uy*vz - uz*vy, ny = uz*vx - ux*vz, nz = ux*vy - uy*vx;
-      // Align with Blender's outward rest normal rotated by chassisBasis
       if (t.n) {
-        const rnx = basis[0]*t.n[0] + basis[1]*t.n[1] + basis[2]*t.n[2];
-        const rny = basis[3]*t.n[0] + basis[4]*t.n[1] + basis[5]*t.n[2];
-        const rnz = basis[6]*t.n[0] + basis[7]*t.n[1] + basis[8]*t.n[2];
-        if (nx*rnx + ny*rny + nz*rnz < 0) { nx = -nx; ny = -ny; nz = -nz; }
+        const fnx = basis[0]*t.n[0] + basis[1]*t.n[1] + basis[2]*t.n[2];
+        const fny = basis[3]*t.n[0] + basis[4]*t.n[1] + basis[5]*t.n[2];
+        const fnz = basis[6]*t.n[0] + basis[7]*t.n[1] + basis[8]*t.n[2];
+        if (nx*fnx + ny*fny + nz*fnz < 0) { nx = -nx; ny = -ny; nz = -nz; }
       }
       vnx[t.a] += nx; vny[t.a] += ny; vnz[t.a] += nz;
       vnx[t.b] += nx; vny[t.b] += ny; vnz[t.b] += nz;
       vnx[t.c] += nx; vny[t.c] += ny; vnz[t.c] += nz;
     }
-    const vNorm = new Array(this.flexVerts.length);
-    for (let i = 0; i < this.flexVerts.length; ++i) {
-      const l = Math.hypot(vnx[i], vny[i], vnz[i]) || 1;
-      vNorm[i] = [vnx[i]/l, vny[i]/l, vnz[i]/l];
+
+    const vNorm = new Array(nVerts);
+    for (let i = 0; i < nVerts; ++i) {
+      const gl = Math.hypot(vnx[i], vny[i], vnz[i]) || 1;
+      vNorm[i] = [vnx[i]/gl, vny[i]/gl, vnz[i]/gl];
     }
 
     for (let ti = 0; ti < this.flexTris.length; ++ti) {
@@ -1418,7 +1519,6 @@ class SoftBodyVehicle {
       } else if (t.type === 2.0) {
         col = [t.col[0], t.col[1], t.col[2], showWire ? 0.25 : t.col[3]];
       } else if (t.type === 3.0 && t.col[0] > 0.85 && t.col[1] < 0.3) {
-        // Taillight / Brake light
         col = isBraking ? [1.0, 0.14, 0.18, 1.0] : [0.72, 0.06, 0.10, 1.0];
         matType = isBraking ? 3.0 : 1.0;
       } else {
@@ -1427,52 +1527,116 @@ class SoftBodyVehicle {
       mb.pushTri(pos[t.a], pos[t.b], pos[t.c], col, matType, rough, [vNorm[t.a], vNorm[t.b], vNorm[t.c]]);
     }
 
-    // 3) 3D Tires, Sidewalls, 6-Spoke Metallic Alloy Rims & Red Brake Calipers
+    // 3) High-Resolution 24-Segment 3D Wheels:
+    //    Beveled Radial Tire + Tread Blocks + 10-Spoke Deep-Dish Alloy Rim + Brake Disc + Red Caliper
     for (const w of this.wheels) {
-      const N = w.numRays;
-      const hOut = w.zSign > 0 ? w.hubR : w.hubL;
-      const hIn  = w.zSign > 0 ? w.hubL : w.hubR;
-      const pOut = [this.px[hOut], this.py[hOut], this.pz[hOut]];
-      const pIn  = [this.px[hIn],  this.py[hIn],  this.pz[hIn]];
-      let ax = pOut[0] - pIn[0], ay = pOut[1] - pIn[1], az = pOut[2] - pIn[2];
-      const al = Math.hypot(ax, ay, az) || 1;
-      const outN = [ax/al, ay/al, az/al];
+      const cx = 0.5 * (this.px[w.hubL] + this.px[w.hubR]);
+      const cy = 0.5 * (this.py[w.hubL] + this.py[w.hubR]);
+      const cz = 0.5 * (this.pz[w.hubL] + this.pz[w.hubR]);
 
-      const ringOut = w.zSign > 0 ? 0 : 1;
-      const ringIn  = 1 - ringOut;
+      // Use the steered wheel basis so front wheels visibly turn +/-32 deg even at 0 km/h!
+      const wf = w._fwd || [basis[0], 0, basis[6]];
+      const wr = w._right || [basis[2], 0, basis[8]];
+      const outSign = w.zSign > 0 ? 1.0 : -1.0;
+      const outN = [wr[0] * outSign, 0, wr[2] * outSign];
+      const inN  = [-outN[0], 0, -outN[2]];
 
-      for (let r = 0; r < N; ++r) {
-        const r0 = w.treadNodes[ringOut * N + r];
-        const r1 = w.treadNodes[ringOut * N + ((r + 1) % N)];
-        const l0 = w.treadNodes[ringIn  * N + r];
-        const l1 = w.treadNodes[ringIn  * N + ((r + 1) % N)];
+      // Measure average live deformed radius from physics tread nodes
+      let avgRad = w.radius;
+      if (w.burst) {
+        avgRad = w.radius * 0.78;
+      } else {
+        let rSum = 0;
+        for (const idx of w.treadNodes) {
+          rSum += Math.hypot(this.px[idx] - cx, this.py[idx] - cy, this.pz[idx] - cz);
+        }
+        avgRad = Math.max(w.radius * 0.75, Math.min(w.radius * 1.12, rSum / w.treadNodes.length));
+      }
 
-        const pr0 = [this.px[r0], this.py[r0], this.pz[r0]];
-        const pr1 = [this.px[r1], this.py[r1], this.pz[r1]];
-        const pl0 = [this.px[l0], this.py[l0], this.pz[l0]];
-        const pl1 = [this.px[l1], this.py[l1], this.pz[l1]];
+      const segs = 24;
+      const halfW = w.width * 0.52;
+      const bevelW = halfW * 0.82;
+      const rTread = avgRad;
+      const rShoulder = avgRad * 0.94;
+      const rRim = avgRad * 0.62;
+      const rHub = avgRad * 0.16;
+      const spin = w.spinAngle || 0;
 
-        if ((pr1[0]-pr0[0])**2 + (pr1[1]-pr0[1])**2 + (pr1[2]-pr0[2])**2 > 0.22) continue;
+      const wPt = (ang, rad, latOffset) => {
+        const ca = Math.cos(ang), sa = Math.sin(ang);
+        return [
+          cx + wf[0] * (rad * ca) + outN[0] * latOffset,
+          cy + rad * sa,
+          cz + wf[2] * (rad * ca) + outN[2] * latOffset
+        ];
+      };
+      const wRadNorm = (ang, latTilt = 0.0) => {
+        const ca = Math.cos(ang), sa = Math.sin(ang);
+        const nx = wf[0] * ca + outN[0] * latTilt;
+        const ny = sa;
+        const nz = wf[2] * ca + outN[2] * latTilt;
+        const nl = Math.hypot(nx, ny, nz) || 1;
+        return [nx/nl, ny/nl, nz/nl];
+      };
 
-        let rnx = 0.5*(pr0[0]+pr1[0]) - pOut[0];
-        let rny = 0.5*(pr0[1]+pr1[1]) - pOut[1];
-        let rnz = 0.5*(pr0[2]+pr1[2]) - pOut[2];
-        const rl = Math.hypot(rnx, rny, rnz) || 1;
-        const radN = [rnx/rl, rny/rl, rnz/rl];
+      for (let s = 0; s < segs; ++s) {
+        const a0 = spin + (2 * Math.PI * s) / segs;
+        const a1 = spin + (2 * Math.PI * (s + 1)) / segs;
 
-        const treadCol = (r % 2 === 0) ? [0.11, 0.12, 0.14, 1.0] : [0.16, 0.17, 0.20, 1.0];
-        mb.pushTri(pr0, pr1, pl1, treadCol, 0.0, 0.85, [radN, radN, radN]);
-        mb.pushTri(pr0, pl1, pl0, treadCol, 0.0, 0.85, [radN, radN, radN]);
+        const n0 = wRadNorm(a0, 0.0), n1 = wRadNorm(a1, 0.0);
+        const nOut0 = wRadNorm(a0, 0.65), nOut1 = wRadNorm(a1, 0.65);
+        const nIn0  = wRadNorm(a0, -0.65), nIn1 = wRadNorm(a1, -0.65);
 
-        const rim0 = [pOut[0] + 0.58*(pr0[0]-pOut[0]), pOut[1] + 0.58*(pr0[1]-pOut[1]), pOut[2] + 0.58*(pr0[2]-pOut[2])];
-        const rim1 = [pOut[0] + 0.58*(pr1[0]-pOut[0]), pOut[1] + 0.58*(pr1[1]-pOut[1]), pOut[2] + 0.58*(pr1[2]-pOut[2])];
+        // Tread surface (with alternating 3D tread lug shading)
+        const treadCol = (s % 2 === 0) ? [0.10, 0.11, 0.13, 1.0] : [0.15, 0.16, 0.19, 1.0];
+        const tOut0 = wPt(a0, rTread,  bevelW), tOut1 = wPt(a1, rTread,  bevelW);
+        const tIn0  = wPt(a0, rTread, -bevelW), tIn1  = wPt(a1, rTread, -bevelW);
+        mb.pushTri(tOut0, tOut1, tIn1, treadCol, 0.0, 0.86, [n0, n1, n1]);
+        mb.pushTri(tOut0, tIn1,  tIn0, treadCol, 0.0, 0.86, [n0, n1, n0]);
 
-        mb.pushTri(rim0, rim1, pr1, [0.14, 0.15, 0.18, 1.0], 0.0, 0.78, [outN, outN, outN]);
-        mb.pushTri(rim0, pr1, pr0,  [0.14, 0.15, 0.18, 1.0], 0.0, 0.78, [outN, outN, outN]);
+        // Outer & Inner Rounded Tire Shoulders + Sidewalls
+        const shOut0 = wPt(a0, rShoulder,  halfW), shOut1 = wPt(a1, rShoulder,  halfW);
+        const shIn0  = wPt(a0, rShoulder, -halfW), shIn1  = wPt(a1, rShoulder, -halfW);
+        const rmOut0 = wPt(a0, rRim,  halfW * 0.92), rmOut1 = wPt(a1, rRim,  halfW * 0.92);
+        const rmIn0  = wPt(a0, rRim, -halfW * 0.92), rmIn1  = wPt(a1, rRim, -halfW * 0.92);
 
-        const isSpoke = (r % 2 === 0);
-        const rimCol = isSpoke ? [0.85, 0.88, 0.93, 1.0] : (r === 1 ? [0.90, 0.15, 0.18, 1.0] : [0.20, 0.22, 0.26, 1.0]);
-        mb.pushTri(pOut, rim0, rim1, rimCol, isSpoke ? 4.0 : 1.0, isSpoke ? 0.12 : 0.4, [outN, outN, outN]);
+        const swCol = [0.12, 0.13, 0.16, 1.0];
+        mb.pushTri(tOut0, shOut0, shOut1, swCol, 0.0, 0.78, [nOut0, nOut0, nOut1]);
+        mb.pushTri(tOut0, shOut1, tOut1,  swCol, 0.0, 0.78, [nOut0, nOut1, nOut1]);
+        mb.pushTri(shOut0, rmOut0, rmOut1, swCol, 0.0, 0.75, [outN, outN, outN]);
+        mb.pushTri(shOut0, rmOut1, shOut1, swCol, 0.0, 0.75, [outN, outN, outN]);
+
+        mb.pushTri(tIn1, shIn1, shIn0, swCol, 0.0, 0.78, [nIn1, nIn1, nIn0]);
+        mb.pushTri(tIn1, shIn0, tIn0,  swCol, 0.0, 0.78, [nIn1, nIn0, nIn0]);
+
+        // Inner Dark Wheel Barrel & Backing Plate
+        const hubBack = [cx - outN[0]*halfW*0.7, cy, cz - outN[2]*halfW*0.7];
+        mb.pushTri(hubBack, rmIn1, rmIn0, [0.06, 0.07, 0.09, 1.0], 0.0, 0.9, [inN, inN, inN]);
+
+        // Deep-Dish Metallic Rim Lip
+        const rLip = rRim * 0.88;
+        const lpOut0 = wPt(a0, rLip, halfW * 0.72), lpOut1 = wPt(a1, rLip, halfW * 0.72);
+        mb.pushTri(rmOut0, lpOut0, lpOut1, [0.86, 0.89, 0.94, 1.0], 4.0, 0.12, [outN, outN, outN]);
+        mb.pushTri(rmOut0, lpOut1, rmOut1, [0.86, 0.89, 0.94, 1.0], 4.0, 0.12, [outN, outN, outN]);
+
+        // Steel Brake Rotor Disc & Red Brembo Caliper behind the spokes
+        const rDisc = rRim * 0.70;
+        const dc0 = wPt(a0, rDisc, halfW * 0.42), dc1 = wPt(a1, rDisc, halfW * 0.42);
+        const dcCenter = [cx + outN[0]*halfW*0.42, cy, cz + outN[2]*halfW*0.42];
+        const isCaliper = (s >= 2 && s <= 5);
+        const discCol = isCaliper ? [0.92, 0.12, 0.15, 1.0] : [0.42, 0.45, 0.50, 1.0];
+        mb.pushTri(dcCenter, dc0, dc1, discCol, isCaliper ? 1.0 : 4.0, isCaliper ? 0.25 : 0.35, [outN, outN, outN]);
+
+        // 8 Twin-Spokes + Chrome Center Lug Cap
+        const hb0 = wPt(a0, rHub, halfW * 0.82), hb1 = wPt(a1, rHub, halfW * 0.82);
+        const capCenter = [cx + outN[0]*halfW*0.88, cy, cz + outN[2]*halfW*0.88];
+        mb.pushTri(capCenter, hb0, hb1, [0.90, 0.93, 0.97, 1.0], 4.0, 0.10, [outN, outN, outN]);
+
+        if (s % 2 === 0) {
+          const spkCol = this.presetKey === "muscle" ? [0.88, 0.90, 0.95, 1.0] : [0.78, 0.82, 0.88, 1.0];
+          mb.pushTri(hb0, lpOut0, lpOut1, spkCol, 4.0, 0.15, [outN, outN, outN]);
+          mb.pushTri(hb0, lpOut1, hb1,    spkCol, 4.0, 0.15, [outN, outN, outN]);
+        }
       }
     }
 
@@ -1600,7 +1764,7 @@ class ParticleSystem {
 const particles = new ParticleSystem();
 
 // ============================================================================
-// 7. WebGL 3D Hardware Renderer (PBR-Style Clearcoat Shader + Sky + Wireframe)
+// 7. WebGL 3D Hardware Renderer (Dual-Lobe Clearcoat PBR Shader + Sky + Wireframe)
 // ============================================================================
 class WebGLRenderer3D {
   constructor(canvas) {
@@ -1639,44 +1803,49 @@ class WebGLRenderer3D {
       void main() {
         vec3 N = normalize(vNorm);
         vec3 V = normalize(uEye - vWorldPos);
-        vec3 L = normalize(vec3(0.48, 0.78, 0.39));
+        vec3 L = normalize(vec3(0.45, 0.80, 0.38));
+        vec3 L2 = normalize(vec3(-0.55, 0.42, -0.50));
         vec3 H = normalize(L + V);
 
         float matType = vMat.x;
         float rough   = clamp(vMat.y, 0.04, 1.0);
 
-        // Emissive lights (Headlights, Brake lights, Reflectors)
+        // Emissive lights (Headlights, Brake lights, LED strips)
         if (matType > 2.5 && matType < 3.5) {
-          gl_FragColor = vec4(vCol.rgb * 1.25, vCol.a);
+          gl_FragColor = vec4(vCol.rgb * 1.28, vCol.a);
           return;
         }
 
-        // Hemisphere sky/ground ambient + directional sun diffuse
-        float ndl = max(dot(N, L), 0.0);
+        // Hemisphere sky/ground ambient + directional sun + fill light
+        float ndl  = max(dot(N, L), 0.0);
+        float ndl2 = max(dot(N, L2), 0.0);
         float hemi = 0.5 + 0.5 * N.y;
-        vec3 amb = mix(vec3(0.22, 0.25, 0.30), vec3(0.58, 0.68, 0.84), hemi);
-        vec3 color = vCol.rgb * (amb * 0.62 + vec3(1.02, 0.98, 0.90) * ndl * 0.78);
+        vec3 amb = mix(vec3(0.20, 0.23, 0.29), vec3(0.62, 0.72, 0.88), hemi);
+        vec3 color = vCol.rgb * (amb * 0.58 + vec3(1.04, 0.99, 0.92) * ndl * 0.78 + vec3(0.45, 0.55, 0.75) * ndl2 * 0.22);
 
-        // Blinn-Phong + Clearcoat Fresnel reflections for Car Paint (1.0), Glass (2.0), Chrome (4.0)
+        // Dual-Lobe Metallic Base + Clearcoat Fresnel Reflections for Paint (1.0), Glass (2.0), Chrome (4.0)
         float ndh = max(dot(N, H), 0.0);
         float ndv = max(dot(N, V), 0.0);
         float fresnel = pow(1.0 - ndv, 4.0);
 
         if (matType > 0.5) {
-          float shininess = mix(128.0, 14.0, rough);
-          float spec = pow(ndh, shininess) * (1.2 - rough * 0.7);
-          vec3 envSky = mix(vec3(0.45, 0.58, 0.78), vec3(0.85, 0.92, 1.0), max( reflect(-V, N).y, 0.0 ));
-          float envFactor = (matType > 1.5 && matType < 2.5) ? (0.35 + 0.55 * fresnel) : (0.14 + 0.38 * fresnel);
-          color = mix(color, envSky, envFactor) + vec3(1.0, 0.98, 0.94) * spec;
+          float baseShine = mix(64.0, 12.0, rough);
+          float specBase  = pow(ndh, baseShine) * (0.65 - rough * 0.35);
+          float clearcoat = pow(ndh, 220.0) * 0.85;
+          vec3 R = reflect(-V, N);
+          vec3 envSky = mix(vec3(0.28, 0.36, 0.48), mix(vec3(0.66, 0.80, 0.95), vec3(0.22, 0.46, 0.82), clamp(R.y, 0.0, 1.0)), step(-0.05, R.y));
+          float envFactor = (matType > 1.5 && matType < 2.5)
+            ? (0.42 + 0.52 * fresnel)
+            : (matType > 3.5 ? (0.48 + 0.40 * fresnel) : (0.12 + 0.42 * fresnel));
+          color = mix(color, envSky, envFactor) + vCol.rgb * specBase + vec3(1.0, 0.99, 0.96) * clearcoat;
         } else {
-          // Subtle micro-detail on terrain & asphalt
-          float spec = pow(ndh, 16.0) * (1.0 - rough) * 0.25;
+          float spec = pow(ndh, 16.0) * (1.0 - rough) * 0.22;
           color += vec3(spec);
         }
 
-        // Atmospheric distance fog blending into the horizon sky
+        // Atmospheric distance fog
         float dist = length(vWorldPos - uEye);
-        float fog = clamp((dist - 48.0) / 95.0, 0.0, 0.78);
+        float fog = clamp((dist - 52.0) / 98.0, 0.0, 0.78);
         vec3 fogCol = vec3(0.58, 0.72, 0.88);
         color = mix(color, fogCol, fog);
 
@@ -1702,7 +1871,6 @@ class WebGLRenderer3D {
       }
     `;
 
-    // Background Sky Dome Shader
     const vsSky = `
       attribute vec2 aPos;
       varying vec2 vUv;
@@ -1795,7 +1963,7 @@ class WebGLRenderer3D {
     gl.clearDepth(1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    // 1) Render Daylight Sky Dome
+    // 1) Daylight Sky Dome
     gl.disable(gl.DEPTH_TEST);
     gl.useProgram(this.progSky);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.skyBuf);
@@ -1805,17 +1973,17 @@ class WebGLRenderer3D {
     gl.uniform1f(gl.getUniformLocation(this.progSky, "uPitch"), pitch);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-    // 2) Setup Camera View-Projection Matrix
+    // 2) Camera View-Projection Matrix
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-    const proj = mat4Perspective(50 * Math.PI / 180, (w / Math.max(1, h)), 0.2, 180.0);
+    const proj = mat4Perspective(48 * Math.PI / 180, (w / Math.max(1, h)), 0.2, 180.0);
     const view = mat4LookAt(eye, tgt, [0, 1, 0]);
     const vp = mat4Multiply(proj, view);
 
-    // 3) Draw Static 3D World (Terrain, Asphalt Highway, Ramps, Barriers, Cones, Bollards, Trees, Arch)
+    // 3) Static 3D World
     gl.useProgram(this.progTri);
     gl.uniformMatrix4fv(gl.getUniformLocation(this.progTri, "uVP"), false, vp);
     gl.uniform3fv(gl.getUniformLocation(this.progTri, "uEye"), eye);
@@ -1824,7 +1992,7 @@ class WebGLRenderer3D {
     this.bindTriAttributes(this.progTri);
     gl.drawArrays(gl.TRIANGLES, 0, this.staticCount);
 
-    // 4) Build & Draw Dynamic 3D Sculpted Vehicles + Particles
+    // 4) Dynamic High-Res Blender 4.2 Vehicles + Wheels + Particles
     if (showFlexbody) {
       const dynMb = new MeshBuilder();
       for (let i = 0; i < cars.length; ++i) {
@@ -1841,7 +2009,7 @@ class WebGLRenderer3D {
       }
     }
 
-    // 5) Draw 3D Node-Beam Skeleton Lines (when X-Ray mode B is active or on high-strain crash beams)
+    // 5) 3D Node-Beam Skeleton Lines
     const lineVerts = [];
     for (let ci = 0; ci < cars.length; ++ci) {
       const car = cars[ci];
@@ -1935,7 +2103,7 @@ class SoundSystem {
 const sound = new SoundSystem();
 
 // ============================================================================
-// 9. Scene Management, Spawning & Controls
+// 9. Scene Management, Spawning & Responsive Controls
 // ============================================================================
 const env = new WorldEnvironment();
 const canvas = document.getElementById("viewport");
@@ -1943,7 +2111,7 @@ const renderer = new WebGLRenderer3D(canvas);
 
 let cars = [];
 let playerIdx = 0;
-let camYaw = -1.25, camPitch = 0.24, camDist = 6.6;
+let camYaw = -1.25, camPitch = 0.22, camDist = 6.2;
 let camTarget = [0, 0.8, 0];
 let dragging = false, lastX = 0, lastY = 0;
 
@@ -1954,37 +2122,37 @@ function spawnScenario(scnName) {
   particles.particles = [];
 
   const car1 = new SoftBodyVehicle("Spieler", PRESETS[currentPreset].color, currentPreset);
-  const car2 = new SoftBodyVehicle("KI-Gegner", [0.88, 0.20, 0.24], "muscle");
+  const car2 = new SoftBodyVehicle("KI-Gegner", [0.88, 0.16, 0.22], "muscle");
 
   if (scnName === "proving_grounds") {
     car1.translate(-2.5, 0.02, 0.0);
     car2.rotateY(Math.PI, 2.1, 0);
-    car2.translate(16.0, 0.02, -4.2);
-    camYaw = -1.18; camPitch = 0.22; camDist = 6.5;
+    car2.translate(18.0, 0.02, -5.8);
+    camYaw = -1.16; camPitch = 0.21; camDist = 6.1;
   } else if (scnName === "head_on_duel") {
     car1.translate(-6.2, 0.02, -0.28);
     car1.setRollingSpeed(58 / 3.6, 0);
     car2.rotateY(Math.PI, 2.1, 0);
     car2.translate(3.8, 0.02, 0.28);
     car2.setRollingSpeed(-58 / 3.6, 0);
-    camYaw = -0.95; camPitch = 0.25; camDist = 6.8;
+    camYaw = -0.95; camPitch = 0.24; camDist = 6.5;
   } else if (scnName === "t_bone_arena") {
     car1.translate(-4.5, 0.02, -3.5);
     car1.setRollingSpeed(36 / 3.6, 0);
     car2.rotateY(-Math.PI * 0.5, 2.1, 0);
     car2.translate(-2.1, 0.02, -9.2);
     car2.setRollingSpeed(0, 56 / 3.6);
-    camYaw = -0.82; camPitch = 0.26; camDist = 7.2;
+    camYaw = -0.82; camPitch = 0.25; camDist = 6.8;
   } else if (scnName === "mega_jump") {
     car1.translate(2.2, 0.02, 0.0);
     car1.setRollingSpeed(68 / 3.6, 0);
     car2.translate(28.5, 0.02, 0.0);
-    camYaw = -1.15; camPitch = 0.22; camDist = 6.8;
+    camYaw = -1.15; camPitch = 0.21; camDist = 6.4;
   } else if (scnName === "hill_trial") {
     car1.translate(26.0, 0.08, 0.0);
     car1.setRollingSpeed(42 / 3.6, 0);
     car2.translate(36.0, 1.5, 4.0);
-    camYaw = -1.2; camPitch = 0.24; camDist = 6.8;
+    camYaw = -1.2; camPitch = 0.23; camDist = 6.4;
   }
 
   cars.push(car1, car2);
@@ -2002,7 +2170,7 @@ function repairActiveCar(inPlace = false) {
   const yaw = Math.atan2(-fz, fx);
 
   const pKey = playerIdx === 0 ? currentPreset : "muscle";
-  const col  = playerIdx === 0 ? PRESETS[currentPreset].color : [0.88, 0.20, 0.24];
+  const col  = playerIdx === 0 ? PRESETS[currentPreset].color : [0.88, 0.16, 0.22];
   const fresh = new SoftBodyVehicle(oldCar.name, col, pKey);
   if (inPlace) {
     fresh.rotateY(yaw, 2.1, 0);
@@ -2022,36 +2190,58 @@ function updateActiveCarLabel() {
     `${PRESETS[currentPreset].drive} Auto`;
 }
 
+// Robust Keyboard & On-Screen Button Input Handling (handles both e.code and e.key + iframe focus)
 const keys = {};
 const padState = { left: false, right: false, gas: false, brake: false, drift: false };
 
+function setKeyState(e, isDown) {
+  const k = (e.key || "").toLowerCase();
+  const c = e.code || "";
+  if (k) keys[k] = isDown;
+  if (c) keys[c] = isDown;
+}
+
 window.addEventListener("keydown", e => {
-  const k = e.key.toLowerCase();
-  keys[k] = true;
-  if (e.key === " ") e.preventDefault();
-  if (k === "r") {
+  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " ", "Tab"].includes(e.key)) {
+    e.preventDefault();
+  }
+  setKeyState(e, true);
+  const k = (e.key || "").toLowerCase();
+  if (k === "r" || e.code === "KeyR") {
     e.preventDefault();
     repairActiveCar(e.shiftKey);
-  } else if (k === "b") {
+  } else if (k === "b" || e.code === "KeyB") {
     showBeams = !showBeams;
     document.getElementById("btnXray").classList.toggle("active", showBeams);
-  } else if (k === "c") {
+  } else if (k === "c" || e.code === "KeyC") {
     cycleCamera();
   } else if (e.key === "Tab") {
-    e.preventDefault();
     playerIdx = (playerIdx + 1) % cars.length;
     updateActiveCarLabel();
   }
-});
+}, { passive: false });
+
 window.addEventListener("keyup", e => {
-  keys[e.key.toLowerCase()] = false;
+  setKeyState(e, false);
+});
+
+window.addEventListener("blur", () => {
+  for (const k of Object.keys(keys)) keys[k] = false;
+  for (const p of Object.keys(padState)) padState[p] = false;
 });
 
 function bindPad(id, prop) {
   const el = document.getElementById(id);
   const set = v => { padState[prop] = v; el.classList.toggle("active", v); };
-  el.addEventListener("pointerdown", e => { e.preventDefault(); set(true); });
-  window.addEventListener("pointerup", () => set(false));
+  el.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    e.stopPropagation();
+    el.setPointerCapture(e.pointerId);
+    set(true);
+    canvas.focus();
+  });
+  el.addEventListener("pointerup", () => set(false));
+  el.addEventListener("pointercancel", () => set(false));
 }
 bindPad("padLeft", "left");
 bindPad("padRight", "right");
@@ -2063,14 +2253,27 @@ function updateControls(dt) {
   const player = cars[playerIdx];
   if (!player) return;
 
-  const gas = (keys["w"] || keys["arrowup"] || padState.gas) ? 1.0 : 0.0;
-  const brk = (keys["s"] || keys["arrowdown"] || padState.brake) ? 1.0 : 0.0;
-  const left = (keys["a"] || keys["arrowleft"] || padState.left) ? 1.0 : 0.0;
-  const right = (keys["d"] || keys["arrowright"] || padState.right) ? 1.0 : 0.0;
-  const hbk = (keys[" "] || padState.drift) ? 1.0 : 0.0;
+  const isGas   = !!(keys["w"] || keys["KeyW"] || keys["arrowup"]    || keys["ArrowUp"]    || padState.gas);
+  const isBrk   = !!(keys["s"] || keys["KeyS"] || keys["arrowdown"]  || keys["ArrowDown"]  || padState.brake);
+  const isLeft  = !!(keys["a"] || keys["KeyA"] || keys["arrowleft"]  || keys["ArrowLeft"]  || padState.left);
+  const isRight = !!(keys["d"] || keys["KeyD"] || keys["arrowright"] || keys["ArrowRight"] || padState.right);
+  const isDrift = !!(keys[" "] || keys["Space"] || padState.drift);
+
+  // Highlight bottom-dock control buttons when keys are pressed for instant visual feedback
+  document.getElementById("padLeft").classList.toggle("active", isLeft);
+  document.getElementById("padRight").classList.toggle("active", isRight);
+  document.getElementById("padGas").classList.toggle("active", isGas);
+  document.getElementById("padBrake").classList.toggle("active", isBrk);
+  document.getElementById("padDrift").classList.toggle("active", isDrift);
+
+  const gas = isGas ? 1.0 : 0.0;
+  const brk = isBrk ? 1.0 : 0.0;
+  const left = isLeft ? 1.0 : 0.0;
+  const right = isRight ? 1.0 : 0.0;
+  const hbk = isDrift ? 1.0 : 0.0;
 
   if ((currentScenario === "head_on_duel" || currentScenario === "t_bone_arena" || currentScenario === "mega_jump") &&
-      simTime < 0.65 && !gas && !brk && !left && !right) {
+      simTime < 0.65 && !isGas && !isBrk && !isLeft && !isRight) {
     player.controls.throttle = 1.0;
     player.controls.brake = 0.0;
     player.controls.steer = 0.0;
@@ -2084,7 +2287,7 @@ function updateControls(dt) {
   const aiIdx = 1 - playerIdx;
   const ai = cars[aiIdx];
   if (!ai) return;
-  if (aiBehavior === "parked") {
+  if (aiBehavior === "parked" || currentScenario === "head_on_duel" || currentScenario === "t_bone_arena") {
     ai.controls.throttle = (currentScenario === "head_on_duel" || currentScenario === "t_bone_arena") && simTime < 0.65 ? 1.0 : 0.0;
     ai.controls.brake = simTime > 0.85 ? 0.6 : 0.0;
     ai.controls.steer = 0.0;
@@ -2096,18 +2299,18 @@ function updateControls(dt) {
     const dist = Math.hypot(dx, dz) || 1;
     const crossY = fx * (dz / dist) - fz * (dx / dist);
     ai.controls.steer = Math.max(-1, Math.min(1, -crossY * 2.2));
-    ai.controls.throttle = dist > 2.5 ? 0.85 : 0.4;
+    ai.controls.throttle = dist > 2.5 ? 0.80 : 0.35;
     ai.controls.brake = 0.0;
   } else if (aiBehavior === "cruise") {
     const [ax, , az] = ai.centerOfMass();
     const [fx, , fz] = ai.forwardDir();
-    const tx = 12 + 18 * Math.cos(simTime * 0.45);
-    const tz = -2 + 12 * Math.sin(simTime * 0.45);
+    const tx = 10 + 18 * Math.cos(simTime * 0.42);
+    const tz = -8 + 9 * Math.sin(simTime * 0.42);
     const dx = tx - ax, dz = tz - az;
     const dist = Math.hypot(dx, dz) || 1;
     const crossY = fx * (dz / dist) - fz * (dx / dist);
-    ai.controls.steer = Math.max(-1, Math.min(1, -crossY * 2.5));
-    ai.controls.throttle = 0.7;
+    ai.controls.steer = Math.max(-1, Math.min(1, -crossY * 2.4));
+    ai.controls.throttle = 0.62;
     ai.controls.brake = 0.0;
   }
 }
@@ -2116,6 +2319,8 @@ function updateControls(dt) {
 // 10. Camera Orbit & Modes
 // ============================================================================
 canvas.addEventListener("pointerdown", e => {
+  window.focus();
+  canvas.focus();
   dragging = true; lastX = e.clientX; lastY = e.clientY;
 });
 window.addEventListener("pointermove", e => {
@@ -2141,16 +2346,15 @@ function computeCameraEyeTarget(activeCar) {
   const [fx, fy, fz] = activeCar.forwardDir();
 
   if (camMode === 0) {
-    // Smooth 3/4 Chase Camera behind & slightly angled to show the 3D profile of the car
     const carYaw = Math.atan2(-fz, fx);
     if (!dragging) {
-      const desiredYaw = -carYaw - Math.PI * 0.42;
+      const desiredYaw = -carYaw - Math.PI * 0.43;
       const diff = Math.atan2(Math.sin(desiredYaw - camYaw), Math.cos(desiredYaw - camYaw));
-      camYaw += diff * 0.08;
+      camYaw += diff * 0.09;
     }
-    camTarget[0] += (cx + fx * 0.5 - camTarget[0]) * 0.25;
-    camTarget[1] += (cy + 0.32 - camTarget[1]) * 0.2;
-    camTarget[2] += (cz + fz * 0.5 - camTarget[2]) * 0.25;
+    camTarget[0] += (cx + fx * 0.45 - camTarget[0]) * 0.25;
+    camTarget[1] += (cy + 0.30 - camTarget[1]) * 0.20;
+    camTarget[2] += (cz + fz * 0.45 - camTarget[2]) * 0.25;
     const cp = Math.cos(camPitch), sp = Math.sin(camPitch);
     const eye = [
       camTarget[0] + camDist * cp * Math.sin(camYaw),
@@ -2159,12 +2363,10 @@ function computeCameraEyeTarget(activeCar) {
     ];
     return [eye, camTarget];
   } else if (camMode === 1) {
-    // Hood / Cockpit View
     const eye = [cx + fx * 0.45, cy + 0.62, cz + fz * 0.45];
     const tgt = [cx + fx * 9.0, cy + 0.45 + fy * 4.0, cz + fz * 9.0];
     return [eye, tgt];
   } else if (camMode === 2) {
-    // Free Orbit
     camTarget[0] += (cx - camTarget[0]) * 0.18;
     camTarget[1] += (cy + 0.3 - camTarget[1]) * 0.18;
     camTarget[2] += (cz - camTarget[2]) * 0.18;
@@ -2176,9 +2378,8 @@ function computeCameraEyeTarget(activeCar) {
     ];
     return [eye, camTarget];
   } else {
-    // Cinematic Side Action Camera
     const tgt = [cx, cy + 0.28, cz];
-    const eye = [cx - fz * 5.8 - fx * 1.4, cy + 1.35, cz + fx * 5.8 - fz * 1.4];
+    const eye = [cx - fz * 5.6 - fx * 1.3, cy + 1.25, cz + fx * 5.6 - fz * 1.3];
     return [eye, tgt];
   }
 }
@@ -2204,6 +2405,13 @@ function updateHUD(car) {
   document.getElementById("hudGear").textContent = car.gear === -1 ? "R" : (car.gear === 0 ? "N" : String(car.gear));
   document.getElementById("hudRpmBar").style.width = `${Math.min(100, (car.engineRpm / 6600) * 100)}%`;
 
+  const steerDeg = Math.round(-car.smoothedSteer * 32);
+  document.getElementById("hudSteer").textContent = `${steerDeg > 0 ? "+" : ""}${steerDeg}°`;
+  const barSteer = document.getElementById("barSteer");
+  const stPct = Math.abs(car.smoothedSteer) * 50;
+  barSteer.style.left = car.smoothedSteer >= 0 ? `${50 - stPct}%` : "50%";
+  barSteer.style.width = `${stPct}%`;
+
   const thrPct = Math.round(car.controls.throttle * 100);
   const brkPct = Math.round(car.controls.brake * 100);
   const hbkPct = Math.round(car.controls.handbrake * 100);
@@ -2228,7 +2436,7 @@ function updateHUD(car) {
 
   document.getElementById("stNodes").textContent = car.nodeCount;
   document.getElementById("stBeams").textContent = car.beamCount;
-  document.getElementById("stTris").textContent = car.flexTris.length + 192;
+  document.getElementById("stTris").textContent = car.flexTris.length + 1152;
   document.getElementById("stDeform").textContent = deformed;
   document.getElementById("stBroken").textContent = broken;
 
@@ -2257,50 +2465,64 @@ function updateHUD(car) {
 }
 
 // ============================================================================
-// 12. UI Event Listeners & Main Loop
+// 12. UI Event Listeners (with automatic focus return to canvas) & Main Loop
 // ============================================================================
 document.querySelectorAll(".scnBtn").forEach(btn => {
-  btn.onclick = () => { simTime = 0; spawnScenario(btn.dataset.scn); };
+  btn.onclick = () => { simTime = 0; spawnScenario(btn.dataset.scn); btn.blur(); canvas.focus(); };
 });
 document.getElementById("carPreset").onchange = e => {
   currentPreset = e.target.value;
   simTime = 0;
   spawnScenario(currentScenario);
+  e.target.blur();
+  canvas.focus();
 };
 document.getElementById("aiMode").onchange = e => {
   aiBehavior = e.target.value;
+  e.target.blur();
+  canvas.focus();
 };
 document.querySelectorAll(".timeBtn").forEach(btn => {
   btn.onclick = () => {
     timeScale = Number(btn.dataset.scale);
     document.querySelectorAll(".timeBtn").forEach(b => b.classList.toggle("active", b === btn));
+    btn.blur();
+    canvas.focus();
   };
 });
 document.getElementById("btnFlexbody").onclick = e => {
   showFlexbody = !showFlexbody;
   if (!showFlexbody && !showBeams) { showBeams = true; document.getElementById("btnXray").classList.add("active"); }
   e.currentTarget.classList.toggle("active", showFlexbody);
+  e.currentTarget.blur();
+  canvas.focus();
 };
 document.getElementById("btnXray").onclick = e => {
   showBeams = !showBeams;
   if (!showFlexbody && !showBeams) { showFlexbody = true; document.getElementById("btnFlexbody").classList.add("active"); }
   e.currentTarget.classList.toggle("active", showBeams);
+  e.currentTarget.blur();
+  canvas.focus();
 };
-document.getElementById("btnCam").onclick = () => cycleCamera();
-document.getElementById("btnReset").onclick = () => { simTime = 0; repairActiveCar(false); };
-document.getElementById("btnRepairHere").onclick = () => repairActiveCar(true);
-document.getElementById("btnSwitchCar").onclick = () => {
+document.getElementById("btnCam").onclick = e => { cycleCamera(); e.currentTarget.blur(); canvas.focus(); };
+document.getElementById("btnReset").onclick = e => { simTime = 0; repairActiveCar(false); e.currentTarget.blur(); canvas.focus(); };
+document.getElementById("btnRepairHere").onclick = e => { repairActiveCar(true); e.currentTarget.blur(); canvas.focus(); };
+document.getElementById("btnSwitchCar").onclick = e => {
   playerIdx = (playerIdx + 1) % cars.length;
   updateActiveCarLabel();
+  e.currentTarget.blur();
+  canvas.focus();
 };
 document.getElementById("btnAudio").onclick = e => {
   const on = sound.toggle();
   e.currentTarget.classList.toggle("active", on);
+  e.currentTarget.blur();
+  canvas.focus();
 };
 
 const drawer = document.getElementById("tuningDrawer");
-document.getElementById("btnTuning").onclick = () => drawer.classList.toggle("open");
-document.getElementById("closeTuning").onclick = () => drawer.classList.remove("open");
+document.getElementById("btnTuning").onclick = e => { drawer.classList.toggle("open"); e.currentTarget.blur(); };
+document.getElementById("closeTuning").onclick = () => { drawer.classList.remove("open"); canvas.focus(); };
 document.getElementById("slPower").oninput = e => {
   tuning.power = Number(e.target.value) / 100;
   document.getElementById("lblPower").textContent = `${e.target.value}%`;
@@ -2324,6 +2546,7 @@ document.getElementById("slDeform").oninput = e => {
 document.getElementById("btnApplyTuning").onclick = () => {
   repairActiveCar(true);
   drawer.classList.remove("open");
+  canvas.focus();
 };
 
 let simTime = 0;
@@ -2400,7 +2623,7 @@ function mainLoop(ts) {
 
 spawnScenario("proving_grounds");
 
-// Support ?scn=...&steps=...&xray=1&preset=... for automated Chromium inspection
+// Support ?scn=...&steps=...&xray=1&preset=...&steer=...&gas=... for automated Chromium verification
 const q = new URLSearchParams(window.location.search);
 if (q.has("preset")) {
   currentPreset = q.get("preset");
@@ -2412,6 +2635,14 @@ if (q.has("scn")) {
 if (q.get("xray") === "1") {
   showBeams = true;
   document.getElementById("btnXray").classList.add("active");
+}
+if (q.has("steer")) {
+  const st = Number(q.get("steer"));
+  if (st > 0) keys["a"] = true;
+  else if (st < 0) keys["d"] = true;
+}
+if (q.has("gas")) {
+  if (Number(q.get("gas")) > 0) keys["w"] = true;
 }
 if (q.has("steps")) {
   const nSteps = Math.min(4000, Number(q.get("steps")));
