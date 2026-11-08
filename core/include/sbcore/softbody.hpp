@@ -12,11 +12,14 @@
 
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#include "sbcore/powertrain.hpp"
 #include "sbcore/vec3.hpp"
+#include "sbcore/wheel.hpp"
 
 namespace sb {
 
@@ -93,6 +96,31 @@ struct BodyStats {
     real elasticEnergy = 0;
 };
 
+struct VehicleControls {
+    real throttle = 0.0;     ///< [0, 1]
+    real brake = 0.0;        ///< [0, 1]
+    real steer = 0.0;        ///< [-1, 1], + = left, - = right
+    real handbrake = 0.0;    ///< [0, 1]
+    real clutch = -1.0;      ///< < 0: automatic clutch; [0, 1]: manual override
+    int gear = -99;          ///< -99: automatic / keep; -1 = R, 0 = N, 1..5 = forward
+    real steerRate = 4.5;    ///< Max steering change per second (0 = instant)
+};
+
+struct VehicleTelemetry {
+    real speedKmh = 0.0;
+    Vec3 velocity{0, 0, 0};
+    real engineRpm = 0.0;
+    int gear = 0;
+    real clutch = 0.0;
+    real throttle = 0.0;
+    real brake = 0.0;
+    real steer = 0.0;
+    std::vector<real> wheelOmega;
+    std::vector<bool> wheelBurst;
+    std::size_t deformedBeams = 0;
+    std::size_t brokenBeams = 0;
+};
+
 class SoftBody {
 public:
     explicit SoftBody(std::string name = "body") : name_(std::move(name)) {}
@@ -104,11 +132,23 @@ public:
     std::uint32_t addBeam(std::uint32_t a, std::uint32_t b, const BeamParams& p = {});
     std::uint32_t addBeam(const std::string& a, const std::string& b, const BeamParams& p = {});
 
+    /// Generates and registers a BeamNG-style PressureWheel on this body.
+    std::size_t addWheel(const PressureWheelSpec& spec);
+    void setPowertrain(const PowertrainSpec& spec);
+    bool hasPowertrain() const { return powertrain_.has_value(); }
+    Powertrain& powertrain() { return *powertrain_; }
+    const Powertrain& powertrain() const { return *powertrain_; }
+
+    void setControls(const VehicleControls& c) { controls_ = c; }
+    const VehicleControls& controls() const { return controls_; }
+    VehicleControls& controls() { return controls_; }
+    VehicleTelemetry telemetry() const;
+
     /// Index of node `id` or -1.
     std::int64_t findNode(const std::string& id) const;
 
     // ---------------------------------------------------------------- simulation
-    /// Computes beam forces into force(); applies plasticity and breaking.
+    /// Computes beam, powertrain and wheel forces into force(); applies plasticity and breaking.
     /// Must be called once per physics step after forces are cleared.
     void accumulateBeamForces(real dt);
 
@@ -121,6 +161,7 @@ public:
     void setVelocity(const Vec3& v);
     void addVelocity(const Vec3& v);
     Vec3 centerOfMass() const;
+    Vec3 centerOfMassVelocity() const;
     real totalMass() const;
     void aabb(Vec3& lo, Vec3& hi) const;
     BodyStats stats() const;
@@ -157,6 +198,8 @@ public:
     std::vector<Beam>& beams() { return beams_; }
     const std::vector<Beam>& beams() const { return beams_; }
     const std::vector<std::string>& breakGroupNames() const { return breakGroupNames_; }
+    std::vector<PressureWheel>& wheels() { return wheels_; }
+    const std::vector<PressureWheel>& wheels() const { return wheels_; }
 
     /// Changes a node's mass at runtime (e.g. cargo / load tests).
     void setNodeMass(std::uint32_t i, real mass);
@@ -165,6 +208,7 @@ public:
 private:
     std::int32_t breakGroupIndex(const std::string& name);
     void processPendingBreaks();
+    void stepDrivetrain(real dt);
 
     std::string name_;
     // Node data, structure-of-arrays for cache / SIMD friendliness.
@@ -180,6 +224,11 @@ private:
     std::vector<std::vector<std::uint32_t>> breakGroupMembers_;
     std::vector<std::uint32_t> pendingBreaks_;
     std::vector<real> inputs_;
+
+    std::vector<PressureWheel> wheels_;
+    std::optional<Powertrain> powertrain_;
+    VehicleControls controls_;
+    real smoothedSteer_ = 0.0;
 };
 
 }  // namespace sb

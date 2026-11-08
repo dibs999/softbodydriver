@@ -135,7 +135,62 @@ void SoftBody::processPendingBreaks() {
     }
 }
 
-void SoftBody::accumulateBeamForces(real /*dt*/) {
+std::size_t SoftBody::addWheel(const PressureWheelSpec& spec) {
+    wheels_.push_back(addPressureWheel(*this, spec));
+    return wheels_.size() - 1;
+}
+
+void SoftBody::setPowertrain(const PowertrainSpec& spec) {
+    powertrain_.emplace(spec);
+}
+
+void SoftBody::stepDrivetrain(real dt) {
+    if (wheels_.empty() && !powertrain_) return;
+
+    const std::size_t nw = wheels_.size();
+    std::vector<real> omega(nw, 0.0);
+    std::vector<bool> driven(nw, false), steered(nw, false), braked(nw, false), handbraked(nw, false);
+    for (std::size_t i = 0; i < nw; ++i) {
+        omega[i] = wheels_[i].measureAngularVelocity(*this);
+        driven[i] = wheels_[i].spec.driven;
+        steered[i] = wheels_[i].spec.steered;
+        braked[i] = wheels_[i].spec.braked;
+        handbraked[i] = wheels_[i].spec.handbraked;
+    }
+
+    std::vector<real> driveTorque(nw, 0.0), brakeTorque(nw, 0.0);
+    if (powertrain_) {
+        PowertrainInputs pin;
+        pin.throttle = controls_.throttle;
+        pin.brake = controls_.brake;
+        pin.handbrake = controls_.handbrake;
+        pin.clutch = controls_.clutch;
+        pin.requestedGear = controls_.gear;
+        powertrain_->step(pin, omega, driven, steered, braked, handbraked, driveTorque, brakeTorque, dt);
+    } else {
+        for (std::size_t i = 0; i < nw; ++i) {
+            if (braked[i]) brakeTorque[i] += std::clamp(controls_.brake, 0.0, 1.0) * 1800.0;
+            if (handbraked[i]) brakeTorque[i] += std::clamp(controls_.handbrake, 0.0, 1.0) * 1500.0;
+        }
+    }
+
+    for (std::size_t i = 0; i < nw; ++i) {
+        wheels_[i].step(*this, driveTorque[i], brakeTorque[i], dt);
+    }
+}
+
+void SoftBody::accumulateBeamForces(real dt) {
+    if (!wheels_.empty() || powertrain_) {
+        const real targetSteer = std::clamp(controls_.steer, -1.0, 1.0);
+        if (controls_.steerRate > 0.0 && dt > 0.0) {
+            const real maxDelta = controls_.steerRate * dt;
+            smoothedSteer_ += std::clamp(targetSteer - smoothedSteer_, -maxDelta, maxDelta);
+        } else {
+            smoothedSteer_ = targetSteer;
+        }
+        setInput(0, smoothedSteer_);
+    }
+
     const std::size_t n = beams_.size();
     Vec3* force = force_.data();
     const Vec3* pos = pos_.data();
@@ -194,6 +249,7 @@ void SoftBody::accumulateBeamForces(real /*dt*/) {
         force[bm.b] -= fv;
     }
     if (!pendingBreaks_.empty()) processPendingBreaks();
+    if (!wheels_.empty() || powertrain_) stepDrivetrain(dt);
 }
 
 void SoftBody::translate(const Vec3& d) {
@@ -230,6 +286,38 @@ Vec3 SoftBody::centerOfMass() const {
         m += mass_[i];
     }
     return m > 0 ? c / m : c;
+}
+
+Vec3 SoftBody::centerOfMassVelocity() const {
+    Vec3 v;
+    real m = 0;
+    for (std::size_t i = 0; i < vel_.size(); ++i) {
+        v += vel_[i] * mass_[i];
+        m += mass_[i];
+    }
+    return m > 0 ? v / m : v;
+}
+
+VehicleTelemetry SoftBody::telemetry() const {
+    VehicleTelemetry t;
+    t.velocity = centerOfMassVelocity();
+    t.speedKmh = length(t.velocity) * 3.6;
+    if (powertrain_) {
+        t.engineRpm = powertrain_->engineRpm();
+        t.gear = powertrain_->gear();
+        t.clutch = powertrain_->clutchEngagement();
+    }
+    t.throttle = controls_.throttle;
+    t.brake = controls_.brake;
+    t.steer = smoothedSteer_;
+    for (const PressureWheel& w : wheels_) {
+        t.wheelOmega.push_back(w.angularVelocity);
+        t.wheelBurst.push_back(w.burst);
+    }
+    const BodyStats bs = stats();
+    t.deformedBeams = bs.deformedBeams;
+    t.brokenBeams = bs.brokenBeams;
+    return t;
 }
 
 void SoftBody::aabb(Vec3& lo, Vec3& hi) const {

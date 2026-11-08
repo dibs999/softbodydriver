@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "sbcore/builders.hpp"
+#include "sbcore/vehicle.hpp"
 
 namespace sb {
 
@@ -23,7 +24,9 @@ void Scene::run(real seconds) {
     for (long long i = 0; i < n; ++i) step();
 }
 
-std::vector<std::string> sceneNames() { return {"cube_drop", "wall_crash", "ramp_jump", "bridge_overload"}; }
+std::vector<std::string> sceneNames() {
+    return {"accel_brake", "slalom", "curb_impact", "wall_crash", "ramp_jump", "bridge_overload", "cube_drop"};
+}
 
 SoftBody buildTestCar(const std::string& name) {
     // 14 x 4 x 6 cells of 0.3 m: lower body 0.6 m high over the full length,
@@ -188,9 +191,79 @@ Scene bridgeOverload() {
     return sc;
 }
 
+Scene accelBrake() {
+    Scene sc;
+    sc.name = "accel_brake";
+    sc.description = "Fahrbares Auto (4 Pressure-Wheels, Federung, 5-Gang-Automatik): Vollgas-Sprint (Schaltvorgang 1->2) und Vollbremsung bis zum Stillstand.";
+    sc.duration = 5.2;
+    addGround(sc.world, 1.0);
+    SoftBody car = buildDrivableCar();
+    car.translate({-2.0, 0.01, 0.0});
+    sc.world.addBody(std::move(car));
+    sc.update = [](World& w) {
+        const real t = w.time();
+        VehicleControls c;
+        if (t >= 0.15 && t < 3.6) {
+            c.throttle = 1.0;
+        } else if (t >= 3.6) {
+            c.throttle = 0.0;
+            c.brake = 1.0;
+        }
+        w.body(0).setControls(c);
+    };
+    return sc;
+}
+
+Scene slalom() {
+    Scene sc;
+    sc.name = "slalom";
+    sc.description = "Fahrbares Auto lenkt per Hydro-Spurstangen im Slalom um drei Pylonen (Fahrwerks-Wanken & Reifenwalken sichtbar).";
+    sc.duration = 4.8;
+    addGround(sc.world, 1.05);
+    SoftBody car = buildDrivableCar();
+    car.translate({-2.0, 0.01, 0.0});
+    sc.world.addBody(std::move(car));
+    sc.world.addCollider(StaticCollider::box({12.0, 0.5,  0.9}, {0.35, 0.5, 0.35}, {}, 0.8, "pylon_1"));
+    sc.world.addCollider(StaticCollider::box({24.0, 0.5, -0.9}, {0.35, 0.5, 0.35}, {}, 0.8, "pylon_2"));
+    sc.world.addCollider(StaticCollider::box({36.0, 0.5,  0.9}, {0.35, 0.5, 0.35}, {}, 0.8, "pylon_3"));
+    sc.update = [](World& w) {
+        const real t = w.time();
+        VehicleControls c;
+        c.throttle = t < 4.2 ? 0.85 : 0.0;
+        if (t > 0.6 && t < 4.2) {
+            c.steer = 0.85 * std::sin((t - 0.6) * (2.0 * kPi / 2.2));
+        }
+        w.body(0).setControls(c);
+    };
+    return sc;
+}
+
+Scene curbImpact() {
+    Scene sc;
+    sc.name = "curb_impact";
+    sc.description = "Fahrbares Auto beschleunigt auf ein einseitiges Hindernis (rechts): Radaufhaengung & Kotfluegel verformen sich beim Einschlag.";
+    sc.duration = 3.6;
+    addGround(sc.world, 1.0);
+    SoftBody car = buildDrivableCar();
+    car.translate({-2.0, 0.01, 0.0});
+    sc.world.addBody(std::move(car));
+    sc.world.addCollider(StaticCollider::box({16.5, 0.28, 0.85}, {0.45, 0.28, 0.65}, {}, 0.85, "curb_block"));
+    sc.update = [](World& w) {
+        const real t = w.time();
+        VehicleControls c;
+        c.throttle = t < 2.1 ? 1.0 : 0.0;
+        c.brake = t >= 2.4 ? 0.7 : 0.0;
+        w.body(0).setControls(c);
+    };
+    return sc;
+}
+
 }  // namespace
 
 Scene makeScene(const std::string& name) {
+    if (name == "accel_brake") return accelBrake();
+    if (name == "slalom") return slalom();
+    if (name == "curb_impact") return curbImpact();
     if (name == "cube_drop") return cubeDrop();
     if (name == "wall_crash") return wallCrash();
     if (name == "ramp_jump") return rampJump();

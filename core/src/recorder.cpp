@@ -50,6 +50,12 @@ Recorder::Recorder(const World& world, std::string sceneName, std::string descri
         for (std::uint32_t i = 0; i < b.nodeCount(); ++i)
             if (b.isFixed(i)) fixed.push_back(i);
         o["fixed"] = fixed;
+        if (!b.wheels().empty()) {
+            json wb = json::array();
+            for (const PressureWheel& w : b.wheels())
+                for (std::uint32_t bi : w.beamIndices) wb.push_back(bi);
+            o["wheelBeams"] = std::move(wb);
+        }
         bodies.push_back(o);
         std::vector<char> br(b.beamCount(), 0);
         for (std::size_t i = 0; i < b.beamCount(); ++i) br[i] = b.beams()[i].broken ? 1 : 0;
@@ -68,6 +74,17 @@ void Recorder::captureIfDue(const World& world) {
 void Recorder::capture(const World& world) {
     Frame f;
     f.time = world.time();
+    if (!world.bodies().empty() &&
+        (!world.bodies()[0].wheels().empty() || world.bodies()[0].hasPowertrain())) {
+        const VehicleTelemetry t = world.bodies()[0].telemetry();
+        f.hasTelemetry = true;
+        f.rpm = static_cast<int>(std::lround(t.engineRpm));
+        f.gear = t.gear;
+        f.throttle = std::round(t.throttle * 100.0) / 100.0;
+        f.brake = std::round(t.brake * 100.0) / 100.0;
+        f.steer = std::round(t.steer * 100.0) / 100.0;
+        f.speedKmh = std::round(t.speedKmh * 10.0) / 10.0;
+    }
     for (std::size_t bi = 0; bi < world.bodies().size(); ++bi) {
         const SoftBody& b = world.bodies()[bi];
         std::vector<std::int32_t> p;
@@ -108,6 +125,9 @@ std::string Recorder::toJson() const {
         bool anyBroken = false;
         for (const auto& v : f.newlyBroken) anyBroken |= !v.empty();
         if (anyBroken) o["b"] = f.newlyBroken;
+        if (f.hasTelemetry) {
+            o["tel"] = json::array({f.speedKmh, f.rpm, f.gear, f.throttle, f.brake, f.steer});
+        }
         frames.push_back(std::move(o));
     }
     doc["frames"] = std::move(frames);

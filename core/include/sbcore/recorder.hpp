@@ -28,6 +28,9 @@ private:
         real time = 0;
         std::vector<std::vector<std::int32_t>> positionsMm;      // per body, xyz interleaved
         std::vector<std::vector<std::uint32_t>> newlyBroken;    // per body
+        bool hasTelemetry = false;
+        int rpm = 0, gear = 0;
+        real throttle = 0, brake = 0, steer = 0, speedKmh = 0;
     };
 
     std::string scene_, description_;

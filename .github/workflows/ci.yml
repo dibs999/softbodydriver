@@ -35,23 +35,30 @@ jobs:
       - name: Unit tests
         run: ctest --test-dir build -C Release --output-on-failure
 
-      - name: Smoke test + generate 3D replay HTML
+      - name: C ABI test + generate 3D replay HTML
         shell: bash
         run: |
+          python3 tools/test_c_api.py build
           BIN=./build/apps/sbsim/sbsim
           if [ -f ./build/apps/sbsim/Release/sbsim.exe ]; then
             BIN=./build/apps/sbsim/Release/sbsim.exe
           fi
-          mkdir -p dist/replays
+          mkdir -p dist/replays dist/include
           cp "$BIN" dist/
-          cp -r content dist/
-          "$BIN" --scene wall_crash --duration 1.8 --fps 25 --quiet --record dist/replays/wall_crash.json
-          "$BIN" --scene ramp_jump  --duration 3.0 --fps 25 --quiet --record dist/replays/ramp_jump.json
-          "$BIN" --scene bridge_overload --duration 6.5 --fps 20 --quiet --record dist/replays/bridge_overload.json
-          "$BIN" --scene cube_drop  --duration 2.2 --fps 25 --quiet --record dist/replays/cube_drop.json
+          cp core/include/sbcore/c_api.h dist/include/
+          for f in build/core/*sbcore*.so build/core/*sbcore*.dylib build/core/*sbcore*.dll build/core/Release/*sbcore*.dll; do
+            [ -f "$f" ] && cp "$f" dist/
+          done
+          cp -r content game dist/
+          "$BIN" --scene accel_brake --fps 20 --quiet --record dist/replays/accel_brake.json
+          "$BIN" --scene slalom      --fps 20 --quiet --record dist/replays/slalom.json
+          "$BIN" --scene curb_impact --fps 20 --quiet --record dist/replays/curb_impact.json
+          "$BIN" --scene wall_crash  --duration 1.8 --fps 20 --quiet --record dist/replays/wall_crash.json
+          "$BIN" --scene bridge_overload --duration 6.5 --fps 18 --quiet --record dist/replays/bridge_overload.json
           python3 tools/make_viewer.py -o dist/replay_viewer.html \
-            dist/replays/wall_crash.json dist/replays/ramp_jump.json \
-            dist/replays/bridge_overload.json dist/replays/cube_drop.json
+            dist/replays/accel_brake.json dist/replays/slalom.json \
+            dist/replays/curb_impact.json dist/replays/wall_crash.json \
+            dist/replays/bridge_overload.json
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

@@ -334,7 +334,7 @@ TEST_CASE("sbeam parser reports helpful errors") {
                          doctest::Contains("unknown beam property 'sprnig'"), std::runtime_error);
 }
 
-TEST_CASE("all built-in scenes are stable and produce damage") {
+TEST_CASE("all built-in scenes are stable") {
     for (const auto& name : sceneNames()) {
         CAPTURE(name);
         Scene sc = makeScene(name);
@@ -342,7 +342,9 @@ TEST_CASE("all built-in scenes are stable and produce damage") {
         sc.run(sc.duration);
         const WorldStats st = sc.world.stats();
         CHECK(st.finite);
-        CHECK(st.deformedBeams + st.brokenBeams > 0);
+        if (name != "slalom" && name != "accel_brake") {
+            CHECK(st.deformedBeams + st.brokenBeams > 0);
+        }
     }
 }
 
@@ -353,7 +355,6 @@ TEST_CASE("wall crash: front crumples much more than the cabin") {
     std::size_t front = 0, frontTotal = 0, cabin = 0, cabinTotal = 0;
     const real carFrontX = 14 * 0.3;
     for (const Beam& bm : car.beams()) {
-        // classify by spawn geometry: base rest positions are not stored, use node ids
         const auto& ida = car.nodeIds()[bm.a];
         int i = 0, j = 0, k = 0;
         std::sscanf(ida.c_str(), "n_%d_%d_%d", &i, &j, &k);
@@ -369,6 +370,121 @@ TEST_CASE("wall crash: front crumples much more than the cabin") {
     MESSAGE("front deformed ratio " << frontRatio << ", cabin deformed ratio " << cabinRatio);
     CHECK(frontRatio > 0.3);
     CHECK(cabinRatio < frontRatio * 0.5);
-    // The car must have been stopped by the wall.
     CHECK(length(car.velocities()[0]) < 3.0);
 }
+
+TEST_CASE("pressure wheel spins freely around its spindle and brakes to a stop") {
+    WorldSettings ws;
+    ws.gravity = {0, 0, 0};
+    World w(ws);
+    SoftBody b("wheel_rig");
+    NodeParams fixed;
+    fixed.fixed = true;
+    const auto hr = b.addNode("hr", {0, 0,  0.11}, fixed);
+    const auto hl = b.addNode("hl", {0, 0, -0.11}, fixed);
+
+    PressureWheelSpec pws;
+    pws.name = "W";
+    pws.hubRight = hr;
+    pws.hubLeft = hl;
+    pws.driven = true;
+    pws.braked = true;
+    b.addWheel(pws);
+    w.addBody(std::move(b));
+
+    // Apply 200 Nm of drive torque for 0.5 s directly via PressureWheel::step
+    for (int i = 0; i < 1000; ++i) {
+        SoftBody& body = w.body(0);
+        for (auto& f : body.forces()) f = {};
+        body.accumulateBeamForces(ws.dt);
+        body.wheels()[0].step(body, 200.0, 0.0, ws.dt);
+        for (std::size_t n = 0; n < body.nodeCount(); ++n) {
+            if (body.invMasses()[n] == 0) continue;
+            body.velocities()[n] += body.forces()[n] * (body.invMasses()[n] * ws.dt);
+            body.positions()[n] += body.velocities()[n] * ws.dt;
+        }
+    }
+    const real omegaSpin = w.body(0).wheels()[0].measureAngularVelocity(w.body(0));
+    CHECK(omegaSpin > 40.0);
+    // Spinning a wheel around its spindle must not plastically deform any spoke/tread beam.
+    CHECK(w.body(0).stats().deformedBeams == 0);
+
+    // Now brake with 500 Nm for 0.5 s -> wheel stops without reversing.
+    for (int i = 0; i < 1000; ++i) {
+        SoftBody& body = w.body(0);
+        for (auto& f : body.forces()) f = {};
+        body.accumulateBeamForces(ws.dt);
+        body.wheels()[0].step(body, 0.0, 500.0, ws.dt);
+        for (std::size_t n = 0; n < body.nodeCount(); ++n) {
+            if (body.invMasses()[n] == 0) continue;
+            body.velocities()[n] += body.forces()[n] * (body.invMasses()[n] * ws.dt);
+            body.positions()[n] += body.velocities()[n] * ws.dt;
+        }
+    }
+    CHECK( std::abs(w.body(0).wheels()[0].measureAngularVelocity(w.body(0))) < 0.5 );
+
+    // Breaking a wheel beam punctures the tire.
+    w.body(0).breakBeam(w.body(0).wheels()[0].beamIndices[0]);
+    w.step();
+    CHECK(w.body(0).wheels()[0].burst);
+}
+
+TEST_CASE("drivable car accelerates, shifts into 2nd gear, and stops under braking") {
+    Scene sc = makeScene("accel_brake");
+    sc.run(3.55);
+    const VehicleTelemetry peak = sc.world.body(0).telemetry();
+    CHECK(peak.speedKmh > 45.0);
+    CHECK(peak.gear >= 2);
+    CHECK(sc.world.body(0).centerOfMass().x > 18.0);
+
+    sc.run(1.65);
+    const VehicleTelemetry stopped = sc.world.body(0).telemetry();
+    CHECK(stopped.speedKmh < 1.5);
+    CHECK(stopped.engineRpm > 600.0);  // engine idles without stalling
+}
+
+TEST_CASE("hydro steering turns the drivable car left (+steer) and right (-steer)") {
+    auto driveWithSteer = [](real steerVal) {
+        World w;
+        w.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}, 1.0));
+        SoftBody car = buildDrivableCar();
+        car.translate({0, 0.01, 0});
+        VehicleControls c;
+        c.throttle = 0.75;
+        c.steer = steerVal;
+        car.setControls(c);
+        w.addBody(std::move(car));
+        w.simulate(2.2);
+        return w.body(0).centerOfMass().z;
+    };
+    const real zLeft = driveWithSteer(+0.85);   // +steer -> left (-Z)
+    const real zRight = driveWithSteer(-0.85);  // -steer -> right (+Z)
+    CHECK(zLeft < -1.0);
+    CHECK(zRight > +1.0);
+}
+
+TEST_CASE("drivable car round-trips through sbeam JSON with wheels and powertrain") {
+    const SoftBody car = buildDrivableCar();
+    const std::string jsonText = serializeSBeam(car);
+    const SoftBody car2 = parseSBeam(jsonText);
+    CHECK(car2.nodeCount() == car.nodeCount());
+    CHECK(car2.beamCount() == car.beamCount());
+    CHECK(car2.wheels().size() == 4);
+    CHECK(car2.hasPowertrain());
+}
+
+TEST_CASE("C ABI spawns drivable car and advances telemetry") {
+    sb_world_t* w = sb_world_create(1.0 / 2000.0);
+    sb_world_add_ground_plane(w, 1.0);
+    const int32_t car = sb_world_spawn_drivable_car(w, 0.0, 0.01, 0.0);
+    REQUIRE(car == 0);
+    sb_body_set_controls(w, car, 1.0, 0.0, 0.0, 0.0, -99);
+    sb_world_step(w, 2000);
+    sb_telemetry_c tel{};
+    sb_body_get_telemetry(w, car, &tel);
+    CHECK(tel.speed_kmh > 10.0);
+    CHECK(tel.engine_rpm > 1000.0);
+    CHECK(sb_body_node_count(w, car) > 300);
+    sb_world_destroy(w);
+}
+

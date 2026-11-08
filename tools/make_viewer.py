@@ -2,7 +2,7 @@
 """Bundles one or more `sbsim --record` JSON files into a self-contained HTML 3D viewer.
 
 Usage:
-    python3 tools/make_viewer.py --out viewer.html wall_crash.json ramp_jump.json ...
+    python3 tools/make_viewer.py --out viewer.html accel_brake.json slalom.json ...
 """
 
 import argparse
@@ -27,7 +27,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     <div>
       <div class="flex items-center gap-2">
         <span class="font-semibold text-base">SoftBodyDriver – C++-Physik-Kern (2000 Hz)</span>
-        <span class="text-xs px-2 py-0.5 rounded bg-[var(--secondary,#334155)] text-[var(--secondary-foreground,#e2e8f0)]">Phase 1 Replay</span>
+        <span class="text-xs px-2 py-0.5 rounded bg-[var(--secondary,#334155)] text-[var(--secondary-foreground,#e2e8f0)]">Phase 2 · Räder &amp; Antrieb</span>
       </div>
       <p id="sceneDesc" class="text-[var(--muted-foreground,#94a3b8)] text-xs mt-1"></p>
     </div>
@@ -37,14 +37,33 @@ TEMPLATE = r"""<!DOCTYPE html>
   <div class="relative bg-[var(--card,#1e293b)] border border-[var(--border,#334155)] rounded-xl overflow-hidden shadow-sm">
     <canvas id="view" class="w-full" style="height: 460px;"></canvas>
 
-    <div class="absolute top-3 left-3 bg-[var(--card,#1e293b)]/90 backdrop-blur border border-[var(--border,#334155)] rounded-lg px-3 py-2 text-xs space-y-1 pointer-events-none">
+    <div class="absolute top-3 left-3 bg-[var(--card,#1e293b)]/90 backdrop-blur border border-[var(--border,#334155)] rounded-lg px-3 py-2 text-xs space-y-1 pointer-events-none min-w-[215px]">
       <div class="font-medium text-sm" id="hudTitle"></div>
       <div class="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[var(--muted-foreground,#94a3b8)]">
         <span>Zeit:</span><span id="hudTime" class="text-[var(--foreground,#f8fafc)] font-mono"></span>
-        <span>Geschwindigkeit:</span><span id="hudSpeed" class="text-[var(--foreground,#f8fafc)] font-mono"></span>
+        <span>Geschwindigkeit:</span><span id="hudSpeed" class="text-[var(--foreground,#f8fafc)] font-mono font-semibold"></span>
         <span>Nodes / Beams:</span><span id="hudTopo" class="text-[var(--foreground,#f8fafc)] font-mono"></span>
         <span>Verbeult (&gt;1%):</span><span id="hudDeformed" class="text-amber-400 font-mono"></span>
         <span>Gebrochen:</span><span id="hudBroken" class="text-rose-400 font-mono"></span>
+      </div>
+      <div id="hudTelemetry" class="pt-1.5 mt-1 border-t border-[var(--border,#334155)] space-y-1 hidden">
+        <div class="flex items-center justify-between">
+          <span class="text-[var(--muted-foreground,#94a3b8)]">Gang / Drehzahl:</span>
+          <span class="font-mono"><span id="hudGear" class="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-bold mr-1">1</span><span id="hudRpm">850</span> RPM</span>
+        </div>
+        <div class="w-full h-1.5 bg-slate-700/60 rounded overflow-hidden">
+          <div id="hudRpmBar" class="h-full bg-gradient-to-r from-sky-400 via-amber-400 to-rose-500" style="width:15%"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 pt-0.5">
+          <div>
+            <div class="flex justify-between text-[var(--muted-foreground,#94a3b8)]"><span>Gas</span><span id="hudThr" class="font-mono">0%</span></div>
+            <div class="w-full h-1.5 bg-slate-700/60 rounded overflow-hidden"><div id="hudThrBar" class="h-full bg-emerald-400" style="width:0%"></div></div>
+          </div>
+          <div>
+            <div class="flex justify-between text-[var(--muted-foreground,#94a3b8)]"><span>Bremse</span><span id="hudBrk" class="font-mono">0%</span></div>
+            <div class="w-full h-1.5 bg-slate-700/60 rounded overflow-hidden"><div id="hudBrkBar" class="h-full bg-rose-500" style="width:0%"></div></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -59,10 +78,11 @@ TEMPLATE = r"""<!DOCTYPE html>
     </div>
 
     <div class="absolute bottom-3 left-3 flex items-center gap-3 text-xs bg-[var(--card,#1e293b)]/90 border border-[var(--border,#334155)] rounded-lg px-3 py-1.5 pointer-events-none">
-      <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-full bg-sky-400"></span> entspannt</span>
-      <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-400"></span> gestaucht/gedehnt</span>
-      <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-full bg-rose-500"></span> stark verformt</span>
-      <span class="text-[var(--muted-foreground,#94a3b8)] hidden sm:inline">· Maus ziehen: drehen · Rechts/Shift: schieben · Mausrad: Zoom</span>
+      <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-full bg-sky-400"></span> Chassis</span>
+      <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400"></span> Pressure-Wheels</span>
+      <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-400"></span> Last / Dehnung</span>
+      <span class="flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-full bg-rose-500"></span> Verbeult</span>
+      <span class="text-[var(--muted-foreground,#94a3b8)] hidden sm:inline">· Ziehen: drehen · Rechts/Shift: schieben · Rad: Zoom</span>
     </div>
   </div>
 
@@ -93,6 +113,9 @@ TEMPLATE = r"""<!DOCTYPE html>
 const SCENES = __SCENES_JSON__;
 
 const LABELS = {
+  accel_brake: "Sprint & Vollbremsung",
+  slalom: "Slalom (Hydro-Lenkung)",
+  curb_impact: "Bordstein-Einschlag",
   wall_crash: "50 km/h Wand-Crash",
   ramp_jump: "80 km/h Rampensprung",
   bridge_overload: "Brücken-Überlast",
@@ -105,7 +128,6 @@ let framePos = 0;
 let playing = true;
 let speed = 1.0;
 
-// Camera spherical coordinates around `target`.
 let camYaw = 0.55, camPitch = 0.32, camDist = 9.0;
 let camTarget = [0, 0.8, 0];
 let panOffset = [0, 0, 0];
@@ -116,10 +138,10 @@ function prepareScene(idx) {
   framePos = 0;
   panOffset = [0, 0, 0];
 
-  // Precompute initial beam lengths (from frame 0) and per-frame cumulative broken sets.
   const f0 = scene.frames[0];
   scene._restLen = [];
   scene._brokenAt = [];
+  scene._wheelBeamSet = [];
   for (let bi = 0; bi < scene.bodies.length; ++bi) {
     const b = scene.bodies[bi];
     const p = f0.p[bi];
@@ -131,6 +153,10 @@ function prepareScene(idx) {
       rl[i] = Math.hypot(dx, dy, dz) || 1;
     }
     scene._restLen.push(rl);
+
+    const wb = new Uint8Array(nb);
+    if (b.wheelBeams) for (const k of b.wheelBeams) if (k < nb) wb[k] = 1;
+    scene._wheelBeamSet.push(wb);
 
     const brokenFrames = [];
     const cur = new Uint8Array(nb);
@@ -151,11 +177,11 @@ function prepareScene(idx) {
     camYaw = 0.7; camPitch = 0.35; camDist = 5.5;
     document.getElementById("followCam").checked = false;
     camTarget = [0, 1.0, 0];
-  } else if (scene.scene === "ramp_jump") {
-    camYaw = 0.25; camPitch = 0.22; camDist = 11.0;
+  } else if (scene.scene === "slalom") {
+    camYaw = -1.15; camPitch = 0.32; camDist = 8.5;
     document.getElementById("followCam").checked = true;
   } else {
-    camYaw = 0.45; camPitch = 0.28; camDist = 7.5;
+    camYaw = 0.48; camPitch = 0.25; camDist = 6.8;
     document.getElementById("followCam").checked = true;
   }
 
@@ -184,7 +210,6 @@ function renderTabs() {
   });
 }
 
-// --- 3D math & projection
 const canvas = document.getElementById("view");
 const ctx = canvas.getContext("2d");
 
@@ -239,7 +264,7 @@ function drawBoxCollider(cam, c, isLight) {
     ]);
   }
   const faces = [[0,1,3,2],[4,6,7,5],[0,4,5,1],[2,3,7,6],[0,2,6,4],[1,5,7,3]];
-  ctx.fillStyle = isLight ? "rgba(100,116,139,0.22)" : "rgba(148,163,184,0.16)";
+  ctx.fillStyle = isLight ? "rgba(100,116,139,0.25)" : "rgba(148,163,184,0.18)";
   for (const f of faces) {
     const pts = f.map(k => cam.project(corners[k]));
     if (pts.some(p => !p)) continue;
@@ -250,13 +275,16 @@ function drawBoxCollider(cam, c, isLight) {
     ctx.fill();
   }
   const edges = [[0,1],[1,3],[3,2],[2,0],[4,5],[5,7],[7,6],[6,4],[0,4],[1,5],[2,6],[3,7]];
-  const edgeCol = isLight ? "rgba(71,85,105,0.65)" : "rgba(148,163,184,0.5)";
+  const edgeCol = isLight ? "rgba(71,85,105,0.7)" : "rgba(148,163,184,0.55)";
   for (const [a,b] of edges) drawLine3D(cam, corners[a], corners[b], edgeCol, 1.2);
 }
 
-function strainColor(strain, isLight) {
+function strainColor(strain, isWheel, isLight) {
   const s = Math.min(1, strain / 0.12);
-  if (s < 0.08) return isLight ? "#0284c7" : "#38bdf8";
+  if (s < 0.08) {
+    if (isWheel) return isLight ? "#059669" : "#34d399";
+    return isLight ? "#0284c7" : "#38bdf8";
+  }
   if (s < 0.45) {
     const t = (s - 0.08) / 0.37;
     const r = Math.round(56 + t*(251-56));
@@ -287,7 +315,6 @@ function render() {
   const fi = Math.min(scene.frames.length - 1, Math.floor(framePos));
   const frame = scene.frames[fi];
 
-  // Center of mass of body 0 for follow-cam and speed readout.
   const p0 = frame.p[0];
   const n0 = p0.length / 3;
   let cx = 0, cy = 0, cz = 0;
@@ -301,9 +328,8 @@ function render() {
 
   const cam = makeCamera(w, h);
 
-  // Ground grid (y = 0)
   const gridCol = isLight ? "rgba(100,116,139,0.22)" : "rgba(148,163,184,0.14)";
-  const gx0 = Math.floor(camTarget[0] - 16), gx1 = Math.ceil(camTarget[0] + 16);
+  const gx0 = Math.floor(camTarget[0] - 18), gx1 = Math.ceil(camTarget[0] + 18);
   for (let x = gx0; x <= gx1; ++x) drawLine3D(cam, [x, 0, -10], [x, 0, 10], gridCol, 1);
   for (let z = -10; z <= 10; ++z) drawLine3D(cam, [gx0, 0, z], [gx1, 0, z], gridCol, 1);
 
@@ -313,13 +339,13 @@ function render() {
   const showBroken = document.getElementById("showBroken").checked;
   const showNodes = document.getElementById("showNodes").checked;
 
-  // Depth-sorted beams for clean rendering.
   const segments = [];
   for (let bi = 0; bi < scene.bodies.length; ++bi) {
     const b = scene.bodies[bi];
     const p = frame.p[bi];
     const rl = scene._restLen[bi];
     const br = scene._brokenAt[bi][fi];
+    const wb = scene._wheelBeamSet[bi];
     broken += br.count;
     totalNodes += b.nodes;
     const nb = b.beams.length / 2;
@@ -339,7 +365,7 @@ function render() {
       segments.push({
         x0: pa[0], y0: pa[1], x1: pb[0], y1: pb[1],
         z: 0.5*(pa[2] + pb[2]),
-        color: isBroken ? "rgba(244,63,94,0.28)" : strainColor(strain, isLight),
+        color: isBroken ? "rgba(244,63,94,0.28)" : strainColor(strain, wb[i] === 1, isLight),
         w: isBroken ? 1.0 : (strain > 0.03 ? 2.1 : 1.5)
       });
     }
@@ -362,7 +388,7 @@ function render() {
       for (let i = 0; i < b.nodes; ++i) {
         const pr = cam.project([p[3*i]*0.001, p[3*i+1]*0.001, p[3*i+2]*0.001]);
         if (!pr) continue;
-        const r = Math.max(1.6, Math.min(4.0, 14 / pr[2]));
+        const r = Math.max(1.5, Math.min(3.8, 13 / pr[2]));
         ctx.fillStyle = fixedSet.has(i) ? "#f43f5e" : (isLight ? "#0f172a" : "#e2e8f0");
         ctx.beginPath();
         ctx.arc(pr[0], pr[1], r, 0, Math.PI*2);
@@ -371,13 +397,14 @@ function render() {
     }
   }
 
-  // Speed from central difference on center of mass.
   let speedKmh = 0;
-  if (fi > 0) {
+  if (frame.tel) {
+    speedKmh = frame.tel[0];
+  } else if (fi > 0) {
     const prev = scene.frames[fi - 1].p[0];
     let px = 0, py = 0, pz = 0;
     for (let i = 0; i < prev.length; i += 3) { px += prev[i]; py += prev[i+1]; pz += prev[i+2]; }
-    px = (px / n0) * 0.001; py = (py / n0) * 0.001; pz = (pz / n0) * 0.001;
+    px = (px / n0) * 0.001; py = (py / n0) * 0.001; pz = (cz / n0) * 0.001;
     const dt = (frame.t - scene.frames[fi - 1].t) || (1 / scene.fps);
     speedKmh = Math.hypot(cx - px, cy - py, cz - pz) / dt * 3.6;
   }
@@ -387,9 +414,23 @@ function render() {
   document.getElementById("hudTopo").textContent = `${totalNodes} / ${totalBeams}`;
   document.getElementById("hudDeformed").textContent = `${deformed}`;
   document.getElementById("hudBroken").textContent = `${broken}`;
+
+  const telBox = document.getElementById("hudTelemetry");
+  if (frame.tel) {
+    telBox.classList.remove("hidden");
+    const [, rpm, gear, thr, brk] = frame.tel;
+    document.getElementById("hudGear").textContent = gear < 0 ? "R" : (gear === 0 ? "N" : String(gear));
+    document.getElementById("hudRpm").textContent = String(rpm);
+    document.getElementById("hudRpmBar").style.width = `${Math.min(100, Math.round((rpm / 6500) * 100))}%`;
+    document.getElementById("hudThr").textContent = `${Math.round(thr * 100)}%`;
+    document.getElementById("hudThrBar").style.width = `${Math.round(thr * 100)}%`;
+    document.getElementById("hudBrk").textContent = `${Math.round(brk * 100)}%`;
+    document.getElementById("hudBrkBar").style.width = `${Math.round(brk * 100)}%`;
+  } else {
+    telBox.classList.add("hidden");
+  }
 }
 
-// --- Controls
 let dragging = false, dragPan = false, lastX = 0, lastY = 0;
 canvas.addEventListener("pointerdown", e => {
   dragging = true;

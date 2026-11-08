@@ -148,6 +148,65 @@ SoftBody parseSBeam(const std::string& jsonText) {
                 }
             }
         }
+        if (doc.contains("wheels")) {
+            const json& wheels = doc["wheels"];
+            if (!wheels.is_array()) throw std::runtime_error("sbeam: 'wheels' must be an array");
+            row = 0;
+            for (const json& wj : wheels) {
+                const std::string ctx = "wheels[" + std::to_string(row++) + "]";
+                auto resolveNode = [&](const json& v) -> std::uint32_t {
+                    if (v.is_number_unsigned()) return v.get<std::uint32_t>();
+                    const auto id = v.get<std::string>();
+                    const auto idx = body.findNode(id);
+                    if (idx < 0) throw std::runtime_error(ctx + ": unknown hub node '" + id + "'");
+                    return static_cast<std::uint32_t>(idx);
+                };
+                PressureWheelSpec ws;
+                ws.name = wj.value("name", "wheel");
+                ws.hubRight = resolveNode(wj.at("hubRight"));
+                ws.hubLeft = resolveNode(wj.at("hubLeft"));
+                ws.radius = wj.value("radius", ws.radius);
+                ws.width = wj.value("width", ws.width);
+                ws.numRays = wj.value("numRays", ws.numRays);
+                ws.tireMass = wj.value("tireMass", ws.tireMass);
+                ws.friction = wj.value("friction", ws.friction);
+                ws.pressurePsi = wj.value("pressurePsi", ws.pressurePsi);
+                ws.spokeSpring = wj.value("spokeSpring", ws.spokeSpring);
+                ws.spokeDamp = wj.value("spokeDamp", ws.spokeDamp);
+                ws.treadSpring = wj.value("treadSpring", ws.treadSpring);
+                ws.treadDamp = wj.value("treadDamp", ws.treadDamp);
+                ws.driven = wj.value("driven", ws.driven);
+                ws.steered = wj.value("steered", ws.steered);
+                ws.braked = wj.value("braked", ws.braked);
+                ws.handbraked = wj.value("handbraked", ws.handbraked);
+                if (wj.contains("treadNodes")) {
+                    PressureWheel pw;
+                    pw.spec = ws;
+                    pw.treadNodes = wj["treadNodes"].get<std::vector<std::uint32_t>>();
+                    if (wj.contains("beamIndices"))
+                        pw.beamIndices = wj["beamIndices"].get<std::vector<std::uint32_t>>();
+                    body.wheels().push_back(std::move(pw));
+                } else {
+                    body.addWheel(ws);
+                }
+            }
+        }
+
+        if (doc.contains("powertrain")) {
+            const json& pj = doc["powertrain"];
+            PowertrainSpec pt;
+            const std::string layout = pj.value("layout", "AWD");
+            if (layout == "RWD") pt.layout = DriveLayout::RWD;
+            else if (layout == "FWD") pt.layout = DriveLayout::FWD;
+            else pt.layout = DriveLayout::AWD;
+            pt.idleRpm = pj.value("idleRpm", pt.idleRpm);
+            pt.redlineRpm = pj.value("redlineRpm", pt.redlineRpm);
+            pt.finalDrive = pj.value("finalDrive", pt.finalDrive);
+            pt.automatic = pj.value("automatic", pt.automatic);
+            pt.maxBrakeTorque = pj.value("maxBrakeTorque", pt.maxBrakeTorque);
+            if (pj.contains("forwardGears")) pt.forwardGears = pj["forwardGears"].get<std::vector<real>>();
+            body.setPowertrain(pt);
+        }
     } catch (const json::exception& e) {
         throw std::runtime_error(std::string("sbeam: ") + e.what());
     } catch (const std::invalid_argument& e) {
@@ -198,6 +257,49 @@ std::string serializeSBeam(const SoftBody& body, int indent) {
         beams.push_back({body.nodeIds()[bm.a], body.nodeIds()[bm.b]});
     }
     doc["beams"] = beams;
+
+    if (!body.wheels().empty()) {
+        json wheels = json::array();
+        for (const PressureWheel& w : body.wheels()) {
+            const auto& ws = w.spec;
+            json wj;
+            wj["name"] = ws.name;
+            wj["hubRight"] = body.nodeIds()[ws.hubRight];
+            wj["hubLeft"] = body.nodeIds()[ws.hubLeft];
+            wj["radius"] = ws.radius;
+            wj["width"] = ws.width;
+            wj["numRays"] = ws.numRays;
+            wj["tireMass"] = ws.tireMass;
+            wj["friction"] = ws.friction;
+            wj["pressurePsi"] = ws.pressurePsi;
+            wj["spokeSpring"] = ws.spokeSpring;
+            wj["spokeDamp"] = ws.spokeDamp;
+            wj["treadSpring"] = ws.treadSpring;
+            wj["treadDamp"] = ws.treadDamp;
+            wj["driven"] = ws.driven;
+            wj["steered"] = ws.steered;
+            wj["braked"] = ws.braked;
+            wj["handbraked"] = ws.handbraked;
+            wj["treadNodes"] = w.treadNodes;
+            wj["beamIndices"] = w.beamIndices;
+            wheels.push_back(std::move(wj));
+        }
+        doc["wheels"] = std::move(wheels);
+    }
+
+    if (body.hasPowertrain()) {
+        const auto& pt = body.powertrain().spec();
+        json pj;
+        pj["layout"] = pt.layout == DriveLayout::RWD ? "RWD" : (pt.layout == DriveLayout::FWD ? "FWD" : "AWD");
+        pj["idleRpm"] = pt.idleRpm;
+        pj["redlineRpm"] = pt.redlineRpm;
+        pj["finalDrive"] = pt.finalDrive;
+        pj["automatic"] = pt.automatic;
+        pj["maxBrakeTorque"] = pt.maxBrakeTorque;
+        pj["forwardGears"] = pt.forwardGears;
+        doc["powertrain"] = std::move(pj);
+    }
+
     return doc.dump(indent);
 }
 

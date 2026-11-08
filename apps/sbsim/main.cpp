@@ -38,9 +38,16 @@ double nowSeconds() {
 
 void printStats(const sb::World& w) {
     const auto s = w.stats();
-    std::printf("  t=%6.3fs  KE=%11.1f J  elastic=%10.1f J  deformed=%6zu  broken=%5zu  contacts=%5zu%s\n", s.time,
-                s.kineticEnergy, s.elasticEnergy, s.deformedBeams, s.brokenBeams, s.contacts,
-                s.finite ? "" : "  !! NON-FINITE");
+    if (!w.bodies().empty() && (!w.bodies()[0].wheels().empty() || w.bodies()[0].hasPowertrain())) {
+        const auto t = w.bodies()[0].telemetry();
+        std::printf("  t=%6.3fs  v=%5.1f km/h  rpm=%4.0f  gear=%2d  steer=%+5.2f  deformed=%5zu  broken=%4zu%s\n",
+                    s.time, t.speedKmh, t.engineRpm, t.gear, t.steer, s.deformedBeams, s.brokenBeams,
+                    s.finite ? "" : "  !! NON-FINITE");
+    } else {
+        std::printf("  t=%6.3fs  KE=%11.1f J  elastic=%10.1f J  deformed=%6zu  broken=%5zu  contacts=%5zu%s\n", s.time,
+                    s.kineticEnergy, s.elasticEnergy, s.deformedBeams, s.brokenBeams, s.contacts,
+                    s.finite ? "" : "  !! NON-FINITE");
+    }
 }
 
 int runScene(sb::Scene& sc, double duration, const char* recordPath, double fps, bool quiet) {
