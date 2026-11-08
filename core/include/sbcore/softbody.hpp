@@ -1,0 +1,185 @@
+// Node-beam soft body: the fundamental simulation object (vehicles, props, structures).
+//
+// Model (BeamNG / Rigs-of-Rods style):
+//   * Nodes  = point masses (position, velocity, mass, friction coefficient).
+//   * Beams  = massless spring-dampers between two nodes. They only transmit
+//              axial force (tension/compression); rigidity comes from bracing.
+//   * Plasticity: if the spring force exceeds `deform`, the rest length moves
+//              -> permanent dents. Optional work-hardening raises the threshold.
+//   * Breaking: if the total beam force exceeds `strength`, the beam breaks and
+//              takes its whole break group with it (e.g. a door hinge).
+#pragma once
+
+#include <cstdint>
+#include <limits>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include "sbcore/vec3.hpp"
+
+namespace sb {
+
+
+enum class BeamType : std::uint8_t {
+    Normal,       ///< Spring-damper in tension and compression.
+    Support,      ///< Only resists compression (anti-clipping limiter between parts).
+    Anisotropic,  ///< Separate spring/damp for expansion vs. compression (tyres, ropes).
+    Hydro,        ///< Rest length driven by an input channel (steering racks, actuators).
+};
+
+const char* beamTypeToString(BeamType t);
+bool beamTypeFromString(const std::string& s, BeamType& out);
+
+/// Authoring parameters of a node (what you write in a .sbeam file).
+struct NodeParams {
+    real mass = 1.0;        ///< kg
+    real friction = 1.0;    ///< Coulomb friction coefficient (multiplied with the surface's).
+    bool fixed = false;     ///< Pinned in space (infinite mass).
+    bool collision = true;  ///< Collides with static world geometry.
+};
+
+/// Authoring parameters of a beam (what you write in a .sbeam file).
+struct BeamParams {
+    BeamType type = BeamType::Normal;
+    real spring = 1.0e6;          ///< N/m
+    real damp = 100.0;            ///< N*s/m
+    real deform = kInf;           ///< N; force above which the beam deforms permanently.
+    real strength = kInf;         ///< N; force above which the beam breaks.
+    real deformLimit = kInf;      ///< Max fractional rest-length shrink (0.3 -> may shrink to 70%).
+    real deformLimitExpansion = kInf;  ///< Max fractional rest-length growth.
+    real hardening = 0.0;         ///< Threshold gain per unit plastic force (0 = perfectly plastic).
+    real precompression = 1.0;    ///< Rest length multiplier at spawn.
+    // Anisotropic only: values used while the beam is longer than rest length.
+    real springExpansion = -1.0;  ///< <0 -> same as `spring`.
+    real dampExpansion = -1.0;    ///< <0 -> same as `damp`.
+    // Hydro only: restLength = base * (1 + hydroRatio * input[hydroInput]).
+    int hydroInput = -1;
+    real hydroRatio = 0.0;
+    std::string breakGroup;       ///< Empty = none.
+};
+
+/// Runtime beam state.
+struct Beam {
+    std::uint32_t a = 0, b = 0;
+    BeamType type = BeamType::Normal;
+    bool broken = false;
+    std::int32_t breakGroup = -1;
+    std::int32_t hydroInput = -1;
+
+    real spring = 0, damp = 0;
+    real springExp = 0, dampExp = 0;
+    real restLength = 0;      ///< Current (possibly plastically changed) rest length.
+    real baseRestLength = 0;  ///< Rest length at spawn (incl. precompression). Reference for limits.
+    real deformThreshold = kInf;
+    real deformLimitStress = kInf;  ///< Cap for hardening (internal).
+    real hardening = 0;
+    real strength = kInf;
+    real minRest = 0, maxRest = kInf;
+    real hydroRatio = 0;
+    real hydroOffset = 0;     ///< Plastic offset preserved while hydro input changes rest length.
+
+    real lastForce = 0;       ///< Signed axial force of the last step (+ tension), diagnostics.
+    BeamParams params;        ///< Original authoring parameters (for saving / tooling).
+};
+
+struct BodyStats {
+    std::size_t nodes = 0;
+    std::size_t beams = 0;
+    std::size_t brokenBeams = 0;
+    std::size_t deformedBeams = 0;  ///< |rest - base| / base > 0.1 %
+    real totalMass = 0;
+    real kineticEnergy = 0;
+    real elasticEnergy = 0;
+};
+
+class SoftBody {
+public:
+    explicit SoftBody(std::string name = "body") : name_(std::move(name)) {}
+
+    // ---------------------------------------------------------------- authoring
+    std::uint32_t addNode(const std::string& id, const Vec3& pos, const NodeParams& p = {});
+    /// Adds a beam; rest length is taken from the current node positions.
+    /// Returns the beam index. Throws std::invalid_argument for bad indices / zero length.
+    std::uint32_t addBeam(std::uint32_t a, std::uint32_t b, const BeamParams& p = {});
+    std::uint32_t addBeam(const std::string& a, const std::string& b, const BeamParams& p = {});
+
+    /// Index of node `id` or -1.
+    std::int64_t findNode(const std::string& id) const;
+
+    // ---------------------------------------------------------------- simulation
+    /// Computes beam forces into force(); applies plasticity and breaking.
+    /// Must be called once per physics step after forces are cleared.
+    void accumulateBeamForces(real dt);
+
+    /// Hydro input channels (e.g. steering in [-1, 1]).
+    void setInput(int channel, real value);
+    real input(int channel) const;
+
+    // ---------------------------------------------------------------- utilities
+    void translate(const Vec3& d);
+    void setVelocity(const Vec3& v);
+    void addVelocity(const Vec3& v);
+    Vec3 centerOfMass() const;
+    real totalMass() const;
+    void aabb(Vec3& lo, Vec3& hi) const;
+    BodyStats stats() const;
+    real kineticEnergy() const;
+    real elasticEnergy() const;
+    /// Gravity potential energy relative to y = 0 for gravity g.
+    real potentialEnergy(const Vec3& gravity) const;
+
+    /// Conservative explicit-integration stability estimate for time step dt.
+    /// Values < 1 are stable for symplectic Euler; aim for < ~0.7.
+    real stabilityRatio(real dt) const;
+
+    /// Breaks a beam (and its break group).
+    void breakBeam(std::uint32_t beamIndex);
+
+    // ---------------------------------------------------------------- access
+    const std::string& name() const { return name_; }
+    void setName(std::string n) { name_ = std::move(n); }
+    std::size_t nodeCount() const { return pos_.size(); }
+    std::size_t beamCount() const { return beams_.size(); }
+
+    std::vector<Vec3>& positions() { return pos_; }
+    const std::vector<Vec3>& positions() const { return pos_; }
+    std::vector<Vec3>& velocities() { return vel_; }
+    const std::vector<Vec3>& velocities() const { return vel_; }
+    std::vector<Vec3>& forces() { return force_; }
+    const std::vector<Vec3>& forces() const { return force_; }
+    const std::vector<real>& masses() const { return mass_; }
+    const std::vector<real>& invMasses() const { return invMass_; }
+    const std::vector<real>& frictions() const { return friction_; }
+    const std::vector<std::uint8_t>& collisionFlags() const { return collision_; }
+    const std::vector<std::string>& nodeIds() const { return nodeIds_; }
+    const NodeParams& nodeParams(std::uint32_t i) const { return nodeParams_[i]; }
+    std::vector<Beam>& beams() { return beams_; }
+    const std::vector<Beam>& beams() const { return beams_; }
+    const std::vector<std::string>& breakGroupNames() const { return breakGroupNames_; }
+
+    /// Changes a node's mass at runtime (e.g. cargo / load tests).
+    void setNodeMass(std::uint32_t i, real mass);
+    bool isFixed(std::uint32_t i) const { return invMass_[i] == 0; }
+
+private:
+    std::int32_t breakGroupIndex(const std::string& name);
+    void processPendingBreaks();
+
+    std::string name_;
+    // Node data, structure-of-arrays for cache / SIMD friendliness.
+    std::vector<Vec3> pos_, vel_, force_;
+    std::vector<real> mass_, invMass_, friction_;
+    std::vector<std::uint8_t> collision_;
+    std::vector<std::string> nodeIds_;
+    std::vector<NodeParams> nodeParams_;
+    std::unordered_map<std::string, std::uint32_t> nodeLookup_;
+
+    std::vector<Beam> beams_;
+    std::vector<std::string> breakGroupNames_;
+    std::vector<std::vector<std::uint32_t>> breakGroupMembers_;
+    std::vector<std::uint32_t> pendingBreaks_;
+    std::vector<real> inputs_;
+};
+
+}  // namespace sb

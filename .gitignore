@@ -1,0 +1,6 @@
+/build*/
+/dist/
+/.cache/
+compile_commands.json
+*.Replay.json
+.DS_Store

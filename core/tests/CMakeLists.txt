@@ -1,0 +1,4 @@
+add_executable(sbcore_tests test_physics.cpp)
+target_link_libraries(sbcore_tests PRIVATE sb::core)
+target_include_directories(sbcore_tests SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/third_party)
+add_test(NAME sbcore_tests COMMAND sbcore_tests)

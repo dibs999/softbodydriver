@@ -1,0 +1,39 @@
+{
+  // Hand-authored 1x1x1 m braced test box (8 nodes, 28 beams) with a breakable "door" panel.
+  "format": "sbeam",
+  "version": 1,
+  "name": "test_box",
+  "nodes": [
+    {"set": {"mass": 12.5, "friction": 0.85}},
+    ["b00", -0.5, 0.0, -0.5],
+    ["b10",  0.5, 0.0, -0.5],
+    ["b01", -0.5, 0.0,  0.5],
+    ["b11",  0.5, 0.0,  0.5],
+    ["t00", -0.5, 1.0, -0.5],
+    ["t10",  0.5, 1.0, -0.5],
+    ["t01", -0.5, 1.0,  0.5],
+    ["t11",  0.5, 1.0,  0.5]
+  ],
+  "beams": [
+    // 12 edges
+    {"set": {"spring": 350000, "damp": 90, "deform": 8000, "hardening": 0.2, "deformLimit": 0.5, "strength": 30000}},
+    ["b00", "b10"], ["b01", "b11"], ["b00", "b01"], ["b10", "b11"],
+    ["t00", "t10"], ["t01", "t11"], ["t00", "t01"], ["t10", "t11"],
+    ["b00", "t00"], ["b10", "t10"], ["b01", "t01"], ["b11", "t11"],
+
+    // 12 face diagonals
+    {"set": {"spring": 220000, "damp": 70, "deform": 6000}},
+    ["b00", "b11"], ["b10", "b01"],
+    ["t00", "t11"], ["t10", "t01"],
+    ["b00", "t10"], ["b10", "t00"],
+    ["b01", "t11"], ["b11", "t01"],
+    ["b00", "t01"], ["b01", "t00"],
+    // Right face acts as a removable door: if one diagonal snaps, both snap together.
+    {"set": {"strength": 9000, "breakGroup": "right_door"}},
+    ["b10", "t11"], ["b11", "t10"],
+
+    // 4 interior body diagonals
+    {"reset": true, "set": {"spring": 160000, "damp": 60, "deform": 5000, "deformLimit": 0.5}},
+    ["b00", "t11"], ["b10", "t01"], ["b01", "t10"], ["b11", "t00"]
+  ]
+}
