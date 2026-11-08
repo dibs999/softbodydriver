@@ -782,7 +782,9 @@ CarBuild buildCar(const CarDefinition& def) {
             if (std::abs(stations[i] - x) < best) { best = std::abs(stations[i] - x); bestI = i; }
         return bestI;
     };
-    const std::size_t sf = findStation(prof.xFA), sr = findStation(prof.xRA);
+    // Orientation references inside the stiff passenger cell (front: just behind the firewall,
+    // rear: in front of the rear seat bulkhead) so crash damage does not tilt the reference frame.
+    const std::size_t sf = findStation(prof.xCowl - 0.15), sr = findStation(std::max(prof.xRwBase + 0.15, prof.xRA + prof.Ra + 0.05));
     build.layout.refFL = static_cast<std::uint32_t>(rig.shell[sf][0][0]);
     build.layout.refFR = static_cast<std::uint32_t>(rig.shell[sf][0][1]);
     build.layout.refRL = static_cast<std::uint32_t>(rig.shell[sr][0][0]);

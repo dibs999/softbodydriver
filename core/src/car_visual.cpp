@@ -13,19 +13,6 @@ using namespace detail;
 
 namespace {
 
-struct Frame {
-    Vec3 e1{1, 0, 0}, e2{0, 1, 0}, e3{0, 0, 1};
-};
-
-Frame frameOf(const std::vector<float>& frames, std::uint32_t n) {
-    const float* f = &frames[static_cast<std::size_t>(n) * 9];
-    Frame fr;
-    fr.e1 = {f[0], f[1], f[2]};
-    fr.e2 = {f[3], f[4], f[5]};
-    fr.e3 = {f[6], f[7], f[8]};
-    return fr;
-}
-
 class VisBuilder {
 public:
     VisBuilder(const SoftBody& body, CarVisual& vis, const std::vector<float>& frames)
@@ -56,17 +43,15 @@ public:
         const std::size_t kk = std::min<std::size_t>(k, candidates.size());
         for (std::size_t i = 0; i < kk; ++i) {
             const real d = std::sqrt(best[i].first);
-            const real w = 1.0 / ((d + 0.05) * (d + 0.05));
+            const real w = 1.0 / ((d + 0.08) * (d + 0.08));
             s.node[i] = best[i].second;
             s.weight[i] = static_cast<float>(w);
             wsum += w;
-            const Frame f = frameOf(frames_, best[i].second);
-            const Vec3 rel = p - body_.positions()[best[i].second];
-            s.local[i][0] = static_cast<float>(dot(rel, f.e1));
-            s.local[i][1] = static_cast<float>(dot(rel, f.e2));
-            s.local[i][2] = static_cast<float>(dot(rel, f.e3));
         }
         for (std::size_t i = 0; i < kk; ++i) s.weight[i] = static_cast<float>(s.weight[i] / wsum);
+        s.local[0][0] = static_cast<float>(p.x);
+        s.local[0][1] = static_cast<float>(p.y);
+        s.local[0][2] = static_cast<float>(p.z);
         return s;
     }
 
@@ -325,34 +310,55 @@ std::vector<MeshSurface> buildWheelMeshes(const TireDef& tire) {
 
 // ============================================================================== skinning runtime
 
-void computeNodeFrames(const SoftBody& body, const CarVisual& vis, std::vector<float>& frames) {
-    const auto& pos = body.positions();
+namespace {
+void cellBasis(const Vec3& fl, const Vec3& fr, const Vec3& rl, const Vec3& rr, Vec3& f, Vec3& r, Vec3& u) {
+    f = normalize((fl + fr) - (rl + rr));
+    const Vec3 r0 = (fr + rr) - (fl + rl);
+    u = normalize(cross(r0, f));
+    r = cross(f, u);
+}
+}  // namespace
+
+void computeNodeFrames(const std::vector<Vec3>& pos, const CarVisual& vis, std::vector<float>& frames) {
     const std::size_t n = pos.size();
-    frames.resize(n * 9);
-    for (std::size_t i = 0; i < n; ++i) {
-        float* f = &frames[i * 9];
-        Vec3 e1{1, 0, 0}, e2{0, 1, 0}, e3{0, 0, 1};
-        if (i < vis.frameA.size() && vis.frameA[i] != i && vis.frameB[i] != i) {
-            const Vec3 p = pos[i];
-            const Vec3 a = pos[vis.frameA[i]] - p;
-            const Vec3 b = pos[vis.frameB[i]] - p;
-            const Vec3 t1 = normalize(a);
-            Vec3 t2 = b - t1 * dot(b, t1);
-            const real l2 = length(t2);
-            if (length(a) > 1e-9 && l2 > 1e-9) {
-                e1 = t1;
-                e2 = t2 / l2;
-                e3 = cross(e1, e2);
-            }
+    frames.resize(12 + n * 3);
+    // Rigid motion of the passenger cell: R = B_now * B_rest^T, t = c_now - R * c_rest.
+    real R[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+    Vec3 t{0, 0, 0};
+    const auto* fr = vis.frameRefs;
+    if (vis.restNodes.size() == n && fr[0] < n && fr[1] < n && fr[2] < n && fr[3] < n) {
+        Vec3 f0, r0, u0, f1, r1, u1;
+        cellBasis(vis.restNodes[fr[0]], vis.restNodes[fr[1]], vis.restNodes[fr[2]], vis.restNodes[fr[3]], f0, r0, u0);
+        cellBasis(pos[fr[0]], pos[fr[1]], pos[fr[2]], pos[fr[3]], f1, r1, u1);
+        const Vec3 b0[3] = {f0, r0, u0}, b1[3] = {f1, r1, u1};
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 3; ++j) R[i][j] = b1[0][i] * b0[0][j] + b1[1][i] * b0[1][j] + b1[2][i] * b0[2][j];
+        const Vec3 c0 = (vis.restNodes[fr[0]] + vis.restNodes[fr[1]] + vis.restNodes[fr[2]] + vis.restNodes[fr[3]]) * 0.25;
+        const Vec3 c1 = (pos[fr[0]] + pos[fr[1]] + pos[fr[2]] + pos[fr[3]]) * 0.25;
+        t = c1 - Vec3{R[0][0] * c0.x + R[0][1] * c0.y + R[0][2] * c0.z, R[1][0] * c0.x + R[1][1] * c0.y + R[1][2] * c0.z,
+                      R[2][0] * c0.x + R[2][1] * c0.y + R[2][2] * c0.z};
+    }
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j) frames[static_cast<std::size_t>(i * 3 + j)] = static_cast<float>(R[i][j]);
+    frames[9] = static_cast<float>(t.x);
+    frames[10] = static_cast<float>(t.y);
+    frames[11] = static_cast<float>(t.z);
+    const bool haveRest = vis.restNodes.size() == n;
+    for (std::size_t k = 0; k < n; ++k) {
+        Vec3 d{0, 0, 0};
+        if (haveRest) {
+            const Vec3& q = vis.restNodes[k];
+            const Vec3 rigid{R[0][0] * q.x + R[0][1] * q.y + R[0][2] * q.z + t.x, R[1][0] * q.x + R[1][1] * q.y + R[1][2] * q.z + t.y,
+                             R[2][0] * q.x + R[2][1] * q.y + R[2][2] * q.z + t.z};
+            d = pos[k] - rigid;
         }
-        f[0] = static_cast<float>(e1.x); f[1] = static_cast<float>(e1.y); f[2] = static_cast<float>(e1.z);
-        f[3] = static_cast<float>(e2.x); f[4] = static_cast<float>(e2.y); f[5] = static_cast<float>(e2.z);
-        f[6] = static_cast<float>(e3.x); f[7] = static_cast<float>(e3.y); f[8] = static_cast<float>(e3.z);
+        frames[12 + k * 3] = static_cast<float>(d.x);
+        frames[12 + k * 3 + 1] = static_cast<float>(d.y);
+        frames[12 + k * 3 + 2] = static_cast<float>(d.z);
     }
 }
 
-Vec3 evalSkin(const SoftBody& body, const std::vector<float>& frames, const VertexSkin& s) {
-    const auto& pos = body.positions();
+Vec3 evalSkin(const std::vector<Vec3>& pos, const std::vector<float>& frames, const VertexSkin& s) {
     if (s.weight[0] < 0.0f) {  // line skin
         const Vec3 pa = pos[s.node[0]], pb = pos[s.node[1]], pr = pos[s.node[2]];
         Vec3 d = pb - pa;
@@ -365,26 +371,26 @@ Vec3 evalSkin(const SoftBody& body, const std::vector<float>& frames, const Vert
         const Vec3 e3 = cross(e1, e2);
         return pa + d * s.weight[1] + e1 * s.weight[2] + e2 * s.local[0][0] + e3 * s.local[0][1];
     }
-    Vec3 out{0, 0, 0};
+    const float* R = frames.data();
+    const float x = s.local[0][0], y = s.local[0][1], z = s.local[0][2];
+    Vec3 out{R[0] * x + R[1] * y + R[2] * z + R[9], R[3] * x + R[4] * y + R[5] * z + R[10], R[6] * x + R[7] * y + R[8] * z + R[11]};
     for (int k = 0; k < 4; ++k) {
         const float w = s.weight[k];
         if (w <= 0.0f) continue;
-        const float* f = &frames[static_cast<std::size_t>(s.node[k]) * 9];
-        const Vec3 p = pos[s.node[k]];
-        const Vec3 v{p.x + f[0] * s.local[k][0] + f[3] * s.local[k][1] + f[6] * s.local[k][2],
-                     p.y + f[1] * s.local[k][0] + f[4] * s.local[k][1] + f[7] * s.local[k][2],
-                     p.z + f[2] * s.local[k][0] + f[5] * s.local[k][1] + f[8] * s.local[k][2]};
-        out += v * w;
+        const float* d = &frames[12 + static_cast<std::size_t>(s.node[k]) * 3];
+        out.x += w * d[0];
+        out.y += w * d[1];
+        out.z += w * d[2];
     }
     return out;
 }
 
-void deformSurface(const SoftBody& body, const std::vector<float>& frames, const MeshSurface& surf,
+void deformSurface(const std::vector<Vec3>& pos, const std::vector<float>& frames, const MeshSurface& surf,
                    std::vector<float>& outPositions, std::vector<float>& outNormals) {
     const std::size_t nv = surf.skin.size();
     outPositions.resize(nv * 3);
     for (std::size_t i = 0; i < nv; ++i) {
-        const Vec3 p = evalSkin(body, frames, surf.skin[i]);
+        const Vec3 p = evalSkin(pos, frames, surf.skin[i]);
         outPositions[i * 3] = static_cast<float>(p.x);
         outPositions[i * 3 + 1] = static_cast<float>(p.y);
         outPositions[i * 3 + 2] = static_cast<float>(p.z);
@@ -398,45 +404,12 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
     const SoftBody& body = build.body;
     CarVisual& vis = build.visual;
     const CarBodyDef& bd = build.def.body;
-    const std::size_t N = body.nodeCount();
 
-    // ---- per-node frames from beam neighbours (prefer same group)
-    vis.frameA.assign(N, 0);
-    vis.frameB.assign(N, 0);
-    {
-        std::vector<std::vector<std::uint32_t>> nb(N);
-        for (const Beam& bm : body.beams()) {
-            if (bm.type == BeamType::Support || bm.type == BeamType::Shock || bm.spring <= 0.0) continue;
-            nb[bm.a].push_back(bm.b);
-            nb[bm.b].push_back(bm.a);
-        }
-        const auto& grp = body.nodeGroups();
-        for (std::size_t i = 0; i < N; ++i) {
-            vis.frameA[i] = static_cast<std::uint32_t>(i);
-            vis.frameB[i] = static_cast<std::uint32_t>(i);
-            real best = -1.0;
-            const Vec3 p = body.positions()[i];
-            for (int pass = 0; pass < 2 && best < 0.3; ++pass) {
-                for (std::size_t a = 0; a < nb[i].size(); ++a) {
-                    const std::uint32_t na = nb[i][a];
-                    if (pass == 0 && grp[na] != grp[i]) continue;
-                    for (std::size_t b = a + 1; b < nb[i].size(); ++b) {
-                        const std::uint32_t nbb = nb[i][b];
-                        if (pass == 0 && grp[nbb] != grp[i]) continue;
-                        const Vec3 da = body.positions()[na] - p, db = body.positions()[nbb] - p;
-                        const real la = length(da), lb = length(db);
-                        if (la < 1e-6 || lb < 1e-6) continue;
-                        const real score = length(cross(da / la, db / lb)) / (1.0 + 0.5 * (la + lb));
-                        if (score > best) {
-                            best = score;
-                            vis.frameA[i] = na;
-                            vis.frameB[i] = nbb;
-                        }
-                    }
-                }
-            }
-        }
-    }
+    vis.restNodes = body.positions();
+    vis.frameRefs[0] = build.layout.refFL;
+    vis.frameRefs[1] = build.layout.refFR;
+    vis.frameRefs[2] = build.layout.refRL;
+    vis.frameRefs[3] = build.layout.refRR;
     std::vector<float> frames;
     computeNodeFrames(body, vis, frames);
     VisBuilder vb(body, vis, frames);
@@ -521,8 +494,6 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         if (seg == 0) return "chassis";
         if (seg <= 2) return "trim";
         if (seg <= 5) {
-            if (xm > L - 0.22 && ym > bd.noseHeight - 0.17 && ym < bd.noseHeight + 0.03 && az > 0.40 * hw) return "headlight";
-            if (xm < 0.20 && ym > bd.tailHeight - 0.21 && ym < bd.tailHeight - 0.02 && az > 0.45 * hw) return "taillight";
             if (xm > L - 0.40 && ym < yB + 0.13) return "trim";
             if (xm < 0.32 && ym < yB + 0.15) return "trim";
             if (bd.style == BodyStyle::SUV && seg <= 4) return "trim";
@@ -616,14 +587,11 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             const real az = std::abs(p.z);
             const real yB = prof.yBottom(xEnd);
             if (end == 1) {
-                if (az > 0.40 * hw && p.y > bd.noseHeight - 0.17 && p.y < bd.noseHeight + 0.01) return "headlight";
                 if (az < 0.24 && p.y > yB + 0.17 && p.y < yB + 0.28) return "plate";
-                if (az < 0.40 * hw && p.y > bd.noseHeight - 0.21 && p.y < bd.noseHeight - 0.04) return "grille";
                 if (az < 0.62 * hw && p.y > yB + 0.03 && p.y < yB + 0.14) return "grille";
                 if (p.y < yB + 0.13) return "trim";
                 return "paint";
             }
-            if (az > 0.45 * hw && p.y > bd.tailHeight - 0.21 && p.y < bd.tailHeight - 0.02) return "taillight";
             if (az < 0.26 && p.y > bd.tailHeight - 0.40 && p.y < bd.tailHeight - 0.27) return "plate";
             if (p.y < yB + 0.15) return "trim";
             return "paint";
@@ -642,6 +610,38 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                 if (dot(n, Vec3{outward, 0, 0}) >= 0) { VisBuilder::tri(m, a, b, cc); VisBuilder::tri(m, a, cc, d); }
                 else { VisBuilder::tri(m, a, cc, b); VisBuilder::tri(m, a, d, cc); }
             }
+        }
+    }
+
+    // ---- light units and grille (separate geometry, skinned to the front / rear structure)
+    {
+        const real xf = L;
+        const real hwF = prof.halfW(L - 0.04);
+        const real yH = bd.noseHeight - 0.075;
+        const real lightW = std::min<real>(0.17, 0.26 * hwF);
+        for (int side = 0; side < 2; ++side) {
+            const real sg = side ? 1.0 : -1.0;
+            const real zc = sg * (hwF - lightW - 0.05);
+            // Lens slightly yawed to follow the rounded corner.
+            const Vec3 ax = normalize(Vec3{1.0, 0.0, sg * 0.35});
+            const Vec3 az = normalize(cross(ax, Vec3{0, 1, 0})) * -1.0;
+            vb.box("chrome", {xf - 0.035, yH, zc}, {0.03, 0.058, lightW + 0.012}, bodyNodes, ax, {0, 1, 0}, az);
+            vb.box("headlight", {xf - 0.012, yH, zc}, {0.025, 0.048, lightW}, bodyNodes, ax, {0, 1, 0}, az);
+        }
+        // Grille between the headlights.
+        const real gw = std::max<real>(0.2, hwF - 2.0 * (0.26 * hwF) - 0.12);
+        vb.box("grille", {xf - 0.02, yH - 0.03, 0.0}, {0.03, 0.065, gw}, bodyNodes);
+        vb.box("chrome", {xf - 0.008, yH + 0.04, 0.0}, {0.012, 0.008, gw}, bodyNodes);
+        // Tail lights.
+        const real hwR = prof.halfW(0.04);
+        const real yT = bd.tailHeight - 0.11;
+        const real tw = std::min<real>(0.19, 0.3 * hwR);
+        for (int side = 0; side < 2; ++side) {
+            const real sg = side ? 1.0 : -1.0;
+            const real zc = sg * (hwR - tw - 0.04);
+            const Vec3 ax = normalize(Vec3{1.0, 0.0, -sg * 0.3});
+            const Vec3 az = normalize(cross(ax, Vec3{0, 1, 0})) * -1.0;
+            vb.box("taillight", {0.012, yT, zc}, {0.022, 0.05, tw}, bodyNodes, ax, {0, 1, 0}, az);
         }
     }
 

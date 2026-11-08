@@ -1,0 +1,8 @@
+.godot/
+bin/*.so
+bin/*.dll
+bin/*.dylib
+bin/*.lib
+bin/*.exp
+bin/*.pdb
+export/

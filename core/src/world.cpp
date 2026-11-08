@@ -10,6 +10,10 @@ std::size_t World::addBody(SoftBody body) {
     return bodies_.size() - 1;
 }
 
+void World::removeBody(std::size_t i) {
+    if (i < bodies_.size()) bodies_.erase(bodies_.begin() + static_cast<std::ptrdiff_t>(i));
+}
+
 void World::accumulateAerodynamicForces(SoftBody& b) {
     if (settings_.airDensity <= 0.0 || b.triangleCount() == 0) return;
     const auto& pos = b.positions();

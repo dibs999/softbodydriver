@@ -8,13 +8,13 @@
 
 using namespace sb;
 
-#ifndef SB_CONTENT_DIR
-#define SB_CONTENT_DIR "content"
+#ifndef SB_CARS_DIR
+#define SB_CARS_DIR "game/cars"
 #endif
 
 namespace {
 
-std::string carPath(const char* id) { return std::string(SB_CONTENT_DIR) + "/cars/" + id + ".car.json"; }
+std::string carPath(const char* id) { return std::string(SB_CARS_DIR) + "/" + id + ".car.json"; }
 
 World flatWorld() {
     World w;

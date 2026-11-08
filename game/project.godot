@@ -1,48 +1,45 @@
-; Engine configuration file.
-; Open this folder (`game/`) in Godot 4.2+ on Windows or macOS.
+; SoftBodyDriver - native desktop game (Godot 4.5+, Windows / macOS / Linux).
+; The soft-body physics runs in C++ (GDExtension, bin/) at 2000 Hz on its own thread.
 
 config_version=5
 
 [application]
 
 config/name="SoftBodyDriver"
-config/description="2000 Hz Soft-Body Node-Beam Vehicle Simulator"
-run/main_scene="res://main.tscn"
-config/features=PackedStringArray("4.2", "Forward Plus")
+config/description="Soft-body vehicle simulator: node-beam physics at 2000 Hz, real deformation, cooling and engine damage."
+config/version="0.4.0"
+run/main_scene="res://scenes/main_menu.tscn"
+config/features=PackedStringArray("4.5", "Forward Plus")
+boot_splash/bg_color=Color(0.06, 0.07, 0.08, 1)
 
-[input]
+[autoload]
 
-throttle={
-"deadzone": 0.2,
-"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":87,"physical_keycode":87,"key_label":0,"unicode":119,"echo":false,"script":null)
-, Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":4194320,"physical_keycode":4194320,"key_label":0,"unicode":0,"echo":false,"script":null)
-]
-}
-brake={
-"deadzone": 0.2,
-"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":83,"physical_keycode":83,"key_label":0,"unicode":115,"echo":false,"script":null)
-, Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":4194322,"physical_keycode":4194322,"key_label":0,"unicode":0,"echo":false,"script":null)
-]
-}
-steer_left={
-"deadzone": 0.2,
-"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":65,"physical_keycode":65,"key_label":0,"unicode":97,"echo":false,"script":null)
-, Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":4194319,"physical_keycode":4194319,"key_label":0,"unicode":0,"echo":false,"script":null)
-]
-}
-steer_right={
-"deadzone": 0.2,
-"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":68,"physical_keycode":68,"key_label":0,"unicode":100,"echo":false,"script":null)
-, Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":4194321,"physical_keycode":4194321,"key_label":0,"unicode":0,"echo":false,"script":null)
-]
-}
-handbrake={
-"deadzone": 0.2,
-"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":32,"physical_keycode":32,"key_label":0,"unicode":32,"echo":false,"script":null)
-]
-}
-reset_car={
-"deadzone": 0.5,
-"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":82,"physical_keycode":82,"key_label":0,"unicode":114,"echo":false,"script":null)
-]
-}
+Game="*res://scripts/game_state.gd"
+
+[display]
+
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/stretch/mode="disabled"
+window/vsync/vsync_mode=1
+
+[editor_plugins]
+
+enabled=PackedStringArray()
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=false
+
+[physics]
+
+common/physics_ticks_per_second=60
+
+[rendering]
+
+anti_aliasing/quality/msaa_3d=2
+anti_aliasing/quality/screen_space_aa=1
+lights_and_shadows/directional_shadow/size=4096
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
+environment/defaults/default_clear_color=Color(0.45, 0.6, 0.8, 1)
+textures/canvas_textures/default_texture_filter=1

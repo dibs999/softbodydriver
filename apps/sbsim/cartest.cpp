@@ -1,7 +1,7 @@
 // cartest - automated driving / crash test bench for *.car.json vehicles.
 //
-//   cartest content/cars/kestrel_hatch.car.json            # all tests
-//   cartest content/cars/vortex_gt.car.json --obj out.obj    # export the rest-pose visual model
+//   cartest game/cars/kestrel_hatch.car.json            # all tests
+//   cartest game/cars/vortex_gt.car.json --obj out.obj    # export the rest-pose visual model
 #include <chrono>
 #include <cmath>
 #include <cstdio>

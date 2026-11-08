@@ -14,6 +14,7 @@ endif()
 option(SB_BUILD_TESTS "Build unit tests" ON)
 option(SB_BUILD_APPS "Build command line tools (sbsim)" ON)
 option(SB_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+option(SB_BUILD_GDEXTENSION "Build the Godot 4 GDExtension (downloads godot-cpp)" OFF)
 
 # macOS: build universal binaries (Apple Silicon + Intel) unless overridden.
 if(APPLE AND NOT CMAKE_OSX_ARCHITECTURES)
@@ -34,6 +35,10 @@ else()
 endif()
 
 add_subdirectory(core)
+
+if(SB_BUILD_GDEXTENSION)
+  add_subdirectory(gdextension)
+endif()
 
 if(SB_BUILD_APPS)
   add_subdirectory(apps/sbsim)

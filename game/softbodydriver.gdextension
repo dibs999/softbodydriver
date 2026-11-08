@@ -1,0 +1,14 @@
+[configuration]
+
+entry_symbol = "softbodydriver_library_init"
+compatibility_minimum = "4.5"
+reloadable = false
+
+[libraries]
+
+windows.debug.x86_64 = "res://bin/libsoftbodydriver.windows.template_debug.x86_64.dll"
+windows.release.x86_64 = "res://bin/libsoftbodydriver.windows.template_release.x86_64.dll"
+macos.debug = "res://bin/libsoftbodydriver.macos.template_debug.universal.dylib"
+macos.release = "res://bin/libsoftbodydriver.macos.template_release.universal.dylib"
+linux.debug.x86_64 = "res://bin/libsoftbodydriver.linux.template_debug.x86_64.so"
+linux.release.x86_64 = "res://bin/libsoftbodydriver.linux.template_release.x86_64.so"

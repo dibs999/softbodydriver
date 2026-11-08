@@ -121,6 +121,11 @@ CarDefinition parseCarDefinition(const std::string& jsonText, const std::string&
 // ---------------------------------------------------------------------------- visuals
 
 /// How one rendered vertex follows the node-beam structure.
+///  * Node skin (weight[0] >= 0): v = R * rest + t + sum_k weight[k] * displacement(node[k]), where (R, t)
+///    is the rigid motion of the passenger cell and displacement = node position minus its rigidly
+///    transformed rest position. local[0] holds the rest position. Dents interpolate smoothly and no
+///    per-node rotation noise reaches the surface.
+///  * Line skin (weight[0] < 0): follows the segment node[0] -> node[1] (struts, springs, shafts).
 struct VertexSkin {
     std::uint32_t node[4] = {0, 0, 0, 0};
     float weight[4] = {0, 0, 0, 0};
@@ -140,8 +145,10 @@ struct MeshSurface {
 struct CarVisual {
     std::vector<MeshSurface> skinned;              ///< Body + chassis parts (world space, skinned)
     std::vector<MeshSurface> wheelFront, wheelRear;///< Wheel-local: +Z = outward face, X/Y = wheel plane
-    /// Per node: two reference neighbours that define its local frame (for skinning).
-    std::vector<std::uint32_t> frameA, frameB;
+    /// Skinning reference: rest positions of all nodes and four safety-cell floor nodes
+    /// (FL, FR, RL, RR) whose motion defines the rigid frame of the car.
+    std::vector<Vec3> restNodes;
+    std::uint32_t frameRefs[4] = {0, 0, 0, 0};
     VertexSkin driverEye;                          ///< Cockpit camera anchor
     VertexSkin chaseTarget;                        ///< Look-at point for chase cameras
 };
@@ -166,12 +173,23 @@ struct CarBuild {
 /// facing +X. Call body.translate() to place it.
 CarBuild buildCar(const CarDefinition& def);
 
-/// Computes the per-node skinning frames into frames (3x3 row-major per node, axes as rows).
-void computeNodeFrames(const SoftBody& body, const CarVisual& vis, std::vector<float>& frames);
+/// Computes the skinning state (rigid frame + per-node displacements) into `frames`.
+void computeNodeFrames(const std::vector<Vec3>& positions, const CarVisual& vis, std::vector<float>& frames);
 /// Deforms one skinned surface. `frames` from computeNodeFrames. Writes positions + normals.
-void deformSurface(const SoftBody& body, const std::vector<float>& frames, const MeshSurface& surf,
+void deformSurface(const std::vector<Vec3>& positions, const std::vector<float>& frames, const MeshSurface& surf,
                    std::vector<float>& outPositions, std::vector<float>& outNormals);
 /// Evaluates a single skin binding (camera anchors).
-Vec3 evalSkin(const SoftBody& body, const std::vector<float>& frames, const VertexSkin& s);
+Vec3 evalSkin(const std::vector<Vec3>& positions, const std::vector<float>& frames, const VertexSkin& s);
+
+inline void computeNodeFrames(const SoftBody& body, const CarVisual& vis, std::vector<float>& frames) {
+    computeNodeFrames(body.positions(), vis, frames);
+}
+inline void deformSurface(const SoftBody& body, const std::vector<float>& frames, const MeshSurface& surf,
+                          std::vector<float>& outPositions, std::vector<float>& outNormals) {
+    deformSurface(body.positions(), frames, surf, outPositions, outNormals);
+}
+inline Vec3 evalSkin(const SoftBody& body, const std::vector<float>& frames, const VertexSkin& s) {
+    return evalSkin(body.positions(), frames, s);
+}
 
 }  // namespace sb

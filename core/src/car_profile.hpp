@@ -170,8 +170,8 @@ struct Profile {
         s.z[0] = 0.0;            s.y[0] = yB;
         s.z[1] = zin;            s.y[1] = yB;
         s.z[2] = zin;            s.y[2] = ya;
-        s.z[3] = inArch ? hW - 0.025 : hW - 0.07;  s.y[3] = ya;
-        s.z[4] = hW - 0.015;     s.y[4] = std::max(ys, ya + 0.015);
+        s.z[3] = inArch ? hW - 0.03 : hW - 0.10;  s.y[3] = ya;
+        s.z[4] = inArch ? hW - 0.02 : hW - 0.055;  s.y[4] = std::max(ys, ya + 0.015);
         s.z[5] = hW;             s.y[5] = std::max(yMid, ya + 0.04);
         s.z[6] = sH;             s.y[6] = yBe;
         s.z[7] = sH - 0.025 - 0.02 * sg;  s.y[7] = yBe + 0.012;

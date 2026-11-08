@@ -38,7 +38,10 @@ public:
     explicit World(WorldSettings s = {}) : settings_(s) {}
 
     std::size_t addBody(SoftBody body);
+    /// Removes body i; indices of later bodies shift down by one.
+    void removeBody(std::size_t i);
     void addCollider(const StaticCollider& c) { colliders_.push_back(c); }
+    void clearColliders() { colliders_.clear(); }
 
     /// Advances one fixed physics step.
     void step();
