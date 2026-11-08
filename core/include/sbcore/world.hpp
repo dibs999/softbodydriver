@@ -72,6 +72,7 @@ private:
     WorldSettings settings_;
     std::vector<SoftBody> bodies_;
     std::vector<StaticCollider> colliders_;
+    std::vector<const StaticCollider*> candidates_;  ///< Broadphase scratch list
     std::uint64_t steps_ = 0;
     std::size_t lastContacts_ = 0;
     std::size_t lastBodyContacts_ = 0;

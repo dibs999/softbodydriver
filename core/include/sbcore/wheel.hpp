@@ -40,6 +40,10 @@ struct PressureWheelSpec {
     /// perpendicular to the wheel axis. -1 = no reaction (torque is "external").
     std::int64_t driveReactionA = -1, driveReactionB = -1;
     std::int64_t brakeReactionA = -1, brakeReactionB = -1;
+    // Tyre condition model.
+    real wearRate = 1.0;         ///< Multiplier on tread wear (1 = realistic, >1 = faster for gameplay).
+    real burstTempC = 175.0;     ///< Carcass temperature at which the tyre bursts.
+    real ambientTempC = 22.0;
 };
 
 struct PressureWheel {
@@ -50,6 +54,26 @@ struct PressureWheel {
     real angularVelocity = 0.0;             ///< rad/s around spindle (+ = forward roll).
     real lastDriveTorque = 0.0;             ///< Nm applied in the last step.
     real lastBrakeTorque = 0.0;             ///< Nm applied in the last step.
+
+    // ---- tyre condition (all updated in step())
+    std::vector<std::uint32_t> spokeBeams;  ///< Sidewall beams whose stiffness comes from the air pressure.
+    std::vector<real> spokeBaseSpring;
+    real wear = 0.0;                        ///< 0 = new, 1 = cords exposed (bursts)
+    real tempC = 22.0;                      ///< Carcass / tread temperature
+    real pressurePsi = 0.0;                 ///< Current gauge pressure (hot), 0 when burst
+    real coldPressurePsi = 0.0;             ///< Gauge pressure referred to ambient temperature
+    real leakPsiPerS = 0.0;                 ///< Slow puncture leak rate
+    real load = 0.0;                        ///< Estimated vertical load (N)
+    real slipSpeed = 0.0;                   ///< Sliding speed of the contact patch (m/s)
+    real grip = 1.0;                        ///< Friction multiplier from wear and temperature
+    int conditionCounter = 0;
+    real appliedSpokeFactor = 1.0;
+    real appliedGrip = 1.0;
+
+    /// Restores a new, correctly inflated tyre (used by SoftBody::repair).
+    void resetCondition(SoftBody& body);
+    /// Punctures the tyre: rate in psi/s (very large = burst).
+    void puncture(real psiPerSecond);
 
     /// Unit vector from hubRight to hubLeft (points toward -Z for an unsteered wheel).
     Vec3 axis(const SoftBody& body) const;

@@ -164,6 +164,7 @@ struct VehicleTelemetry {
     real steer = 0.0;
     std::vector<real> wheelOmega;
     std::vector<bool> wheelBurst;
+    std::vector<real> wheelWear, wheelTempC, wheelPressurePsi, wheelSlip, wheelLoad;
     std::size_t deformedBeams = 0;
     std::size_t brokenBeams = 0;
     bool tcsActive = false;
@@ -279,6 +280,7 @@ public:
     std::vector<PressureWheel>& wheels() { return wheels_; }
     const std::vector<PressureWheel>& wheels() const { return wheels_; }
 
+    void setNodeFriction(std::uint32_t i, real f) { if (i < friction_.size()) friction_[i] = f; }
     /// Changes a node's mass at runtime (e.g. cargo / load tests).
     void setNodeMass(std::uint32_t i, real mass);
     bool isFixed(std::uint32_t i) const { return invMass_[i] == 0; }

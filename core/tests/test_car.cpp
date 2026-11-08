@@ -170,3 +170,46 @@ TEST_CASE("repair restores structure and systems") {
     CHECK_FALSE(car.systems().state().seized);
     CHECK(car.stats().deformedBeams == 0);
 }
+
+TEST_CASE("tyres heat up, wear out and burst under sustained wheelspin") {
+    CarBuild cb = buildCar(loadCarDefinition(carPath("aurora_sedan")));
+    for (PressureWheel& w : cb.body.wheels()) w.spec.wearRate = 4.0;  // accelerated test
+    World w = flatWorld();
+    w.addBody(std::move(cb.body));
+    SoftBody& car = w.body(0);
+    w.simulate(1.0);
+    VehicleControls c;
+    c.throttle = 1.0;
+    c.tcs = false;
+    c.steer = 0.6;
+    car.setControls(c);
+    bool burst = false;
+    for (int i = 0; i < 60 && !burst; ++i) {
+        w.simulate(1.0);
+        burst = car.wheels()[2].burst || car.wheels()[3].burst;
+    }
+    CHECK(burst);
+    CHECK(std::max(car.wheels()[2].wear, car.wheels()[3].wear) > 0.5);
+    CHECK(car.wheels()[0].wear < 0.2);  // undriven front tyres barely wear
+    CHECK(w.stats().finite);
+}
+
+TEST_CASE("a punctured tyre deflates, goes flat and is restored by repair") {
+    CarBuild cb = buildCar(loadCarDefinition(carPath("kestrel_hatch")));
+    const std::vector<Vec3> rest = cb.restPositions;
+    World w = flatWorld();
+    w.addBody(std::move(cb.body));
+    SoftBody& car = w.body(0);
+    VehicleControls c;
+    c.brake = 1.0;
+    car.setControls(c);
+    w.simulate(1.5);
+    const real y0 = car.wheels()[0].center(car).y;
+    car.wheels()[0].puncture(4.0);
+    w.simulate(12.0);
+    CHECK(car.wheels()[0].pressurePsi < 1.0);
+    CHECK(car.wheels()[0].center(car).y < y0 - 0.03);
+    car.repair(rest);
+    CHECK(car.wheels()[0].pressurePsi > 30.0);
+    CHECK(car.wheels()[0].leakPsiPerS == 0.0);
+}

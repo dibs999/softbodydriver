@@ -166,8 +166,8 @@ void SoftBody::repair(const std::vector<Vec3>& restPositions) {
         if (d.valid) t.restAngle = d.phi;
     }
     for (PressureWheel& w : wheels_) {
-        w.burst = false;
         w.angularVelocity = 0;
+        w.resetCondition(*this);
     }
     if (powertrain_) {
         powertrain_->setCondition({});
@@ -568,6 +568,11 @@ VehicleTelemetry SoftBody::telemetry() const {
     for (const PressureWheel& w : wheels_) {
         t.wheelOmega.push_back(w.angularVelocity);
         t.wheelBurst.push_back(w.burst);
+        t.wheelWear.push_back(w.wear);
+        t.wheelTempC.push_back(w.tempC);
+        t.wheelPressurePsi.push_back(w.pressurePsi);
+        t.wheelSlip.push_back(w.slipSpeed);
+        t.wheelLoad.push_back(w.load);
     }
     const BodyStats bs = stats();
     t.deformedBeams = bs.deformedBeams;
