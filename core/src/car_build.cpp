@@ -174,6 +174,16 @@ CarBuild buildCar(const CarDefinition& def) {
         car.addBeam(ua, uc, p);
     };
 
+    auto addRingBrace = [&](std::int64_t a, std::int64_t c) {
+        if (a < 0 || c < 0 || a == c) return;
+        const auto ua = static_cast<std::uint32_t>(a), uc = static_cast<std::uint32_t>(c);
+        BeamParams p = regionBeam(car.positions()[ua], car.positions()[uc]);
+        p.spring *= 0.8;
+        p.deform *= 0.35;
+        p.strength *= 0.4;
+        p.breakGroup.clear();
+        car.addBeam(ua, uc, p);
+    };
     for (std::size_t i = 0; i < NS; ++i) {
         const auto& R = rig.shell[i];
         // Ring perimeter (each side) + cross members.
@@ -205,6 +215,18 @@ CarBuild buildCar(const CarDefinition& def) {
                 addShellBeam(R[2][1], R[4][0]);
             }
         }
+        // Cross-car bracing of every ring. Mid, belt and roof-rail nodes on a side wall lie almost
+        // in one vertical line; without a cross-car triangle the belt rail had no lateral stiffness
+        // and the body sides swung by up to 9 cm while driving ("jelly"). These stand in for the
+        // roof bows, seat cross-members and door-ring stiffness of a monocoque. They yield before
+        // the outer shell, so crash deformation stays close to the shell's own behaviour.
+        if (!bulkhead) {
+            addRingBrace(R[2][0], R[3][1]);
+            addRingBrace(R[2][1], R[3][0]);
+        }
+        addRingBrace(R[3][0], R[4][1]);
+        addRingBrace(R[3][1], R[4][0]);
+        addRingBrace(R[3][0], R[3][1]);
     }
     for (std::size_t i = 0; i + 1 < NS; ++i) {
         const auto& A = rig.shell[i];
