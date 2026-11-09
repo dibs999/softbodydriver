@@ -87,10 +87,10 @@ Aus einer Datei erzeugt der Generator:
 | Datei | Fahrzeug | Antrieb | Leistung | Masse |
 |---|---|---|---|---|
 | `concept_gt` | Concept-GT mit **importiertem Detail-Modell** (glTF, CC-BY 4.0) | RWD | 4,0 l V8 Biturbo, 456 kW | 1580 kg |
-| `kestrel_hatch` | Kompakt-Fließheck (C-Segment) | FWD | 1,5 l Turbo, 110 kW | 1290 kg |
-| `aurora_sedan` | Mittelklasse-Limousine | RWD | 2,0 l Turbo, 190 kW | 1590 kg |
-| `vortex_gt` | V8-Sportcoupé | RWD, Sperre | 5,0 l V8, 335 kW | 1720 kg |
-| `basalt_suv` | Mittelgroßer SUV | AWD | 3,5 l V6, 220 kW | 2050 kg |
+| `kestrel_hatch` | Kompakt-Fließheck (C-Segment) | FWD | 1,5 l Turbo, 119 kW | 1290 kg |
+| `aurora_sedan` | Mittelklasse-Limousine | RWD | 2,0 l Turbo, 196 kW | 1590 kg |
+| `vortex_gt` | V8-Sportcoupé | RWD, Sperre | 5,0 l V8, 323 kW | 1720 kg |
+| `basalt_suv` | Mittelgroßer SUV | AWD | 3,5 l V6, 210 kW | 2050 kg |
 
 Marken und Modelle sind frei erfunden, Maße und Fahrleistungen entsprechen echten Autos der jeweiligen Klasse.
 

@@ -2,7 +2,7 @@
   "id": "meridian_interceptor",
   "name": "Meridian Interceptor 3.5 V6",
   "brand": "Meridian",
-  "description": "Einsatzfahrzeug auf Basis der Meridian: 3,5-l-V6 mit 224 kW, Heckantrieb, straffes Fahrwerk, Rammschutz und Signalanlage.",
+  "description": "Einsatzfahrzeug auf Basis der Meridian: 3,5-l-V6 mit 214 kW, Heckantrieb, straffes Fahrwerk, Rammschutz und Signalanlage.",
   "credits": "Body, interior and wheels: \"police_sedan\" from Rubble (https://github.com/Glavin001/rubble, engine/scenes/vehicles/police_sedan) by the Rubble authors, CC-BY 4.0. Used unmodified as the visual flexbody.",
   "visualModel": {
     "path": "res://models/rubble/police_sedan.glb",

@@ -61,7 +61,7 @@ Vollgas mit Automatik auf ebener Fläche, keine Lenkeingabe, 60 s, Spitzenwert
 
 | Fahrzeug | vorher | nachher | 0–100 km/h vorher → nachher |
 |---|---:|---:|---|
-| Kestrel Hatch (110 kW, FWD) | 113,7 km/h | 141,7 km/h | 11,4 → 8,7 s |
+| Kestrel Hatch (119 kW, FWD) | 113,7 km/h | 141,7 km/h | 11,4 → 8,7 s |
 | Aurora Sedan | 134,1 | 170,7 | 7,2 → 6,4 s |
 | Vortex GT | 147,6 | 252,6 | 5,6 → 5,3 s |
 | Vortex Sprint | 132,2 | 205,9 | 7,4 → 6,6 s |
@@ -109,7 +109,7 @@ vor allem weil der Luftdruck die Lauffläche wie eine Trommelhaut spannt.
 
 | Fahrzeug | Spitze 1. Iteration | Spitze jetzt | 0–100 km/h | Ausrollwiderstand 100 km/h |
 |---|---:|---:|---|---:|
-| Kestrel Hatch (110 kW) | 141,7 km/h | **197,0** | 8,2 s | 557 N |
+| Kestrel Hatch (119 kW) | 141,7 km/h | **197,0** | 8,2 s | 557 N |
 | Aurora Sedan | 170,7 | **233,6** | 6,3 s | 566 N |
 | Vortex GT | 252,6 | **280,7** | 5,1 s | 544 N |
 | Vortex Sprint | 205,9 | **229,3** | 6,4 s | 476 N |

@@ -3,7 +3,7 @@
   "id": "kestrel_hatch",
   "name": "Kestrel Hatch 1.5 TSX",
   "brand": "Kestrel",
-  "description": "Kompakter Fronttriebler (C-Segment), 1.5-l-Turbo-Vierzylinder, 110 kW, 7-Gang-Doppelkupplung.",
+  "description": "Kompakter Fronttriebler (C-Segment), 1.5-l-Turbo-Vierzylinder, 119 kW, 7-Gang-Doppelkupplung.",
   "body": {
     "style": "hatchback", "doors": 4, "detachableBumpers": true, "detachableDoors": true,
     "length": 4.28, "width": 1.79, "height": 1.46,

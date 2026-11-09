@@ -2,7 +2,7 @@
   "id": "fastback_69",
   "name": "Fastback 69 7.0 V8",
   "brand": "Detroit Classics",
-  "description": "Klassisches Fastback-Coupé von 1969: 7,0-l-V8 mit 250 kW und 590 Nm, Heckantrieb, schmale Reifen, weiches Fahrwerk, schwache Bremsen. Viel Drehmoment, wenig Grip.",
+  "description": "Klassisches Fastback-Coupé von 1969: 7,0-l-V8 mit 261 kW und 590 Nm, Heckantrieb, schmale Reifen, weiches Fahrwerk, schwache Bremsen. Viel Drehmoment, wenig Grip.",
   "credits": "Body, interior and wheels: \"mach1_1969\" from Rubble (https://github.com/Glavin001/rubble, engine/scenes/vehicles/mach1_1969) by the Rubble authors, CC-BY 4.0. Used unmodified as the visual flexbody.",
   "visualModel": {
     "path": "res://models/rubble/mach1_1969.glb",
