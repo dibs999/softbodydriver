@@ -30,6 +30,29 @@ float fbm(vec2 p) {
 	return v;
 }
 
+// Distance to the nearest Voronoi cell border.
+float cell_edge(vec2 x) {
+	vec2 n = floor(x), f = fract(x), mg = vec2(0.0), mr = vec2(0.0);
+	float md = 8.0;
+	for (int j = -1; j <= 1; j++)
+		for (int i = -1; i <= 1; i++) {
+			vec2 g = vec2(float(i), float(j));
+			vec2 o = vec2(hash(n + g), hash(n + g + 31.7));
+			vec2 r = g + o - f;
+			float d = dot(r, r);
+			if (d < md) { md = d; mr = r; mg = g; }
+		}
+	md = 8.0;
+	for (int j = -2; j <= 2; j++)
+		for (int i = -2; i <= 2; i++) {
+			vec2 g = mg + vec2(float(i), float(j));
+			vec2 o = vec2(hash(n + g), hash(n + g + 31.7));
+			vec2 r = g + o - f;
+			if (dot(mr - r, mr - r) > 0.00001) md = min(md, dot(0.5 * (mr + r), normalize(r - mr)));
+		}
+	return md;
+}
+
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
@@ -68,6 +91,28 @@ void fragment() {
 		float patch_mask = step(0.86, pick) * step(0.12, local.x) * step(local.x, 0.88) * step(0.2, local.y) * step(local.y, 0.2 + 0.5 * hash(cell));
 		base = mix(base, base * 0.62 + vec3(0.01), patch_mask * wear);
 		rough = mix(rough, 0.92, patch_mask * wear);
+		// Ageing: a crack network in worn stretches, glossy black bitumen sealing over some of the
+		// cracks, longitudinal cracks and grit along the edges, oil drips in the lane centres.
+		vec2 wp = world_pos.xz;
+		float aged = smoothstep(0.52, 0.72, fbm(wp * 0.018 + vec2(41.0, 7.0))) * wear;
+		float ce = cell_edge(wp / 1.6) * 1.6;
+		float cw = max(fwidth(ce), 0.001);
+		float crack = (1.0 - smoothstep(0.004, 0.004 + cw, ce)) * aged * step(0.25, vnoise(wp * 0.7));
+		float seal_zone = smoothstep(0.68, 0.78, vnoise(wp * 0.04 + 13.0)) * wear;
+		float seal_line = cell_edge(wp / 4.5 + 7.0) * 4.5 + 0.05 * (vnoise(wp * 3.0) - 0.5);
+		float seal = (1.0 - smoothstep(0.014, 0.014 + cw * 1.5, seal_line)) * seal_zone * step(0.55, vnoise(wp * 0.45 + 5.0));
+		float edge_u = min(u, 1.0 - u) * road_width;      // metres from the outer edge
+		float edge_crack = (1.0 - smoothstep(0.006, 0.006 + max(fwidth(edge_u), 0.001), abs(edge_u - 0.55 - 0.12 * (fbm(vec2(UV.y * 0.7, 3.0)) - 0.5)))) * wear * step(0.4, vnoise(wp * 0.3));
+		float grit = (1.0 - smoothstep(0.05, 0.45 + 0.3 * fbm(wp * 0.5), edge_u)) * wear;
+		float lane_centre = 1.0 - smoothstep(0.0, 0.32 / lane_w, abs(lane_pos - 0.5));
+		vec2 oc = floor(wp / 0.9);
+		float oil = (1.0 - smoothstep(0.08, 0.30, length(fract(wp / 0.9) - vec2(hash(oc), hash(oc + 2.0))))) * step(0.82, hash(oc + 9.0)) * lane_centre * wear;
+		base = mix(base, base * 0.45, max(crack, edge_crack) * 0.85);
+		base = mix(base, vec3(0.018), seal * 0.9);
+		rough = mix(rough, 0.6, seal);
+		base = mix(base, base * vec3(1.25, 1.18, 1.05) + vec3(0.03, 0.025, 0.015), grit * 0.6);
+		base = mix(base, base * 0.7, oil * 0.6);
+		rough = mix(rough, 0.55, oil * 0.5);
 		// Markings, slightly worn and dirtier at the wheel tracks.
 		float pixel = max(fwidth(u) * 0.55, 0.0002);
 		float edge_distance = abs(min(u, 1.0 - u) - 0.22 / road_width);
