@@ -104,3 +104,14 @@ Vorschau: `tests/facade_shots.gd -- <png> <stil> [debug]`.
 
 * Felsen und Klippen der Wüste haben nur Vertexfarben.
 * Testgelände, Stadtpark und Wüste haben noch keinen Bodenbewuchs.
+
+## Hügelland: Straßenausstattung, Wald und Felder
+
+* **Schutzplanken:** W-Profil auf Pfosten an der Außenseite der schärfsten Kurven und an Böschungen, mit Kollision in Stoßfängerhöhe.
+* **Kurvenwarnung:** rot-weiße Leittafeln in den Kurven, Warnschilder rund 60 m davor.
+* **Stromleitung:** Holzmasten mit Querträger und Isolatoren, dazu durchhängende Leitungen.
+* **Höfe:** Weidezaun, Heuballen, Felsbrocken. Felder in Streifen aus Weizen und umgepflügter Erde hinter den Höfen.
+* **Waldkorridore:** dichter Nadel- und Laubwald mit Unterholz auf einzelnen Abschnitten.
+* **Hänge:** An steilen Hängen und Böschungen kommt auf allen Karten Erde und Gestein durch (Bodenshader).
+
+Bausteine in `scripts/maps/roadside.gd`; Ansichten bestimmter Stellen mit `AT=<Wegpunkte> tests/map_shots.gd`.
