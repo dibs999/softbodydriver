@@ -324,7 +324,7 @@ func apply_visual_model(v: SBVehicle, info: Dictionary) -> void:
 		elif lib.has(target):
 			overrides[k] = lib[target]
 	var options := {"wheels": cfg.get("wheels", {}), "hide": hide, "keep_procedural": cfg.get("keepProcedural", []),
-		"material_overrides": overrides, "ao_on_uv2": bool(cfg.get("aoOnUV2", false))}
+		"material_overrides": overrides, "ao_on_uv2": bool(cfg.get("aoOnUV2", false)), "parts": cfg.get("parts", {})}
 	var eye: Variant = _model_point(cfg.get("driverEye"))
 	if eye is Vector3:
 		options["driver_eye"] = xf * eye

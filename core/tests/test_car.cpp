@@ -833,3 +833,47 @@ TEST_CASE("automatic cars pull away with a gentle throttle and stop fully under 
         CHECK(worstSpin < 0.3);  // a held brake does not chatter
     }
 }
+
+TEST_CASE("panels on their own rigid frame keep their shape when they swing open or come off") {
+    // Imported panels are bound to their part's nodes; linear blending of node displacements
+    // stretched a door or bonnet swinging through 60 degrees. Each separate part now carries its
+    // vertices on a best-fit rigid frame of its own nodes.
+    CarBuild cb = buildCar(loadCarDefinition(carPath("kestrel_hatch")));
+    const CarVisual& vis = cb.visual;
+    REQUIRE(vis.parts.size() >= 3);
+    const auto& door = cb.layout.frontDoors[0].nodes;
+    REQUIRE(door.size() == 8);
+    // A door skin like the importer builds it: points spread over and beyond the cage.
+    Vec3 lo{1e9, 1e9, 1e9}, hi{-1e9, -1e9, -1e9};
+    for (auto n : door) {
+        lo = Vec3{std::min(lo.x, vis.restNodes[n].x), std::min(lo.y, vis.restNodes[n].y), std::min(lo.z, vis.restNodes[n].z)};
+        hi = Vec3{std::max(hi.x, vis.restNodes[n].x), std::max(hi.y, vis.restNodes[n].y), std::max(hi.z, vis.restNodes[n].z)};
+    }
+    MeshSurface surf;
+    for (int ix = -1; ix <= 5; ++ix)
+        for (int iy = -1; iy <= 5; ++iy) {
+            const Vec3 p{lo.x + (hi.x - lo.x) * ix / 4.0, lo.y + (hi.y - lo.y) * iy / 4.0, lo.z - 0.02};
+            surf.positions.insert(surf.positions.end(), {static_cast<float>(p.x), static_cast<float>(p.y), static_cast<float>(p.z)});
+            surf.skin.push_back(bindToNodes(vis.restNodes, door, p));
+        }
+    tagRigidPartVertices(vis, surf);
+    for (const auto& sk : surf.skin) REQUIRE(sk.part >= 0);
+    // Swing the door cage 60 degrees about a vertical hinge at its front edge and lift it 5 cm.
+    std::vector<Vec3> pos = vis.restNodes;
+    const Vec3 hinge{hi.x, 0.0, lo.z};
+    const real a = 60.0 * 3.14159265358979 / 180.0;
+    auto swing = [&](const Vec3& q) {
+        const Vec3 r = q - hinge;
+        return hinge + Vec3{r.x * std::cos(a) - r.z * std::sin(a), r.y + 0.05, r.x * std::sin(a) + r.z * std::cos(a)};
+    };
+    for (auto n : door) pos[n] = swing(pos[n]);
+    std::vector<float> frames;
+    computeNodeFrames(pos, vis, frames);
+    computeNodeFrames(pos, vis, frames);  // warm-started second evaluation must agree
+    real worst = 0.0;
+    for (std::size_t i = 0; i < surf.skin.size(); ++i) {
+        const Vec3 rest{surf.positions[i * 3], surf.positions[i * 3 + 1], surf.positions[i * 3 + 2]};
+        worst = std::max(worst, length(evalSkin(pos, frames, surf.skin[i]) - swing(rest)));
+    }
+    CHECK(worst < 0.002);
+}

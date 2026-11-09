@@ -66,6 +66,38 @@
     "materialOverrides": {
       "glass": "glass",
       "paint": "paint"
+    },
+    "parts": {
+      "bonnet": [
+        "hood",
+        "latch_hood"
+      ],
+      "door_left": [
+        "door_FL",
+        "door_trim_FL",
+        "glass_door_FL",
+        "handle_FL",
+        "latch_door_FL",
+        "mirror_L",
+        "mount_mirror_L"
+      ],
+      "door_right": [
+        "door_FR",
+        "door_trim_FR",
+        "glass_door_FR",
+        "handle_FR",
+        "latch_door_FR",
+        "mirror_R",
+        "mount_mirror_R"
+      ],
+      "bumper_front": [
+        "bumper_front",
+        "bolt_bumper_front"
+      ],
+      "bumper_rear": [
+        "bumper_rear",
+        "bolt_bumper_rear"
+      ]
     }
   },
   "body": {
@@ -97,7 +129,9 @@
       0.14
     ],
     "paintMetallic": 0.15,
-    "dragCoefficient": 0.44
+    "dragCoefficient": 0.44,
+    "detachableDoors": true,
+    "detachableBumpers": true
   },
   "chassis": {
     "curbMass": 2080,

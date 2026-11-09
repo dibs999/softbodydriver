@@ -143,6 +143,9 @@ struct VertexSkin {
     std::uint32_t node[4] = {0, 0, 0, 0};
     float weight[4] = {0, 0, 0, 0};
     float local[4][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
+    /// Rigid part whose frame carries this vertex (-1 = passenger cell). Set when all bound nodes
+    /// belong to one separate part (bonnet, door, bumper) so it can swing open or fall off intact.
+    std::int32_t part = -1;
 };
 
 struct MeshSurface {
@@ -163,6 +166,9 @@ struct CarVisual {
     /// (FL, FR, RL, RR) whose motion defines the rigid frame of the car.
     std::vector<Vec3> restNodes;
     std::uint32_t frameRefs[4] = {0, 0, 0, 0};
+    /// Separate rigid parts (node sets) and node -> part index (-1 = not in a part).
+    std::vector<std::vector<std::uint32_t>> parts;
+    std::vector<std::int32_t> nodePart;
     VertexSkin driverEye;                          ///< Cockpit camera anchor
     VertexSkin dashboard;                          ///< Instrument cluster centre
     VertexSkin steeringPivot;
@@ -206,6 +212,12 @@ CarBuild buildCar(const CarDefinition& def);
 
 /// Computes the skinning state (rigid frame + per-node displacements) into `frames`.
 void computeNodeFrames(const std::vector<Vec3>& positions, const CarVisual& vis, std::vector<float>& frames);
+/// Registers rigid parts (fills vis.nodePart) and tags every skinned vertex bound only to one part.
+void setRigidParts(CarVisual& vis, const std::vector<std::vector<std::uint32_t>>& parts);
+/// Tags vertices of one surface whose bound nodes all belong to the same rigid part.
+void tagRigidPartVertices(const CarVisual& vis, MeshSurface& surf);
+/// Frame (R row-major 3x3, t) that carries a vertex: the part frame or the passenger cell.
+const float* skinFrame(const std::vector<float>& frames, std::size_t nodeCount, std::int32_t part);
 /// Deforms one skinned surface. `frames` from computeNodeFrames. Writes positions + normals.
 void deformSurface(const std::vector<Vec3>& positions, const std::vector<float>& frames, const MeshSurface& surf,
                    std::vector<float>& outPositions, std::vector<float>& outNormals);

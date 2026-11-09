@@ -54,6 +54,11 @@ func _setup() -> void:
 	car = game.spawn_vehicle(world, path, Transform3D(Basis.IDENTITY, Vector3.ZERO))
 	car.set_input(0, 1, 0, 1)
 	world.step_blocking(2.0)
+	if args.size() > 2 and args[2] == "open":
+		print("door ", car.set_door_open(0, true), " bonnet ", car.release_bonnet())
+		for i in 40:
+			world.step_blocking(0.1)
+			world.sync_visuals()
 	world.sync_visuals()
 	cam = Camera3D.new()
 	cam.fov = 45
@@ -67,6 +72,8 @@ func _setup() -> void:
 	f = f.normalized()
 	var r := f.cross(Vector3.UP).normalized()
 	var eye: Vector3 = car.get_driver_eye()
+	if args.size() > 2 and args[2] == "open":
+		r = -r
 	views = [
 		[c + f * (L * 0.85) + r * (L * 0.65) + Vector3.UP * 1.2, c + Vector3.UP * 0.6],
 		[c - f * (L * 0.85) - r * (L * 0.65) + Vector3.UP * 1.3, c + Vector3.UP * 0.6],

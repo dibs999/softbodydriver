@@ -1182,6 +1182,8 @@ CarBuild buildCar(const CarDefinition& def) {
     }
 
     buildCarVisual(build, prof, rig);
+    setRigidParts(build.visual, {build.layout.bonnetNodes, build.layout.frontDoors[0].nodes, build.layout.frontDoors[1].nodes,
+                                 build.layout.frontBumperNodes, build.layout.rearBumperNodes});
     build.restPositions = car.positions();
     return build;
 }
