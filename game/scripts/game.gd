@@ -96,6 +96,7 @@ func _ready() -> void:
 			if v:
 				vehicles.append(v)
 				ai[v] = AIDriver.new(v, routes[i]["waypoints"], routes[i]["speeds"], 0.9)
+				ai[v].others = vehicles
 
 	cam = CameraRig.new()
 	cam.current = true
