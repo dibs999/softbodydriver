@@ -213,15 +213,53 @@ static func _vegetation(parent: Node3D, world: SBWorld, paths: Array[PackedVecto
 				if not V.keep(p): continue
 				pines.append(p)
 				world.add_box(p+Vector3.UP*1.8,Vector3(0.23,1.8,0.23),Vector3.ZERO,0.75)
+	# Verges of the main loop: scrub, fallen trunks, stumps and rocks within sight of the track.
+	var loop := paths[0]
+	var logs: Array[Transform3D] = []
+	var stumps: Array[Transform3D] = []
+	for i in range(0,loop.size(),2):
+		var tangent := (loop[(i+1)%loop.size()]-loop[(i-1+loop.size())%loop.size()]).normalized()
+		var side := Vector3(-tangent.z,0,tangent.x).normalized()
+		for sign: float in [-1,1]:
+			var p := loop[i]+side*sign*rng.randf_range(6.5,22.0)
+			var q := Vector2(p.x,p.z)
+			if _near_paths(q,paths,6.0) or q.distance_to(Vector2(farm.x,farm.z)) < 45: continue
+			p.y = ground.call(p.x,p.z)
+			var roll := rng.randf()
+			if roll < 0.45:
+				bushes.append(p)
+			elif roll < 0.52 and _field(q) < 0:
+				var yaw := rng.randf()*TAU
+				var l := rng.randf_range(0.7,1.4)
+				logs.append(Transform3D(Basis(Vector3.UP,yaw)*Basis(Vector3.RIGHT,PI*0.5).scaled(Vector3(l,l*rng.randf_range(3.0,5.0),l)),p+Vector3.UP*0.2*l))
+				world.add_box(p+Vector3.UP*0.2*l,Vector3(0.2*l,0.2*l,1.6*l),Vector3(0,yaw,0),0.7)
+			elif roll < 0.60 and _field(q) < 0:
+				stumps.append(Transform3D(Basis(Vector3.UP,rng.randf()*TAU).scaled(Vector3.ONE*rng.randf_range(0.8,1.3)),p+Vector3.UP*0.2))
+			elif roll < 0.68:
+				var sc := rng.randf_range(0.35,1.2)
+				rocks.append(Transform3D(Basis(Vector3.UP,rng.randf()*TAU).scaled(Vector3(sc,sc*0.8,sc*1.1)),p))
+	var trunk := CylinderMesh.new()
+	trunk.top_radius = 0.17
+	trunk.bottom_radius = 0.21
+	trunk.height = 0.8
+	trunk.radial_segments = 9
+	var bark := C.noise_mat(Color(0.30,0.24,0.18),0.12,5.0,0.95)
+	C.scatter_multimesh(parent,trunk,bark,logs)
+	var stump := CylinderMesh.new()
+	stump.top_radius = 0.22
+	stump.bottom_radius = 0.30
+	stump.height = 0.4
+	stump.radial_segments = 9
+	C.scatter_multimesh(parent,stump,bark,stumps,false)
+	var R := preload("res://scripts/maps/roadside.gd")
+	var rock_list: Array[Transform3D] = []
+	for xf in rocks:
+		# The old spheres were placed by their centre; the boulders sit on the ground.
+		rock_list.append(Transform3D(xf.basis, xf.origin - Vector3.UP * xf.basis.get_scale().y * 0.3))
+	R.boulders(parent,world,rock_list)
 	V.plant(parent,"conifer",pines,19183,0.55,0.95)
 	V.plant(parent,"broadleaf",leafy,19184,0.75,1.2)
 	V.plant(parent,"bush",bushes,19185,0.7,1.5,false)
-	var sphere := SphereMesh.new()
-	sphere.radius = 1
-	sphere.height = 2
-	sphere.radial_segments = 9
-	sphere.rings = 4
-	C.scatter_multimesh(parent,sphere,C.surface_material("gravel",1.8,Color(0.65,0.65,0.60)),rocks,false)
 	# Hay bales make the cultivated meadows readable without thousands of grass nodes.
 	var bale := CylinderMesh.new()
 	bale.top_radius = 0.85
