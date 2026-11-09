@@ -44,20 +44,34 @@ float line(float d, float width) {
 
 void fragment() {
 	vec2 uv = UV;
-	// Spread: from the origin outwards, with a ragged front.
-	float r = length(uv - origin);
-	float front = crack * 1.6 + 0.12 * (hash2(floor(uv * 3.0)).x - 0.5);
-	float reach = 1.0 - smoothstep(front - 0.15, front, r);
-	float coarse = line(cell_edge(uv * cell_scale), 0.018);
-	float fine = line(cell_edge(uv * fine_scale + 3.7), 0.03) * smoothstep(0.35, 0.9, crack);
-	// Radial cracks running out from the origin.
-	float ang = atan(uv.y - origin.y, uv.x - origin.x);
-	float rays = line(abs(fract(ang * 2.2 + hash2(vec2(floor(ang * 2.2), 1.0)).x * 0.3) - 0.5) * r * 6.0, 0.01) * step(r, front);
-	float cracks = clamp(max(max(coarse, fine * 0.8), rays), 0.0, 1.0) * reach;
-	float frost = reach * crack * 0.35;
-	ALBEDO = mix(tint.rgb, vec3(0.78, 0.80, 0.82), max(cracks, frost));
-	ALPHA = clamp(mix(tint.a, 0.92, cracks) + frost * 0.4, 0.0, 1.0);
-	ROUGHNESS = mix(0.04, 0.55, max(cracks, frost));
-	METALLIC = 0.3 * (1.0 - cracks);
+	vec2 d = uv - origin;
+	float r = length(d);
+	// The fracture spreads from the origin; even a crazed screen keeps clear areas far from it.
+	float front = 0.18 + crack * 0.95;
+	float ragged = 0.10 * (hash2(floor(uv * 4.0)).x - 0.5);
+	float reach = 1.0 - smoothstep(front - 0.2, front + ragged, r);
+	// Spider web at the origin: radial cracks and concentric rings, denser close in.
+	float ang = atan(d.y, d.x) / 6.28318 + 0.5;
+	float spokes = 15.0;
+	float sector = floor(ang * spokes);
+	float wobble = 0.15 * sin(r * 23.0 + sector * 1.7) * smoothstep(0.0, 0.3, r);
+	float radial = abs(fract(ang * spokes + wobble) - 0.5) * r * 6.28318 / spokes;   // metres to spoke
+	float spoke_len = front * (0.55 + 0.45 * hash2(vec2(sector, 3.0)).x);
+	float spokes_mask = line(radial, 0.0009) * step(r, spoke_len);
+	float ring_r = r * (9.0 - 4.0 * smoothstep(0.0, 0.8, r)) + hash2(vec2(sector, 7.0)).x;
+	float rings = line(abs(fract(ring_r) - 0.5) / 9.0, 0.0008) * step(0.03, r) * step(r, front * 0.8)
+		* step(0.35, hash2(vec2(sector, floor(ring_r))).x);
+	// Crazing: tempered glass breaks into small cells; laminated glass only right at the impact.
+	float craze_area = mix(0.12, front, step(0.5, cell_scale / 10.0)) * (0.4 + 0.6 * crack);
+	float fine = line(cell_edge(uv * fine_scale + 3.7) / fine_scale, 0.0007) * (1.0 - smoothstep(craze_area * 0.6, craze_area, r));
+	float coarse = line(cell_edge(uv * cell_scale) / cell_scale, 0.0011) * smoothstep(0.55, 1.0, crack);
+	float cracks = clamp(max(max(spokes_mask, rings), max(fine, coarse * 0.8)), 0.0, 1.0) * reach;
+	// Powdered glass right at the impact point.
+	float star = (1.0 - smoothstep(0.0, 0.035 + 0.04 * crack, r)) * crack;
+	float white = max(cracks * 0.85, star);
+	ALBEDO = mix(tint.rgb, vec3(0.80, 0.82, 0.84), white);
+	ALPHA = clamp(mix(tint.a, 0.85, white), 0.0, 1.0);
+	ROUGHNESS = mix(0.04, 0.5, white);
+	METALLIC = 0.3 * (1.0 - white);
 	SPECULAR = 0.6;
 }

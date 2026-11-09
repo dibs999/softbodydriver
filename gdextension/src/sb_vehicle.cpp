@@ -1299,8 +1299,16 @@ Array SBVehicle::get_lamp_states() const {
             else strain = std::max(strain, beam.plasticStrain());
             damage = std::max(damage, beam.broken ? 1.0 : std::min(1.0, beam.plasticStrain() / kLampBreakStrain));
         }
+        sb::Vec3 centre{};
+        std::size_t count = 0;
+        for (auto bi : lampBeams_[static_cast<std::size_t>(c)]) {
+            if (bi >= beams.size()) continue;
+            centre += body.positions()[beams[bi].a];
+            ++count;
+        }
         Dictionary state;
         state["name"] = names[c];
+        state["center"] = count ? toG(centre / static_cast<double>(count)) : get_position_ws();
         state["front"] = c < 2;
         state["side"] = c % 2 == 0 ? -1 : 1;
         state["damage"] = damage;

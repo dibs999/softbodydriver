@@ -357,8 +357,12 @@ func _update_lamp_damage(v: SBVehicle, s: Dictionary, delta: float) -> void:
 	for lamp in v.get_lamp_states():
 		var corner: String = lamp["name"]
 		var now := bool(lamp["broken"])
-		if now and not broken.get(corner, false) and v == game.player and game.get("hud"):
-			game.hud.toast("%s zerstört" % LAMP_CAPTIONS.get(corner, corner))
+		if now and not broken.get(corner, false):
+			# Lens fragments: clear for headlights, red for tail lights.
+			_spawn_shards(lamp.get("center", v.get_position_ws()), v.get_velocity(), 30,
+				Color(0.85, 0.88, 0.9, 0.7) if lamp["front"] else Color(0.75, 0.05, 0.04, 0.8))
+			if v == game.player and game.get("hud"):
+				game.hud.toast("%s zerstört" % LAMP_CAPTIONS.get(corner, corner))
 		broken[corner] = now
 
 const CRACKED_GLASS := preload("res://materials/cracked_glass.gdshader")
@@ -397,26 +401,30 @@ func _update_glass(v: SBVehicle, s: Dictionary) -> void:
 			var m := ShaderMaterial.new()
 			m.shader = CRACKED_GLASS
 			m.set_shader_parameter("seed", float(hash(key) % 997))
+			# Laminated windscreen: a web of long cracks; tempered side and rear glass: small cubes.
+			m.set_shader_parameter("cell_scale", 4.0 if key == "windscreen" else 9.0)
+			m.set_shader_parameter("fine_scale", 26.0 if key == "windscreen" else 38.0)
 			inst.material_override = m
 			pane["material"] = m
 		var mat: ShaderMaterial = pane["material"]
 		mat.set_shader_parameter("origin", g["origin_uv"])
 		mat.set_shader_parameter("crack", clampf((damage - GLASS_CRACK) / (GLASS_SHATTER - GLASS_CRACK), 0.05, 1.0))
 
-static var _shard_mesh: BoxMesh
-func _spawn_shards(at: Vector3, velocity: Vector3) -> void:
-	if _shard_mesh == null:
-		_shard_mesh = BoxMesh.new()
-		_shard_mesh.size = Vector3(0.018, 0.003, 0.014)
+static var _shard_meshes := {}
+func _spawn_shards(at: Vector3, velocity: Vector3, amount := 90, colour := Color(0.75, 0.82, 0.85, 0.7)) -> void:
+	if not _shard_meshes.has(colour):
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(0.018, 0.003, 0.014)
 		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(0.75, 0.82, 0.85, 0.7)
+		m.albedo_color = colour
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.metallic = 0.4
 		m.roughness = 0.1
-		_shard_mesh.material = m
+		mesh.material = m
+		_shard_meshes[colour] = mesh
 	var p := CPUParticles3D.new()
-	p.mesh = _shard_mesh
-	p.amount = 90 if Game.graphics.get("effects", 1) > 0 else 35
+	p.mesh = _shard_meshes[colour]
+	p.amount = amount if Game.graphics.get("effects", 1) > 0 else maxi(8, amount / 3)
 	p.one_shot = true
 	p.explosiveness = 0.95
 	p.lifetime = 1.4
