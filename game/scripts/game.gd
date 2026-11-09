@@ -13,6 +13,7 @@ const DrivingActivity := preload("res://scripts/driving_activity.gd")
 const DriverPrompts := preload("res://scripts/driver_prompts.gd")
 var equipment: Node3D
 var weather: Node
+var wipers: Node3D
 var lesson: Node
 var activity: DrivingActivity
 var surfaces := RoadSurface.new()
@@ -102,6 +103,9 @@ func _ready() -> void:
 	add_child(weather)
 	weather.configure(_env, _sun, cam, surfaces, world)
 	weather.set_shelters(map_data.get("rain_shelters", []))
+	wipers = preload("res://scripts/vehicle_wipers.gd").new()
+	wipers.name = "Wipers"
+	add_child(wipers)
 	equipment = preload("res://scripts/vehicle_equipment.gd").new()
 	add_child(equipment)
 	equipment.configure(self, map_data["spawns"][0])
@@ -291,7 +295,10 @@ func _set_player(v: SBVehicle) -> void:
 	for car in Game.cars:
 		if car.get("id", "") == v.get_info().get("id", ""):
 			var definition: Variant = JSON.parse_string(FileAccess.get_file_as_string(car["path"]))
-			weather.set_vehicle_shelter(v, definition.get("body", {}) if definition is Dictionary else {})
+			var body: Dictionary = definition.get("body", {}) if definition is Dictionary else {}
+			weather.set_vehicle_shelter(v, body)
+			# Imported models bring their own wiper geometry; procedural bodies get arms.
+			wipers.attach(v, body, not (definition is Dictionary and definition.has("visualModel")))
 			break
 	hud.vehicle = v
 	minimap.player = v
@@ -307,6 +314,8 @@ func _process(delta: float) -> void:
 		return
 	if not pause_menu.visible:
 		_drive_player(delta)
+	if wipers:
+		wipers.update(0.0 if world.paused else delta * world.time_scale, weather.weather_index == 2, weather.wetness)
 	for v in ai.keys():
 		ai[v].update(delta)
 	for v in vehicles:
@@ -422,6 +431,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		activity.cancel("Lauf abgebrochen: Reparatur")
 		player.repair_in_place()
 		hud.toast("Fahrzeug repariert")
+	elif event.is_action_pressed("wipers"):
+		hud.toast(wipers.cycle_mode())
 	elif event.is_action_pressed("debug_view"):
 		var on := not player.get_debug_view()
 		player.set_debug_view(on)
@@ -519,6 +530,9 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 				_toggle_pause()],
 			["Beifahrertür öffnen / schließen", func():
 				equipment.toggle_door(1)
+				_toggle_pause()],
+			["Scheibenwischer umschalten", func():
+				hud.toast(wipers.cycle_mode())
 				_toggle_pause()],
 			["Zum Service bergen · Schäden bleiben", func():
 				lesson.notify_interruption("Bergung zum Service")

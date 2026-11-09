@@ -424,6 +424,7 @@ func _setup_input() -> void:
 	_action("menu"); _key("menu", [KEY_ESCAPE]); _joy_button("menu", JOY_BUTTON_START)
 	_action("bonnet_release"); _key("bonnet_release", [KEY_O])
 	_action("headlights"); _key("headlights", [KEY_L]); _joy_button("headlights", JOY_BUTTON_DPAD_UP)
+	_action("wipers"); _key("wipers", [KEY_X])
 	_action("indicator_left"); _key("indicator_left", [KEY_COMMA])
 	_action("indicator_right"); _key("indicator_right", [KEY_PERIOD])
 	_action("hazards"); _key("hazards", [KEY_H])
