@@ -47,6 +47,10 @@ struct CarBodyDef {
     real cornerRadiusFront = 0.32;
     real cornerRadiusRear = 0.26;
     real archClearance = 0.06;   ///< Wheel arch radius = tyre radius + this.
+    /// Cabin layout corrections (m): front seats forward (+) / back (-) from the position derived
+    /// from the B pillar, rear bench likewise, and front seat height lowered by seatDrop. Used to
+    /// fit the generated seats to the seat positions of imported models.
+    real seatShift = 0.0, rearSeatShift = 0.0, seatDrop = 0.0;
     int doors = 4;
     std::array<real, 3> paint{0.62, 0.05, 0.04};
     real paintMetallic = 0.55;
@@ -170,6 +174,9 @@ struct MeshSurface {
     bool steeringWheel = false;
     /// Lamp surfaces are split per side so a lamp can break on its own: -1 = left (-z), +1 = right.
     std::int8_t side = 0;
+    /// Glass is split into panes that crack and shatter on their own: 0 none, 1 windscreen,
+    /// 2 rear window, 3 left side, 4 right side.
+    std::int8_t pane = 0;
 };
 
 struct CarVisual {

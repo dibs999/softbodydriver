@@ -51,6 +51,7 @@ void parseBody(CarBodyDef& b, const json& j) {
         SB_REAL("rearWindowRun", b.rearWindowRun) SB_REAL("roofWidthRatio", b.roofWidthRatio)
         SB_REAL("cornerRadiusFront", b.cornerRadiusFront) SB_REAL("cornerRadiusRear", b.cornerRadiusRear)
         SB_REAL("archClearance", b.archClearance) SB_INT("doors", b.doors)
+        SB_REAL("seatShift", b.seatShift) SB_REAL("rearSeatShift", b.rearSeatShift) SB_REAL("seatDrop", b.seatDrop)
         SB_REAL("paintMetallic", b.paintMetallic)
         SB_REAL("dragCoefficient", b.dragCoefficient) SB_REAL("frontalArea", b.frontalArea)
         SB_BOOL("detachableBumpers", b.detachableBumpers)

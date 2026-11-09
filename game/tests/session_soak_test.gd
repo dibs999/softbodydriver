@@ -122,6 +122,8 @@ func run() -> void:
 	state.selected_map = "proving_grounds"
 	state.selected_car = "res://cars/kestrel_hatch.car.json"
 	state.settings["traffic"] = false
+	# Driving aids as shipped; a profile saved by other runs must not change the crash and recovery.
+	for aid in ["tcs", "abs", "automatic", "steering_assist"]: state.settings[aid] = true
 	state.start_lesson = false
 	change_scene_to_file("res://scenes/game.tscn")
 	await scene_changed

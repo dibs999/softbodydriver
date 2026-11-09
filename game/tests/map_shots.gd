@@ -1,6 +1,7 @@
 extends SceneTree
 ## Map renders without driving: godot -s res://tests/map_shots.gd -- <map_id> <out_prefix> [car] [night]
 ## Places the camera at five points along the map's route (eye height, looking ahead) plus one overview.
+## AT=<i,j,...> picks the route waypoints to look ahead from.
 
 var frame := 0
 var scene: Node
@@ -42,9 +43,15 @@ func _setup() -> void:
 	if scene.get("cam"):
 		scene.cam.current = false
 	var n := wps.size()
-	for k in 5:
+	# AT=12,140,...: look ahead from these waypoint indices instead of five evenly spaced ones.
+	var picks: Array[int] = []
+	if OS.has_environment("AT"):
+		for t in OS.get_environment("AT").split(","): picks.append(int(t))
+	else:
+		for k in 5: picks.append(int(float(k) / 5.0 * n))
+	for i0 in picks:
 		if n < 2: break
-		var i := int(float(k) / 5.0 * n) % n
+		var i := i0 % n
 		var a: Vector3 = wps[i]
 		var b: Vector3 = wps[(i + 3) % n]
 		var dir := (b - a)

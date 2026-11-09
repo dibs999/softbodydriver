@@ -1,6 +1,7 @@
 // Visual (render) model of the realistic car generator + flexbody skinning. See car.hpp.
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <map>
 #include <tuple>
 
@@ -188,6 +189,103 @@ public:
                     else { tri(mesh, a, b, c); tri(mesh, a, c, d); }
                 }
             }
+        }
+    }
+
+    // Soft moulded solid (seat cushion, backrest, headrest, console lid): a 2-D section swept from
+    // a to b. profile(t) returns the section at t in [0, 1] as (u, v) points around its outline,
+    // u along `across`, v along `up`; it may change along the sweep (bolsters, lumbar). Within
+    // `round` of either end the section shrinks towards its centre like a stuffed cushion.
+    void pillow(const std::string& mat, const Vec3& a, const Vec3& b, const Vec3& across, const Vec3& up,
+                const std::function<std::vector<std::pair<real, real>>(real)>& profile, real round,
+                const std::vector<std::uint32_t>& cand, int middleStations = 6) {
+        MeshSurface& m = surf(partMaterial(mat, cand));
+        const real len = length(b - a);
+        if (len < 1e-6) return;
+        const Vec3 dir = (b - a) / len;
+        round = std::min(round, 0.49 * len);
+        std::vector<real> ss;
+        constexpr int endSteps = 4;
+        for (int i = 0; i <= endSteps; ++i) ss.push_back(round * (1.0 - std::cos(0.5 * kPi * i / endSteps)));
+        for (int i = 1; i < middleStations; ++i) ss.push_back(round + (len - 2.0 * round) * i / middleStations);
+        for (int i = endSteps; i >= 0; --i) ss.push_back(len - round * (1.0 - std::cos(0.5 * kPi * i / endSteps)));
+        std::vector<std::vector<std::uint32_t>> rings;
+        std::vector<std::uint32_t> centres;
+        real area = 0.0;
+        for (std::size_t k = 0; k < ss.size(); ++k) {
+            const real s = ss[k];
+            const auto sec = profile(s / len);
+            if (k == 0) {
+                for (std::size_t j = 0; j < sec.size(); ++j) {
+                    const auto& p = sec[j];
+                    const auto& q = sec[(j + 1) % sec.size()];
+                    area += p.first * q.second - q.first * p.second;
+                }
+            }
+            real cu = 0.0, cv = 0.0;
+            for (const auto& p : sec) { cu += p.first; cv += p.second; }
+            cu /= static_cast<real>(sec.size());
+            cv /= static_cast<real>(sec.size());
+            const real dEnd = std::min(s, len - s);
+            const real e = round > 0.0 ? round - std::sqrt(std::max<real>(0.0, round * round - (round - std::min(dEnd, round)) * (round - std::min(dEnd, round)))) : 0.0;
+            const Vec3 base = a + dir * s;
+            std::vector<std::uint32_t> ring;
+            for (const auto& p : sec) {
+                const real du = p.first - cu, dv = p.second - cv;
+                const real dl = std::sqrt(du * du + dv * dv);
+                const real shrink = dl > 1e-9 ? std::min(e, 0.92 * dl) / dl : 0.0;
+                const Vec3 q = base + across * (p.first - du * shrink) + up * (p.second - dv * shrink);
+                ring.push_back(vertex(m, q, skinNearest(q, cand)));
+            }
+            rings.push_back(ring);
+            if (k == 0 || k + 1 == ss.size()) {
+                const Vec3 c = base + across * cu + up * cv;
+                centres.push_back(vertex(m, c, skinNearest(c, cand)));
+            }
+        }
+        const bool flip = area * dot(cross(across, up), dir) < 0.0;
+        auto emit = [&](std::uint32_t p, std::uint32_t q, std::uint32_t r) { flip ? tri(m, p, r, q) : tri(m, p, q, r); };
+        for (std::size_t k = 0; k + 1 < rings.size(); ++k) {
+            const auto& r0 = rings[k];
+            const auto& r1 = rings[k + 1];
+            for (std::size_t j = 0; j < r0.size(); ++j) {
+                const std::size_t jn = (j + 1) % r0.size();
+                emit(r0[j], r0[jn], r1[jn]);
+                emit(r0[j], r1[jn], r1[j]);
+            }
+        }
+        const auto& first = rings.front();
+        const auto& last = rings.back();
+        for (std::size_t j = 0; j < first.size(); ++j) {
+            const std::size_t jn = (j + 1) % first.size();
+            emit(centres[0], first[jn], first[j]);
+            emit(centres[1], last[j], last[jn]);
+        }
+    }
+
+    // Open surface through rows of points (all rows the same length): headliner, carpet, wheel
+    // arch liners, heat shields. Faces point along `facing` (checked on the first quad); a
+    // two-sided sheet gets separate vertices for its back so both sides shade correctly.
+    void sheet(const std::string& mat, const std::vector<std::vector<Vec3>>& rows, const Vec3& facing,
+               const std::vector<std::uint32_t>& cand, bool twoSided = false) {
+        if (rows.size() < 2 || rows[0].size() < 2) return;
+        MeshSurface& m = surf(partMaterial(mat, cand));
+        const Vec3 n0 = cross(rows[0][1] - rows[0][0], rows[1][1] - rows[0][0]);
+        const bool flip = dot(n0, facing) < 0.0;
+        for (int side = 0; side < (twoSided ? 2 : 1); ++side) {
+            std::vector<std::vector<std::uint32_t>> ids;
+            for (const auto& row : rows) {
+                std::vector<std::uint32_t> r;
+                for (const Vec3& p : row) r.push_back(vertex(m, p, skinNearest(p, cand)));
+                ids.push_back(r);
+            }
+            const bool f = flip != (side == 1);
+            for (std::size_t i = 0; i + 1 < ids.size(); ++i)
+                for (std::size_t j = 0; j + 1 < ids[i].size(); ++j) {
+                    const auto a = ids[i][j], b = ids[i][j + 1], c = ids[i + 1][j + 1], d = ids[i + 1][j];
+                    if (f) { tri(m, a, c, b); tri(m, a, d, c); }
+                    else { tri(m, a, b, c); tri(m, a, c, d); }
+                }
         }
     }
 
@@ -901,8 +999,8 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         const real yB = prof.yBottom(xm);
         const real yBe = prof.yBelt(xm);
         const bool gh = prof.greenhouse(xm) > 0.04;
-        if (seg == 0) return "chassis";
-        if (seg <= 2) return "trim";
+        if (seg == 0) return "underbody";
+        if (seg <= 2) return prof.archY(xm) > 0.0 ? "arch_liner" : "trim";
         if (seg <= 5) {
             if (xm > L - 0.40 && ym < yB + 0.13) return "trim";
             if (xm < 0.32 && ym < yB + 0.15) return "trim";
@@ -1260,10 +1358,58 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         const real beltY = bd.beltHeight;
         const real dashX = prof.xCowl - 0.22;
         const real dashHalf = prof.shoulderHalf(dashX) - 0.10;
-        // Continuous footwell, headliner and two-tone door cards close the cabin.
-        vb.box("interior", {prof.xB - 0.10, yFloor - 0.03, 0}, {0.72, 0.035, dashHalf}, bodyNodes);
-        vb.box("upholstery", {(prof.xWsTop + prof.xRwTop) * 0.5, bd.height - 0.055, 0},
-               {std::abs(prof.xWsTop - prof.xRwTop) * 0.48, 0.018, hw * bd.roofWidthRatio * 0.94}, bodyNodes);
+        const real seatX = prof.xB + 0.10 + bd.seatShift;
+        const real benchX = prof.xB - 0.55 + bd.rearSeatShift;
+        const bool rearSeats = bd.doors >= 4 || bd.style != BodyStyle::Coupe;
+        // Carpet: rear footwell to the toe board, over a transmission tunnel along the centre.
+        {
+            const real xRear = rearSeats ? benchX - 0.26 : prof.xB - 0.45;
+            const real xHeel = seatX + 0.52, xFire = dashX + 0.06;
+            std::vector<std::vector<Vec3>> rows;
+            constexpr int n = 18;
+            for (int i = 0; i <= n; ++i) {
+                const real x = xRear + (xFire - xRear) * i / n;
+                const real rise = x > xHeel ? 0.24 * (x - xHeel) / std::max<real>(0.05, xFire - xHeel) : 0.0;
+                const real w = std::max<real>(0.30, prof.shoulderHalf(x) - 0.10);
+                std::vector<Vec3> row;
+                for (real z : {-w, -0.5 * w, -0.20, -0.13, -0.075, 0.075, 0.13, 0.20, 0.5 * w, w}) {
+                    const real a = std::abs(z);
+                    const real tunnel = a < 0.075 ? 0.13 : a < 0.20 ? 0.13 * (0.20 - a) / 0.125 : 0.0;
+                    row.push_back({x, yFloor - 0.005 + std::max(rise, tunnel), z});
+                }
+                rows.push_back(row);
+            }
+            vb.sheet("carpet", rows, {0, 1, 0}, bodyNodes);
+        }
+        // Headliner following the roof, with sun visors and the rear-view mirror.
+        {
+            std::vector<std::vector<Vec3>> rows;
+            constexpr int n = 14;
+            const real x0 = prof.xRwTop + 0.02, x1 = prof.xWsTop - 0.02;
+            auto roofAt = [&](real x, real zz) {
+                const Section sec = prof.section(x);
+                const real edge = sec.z[8] - 0.05;
+                const real yc = sec.y[10] - 0.045, ye = sec.y[8] - 0.035;
+                return Vec3{x, lerp(yc, ye, zz * zz), zz * edge};
+            };
+            for (int i = 0; i <= n; ++i) {
+                const real x = x0 + (x1 - x0) * i / n;
+                std::vector<Vec3> row;
+                for (int j = 0; j <= 12; ++j) row.push_back(roofAt(x, -1.0 + 2.0 * j / 12));
+                rows.push_back(row);
+            }
+            vb.sheet("headliner", rows, {0, -1, 0}, bodyNodes);
+            const real visorX = x1 - 0.12;
+            for (real z : {-0.34, 0.34}) {
+                const Vec3 hinge = roofAt(visorX, z / std::max<real>(0.2, prof.section(visorX).z[8] - 0.05));
+                vb.bevelBox("headliner", hinge + Vec3{0.0, -0.022, 0.0}, {0.085, 0.011, 0.165}, 0.009, bodyNodes,
+                            normalize(Vec3{1, 0.18, 0}), normalize(Vec3{-0.18, 1, 0}), {0, 0, 1});
+            }
+            const Vec3 mount = roofAt(x1 - 0.06, 0.0);
+            vb.tube("trim", mount + Vec3{0, 0.01, 0}, mount + Vec3{-0.03, -0.075, 0}, 0.009, bodyNodes, 8);
+            vb.bevelBox("trim", mount + Vec3{-0.035, -0.105, 0}, {0.022, 0.036, 0.115}, 0.014, bodyNodes);
+            vb.box("chrome", mount + Vec3{-0.058, -0.105, 0}, {0.002, 0.028, 0.104}, bodyNodes);
+        }
         vb.bevelBox("interior", {dashX, beltY - 0.10, 0.0}, {0.16, 0.09, dashHalf}, 0.035, bodyNodes);
         vb.bevelBox("trim", {dashX + 0.03, beltY - 0.008, 0.0}, {0.17, 0.027, dashHalf}, 0.022, bodyNodes);
         vb.box("chrome", {dashX - 0.162, beltY - 0.051, 0.0}, {0.010, 0.008, dashHalf - 0.014}, bodyNodes);
@@ -1303,7 +1449,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             const Vec3 top{prof.xWsTop, pillarTop.y[8] - 0.018, side * (pillarTop.z[8] - 0.024)};
             const Vec3 axis = normalize(top - foot);
             const Vec3 width = normalize(cross(axis, Vec3{0, 1, 0}));
-            vb.box("interior", (foot + top) * 0.5, {length(top - foot) * 0.5, 0.018, 0.016}, bodyNodes,
+            vb.box("headliner", (foot + top) * 0.5, {length(top - foot) * 0.5, 0.018, 0.016}, bodyNodes,
                    axis, cross(width, axis), width);
         }
         vb.bevelBox("interior", {dashX - 0.17, beltY - 0.15, 0.02}, {0.032, 0.11, 0.135}, 0.025, bodyNodes);
@@ -1312,24 +1458,110 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             vb.box("trim", {dashX - 0.218, beltY - 0.147 + slat * 0.018, 0.02}, {0.007, 0.004, 0.091}, bodyNodes);
         }
         vb.bevelBox("trim", {dashX - 0.25, yFloor + 0.20, 0.0}, {0.30, 0.10, 0.09}, 0.035, bodyNodes);  // console
+        // Rear part of the console between the seats: cup holders, storage box and a padded armrest.
+        vb.bevelBox("trim", {seatX + 0.02, yFloor + 0.17, 0.0}, {0.20, 0.12, 0.085}, 0.03, bodyNodes);
+        vb.pillow("interior", {seatX - 0.16, 0, 0}, {seatX + 0.14, 0, 0}, {0, 0, 1}, {0, 1, 0}, [&](real) {
+            return std::vector<std::pair<real, real>>{{-0.08, yFloor + 0.27}, {0.08, yFloor + 0.27}, {0.085, yFloor + 0.32},
+                                                      {0.05, yFloor + 0.345}, {-0.05, yFloor + 0.345}, {-0.085, yFloor + 0.32}};
+        }, 0.03, bodyNodes, 4);
+        for (real z : {-0.04, 0.04}) vb.tube("seam", {seatX + 0.25, yFloor + 0.27, z}, {seatX + 0.25, yFloor + 0.30, z}, 0.032, bodyNodes, 14);
         vb.box("chrome", {dashX - 0.24, yFloor + 0.303, 0.0}, {0.11, 0.005, 0.073}, bodyNodes);
         vb.box("seam", {dashX - 0.24, yFloor + 0.313, 0.0}, {0.072, 0.014, 0.048}, bodyNodes);
         vb.bevelBox("trim", {dashX - 0.24, yFloor + 0.353, 0.0}, {0.025, 0.045, 0.020}, 0.016, bodyNodes);
         vb.box("chrome", {dashX - 0.24, yFloor + 0.401, 0.0}, {0.034, 0.012, 0.026}, bodyNodes);
-        const real seatX = prof.xB + 0.10;
+        const real ySeat = yFloor - bd.seatDrop;
+        // Front seats: frame and rails, a contoured cushion and backrest with side bolsters and a
+        // two-tone centre, an adjustable headrest on chrome posts, and the belt buckle.
+        const Vec3 backUp = normalize(Vec3{-0.24, 1, 0});
+        const Vec3 backFwd = normalize(Vec3{1, 0.24, 0});
         for (real zs : {-0.36, 0.36}) {
-            vb.box("interior", {seatX + 0.05, yFloor + 0.16, zs}, {0.24, 0.07, 0.24}, bodyNodes);
-            vb.box("interior", {seatX - 0.20, yFloor + 0.48, zs}, {0.06, 0.32, 0.23}, bodyNodes, normalize(Vec3{1, 0.25, 0}),
-                   normalize(Vec3{-0.25, 1, 0}), {0, 0, 1});
-            vb.box("interior", {seatX - 0.26, yFloor + 0.86, zs}, {0.05, 0.09, 0.13}, bodyNodes);  // headrest
-            vb.box("upholstery", {seatX + 0.05, yFloor + 0.232, zs}, {0.19, 0.008, 0.145}, bodyNodes);
-            vb.box("upholstery", {seatX - 0.126, yFloor + 0.48, zs}, {0.008, 0.25, 0.145}, bodyNodes,
-                   normalize(Vec3{1, 0.25, 0}), normalize(Vec3{-0.25, 1, 0}), {0, 0, 1});
+            const real inboard = zs < 0 ? 1.0 : -1.0;
+            vb.box("seat_frame", {seatX + 0.05, ySeat + 0.065, zs}, {0.20, 0.05, 0.18}, bodyNodes);
+            for (real r : {-0.17, 0.17})
+                vb.box("seat_frame", {seatX + 0.05, ySeat + 0.012, zs + r}, {0.27, 0.012, 0.016}, bodyNodes);
+            const real bot = ySeat + 0.11;
+            vb.pillow("fabric", {seatX - 0.20, 0, zs}, {seatX + 0.30, 0, zs}, {0, 0, 1}, {0, 1, 0}, [&](real t) {
+                const real yc = ySeat + 0.235 + 0.02 * t;
+                const real yb = yc + 0.05 * (1.0 - 0.55 * t);
+                return std::vector<std::pair<real, real>>{
+                    {-0.24, bot}, {0.24, bot}, {0.255, bot + 0.06}, {0.25, yc + 0.02}, {0.225, yb}, {0.19, yb - 0.006},
+                    {0.15, yc + 0.012}, {0.10, yc}, {0.0, yc - 0.004}, {-0.10, yc}, {-0.15, yc + 0.012},
+                    {-0.19, yb - 0.006}, {-0.225, yb}, {-0.25, yc + 0.02}, {-0.255, bot + 0.06}};
+            }, 0.055, bodyNodes);
+            vb.pillow("seat_insert", {seatX - 0.15, 0, zs}, {seatX + 0.25, 0, zs}, {0, 0, 1}, {0, 1, 0}, [&](real t) {
+                const real yc = ySeat + 0.235 + 0.02 * t;
+                return std::vector<std::pair<real, real>>{{-0.13, yc - 0.012}, {0.13, yc - 0.012}, {0.135, yc + 0.004},
+                                                          {0.0, yc + 0.007}, {-0.135, yc + 0.004}};
+            }, 0.03, bodyNodes, 4);
+            const Vec3 backA{seatX - 0.17, ySeat + 0.22, zs};
+            const real backH = 0.62;
+            auto backProfile = [](real t, real scale) {
+                const real w = 0.245 - 0.03 * t;
+                const real vc = 0.03 + 0.016 * std::exp(-std::pow((t - 0.25) / 0.15, 2.0));
+                const real vbol = vc + 0.065 * (t < 0.72 ? 1.0 : std::max<real>(0.2, 1.0 - (t - 0.72) / 0.3));
+                std::vector<std::pair<real, real>> pts{
+                    {-w, -0.065}, {w, -0.065}, {w + 0.005, vbol - 0.025}, {w - 0.03, vbol}, {w - 0.07, vbol - 0.01},
+                    {w - 0.10, vc + 0.006}, {0.0, vc}, {-(w - 0.10), vc + 0.006}, {-(w - 0.07), vbol - 0.01},
+                    {-(w - 0.03), vbol}, {-(w + 0.005), vbol - 0.025}};
+                for (auto& p : pts) p.first *= scale;
+                return pts;
+            };
+            vb.pillow("fabric", backA, backA + backUp * backH, {0, 0, 1}, backFwd,
+                      [&](real t) { return backProfile(t, 1.0); }, 0.06, bodyNodes);
+            vb.pillow("seat_insert", backA + backUp * 0.06, backA + backUp * (backH - 0.16), {0, 0, 1}, backFwd, [&](real t) {
+                const real vc = 0.03 + 0.016 * std::exp(-std::pow((t * 0.7 + 0.07 - 0.25) / 0.15, 2.0));
+                return std::vector<std::pair<real, real>>{{-0.12, vc - 0.015}, {0.12, vc - 0.015}, {0.125, vc + 0.004},
+                                                          {0.0, vc + 0.008}, {-0.125, vc + 0.004}};
+            }, 0.03, bodyNodes, 4);
+            const Vec3 headC = backA + backUp * (backH + 0.13) + backFwd * 0.005;
+            vb.pillow("fabric", headC + Vec3{0, 0, -0.135}, headC + Vec3{0, 0, 0.135}, backFwd, backUp, [](real) {
+                std::vector<std::pair<real, real>> pts;
+                for (int i = 0; i < 16; ++i) {
+                    const real a = 2.0 * kPi * i / 16;
+                    const real c = std::cos(a), sn = std::sin(a);
+                    pts.push_back({0.048 * std::copysign(std::pow(std::abs(c), 0.6), c), 0.088 * std::copysign(std::pow(std::abs(sn), 0.6), sn)});
+                }
+                return pts;
+            }, 0.04, bodyNodes, 3);
+            for (real r : {-0.065, 0.065})
+                vb.tube("seat_frame", backA + backUp * (backH - 0.03) + Vec3{0, 0, r}, headC - backUp * 0.07 + Vec3{0, 0, r}, 0.0065, bodyNodes, 8);
+            // Buckle on the inboard side, belt strap and retractor cover on the B pillar.
+            vb.bevelBox("seat_frame", {seatX - 0.13, ySeat + 0.27, zs + inboard * 0.27}, {0.022, 0.045, 0.014}, 0.008, bodyNodes,
+                        backFwd, backUp, {0, 0, 1});
+            vb.box("seat_frame", {seatX - 0.125, ySeat + 0.325, zs + inboard * 0.27}, {0.012, 0.012, 0.004}, bodyNodes);
+        }
+        {
+            const Section sb0 = prof.section(prof.xB);
             for (real side : {-1.0, 1.0}) {
-                vb.box("trim", {seatX + 0.075, yFloor + 0.225, zs + side * 0.18}, {0.20, 0.036, 0.045}, bodyNodes);
-                vb.box("trim", {seatX - 0.145, yFloor + 0.48, zs + side * 0.17}, {0.042, 0.25, 0.04},
-                       bodyNodes, normalize(Vec3{1, 0.25, 0}), normalize(Vec3{-0.25, 1, 0}), {0, 0, 1});
+                const Vec3 lower{prof.xB - 0.005, bd.beltHeight - 0.06, side * (sb0.z[7] - 0.035)};
+                const Vec3 upper{prof.xB - 0.005, sb0.y[8] - 0.04, side * (sb0.z[8] - 0.035)};
+                const Vec3 along = normalize(upper - lower);
+                const Vec3 inward{0, 0, -side};
+                const Vec3 across = normalize(cross(along, inward));
+                vb.bevelBox("headliner", (lower + upper) * 0.5, {length(upper - lower) * 0.5 + 0.02, 0.045, 0.018}, 0.012, bodyNodes,
+                            along, across, inward);
+                vb.box("belt", (lower + upper) * 0.5 + inward * 0.021 + along * 0.03, {length(upper - lower) * 0.5 - 0.02, 0.022, 0.003},
+                       bodyNodes, along, across, inward);
+                vb.bevelBox("trim", upper - along * 0.05 + inward * 0.026, {0.022, 0.024, 0.012}, 0.008, bodyNodes, along, across, inward);
+                vb.bevelBox("headliner", lower - along * 0.10 + inward * 0.005, {0.09, 0.055, 0.03}, 0.02, bodyNodes, along, across, inward);
             }
+        }
+        // Pedal box: brake and throttle, clutch for a manual gearbox.
+        {
+            const real xHeel = seatX + 0.52, xFire = dashX + 0.06;
+            const real padX = xHeel + 0.20;
+            const real padY = yFloor + 0.10 + 0.24 * (padX - xHeel) / std::max<real>(0.05, xFire - xHeel);
+            const Vec3 pivotY{0, beltY - 0.22, 0};
+            struct Pedal { real z, hw, hh; };
+            std::vector<Pedal> pedals{{-0.31, 0.040, 0.030}, {-0.20, 0.022, 0.055}};
+            if (!build.def.engine.automatic) pedals.push_back({-0.43, 0.034, 0.030});
+            for (const Pedal& pd : pedals) {
+                const Vec3 pad{padX - 0.02, padY + 0.05, pd.z};
+                vb.bevelBox("tire", pad, {0.010, pd.hh, pd.hw}, 0.006, bodyNodes, normalize(Vec3{1, 0.55, 0}), normalize(Vec3{-0.55, 1, 0}), {0, 0, 1});
+                vb.tube("chassis", pad + Vec3{0.012, pd.hh * 0.6, 0}, Vec3{dashX - 0.02, pivotY.y, pd.z}, 0.007, bodyNodes, 6);
+            }
+        }
+        for (real zs : {-0.36, 0.36}) {
             const real doorSide = zs < 0 ? -1.0 : 1.0;
             const auto& panelNodes = build.layout.frontDoors[zs < 0 ? 0 : 1].nodes;
             const auto& cardNodes = panelNodes.empty() ? bodyNodes : panelNodes;
@@ -1345,11 +1577,49 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             for (int slat = 0; slat < 5; ++slat)
                 vb.box("seam", {doorX + 0.15, beltY - 0.28 + slat * 0.014, doorZ - doorSide * 0.055}, {0.065, 0.003, 0.003}, cardNodes);
         }
-        if (bd.doors >= 4 || bd.style != BodyStyle::Coupe) {
-            const real benchX = prof.xB - 0.55;
-            vb.box("interior", {benchX, yFloor + 0.16, 0.0}, {0.22, 0.07, prof.shoulderHalf(benchX) - 0.15}, bodyNodes);
-            vb.box("interior", {benchX - 0.24, yFloor + 0.45, 0.0}, {0.06, 0.28, prof.shoulderHalf(benchX) - 0.16}, bodyNodes,
-                   normalize(Vec3{1, 0.3, 0}), normalize(Vec3{-0.3, 1, 0}), {0, 0, 1});
+        if (rearSeats) {
+            const real yBench = yFloor - 0.5 * bd.seatDrop;
+            // Rear bench: two contoured places with a raised centre, backrest and outer headrests.
+            const real W = prof.shoulderHalf(benchX) - 0.14;
+            const real place = std::min<real>(0.37, W - 0.18);
+            auto dip = [&](real u) {
+                const real d = std::min(std::abs(u - place), std::abs(u + place));
+                return std::exp(-std::pow(d / 0.16, 2.0));
+            };
+            vb.pillow("fabric", {benchX - 0.22, 0, 0}, {benchX + 0.25, 0, 0}, {0, 0, 1}, {0, 1, 0}, [&](real t) {
+                std::vector<std::pair<real, real>> pts{{-W, yBench + 0.10}, {W, yBench + 0.10}};
+                for (int i = 0; i <= 16; ++i) {
+                    const real u = W - 2.0 * W * i / 16;
+                    pts.push_back({u, yBench + 0.245 + 0.018 * t - 0.022 * dip(u)});
+                }
+                return pts;
+            }, 0.05, bodyNodes);
+            const Vec3 rUp = normalize(Vec3{-0.30, 1, 0}), rFwd = normalize(Vec3{1, 0.30, 0});
+            const Vec3 rA{benchX - 0.21, yBench + 0.23, 0};
+            vb.pillow("fabric", rA, rA + rUp * 0.56, {0, 0, 1}, rFwd, [&](real t) {
+                std::vector<std::pair<real, real>> pts{{-W, -0.06}, {W, -0.06}};
+                for (int i = 0; i <= 16; ++i) {
+                    const real u = W - 2.0 * W * i / 16;
+                    pts.push_back({u, 0.035 - 0.022 * dip(u) + 0.01 * std::exp(-std::pow((t - 0.3) / 0.2, 2.0))});
+                }
+                return pts;
+            }, 0.05, bodyNodes);
+            for (real zr : {-place, place}) {
+                const Vec3 hc = rA + rUp * 0.67 + Vec3{0, 0, zr};
+                vb.pillow("fabric", hc + Vec3{0, 0, -0.12}, hc + Vec3{0, 0, 0.12}, rFwd, rUp, [](real) {
+                    std::vector<std::pair<real, real>> pts;
+                    for (int i = 0; i < 14; ++i) {
+                        const real a = 2.0 * kPi * i / 14;
+                        pts.push_back({0.042 * std::cos(a), 0.065 * std::sin(a)});
+                    }
+                    return pts;
+                }, 0.035, bodyNodes, 3);
+                for (real r : {-0.055, 0.055})
+                    vb.tube("seat_frame", rA + rUp * 0.54 + Vec3{0, 0, zr + r}, hc - rUp * 0.05 + Vec3{0, 0, r}, 0.006, bodyNodes, 8);
+            }
+            // Parcel shelf / boot cover behind the backrest.
+            const real shelfY = rA.y + rUp.y * 0.56 - 0.01;
+            vb.box("interior", {rA.x + rUp.x * 0.56 - 0.24, shelfY, 0}, {0.22, 0.008, W}, bodyNodes);
         }
         // Steering wheel ring (LHD -> driver on the left, -z).
         MeshSurface& m = vb.surf("trim", true);
@@ -1389,12 +1659,102 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         }
     }
 
-    // ---- exhaust
+    // ---- underbody: exhaust, heat shield, rails, crossmembers, subframe, pipes, spare wheel well
     {
-        const real y = prof.yBottom(0.15) + 0.05;
-        const real z = -0.55 * hw;
-        vb.box("chrome", {0.06, y, z}, {0.08, 0.03, 0.035}, bodyNodes);
-        vb.box("chassis", {0.6, prof.yBottom(0.6) + 0.04, z}, {0.25, 0.06, 0.12}, bodyNodes);  // muffler
+        const real yF = [&] { return prof.yBottom(0.5 * (prof.xFA + prof.xRA)); }();
+        const real archF = prof.xFA - prof.Ra - 0.04, archR = prof.xRA + prof.Ra + 0.04;
+        Vec3 tank{0.5 * (prof.xFA + prof.xRA) - 0.55, yF + 0.05, 0.0};
+        if (rig.fuelTank.size() == 4) {
+            tank = Vec3{0, 0, 0};
+            for (std::uint32_t n : rig.fuelTank) tank += body.positions()[n];
+            tank = tank / 4.0;
+        }
+        // Exhaust: down-pipe at the engine, catalytic converter and pipe in the tunnel, past the
+        // tank, centre silencer, kick-up over the rear axle, transverse rear silencer, tailpipe.
+        const real zt = -0.55 * hw;
+        const real xTankF = tank.x + 0.34, xTankR = tank.x - 0.34;
+        const real yP = yF - 0.012;
+        const std::vector<Vec3> path{
+            {prof.xFA + 0.05, prof.yBottom(prof.xFA) + 0.16, 0.10}, {prof.xFA - 0.12, yP + 0.02, 0.06},
+            {prof.xCowl - 0.30, yP, 0.03}, {xTankF + 0.10, yP, 0.03}, {xTankF - 0.05, yP, -0.42},
+            {xTankR - 0.02, yP, -0.42}, {archR + 0.02, yP, -0.40}, {prof.xRA + 0.05, yP + 0.09, -0.40},
+            {prof.xRA - prof.Ra - 0.02, yP + 0.05, -0.38}};
+        for (std::size_t i = 0; i + 1 < path.size(); ++i) {
+            const Vec3 d = normalize(path[i + 1] - path[i]);
+            vb.tube("exhaust", path[i] - d * 0.012, path[i + 1] + d * 0.012, 0.026, bodyNodes, 10);
+        }
+        for (std::size_t i = 1; i + 1 < path.size(); ++i) vb.oval("exhaust", path[i], {0.027, 0.027, 0.027}, bodyNodes);
+        {
+            const Vec3 a = path[1] + normalize(path[2] - path[1]) * 0.08;
+            vb.pillow("exhaust", a, a + normalize(path[2] - path[1]) * 0.34, {0, 0, 1}, {0, 1, 0}, [](real) {
+                std::vector<std::pair<real, real>> pts;
+                for (int i = 0; i < 14; ++i) { const real t = 2.0 * kPi * i / 14; pts.push_back({0.085 * std::cos(t), 0.045 * std::sin(t)}); }
+                return pts;
+            }, 0.05, bodyNodes, 3);  // catalytic converter
+            const Vec3 sc{0.5 * (xTankR + archR), yP, -0.41};
+            vb.pillow("exhaust", sc + Vec3{0.16, 0, 0}, sc - Vec3{0.16, 0, 0}, {0, 0, 1}, {0, 1, 0}, [](real) {
+                std::vector<std::pair<real, real>> pts;
+                for (int i = 0; i < 16; ++i) { const real t = 2.0 * kPi * i / 16; pts.push_back({0.075 * std::cos(t), 0.055 * std::sin(t)}); }
+                return pts;
+            }, 0.04, bodyNodes, 3);  // centre silencer
+        }
+        const real xBox = std::max<real>(0.22, prof.xRA - prof.Ra - 0.20);
+        const Vec3 boxC{xBox, prof.yBottom(xBox) + 0.04, zt * 0.55};
+        vb.pillow("exhaust", boxC + Vec3{0, 0, 0.24}, boxC - Vec3{0, 0, 0.24}, {1, 0, 0}, {0, 1, 0}, [](real) {
+            std::vector<std::pair<real, real>> pts;
+            for (int i = 0; i < 18; ++i) {
+                const real t = 2.0 * kPi * i / 18, c = std::cos(t), sn = std::sin(t);
+                pts.push_back({0.13 * std::copysign(std::pow(std::abs(c), 0.7), c), 0.06 * std::copysign(std::pow(std::abs(sn), 0.7), sn)});
+            }
+            return pts;
+        }, 0.05, bodyNodes, 4);  // rear silencer
+        vb.tube("exhaust", path.back(), boxC + Vec3{0.08, 0.0, 0.20}, 0.026, bodyNodes, 10);
+        const Vec3 tipA = boxC + Vec3{-0.06, -0.01, -0.21};
+        vb.tube("exhaust", tipA, {0.04, prof.yBottom(0.04) + 0.05, zt}, 0.026, bodyNodes, 10);
+        vb.tube("chrome", {0.075, prof.yBottom(0.04) + 0.05, zt}, {-0.012, prof.yBottom(0.04) + 0.05, zt}, 0.036, bodyNodes, 16);
+        vb.tube("seam", {-0.010, prof.yBottom(0.04) + 0.05, zt}, {-0.013, prof.yBottom(0.04) + 0.05, zt}, 0.030, bodyNodes, 16);
+        // Ribbed heat shield over the tunnel section of the pipe.
+        {
+            std::vector<std::vector<Vec3>> rows;
+            for (int i = 0; i <= 10; ++i) {
+                const real x = prof.xCowl - 0.28 - (prof.xCowl - 0.28 - (xTankF + 0.12)) * i / 10;
+                std::vector<Vec3> row;
+                for (int j = 0; j <= 12; ++j) {
+                    const real z = 0.03 - 0.14 + 0.28 * j / 12;
+                    row.push_back({x, yF - 0.012 - 0.007 * std::abs(std::sin(kPi * j / 2.0)), z});
+                }
+                rows.push_back(row);
+            }
+            vb.sheet("heatshield", rows, {0, -1, 0}, bodyNodes);
+        }
+        // Longitudinal rails and crossmembers between the wheel arches.
+        for (real side : {-1.0, 1.0}) {
+            const real zr = side * (prof.zIn(0.5 * (archF + archR)) - 0.06);
+            vb.bevelBox("underbody", {0.5 * (archF + archR), yF - 0.022, zr}, {0.5 * (archF - archR), 0.024, 0.04}, 0.012, bodyNodes);
+            for (real x : {archR + 0.30, archF - 0.35, archF - 0.10})
+                vb.box("underbody", {x, yF - 0.026, side * 0.02 + side * (prof.halfW(x) - 0.10) * 0.5}, {0.03, 0.008, 0.020}, bodyNodes);
+        }
+        for (real x : {prof.xB + 0.05, prof.xB + 0.40, archR + 0.12})
+            vb.bevelBox("underbody", {x, yF - 0.016, 0.0}, {0.035, 0.016, prof.zIn(x) - 0.08}, 0.01, bodyNodes);
+        // Front subframe under the engine.
+        {
+            const real ys = prof.yBottom(prof.xFA) + 0.04;
+            for (real side : {-1.0, 1.0})
+                vb.bevelBox("chassis", {prof.xFA + 0.03, ys, side * 0.33}, {0.36, 0.03, 0.035}, 0.012, bodyNodes);
+            for (real x : {prof.xFA - 0.28, prof.xFA + 0.25})
+                vb.bevelBox("chassis", {x, ys, 0}, {0.035, 0.028, 0.36}, 0.012, bodyNodes);
+        }
+        // Brake and fuel lines along the right-hand rail.
+        for (int k = 0; k < 3; ++k) {
+            const real z = prof.zIn(0.5 * (archF + archR)) - 0.12 - 0.012 * k;
+            vb.tube(k == 2 ? "exhaust" : "chrome", {archF + 0.02, yF - 0.008, z}, {archR - 0.02, yF - 0.008, z}, k == 2 ? 0.006 : 0.0035, bodyNodes, 6);
+        }
+        // Spare wheel well pressed into the boot floor, if the overhang leaves room.
+        const real xWell = prof.xRA - prof.Ra - 0.34;
+        if (xWell > 0.42) {
+            const real yw = prof.yBottom(xWell);
+            vb.tube("underbody", {xWell, yw + 0.01, 0.12}, {xWell, yw - 0.07, 0.12}, 0.27, bodyNodes, 24);
+        }
     }
 
     // Telescoping support bodies and polished rods follow the real bonnet
@@ -1538,7 +1898,10 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         Vec3 c{0, 0, 0};
         for (std::uint32_t n : rig.fuelTank) c += body.positions()[n];
         c = c / 4.0;
-        vb.box("chassis", c + Vec3{0, 0.05, 0}, {0.30, 0.08, 0.36}, rig.fuelTank);
+        vb.bevelBox("tank", c + Vec3{0, 0.05, 0}, {0.30, 0.08, 0.36}, 0.04, rig.fuelTank);
+        for (real dx : {-0.16, 0.16})
+            vb.box("chassis", c + Vec3{dx, -0.032, 0}, {0.018, 0.003, 0.37}, rig.fuelTank);  // straps
+        vb.tube("tire", c + Vec3{-0.05, 0.10, 0.30}, c + Vec3{-0.30, 0.25, 0.62 * prof.hw}, 0.022, rig.fuelTank, 10);  // filler hose
     }
     if (rig.diff >= 0 && rig.engine.size() == 8) {
         const auto d = static_cast<std::uint32_t>(rig.diff);
@@ -1594,6 +1957,51 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         for (MeshSurface& m : split) vis.skinned.push_back(std::move(m));
     }
 
+    // ---- glass panes (windscreen, rear window, side glass crack and shatter separately)
+    {
+        std::vector<MeshSurface> panes;
+        for (MeshSurface& m : vis.skinned) {
+            if (m.material == "door_left_glass") m.pane = 3;
+            if (m.material == "door_right_glass") m.pane = 4;
+            if (m.material != "glass" || m.pane != 0) continue;
+            MeshSurface parts[4];
+            std::vector<std::uint32_t> remap[4];
+            for (int h = 0; h < 4; ++h) {
+                parts[h].material = m.material;
+                parts[h].doubleSided = m.doubleSided;
+                parts[h].pane = static_cast<std::int8_t>(h + 1);
+                remap[h].assign(m.skin.size(), 0xffffffffu);
+            }
+            auto P = [&](std::uint32_t v) {
+                return Vec3{m.positions[v * 3], m.positions[v * 3 + 1], m.positions[v * 3 + 2]};
+            };
+            for (std::size_t t = 0; t + 2 < m.indices.size(); t += 3) {
+                const Vec3 a = P(m.indices[t]), b = P(m.indices[t + 1]), c = P(m.indices[t + 2]);
+                const Vec3 n = cross(b - a, c - a);
+                const Vec3 centre = (a + b + c) / 3.0;
+                int h;
+                if (std::abs(n.z) > 0.8 * length(n)) h = centre.z < 0.0 ? 2 : 3;
+                else h = centre.x > prof.xB ? 0 : 1;
+                for (int k = 0; k < 3; ++k) {
+                    const std::uint32_t v = m.indices[t + static_cast<std::size_t>(k)];
+                    if (remap[h][v] == 0xffffffffu) {
+                        remap[h][v] = static_cast<std::uint32_t>(parts[h].skin.size());
+                        for (int q = 0; q < 3; ++q) parts[h].positions.push_back(m.positions[v * 3 + static_cast<std::uint32_t>(q)]);
+                        parts[h].skin.push_back(m.skin[v]);
+                    }
+                    parts[h].indices.push_back(remap[h][v]);
+                }
+            }
+            m.material.clear();
+            for (MeshSurface& part : parts)
+                if (!part.indices.empty()) panes.push_back(std::move(part));
+        }
+        vis.skinned.erase(std::remove_if(vis.skinned.begin(), vis.skinned.end(),
+                                         [](const MeshSurface& m) { return m.material.empty(); }),
+                          vis.skinned.end());
+        for (MeshSurface& m : panes) vis.skinned.push_back(std::move(m));
+    }
+
     // ---- rest normals
     for (MeshSurface& m : vis.skinned) computeNormals(m.positions, m.indices, m.normals);
 
@@ -1609,7 +2017,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
 
     // ---- camera anchors
     {
-        const real ex = prof.xB + 0.12;
+        const real ex = prof.xB + 0.12 + bd.seatShift;
         const real ey = std::min(bd.beltHeight + 0.29, prof.yRoofRail(ex) - 0.10);
         vis.driverEye = vb.skinNearest({ex, ey, -0.36}, bodyNodes);
         vis.chaseTarget = vb.skinNearest({0.5 * (prof.xFA + prof.xRA), 0.5 * bd.height + 0.2, 0.0}, bodyNodes);

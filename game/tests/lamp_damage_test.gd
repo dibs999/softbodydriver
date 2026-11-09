@@ -1,6 +1,7 @@
 extends SceneTree
-## Lamps break with the structure around them: a parking bump leaves them intact, a 50 km/h
-## frontal impact smashes both headlights but not the tail lights, and a repair restores them.
+## Lamps and glass break with the structure around them: a parking bump leaves them intact, a
+## 50 km/h frontal impact smashes both headlights and cracks the windscreen but leaves the tail
+## lights and the rear window whole, and a repair restores everything.
 ## godot --headless -s res://tests/lamp_damage_test.gd
 var Equipment: GDScript
 
@@ -10,6 +11,11 @@ var frame := 0
 func check(value: bool, caption: String) -> void:
 	print(caption, ": ", value)
 	failed = failed or not value
+
+func _glass(car: SBVehicle) -> Dictionary:
+	var out := {}
+	for g in car.get_glass_states(): out[g["name"]] = float(g["damage"])
+	return out
 
 func _states(car: SBVehicle) -> Dictionary:
 	var out := {}
@@ -56,11 +62,16 @@ func _process(_d: float) -> bool:
 
 	var lamps := _states(car)
 	check(lamps.size() == 4 and not lamps.values().any(func(s): return s["broken"]), "New car has four intact lamps")
+	var glass := _glass(car)
+	print("  panes ", glass.keys())
+	check(glass.has("windscreen") and glass.has("rear") and glass.has("door_left_glass") and glass.values().all(func(d): return d < 0.05),
+		"New car has intact windscreen, rear and door glass")
 
 	var bump := _run_into_wall(world, car, 6.0)
 	lamps = _states(car)
 	print("  bump at %.1f km/h, head damage %.2f / %.2f" % [bump, lamps["head_left"]["damage"], lamps["head_right"]["damage"]])
 	check(bump > 3.0 and not lamps["head_left"]["broken"] and not lamps["head_right"]["broken"], "Parking bump leaves the headlights intact")
+	check(_glass(car)["windscreen"] < 0.3, "Parking bump leaves the windscreen uncracked")
 
 	car.reset_to(start)
 	world.step_blocking(1.0)
@@ -70,6 +81,10 @@ func _process(_d: float) -> bool:
 		lamps["tail_left"]["damage"], lamps["tail_right"]["damage"]])
 	check(crash > 40.0 and lamps["head_left"]["broken"] and lamps["head_right"]["broken"], "50 km/h frontal impact smashes both headlights")
 	check(not lamps["tail_left"]["broken"] and not lamps["tail_right"]["broken"], "Tail lights survive a frontal impact")
+	glass = _glass(car)
+	print("  glass after crash ", glass)
+	check(glass["windscreen"] >= 0.3, "50 km/h frontal impact cracks the windscreen")
+	check(glass["rear"] < 1.0, "Rear window survives a frontal impact")
 
 	var broken := {"head_left": true, "head_right": false}
 	check(Equipment._lamp_dead(broken, true, -1) and not Equipment._lamp_dead(broken, true, 1), "Split lamps go dark per side")
@@ -79,6 +94,7 @@ func _process(_d: float) -> bool:
 	world.step_blocking(0.5)
 	lamps = _states(car)
 	check(not lamps.values().any(func(s): return s["broken"]), "Repair restores all lamps")
+	check(_glass(car).values().all(func(d): return d < 0.05), "Repair restores all glass")
 	print("TEST OK" if not failed else "TEST FAILED")
 	quit(1 if failed else 0)
 	return true

@@ -310,6 +310,26 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 		for z in nz:
 			var meadow := smoothstep(-0.24, 0.28, noise.get_noise_2d(x * 7.2, z * 7.2))
 			colors[x * nz + z] = Color(0.65, 0.72, 0.49).lerp(Color(1.0, 1.0, 0.75), meadow)
+	# Farmland around the farms: strips of ripe wheat and ploughed earth behind each farmhouse.
+	for index: int in [12, 194, 410]:
+		var tangent := road[index + 1] - road[index - 1]
+		var fwd := Vector2(tangent.x, tangent.z).normalized()
+		var sd := Vector2(-fwd.y, fwd.x)
+		var origin := Vector2(road[index].x, road[index].z)
+		for ix in nx:
+			var x := ox + ix * cell
+			if absf(x - origin.x) > 170.0: continue
+			for iz in nz:
+				var z := oz + iz * cell
+				var rel := Vector2(x, z) - origin
+				var along := rel.dot(fwd)
+				var across := rel.dot(sd)
+				if along < -120.0 or along > 6.0 or across < 30.0 or across > 150.0: continue
+				var strip := int(floor((along + 120.0) / 42.0))
+				var edge := minf(minf(along + 120.0, 6.0 - along), minf(across - 30.0, 150.0 - across))
+				var blend := smoothstep(0.0, 6.0, edge) * (0.92 + 0.08 * sin(across * 1.9))   # furrows
+				var crop: Color = [Color(1.45, 1.12, 0.52), Color(0.82, 0.62, 0.44), Color(1.25, 1.18, 0.62)][(strip + index) % 3]
+				colors[ix * nz + iz] = colors[ix * nz + iz].lerp(crop, blend)
 	C.terrain_tiles(parent, ox, oz, cell, nx, nz, heights, grass, colors)
 	var ground_height := func(x: float, z: float) -> float:
 		return C.sample(heights, nx, nz, ox, oz, cell, x, z)
@@ -324,6 +344,51 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 			p.y = C.sample(heights, nx, nz, ox, oz, cell, p.x, p.z)
 			markers.append(Transform3D(basis, p))
 	C.roadside_markers(parent, markers)
+	# Road furniture: guardrails on bends and embankments, bend chevrons and warning signs, a
+	# power line along the road, and pasture fences, hay bales and boulders around the farms.
+	var R := preload("res://scripts/maps/roadside.gd")
+	# The loop has gentle bends (radius >= ~110 m): rails and chevrons mark its sharpest ones.
+	R.guardrails(parent, world, road, half_w, ground_height, true, 0.125)
+	R.bend_signs(parent, road, half_w, ground_height, true, 0.145)
+	var farm_points := [road[12], road[194], road[410]]
+	var keep_clear := func(p: Vector3) -> bool:
+		for f: Vector3 in farm_points:
+			if Vector2(p.x - f.x, p.z - f.z).length() < 34.0:
+				return false
+		return Vector2(p.x - road[0].x, p.z - road[0].z).length() > 30.0
+	R.utility_line(parent, world, road, -(half_w + 6.0), ground_height, true, 44.0, keep_clear)
+	var bale_rng := RandomNumberGenerator.new()
+	bale_rng.seed = 41
+	var bales: Array[Transform3D] = []
+	for index: int in [12, 194, 410]:
+		var tangent := road[index + 1] - road[index - 1]
+		var forward := Vector3(tangent.x, 0, tangent.z).normalized()
+		var side := Vector3(-forward.z, 0, forward.x)
+		var c := road[index] + side * 23.0
+		var pasture := PackedVector3Array([c + forward * 12.0 - side * 3.0, c + forward * 58.0 - side * 3.0,
+			c + forward * 58.0 + side * 36.0, c + forward * 12.0 + side * 36.0, c + forward * 12.0 + side * 9.0])
+		R.fence(parent, world, pasture, ground_height)
+		for k in 5:
+			var p := c + forward * bale_rng.randf_range(20.0, 50.0) + side * bale_rng.randf_range(6.0, 30.0)
+			p.y = ground_height.call(p.x, p.z)
+			bales.append(Transform3D(Basis(Vector3.UP, bale_rng.randf() * TAU), p))
+	R.hay_bales(parent, world, bales)
+	var rocks: Array[Transform3D] = []
+	var rock_rng := RandomNumberGenerator.new()
+	rock_rng.seed = 43
+	while rocks.size() < 160:
+		var p := Vector3(rock_rng.randf_range(-620, 620), 0, rock_rng.randf_range(-620, 620))
+		var near := false
+		for j in range(0, n_road, 4):
+			if Vector2(p.x - road[j].x, p.z - road[j].z).length() < 9.5:
+				near = true
+				break
+		if near or not keep_clear.call(p):
+			continue
+		p.y = ground_height.call(p.x, p.z)
+		var s := rock_rng.randf_range(0.35, 1.7) * (1.0 if rock_rng.randf() < 0.8 else 1.8)
+		rocks.append(Transform3D(Basis(Vector3.UP, rock_rng.randf() * TAU).scaled(Vector3(s, s * rock_rng.randf_range(0.7, 1.1), s * rock_rng.randf_range(0.8, 1.3))), p))
+	R.boulders(parent, world, rocks)
 
 	# Trees (visual) away from the road.
 	var rng := RandomNumberGenerator.new()
@@ -346,8 +411,29 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 		var y := C.sample(heights, nx, nz, ox, oz, cell, p.x, p.y)
 		# Conifers cluster on the higher, shadier ground; broadleaf trees in the valleys.
 		(conifers if noise.get_noise_2d(p.x * 0.7 + 400.0, p.y * 0.7) > 0.05 else broadleaf).append(Vector3(p.x, y, p.y))
+	# Forest corridors: on a few stretches the road runs through dense woods with undergrowth.
+	var wood_rng := RandomNumberGenerator.new()
+	wood_rng.seed = 47
+	var under: Array[Vector3] = []
+	for i in range(0, n_road, 2):
+		if noise.get_noise_2d(road[i].x * 1.3 + 900.0, road[i].z * 1.3) < 0.12: continue
+		if Vector2(road[i].x - road[0].x, road[i].z - road[0].z).length() < 60.0: continue
+		var tangent := road[(i + 1) % n_road] - road[(i - 1 + n_road) % n_road]
+		var side := Vector3(-tangent.z, 0, tangent.x).normalized()
+		for sign: float in [-1.0, 1.0]:
+			for k in 3:
+				var p := road[i] + side * sign * wood_rng.randf_range(9.5, 38.0) + tangent.normalized() * wood_rng.randf_range(-3.0, 3.0)
+				p.y = ground_height.call(p.x, p.z)
+				var conifer := noise.get_noise_2d(p.x * 0.7 + 400.0, p.z * 0.7) > -0.1
+				(conifers if conifer else broadleaf).append(p)
+				if V.keep(p) and wood_rng.randf() < 0.5:
+					world.add_box(p + Vector3.UP * 1.8, Vector3(0.22, 1.8, 0.22), Vector3.ZERO, 0.7)
+			var b := road[i] + side * sign * wood_rng.randf_range(7.0, 12.0)
+			b.y = ground_height.call(b.x, b.z)
+			under.append(b)
 	V.plant(parent, "broadleaf", broadleaf, 31, 0.75, 1.25, false)
 	V.plant(parent, "conifer", conifers, 32, 0.6, 1.0, false)
+	V.plant(parent, "bush", under, 35, 0.7, 1.6, false)
 	var hedges: Array[Vector3] = []
 	for i in range(0, n_road, 3):
 		var tangent := road[(i + 1) % n_road] - road[(i - 1 + n_road) % n_road]

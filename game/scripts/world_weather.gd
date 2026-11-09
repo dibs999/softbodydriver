@@ -4,6 +4,8 @@ const WeatherAudio := preload("res://scripts/weather_audio.gd")
 const WEATHER_NAMES := ["Klar", "Bedeckt", "Regen"]
 const TIME_NAMES := ["Mittag", "Abend", "Nacht", "Morgen"]
 const TIME_HOURS := [13.0, 18.5, 0.0, 7.0]
+## 0 at night .. 1 in clear daylight (overcast halves it); read by the cabin fill light.
+var daylight := 1.0
 var weather_index := 0
 var time_index := 0
 var hour := 13.0
@@ -198,6 +200,7 @@ func _apply_lighting() -> void:
 		return
 	var elevation := sin((hour - 6.0) * TAU / 24.0)
 	var daylight := smoothstep(-0.12, 0.35, elevation)
+	self.daylight = daylight * (1.0 - 0.5 * float(weather_index) / 2.0)
 	RenderingServer.global_shader_parameter_set("city_night", 1.0 - smoothstep(-0.05, 0.2, elevation))
 	var dusk := (1.0 - smoothstep(0.0, 0.4, absf(elevation))) * daylight
 	var cloud := float(weather_index) / 2.0

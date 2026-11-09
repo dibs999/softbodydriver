@@ -12,6 +12,9 @@ var actions := ["camera_next", "camera_next", "debug_view", "toggle_tcs", "toggl
 func _process(_d: float) -> bool:
 	frame += 1
 	if frame == 2:
+		# Toggling TCS/ABS/gearbox saves settings: keep that out of the real profile, where it
+		# changed how later tests (and the player) drive.
+		root.get_node("Game").settings_config_path = "user://actions_test_%s.cfg" % Time.get_ticks_usec()
 		root.get_node("Game").selected_map = "proving_grounds"
 		change_scene_to_file("res://scenes/game.tscn")
 	var i := (frame - 20) / 4
@@ -24,5 +27,6 @@ func _process(_d: float) -> bool:
 	if frame == 20 + actions.size() * 4 + 10:
 		var g = current_scene
 		print("vehicles: ", g.vehicles.size(), " player: ", g.player.get_info()["name"], " cam mode ", g.cam.mode)
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(root.get_node("Game").settings_config_path))
 		return true
 	return false

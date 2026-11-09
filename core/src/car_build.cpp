@@ -787,11 +787,15 @@ CarBuild buildCar(const CarDefinition& def) {
             // A compliant plastic skin on a coherent cage; sacrificial mount
             // groups release the complete assembly instead of stretching a mesh.
             connectAll(car, nodes, makeBeam(6.0e4, 24.0, 1.2e4, 8.0e4), nullptr);
-            BeamParams mount = makeBeam(8.0e4, 40.0, 5.0e3, 2.2e3); // clips fail before plastic yielding
-            mount.breakGroup = group + "_mounts";
-            for (std::size_t corner = 0; corner < 4; ++corner)
+            // Four clip groups, one per corner: a hit tears the bumper off corner by corner and it
+            // can hang from the clips that held, instead of the whole assembly letting go as soon as
+            // any single clip is overloaded (an inertial spike at the far end of the car was enough).
+            BeamParams mount = makeBeam(8.0e4, 40.0, 8.0e3, 6.0e3); // clips fail before plastic yielding
+            for (std::size_t corner = 0; corner < 4; ++corner) {
+                mount.breakGroup = group + "_mounts_" + std::to_string(corner);
                 for (auto anchor : nearestNodes(car, rig.bodyNodes, car.positions()[nodes[corner]], 3))
                     car.addBeam(nodes[corner], anchor, mount);
+            }
             addBoxCollision(nodes, 0.0); // body exterior already supplies aerodynamic load
         }
     }
@@ -1099,8 +1103,8 @@ CarBuild buildCar(const CarDefinition& def) {
     // Register only after every target collision triangle and mount exists.
     car.addSelfCollisionPanel("bonnet", {"body", "engine"}, {"bonnet_latch", "bonnet_hinge"});
     if (bd.detachableBumpers) {
-        car.addSelfCollisionPanel("bumper_front", {"body"}, {"bumper_front_mounts"});
-        car.addSelfCollisionPanel("bumper_rear", {"body"}, {"bumper_rear_mounts"});
+        for (const std::string end : {"bumper_front", "bumper_rear"})
+            car.addSelfCollisionPanel(end, {"body"}, {end + "_mounts_0", end + "_mounts_1", end + "_mounts_2", end + "_mounts_3"});
     }
 
     if (bd.detachableDoors) {

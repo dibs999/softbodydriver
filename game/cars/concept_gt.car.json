@@ -19,7 +19,10 @@
     },
     "wheels": { "FL": "WheelFrontL", "FR": "WheelFrontR", "RL": "WheelRearL", "RR": "WheelRearR" },
     "hide": ["BrakePad", "Axles"],
-    "keepProcedural": ["spring", "caliper"],
+    "keepProcedural": [
+      "spring",
+      "caliper"
+    ],
     "materialOverrides": { "Glass": "glass", "Paint 1": "paint", "Dashboard": "trim" }
   },
   "body": {

@@ -387,6 +387,10 @@ func _drive_player(delta: float) -> void:
 	# Auto start: pressing throttle on a stalled (not seized) engine cranks it.
 	if not bool(t["running"]) and not bool(t["seized"]) and thr > 0.5 and String(t["status"]) != "OUT OF FUEL":
 		player.start_engine()
+	# Parked: with the engine off and the car at rest, the parking brake holds it (like P on an
+	# automatic). A recovered or switched-off car otherwise rolled away on the slightest slope.
+	if not bool(t["running"]) and absf(kmh) < 3.0 and thr < 0.1:
+		hb = 1.0
 	player.set_input(thr, brk, steer, hb)
 	cam.look_back = Input.is_action_pressed("look_back")
 
