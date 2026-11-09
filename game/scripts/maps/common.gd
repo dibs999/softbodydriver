@@ -69,7 +69,9 @@ static func terrain_material(kind: String, tile_metres: float, tint := Color.WHI
 	m.set_shader_parameter("has_slope", true)
 	m.set_shader_parameter("slope_tex", load(SURFACE_PATH + "gravel.jpg"))
 	m.set_shader_parameter("slope_tile", 2.6)
-	m.set_shader_parameter("slope_tint", Color(0.80, 0.66, 0.50) if kind != "sand" else Color(0.86, 0.58, 0.42))
+	m.set_shader_parameter("slope_tint", Color(0.60, 0.55, 0.47) if kind != "sand" else Color(0.80, 0.60, 0.46))
+	m.set_shader_parameter("slope_start", 0.84)
+	m.set_shader_parameter("slope_full", 0.62)
 	return m
 
 
