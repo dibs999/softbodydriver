@@ -8,7 +8,7 @@ var cam: Camera3D
 var current := ""
 const VIEW := {  # route fraction, height, distance behind
 	"proving_grounds": [0.62, 18.0, 46.0], "autobahn": [0.12, 16.0, 40.0], "city": [0.30, 22.0, 30.0],
-	"desert": [0.40, 14.0, 34.0], "hill_roads": [0.22, 12.0, 30.0], "offroad": [0.35, 10.0, 26.0],
+	"desert": [0.08, 26.0, 40.0], "hill_roads": [0.22, 12.0, 30.0], "offroad": [0.35, 10.0, 26.0],
 }
 
 func _initialize() -> void:

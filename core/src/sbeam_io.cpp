@@ -296,8 +296,9 @@ std::string serializeSBeam(const SoftBody& body, int indent) {
 
     json beams = json::array();
     json lastBeam;
-    for (const Beam& bm : body.beams()) {
-        json props = beamPropsToJson(bm.params);
+    for (std::size_t bi = 0; bi < body.beams().size(); ++bi) {
+        const Beam& bm = body.beams()[bi];
+        json props = beamPropsToJson(body.beamParams()[bi]);
         if (props != lastBeam) {
             beams.push_back({{"reset", true}, {"set", props}});
             lastBeam = props;

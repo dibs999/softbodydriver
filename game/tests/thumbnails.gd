@@ -22,10 +22,6 @@ func _initialize() -> void:
 	e.ambient_light_energy = 0.55
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	e.ssao_enabled = true
-	e.fog_enabled = true
-	e.fog_light_color = Color("17191c")
-	e.fog_density = 0.035
-	e.fog_sky_affect = 0.0
 	e.reflected_light_source = Environment.REFLECTION_SOURCE_BG
 	env.environment = e
 	stage.add_child(env)
@@ -43,9 +39,11 @@ func _initialize() -> void:
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(400, 400)
 	floor_mesh.mesh = plane
-	var fm := StandardMaterial3D.new()
-	fm.albedo_color = Color("2a2d31")
-	fm.roughness = 0.55
+	var fm := ShaderMaterial.new()
+	fm.shader = preload("res://materials/studio_floor.gdshader")
+	fm.set_shader_parameter("backdrop", Color("17191c"))
+	fm.set_shader_parameter("inner", 5.0)
+	fm.set_shader_parameter("outer", 20.0)
 	floor_mesh.material_override = fm
 	stage.add_child(floor_mesh)
 	world = SBWorld.new()

@@ -54,3 +54,7 @@ city_night={
 "type": "float",
 "value": 0.0
 }
+facade_detail={
+"type": "float",
+"value": 1.0
+}

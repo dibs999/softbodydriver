@@ -935,7 +935,8 @@ CarBuild buildCar(const CarDefinition& def) {
             const real axleLoad = sprung * g * (cn.front ? frontFrac : 1.0 - frontFrac);
             const real wheelLoad = 0.5 * axleLoad;
             // Find the spring beam (first Normal beam between armMid and tower).
-            for (Beam& bm : car.beams()) {
+            for (std::size_t bi = 0; bi < car.beams().size(); ++bi) {
+                Beam& bm = car.beams()[bi];
                 const bool match = (bm.a == cn.armMid && bm.b == cn.tower);
                 if (!match || bm.type != BeamType::Normal || bm.damp != 0.0) continue;
                 const Vec3 pm = car.positions()[cn.armMid], pt = car.positions()[cn.tower];
@@ -944,7 +945,7 @@ CarBuild buildCar(const CarDefinition& def) {
                 const real force = wheelLoad / mr;
                 bm.baseRestLength = len + force / bm.spring;
                 bm.restLength = bm.baseRestLength;
-                bm.params.precompression = bm.baseRestLength / len;
+                car.beamParams()[bi].precompression = bm.baseRestLength / len;
                 break;
             }
         }

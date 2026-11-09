@@ -12,16 +12,48 @@ const DRIVING_SETTINGS := ["tcs", "abs", "automatic", "steering_assist", "traffi
 # An explicit path also allows isolated profile tests without touching the player profile.
 var settings_config_path := GRAPHICS_CONFIG
 
-enum GraphicsPreset { PERFORMANCE, BALANCED, HIGH, NATIVE }
-
-const GRAPHICS_PRESETS := [
-	{"name": "Leistung", "scale": 0.60, "hint": "60 % 3D-Auflösung, ohne Schatten und Kantenglättung"},
-	{"name": "Ausgewogen", "scale": 0.80, "hint": "80 % 3D-Auflösung mit FSR-Schärfung und Schatten"},
-	{"name": "Hoch", "scale": 1.0, "hint": "Volle 3D-Auflösung, 4× MSAA, SSAO und Leuchteffekte"},
-	{"name": "Scharf (nativ)", "scale": 1.0, "hint": "Volle 3D-Auflösung, Schatten und FXAA"},
+## Individual graphics options. Presets only fill these in; every option can be changed on its own.
+## Options marked "map" take effect when a map is (re)loaded.
+const GRAPHICS_OPTIONS := [
+	{"key": "render_scale", "caption": "3D-Auflösung", "values": [0.5, 0.6, 0.67, 0.75, 0.8, 0.9, 1.0],
+		"labels": ["50 %", "60 %", "67 %", "75 %", "80 %", "90 %", "100 %"]},
+	{"key": "upscaler", "caption": "Hochskalierung", "values": [0, 1, 2], "labels": ["Bilinear", "AMD FSR 1", "AMD FSR 2"]},
+	{"key": "aa", "caption": "Kantenglättung", "values": [0, 1, 2, 3, 4], "labels": ["Aus", "FXAA", "TAA", "MSAA 2×", "MSAA 4×"]},
+	{"key": "shadows", "caption": "Schatten", "values": [0, 1, 2, 3], "labels": ["Aus", "Niedrig", "Mittel", "Hoch"]},
+	{"key": "ssao", "caption": "Umgebungsverdeckung (SSAO)", "values": [false, true], "labels": ["Aus", "An"]},
+	{"key": "glow", "caption": "Leuchteffekte", "values": [false, true], "labels": ["Aus", "An"]},
+	{"key": "view_distance", "caption": "Sichtweite", "values": [600.0, 1200.0, 2500.0, 4000.0], "labels": ["Kurz", "Mittel", "Weit", "Maximal"]},
+	{"key": "vegetation", "caption": "Bäume und Büsche", "values": [0.3, 0.6, 1.0], "labels": ["Wenig", "Mittel", "Voll"], "map": true},
+	{"key": "grass", "caption": "Gras", "values": [0.0, 45.0, 85.0, 130.0], "labels": ["Aus", "Nah", "Normal", "Weit"], "map": true},
+	{"key": "facades", "caption": "Fassaden", "values": [0, 1], "labels": ["Einfach", "Detailliert"]},
+	{"key": "mirrors", "caption": "Spiegel", "values": [0, 1, 2], "labels": ["Aus", "Niedrig", "Hoch"]},
+	{"key": "effects", "caption": "Partikel und Regen", "values": [0, 1], "labels": ["Reduziert", "Voll"]},
+	{"key": "fps_limit", "caption": "Bildrate begrenzen", "values": [0, 30, 60, 120, 144], "labels": ["Aus", "30", "60", "120", "144"]},
+	{"key": "vsync", "caption": "VSync", "values": [false, true], "labels": ["Aus", "An"]},
 ]
 
-var _graphics_preset: int = GraphicsPreset.BALANCED
+const GRAPHICS_PRESETS := [
+	{"name": "Sehr niedrig", "hint": "Für schwache Laptops: 50 % Auflösung, ohne Schatten, Gras und Spiegel",
+		"values": {"render_scale": 0.5, "upscaler": 1, "aa": 0, "shadows": 0, "ssao": false, "glow": false, "view_distance": 600.0,
+			"vegetation": 0.3, "grass": 0.0, "facades": 0, "mirrors": 0, "effects": 0, "fps_limit": 60, "vsync": true}},
+	{"name": "Niedrig", "hint": "67 % Auflösung mit FSR, einfache Schatten, wenig Vegetation",
+		"values": {"render_scale": 0.67, "upscaler": 1, "aa": 1, "shadows": 1, "ssao": false, "glow": false, "view_distance": 1200.0,
+			"vegetation": 0.6, "grass": 45.0, "facades": 0, "mirrors": 1, "effects": 0, "fps_limit": 60, "vsync": true}},
+	{"name": "Mittel", "hint": "80 % Auflösung mit FSR, Schatten, volle Vegetation",
+		"values": {"render_scale": 0.8, "upscaler": 1, "aa": 1, "shadows": 2, "ssao": false, "glow": false, "view_distance": 2500.0,
+			"vegetation": 1.0, "grass": 85.0, "facades": 1, "mirrors": 1, "effects": 1, "fps_limit": 0, "vsync": true}},
+	{"name": "Hoch", "hint": "Volle Auflösung, 4× MSAA, SSAO und Leuchteffekte",
+		"values": {"render_scale": 1.0, "upscaler": 0, "aa": 4, "shadows": 3, "ssao": true, "glow": true, "view_distance": 2500.0,
+			"vegetation": 1.0, "grass": 85.0, "facades": 1, "mirrors": 2, "effects": 1, "fps_limit": 0, "vsync": true}},
+	{"name": "Ultra", "hint": "Wie Hoch, zusätzlich maximale Sichtweite und weites Gras",
+		"values": {"render_scale": 1.0, "upscaler": 0, "aa": 4, "shadows": 3, "ssao": true, "glow": true, "view_distance": 4000.0,
+			"vegetation": 1.0, "grass": 130.0, "facades": 1, "mirrors": 2, "effects": 1, "fps_limit": 0, "vsync": true}},
+]
+const CUSTOM_PRESET := -1
+
+## Index into GRAPHICS_PRESETS, or CUSTOM_PRESET after individual changes.
+var _graphics_preset: int = 2
+var graphics: Dictionary = GRAPHICS_PRESETS[2]["values"].duplicate()
 
 var cars: Array[Dictionary] = []          # {path, id, name, brand, description, ...}
 var progress := preload("res://scripts/player_progress.gd").new()
@@ -68,8 +100,14 @@ func load_settings() -> void:
 	var config := ConfigFile.new()
 	if config.load(settings_config_path) == OK:
 		var saved: Variant = config.get_value("graphics", "preset", _graphics_preset)
-		if saved is int and saved >= 0 and saved < GRAPHICS_PRESETS.size():
+		if saved is int and saved >= CUSTOM_PRESET and saved < GRAPHICS_PRESETS.size():
 			_graphics_preset = saved
+			if saved >= 0:
+				graphics = GRAPHICS_PRESETS[saved]["values"].duplicate()
+		for option: Dictionary in GRAPHICS_OPTIONS:
+			var value: Variant = config.get_value("graphics", option["key"], graphics[option["key"]])
+			if typeof(value) == typeof(graphics[option["key"]]) or (value is float and graphics[option["key"]] is int) or (value is int and graphics[option["key"]] is float):
+				graphics[option["key"]] = value
 		var show_help: Variant = config.get_value("interface", "show_help", false)
 		if show_help is bool:
 			settings["show_help"] = show_help
@@ -104,20 +142,76 @@ func make_driving_option(key: String, caption: String) -> CheckBox:
 	return option
 
 
-func make_graphics_options() -> HBoxContainer:
+## Preset selector plus one row per option. Changing a single option switches to "Benutzerdefiniert".
+func make_graphics_options() -> VBoxContainer:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	var rows: Array[OptionButton] = []
+	var preset_row := _option_row(box, "Voreinstellung")
+	var preset := preset_row
+	for p: Dictionary in GRAPHICS_PRESETS:
+		preset.add_item(p["name"])
+		preset.set_item_tooltip(preset.item_count - 1, p["hint"])
+	preset.add_item("Benutzerdefiniert")
+	var sync := func() -> void:
+		preset.select(_graphics_preset if _graphics_preset >= 0 else GRAPHICS_PRESETS.size())
+		for i in GRAPHICS_OPTIONS.size():
+			var values: Array = GRAPHICS_OPTIONS[i]["values"]
+			var current: Variant = graphics[GRAPHICS_OPTIONS[i]["key"]]
+			var best := 0
+			for k in values.size():
+				if typeof(values[k]) == TYPE_BOOL or typeof(current) == TYPE_BOOL:
+					if values[k] == current: best = k
+				elif absf(float(values[k]) - float(current)) < absf(float(values[best]) - float(current)):
+					best = k
+			rows[i].select(best)
+	preset.item_selected.connect(func(index: int):
+		if index < GRAPHICS_PRESETS.size():
+			_set_graphics_preset(index))
+	for option: Dictionary in GRAPHICS_OPTIONS:
+		var row := _option_row(box, option["caption"] + (" *" if option.get("map", false) else ""))
+		for label: String in option["labels"]:
+			row.add_item(label)
+		var key: String = option["key"]
+		var values: Array = option["values"]
+		row.item_selected.connect(func(index: int): set_graphics_option(key, values[index]))
+		rows.append(row)
+	var note := Label.new()
+	note.text = "* gilt beim nächsten Laden der Karte"
+	note.add_theme_font_size_override("font_size", 12)
+	note.modulate = Color(1, 1, 1, 0.6)
+	box.add_child(note)
+	sync.call()
+	graphics_preset_changed.connect(sync)
+	box.tree_exiting.connect(func(): graphics_preset_changed.disconnect(sync), CONNECT_ONE_SHOT)
+	return box
+
+
+func _option_row(parent: Container, caption: String) -> OptionButton:
 	var row := HBoxContainer.new()
+	parent.add_child(row)
 	var label := Label.new()
-	label.text = "Grafikqualität"
+	label.text = caption
+	label.custom_minimum_size.x = 230
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(label)
 	var options := OptionButton.new()
-	options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for preset in GRAPHICS_PRESETS:
-		options.add_item(preset["name"])
-		options.set_item_tooltip(options.item_count - 1, preset["hint"])
-	options.select(_graphics_preset)
-	options.item_selected.connect(_set_graphics_preset)
+	options.custom_minimum_size.x = 190
 	row.add_child(options)
-	return row
+	return options
+
+
+func set_graphics_option(key: String, value: Variant) -> void:
+	if graphics.get(key) == value:
+		return
+	graphics[key] = value
+	_graphics_preset = CUSTOM_PRESET
+	for i in GRAPHICS_PRESETS.size():
+		if GRAPHICS_PRESETS[i]["values"] == graphics:
+			_graphics_preset = i
+	_apply_viewport_graphics()
+	graphics_preset_changed.emit()
+	_save_display_settings()
 
 
 func make_audio_options() -> VBoxContainer:
@@ -146,6 +240,7 @@ func make_audio_options() -> VBoxContainer:
 
 func _set_graphics_preset(preset: int) -> void:
 	_graphics_preset = preset
+	graphics = GRAPHICS_PRESETS[preset]["values"].duplicate()
 	_apply_viewport_graphics()
 	graphics_preset_changed.emit()
 	_save_display_settings()
@@ -172,6 +267,8 @@ func _save_display_settings() -> void:
 	var config := ConfigFile.new()
 	config.load(settings_config_path)
 	config.set_value("graphics", "preset", _graphics_preset)
+	for key in graphics:
+		config.set_value("graphics", key, graphics[key])
 	config.set_value("interface", "show_help", settings["show_help"])
 	for key in ["master_volume", "engine_volume"]:
 		config.set_value("audio", key, settings[key])
@@ -185,19 +282,44 @@ func _save_display_settings() -> void:
 func _apply_viewport_graphics() -> void:
 	var viewport := get_viewport()
 	var advanced := RenderingServer.get_current_rendering_method() != "gl_compatibility"
-	var high := _graphics_preset == GraphicsPreset.HIGH
-	var balanced := _graphics_preset == GraphicsPreset.BALANCED
-	viewport.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if balanced and advanced else Viewport.SCALING_3D_MODE_BILINEAR
-	viewport.scaling_3d_scale = GRAPHICS_PRESETS[_graphics_preset]["scale"]
-	viewport.msaa_3d = Viewport.MSAA_4X if high else Viewport.MSAA_DISABLED
-	viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if advanced and (balanced or _graphics_preset == GraphicsPreset.NATIVE) else Viewport.SCREEN_SPACE_AA_DISABLED
+	var scale := clampf(float(graphics["render_scale"]), 0.25, 1.0)
+	var upscaler := int(graphics["upscaler"]) if advanced else 0
+	if scale >= 0.999 and upscaler == 1: upscaler = 0
+	viewport.scaling_3d_mode = [Viewport.SCALING_3D_MODE_BILINEAR, Viewport.SCALING_3D_MODE_FSR, Viewport.SCALING_3D_MODE_FSR2][upscaler]
+	viewport.scaling_3d_scale = scale
+	var aa := int(graphics["aa"])
+	viewport.msaa_3d = Viewport.MSAA_4X if aa == 4 else (Viewport.MSAA_2X if aa == 3 else Viewport.MSAA_DISABLED)
+	viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if advanced and aa == 1 else Viewport.SCREEN_SPACE_AA_DISABLED
+	viewport.use_taa = advanced and aa == 2 and upscaler != 2
+	Engine.max_fps = int(graphics["fps_limit"])
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if graphics["vsync"] else DisplayServer.VSYNC_DISABLED)
+	RenderingServer.global_shader_parameter_set("facade_detail", float(graphics["facades"]))
+	var shadows := int(graphics["shadows"])
+	RenderingServer.directional_shadow_atlas_set_size([1024, 1024, 2048, 4096][shadows], true)
+	RenderingServer.directional_soft_shadow_filter_set_quality([RenderingServer.SHADOW_QUALITY_HARD, RenderingServer.SHADOW_QUALITY_HARD,
+		RenderingServer.SHADOW_QUALITY_SOFT_LOW, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM][shadows])
 
 
 func apply_environment_graphics(environment: Environment, sun: DirectionalLight3D) -> void:
-	var high := _graphics_preset == GraphicsPreset.HIGH
-	environment.ssao_enabled = high
-	environment.glow_enabled = high
-	sun.shadow_enabled = _graphics_preset != GraphicsPreset.PERFORMANCE
+	environment.ssao_enabled = bool(graphics["ssao"])
+	environment.glow_enabled = bool(graphics["glow"])
+	var shadows := int(graphics["shadows"])
+	sun.shadow_enabled = shadows > 0
+	sun.directional_shadow_max_distance = [0.0, 60.0, 120.0, 220.0][shadows]
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS if shadows < 3 else DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+
+
+## Map-build time quality: share of trees/bushes kept, grass draw distance (0 = no grass).
+func vegetation_density() -> float:
+	return float(graphics.get("vegetation", 1.0))
+
+
+func grass_distance() -> float:
+	return float(graphics.get("grass", 85.0))
+
+
+func view_distance() -> float:
+	return float(graphics.get("view_distance", 2500.0))
 
 
 func scan_cars() -> void:

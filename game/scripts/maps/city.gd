@@ -138,6 +138,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			for k in 3:
 				var t := 14.0 + k * 22.0
 				for p: Vector3 in [Vector3(x0 + t, KERB, z0 + BLOCK - 1.7), Vector3(x0 + BLOCK - 1.7, KERB, z0 + t)]:
+					if not V.keep(p): continue
 					street_trees.append(p)
 					world.add_box(p + Vector3.UP * 1.5, Vector3(0.16, 1.5, 0.16), Vector3.ZERO, 0.7)
 					grates.append(Transform3D(Basis.from_scale(Vector3(1.5, 1.0, 1.5)), p + Vector3.UP * 0.005))

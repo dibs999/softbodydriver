@@ -99,6 +99,7 @@ func _ready() -> void:
 
 	cam = CameraRig.new()
 	cam.current = true
+	cam.far = Game.view_distance()
 	add_child(cam)
 	cam.target = player
 	weather = preload("res://scripts/world_weather.gd").new()
@@ -277,6 +278,8 @@ func _build_environment() -> void:
 
 func _apply_graphics() -> void:
 	Game.apply_environment_graphics(_env, _sun)
+	if cam:
+		cam.far = Game.view_distance()
 
 
 func _apply_settings(v: SBVehicle) -> void:

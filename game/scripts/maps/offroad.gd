@@ -173,7 +173,7 @@ static func _vegetation(parent: Node3D, world: SBWorld, paths: Array[PackedVecto
 		if p.distance_to(Vector2(farm.x,farm.z)) < 43 or _near_paths(p,paths,6.0): continue
 		var y: float = ground.call(p.x,p.y)
 		var forest := _field(p) < 0 and (p.y < 160 or p.x < -470 or p.x > 400)
-		if forest and i % 3 != 0:
+		if forest and i % 3 != 0 and V.keep(Vector3(p.x,y,p.y)):
 			if i % 4 != 0:
 				pines.append(Vector3(p.x,y,p.y))
 			else:
@@ -196,6 +196,7 @@ static func _vegetation(parent: Node3D, world: SBWorld, paths: Array[PackedVecto
 				if _field(Vector2(p.x,p.z)) >= 0 or _near_paths(Vector2(p.x,p.z),paths,6.5): continue
 				if p.distance_to(woodland[woodland.size()/3]) < 22: continue
 				p.y = ground.call(p.x,p.z)
+				if not V.keep(p): continue
 				pines.append(p)
 				world.add_box(p+Vector3.UP*1.8,Vector3(0.23,1.8,0.23),Vector3.ZERO,0.75)
 	V.plant(parent,"conifer",pines,19183,0.55,0.95)
