@@ -60,6 +60,50 @@ zu. Die Erkennung läuft auch für Fahrzeuge außerhalb der Partikel-Sichtweite.
 `road_marks.gd` verwendet einen Ringpuffer mit 1024 Instanzen und Simulationszeit.
 `driving_activity.gd` verwendet ebenfalls `sim_time`; die UI ist keine Rennuhr.
 
+## Bergung und Werkstatt
+
+`SBVehicle.relocate_to(transform) -> bool` versetzt das vorhandene deformierte
+Fahrzeug als Ganzes. Ursprung und Achsen entsprechen `reset_to`: der Ursprung
+liegt am Boden, die lokale X-Achse zeigt vorwärts. Nur endliche starre
+Transformationen ohne Skalierung oder Spiegelung sind erlaubt. Positionen werden
+gedreht/verschoben, Geschwindigkeiten und alte Kontakte gelöscht. Verformte und
+gebrochene Beams, Reifenzustand, technische Schäden und Kraftstoff bleiben erhalten.
+Ein vorher angeforderter Sandbox-Reset wird verworfen, damit er die Bergung nicht
+nachträglich in eine kostenlose Reparatur verwandelt.
+
+`SBVehicle.service_repair() -> bool` richtet das Fahrzeug am aktuellen Ort auf und
+repariert Struktur, Reifen und technische Systeme. Der tatsächliche Tankinhalt
+bleibt erhalten, die Zündung bleibt aus und ausstehende Start-/Reset-Aufträge
+werden verworfen. Beide Methoden arbeiten synchron unter dem Welt-Mutex und
+aktualisieren danach den Darstellungs-/Telemetrie-Snapshot. Sie verbuchen keine
+Kosten; diese Aufgabe hat die Spiel-/Werkstattlogik. `reset_to` bleibt der
+vollständige Sandbox-Reset einschließlich Startzustand der Systeme.
+
+`SBVehicle.release_bonnet() -> bool` öffnet am stehenden prozeduralen Fahrzeug die
+Haube über brechbare, gedämpfte Hubstützen. Hydro-Kanal 1 fährt über 1,25 Sekunden
+aus; Steuerkanal 0 bleibt der Lenkung vorbehalten. Reparatur setzt die Stützen
+zurück. Während der Fahrt über 2 km/h, bei bereits gelöstem Verschluss und bei
+importierten Modellen ohne passende Haubensegmentierung liefert die Methode
+`false`. `get_info().bonnet_supported` kennzeichnet die visuelle Unterstützung.
+
+`SBVehicle.set_door_open(index, open) -> bool` und `toggle_door(index) -> bool`
+bedienen die physischen Vordertüren des Kestrel (0 Fahrer, 1 Beifahrer). Sie
+arbeiten unter dem Welt-Mutex, erlauben die Bedienung nur bis 2 km/h und lehnen
+beschädigte Halter ab. Manuelles Entriegeln deaktiviert Schloss-Beams, ohne sie
+zu brechen; Schließen rastet erst bei ausgerichteter, ruhender Tür ein. Reparatur
+setzt Türanforderung, Hub und Schlösser zurück. `get_door_states() -> Array`
+liefert `index`, `requested_open`, `travel`, `latched`, `attached`, `missing`,
+`damaged`, `angle_degrees` und `open`; Fahrzeuge ohne diese Mechanik liefern `[]`.
+
+`get_mirror_surfaces() -> Array` liefert die sichtbaren optischen Flächen als
+`mesh`, `side`, `center`, `normal`, `up`, `half_extents`. Position und Ebene werden
+aus den tatsächlich verformten Vertices berechnet, nicht aus der Fahrzeug-AABB.
+`vehicle_mirrors.gd` verwendet diese Weltkoordinaten für planare Reflexionen im
+Cockpit. Die separaten Viewports teilen die Spielwelt; ihre Kameras schließen
+Spiegelflächen auf Render-Layer 20 aus, damit keine rekursiven Spiegelbilder
+entstehen. Außerhalb des Cockpits werden die ursprünglichen Materialien und
+Render-Layer wiederhergestellt.
+
 ## Bauen
 
 ```bash

@@ -10,6 +10,7 @@ var car_name: Label
 var car_info: Label
 var car_stats: Array[Label] = []
 var map_option: OptionButton
+var progress_info: Label
 var map_info: Label
 var _settings_panel: PanelContainer
 var _stage: VBoxContainer
@@ -213,13 +214,10 @@ func _build_ui() -> void:
 	options.add_child(grid)
 	for key in [["tcs", "Traktionskontrolle"], ["abs", "ABS"], ["automatic", "Automatikgetriebe"],
 			["steering_assist", "Lenkhilfe"], ["traffic", "KI-Verkehr"]]:
-		var cb := CheckBox.new()
-		cb.text = key[1]
+		var cb := Game.make_driving_option(key[0], key[1])
 		cb.add_theme_font_size_override("font_size", 13)
 		if key[0] == "steering_assist":
-			cb.tooltip_text = "Begrenzt den Lenkeinschlag bei höherem Tempo"
-		cb.button_pressed = Game.settings[key[0]]
-		cb.toggled.connect(func(on): Game.settings[key[0]] = on)
+			cb.tooltip_text = "Glättet Tastatureingaben und begrenzt Lenkeinschlag bei Tempo. Aus: direkte Lenkung für erfahrene Fahrer."
 		grid.add_child(cb)
 
 	var start := Button.new()
@@ -229,6 +227,20 @@ func _build_ui() -> void:
 	start.disabled = Game.cars.is_empty()
 	start.pressed.connect(_on_start)
 	setup.add_child(start)
+	var lesson_button := Button.new()
+	lesson_button.text = "Fahreinführung wiederholen" if Game.progress.is_completed("first_drive_complete") else "Fahreinführung · Fahren, Bremsen & Service"
+	lesson_button.custom_minimum_size.y = 42
+	lesson_button.disabled = Game.cars.is_empty()
+	lesson_button.pressed.connect(func():
+		Game.start_lesson = true
+		Game.selected_map = "proving_grounds"
+		Game.progress.set_selection(Game.selected_car, Game.selected_map)
+		get_tree().change_scene_to_file("res://scenes/game.tscn"))
+	setup.add_child(lesson_button)
+	progress_info = Label.new()
+	progress_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	progress_info.add_theme_font_size_override("font_size", 12)
+	setup.add_child(progress_info)
 	if not start.disabled:
 		start.grab_focus()
 
@@ -386,6 +398,13 @@ func _menu_theme() -> Theme:
 func _on_car_selected(i: int) -> void:
 	var c: Dictionary = Game.cars[i]
 	Game.selected_car = c["path"]
+	if progress_info:
+		var record: Dictionary = Game.progress.get_best_braking(str(c["id"]))
+		progress_info.text = "Einführung abgeschlossen" if Game.progress.is_completed("first_drive_complete") else "Einführung optional · Fortschritt wird gespeichert"
+		if not record.is_empty():
+			progress_info.text += "\nBremsrekord: %.1f m aus %.0f km/h" % [record["distance_m"], record["start_speed_kmh"]]
+		if Game.progress.read_only:
+			progress_info.text = "Fortschritt kann nicht gespeichert werden. Das vorhandene Profil bleibt erhalten."
 	car_name.text = c["name"]
 	car_info.text = "%s  ·  %s  ·  %s" % [c["engine"], c["layout"], c["description"]]
 	car_stats[0].text = "%.0f kW" % c["power"]
@@ -406,6 +425,8 @@ func _on_map_selected(i: int) -> void:
 
 
 func _on_start() -> void:
+	Game.start_lesson = false
+	Game.progress.set_selection(Game.selected_car, Game.selected_map)
 	get_tree().change_scene_to_file("res://scenes/game.tscn")
 
 

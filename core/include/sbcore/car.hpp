@@ -49,6 +49,8 @@ struct CarBodyDef {
     int doors = 4;
     std::array<real, 3> paint{0.62, 0.05, 0.04};
     real paintMetallic = 0.55;
+    bool detachableDoors = false; ///< Opt-in physical front doors with reversible latches.
+    bool detachableBumpers = false; ///< Opt-in independent front/rear lower fascia assemblies.
 };
 
 struct CarChassisDef {
@@ -82,6 +84,7 @@ struct TireDef {
 struct EngineDef {
     std::string name = "1.4 I4 Turbo";
     std::string layout = "FWD";   ///< FWD | RWD | AWD
+    std::string position = "front"; ///< front | mid; independent of driven axle layout.
     std::vector<std::pair<real, real>> torqueCurve;  ///< (rpm, Nm)
     real idleRpm = 800, redlineRpm = 6200;
     real inertia = 0.16;
@@ -157,11 +160,24 @@ struct CarVisual {
     VertexSkin chaseTarget;                        ///< Look-at point for chase cameras
 };
 
+struct DoorLayout {
+    std::vector<std::uint32_t> nodes, hingeNodes; // corners: x(rear/front)*4+y(bottom/top)*2+z(inner/outer)
+    std::vector<std::uint32_t> hingeBeams, latchBeams, supportBeams;
+    real rearX = 0, frontX = 0;
+    int inputChannel = -1;
+};
+
 struct CarLayout {
+    std::array<DoorLayout, 2> frontDoors; // left, right
+
     std::vector<std::uint32_t> bodyNodes;
     /// Floor nodes at the front / rear axle (left, right): forward = front - rear, right = R - L.
     std::uint32_t refFL = 0, refFR = 0, refRL = 0, refRR = 0;
     std::vector<std::uint32_t> engineNodes, radiatorNodes;
+    // Independent eight-node bonnet: rear-left/right, front-left/right, lower then upper skin.
+    std::vector<std::uint32_t> bonnetNodes;
+    std::vector<std::uint32_t> bonnetStrutBeams; ///< Channel-1 lift supports; share the hinge breakgroup.
+    std::vector<std::uint32_t> frontBumperNodes, rearBumperNodes; // cuboid ix*4 + iy*2 + iz
     real length = 0, width = 0, height = 0;
 };
 

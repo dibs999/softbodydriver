@@ -11,6 +11,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <limits>
 #include <optional>
@@ -88,6 +89,7 @@ struct Torsionbar {
 
 /// Runtime beam state.
 struct Beam {
+    bool disabled = false; ///< Reversibly disengaged mechanism; independent of crash damage.
     std::uint32_t a = 0, b = 0;
     BeamType type = BeamType::Normal;
     bool broken = false;
@@ -179,6 +181,26 @@ struct VehicleTelemetry {
     bool absActive = false;
 };
 
+struct SelfCollisionPoint {
+    std::array<std::uint32_t, 3> nodes{};
+    std::array<real, 3> weights{};
+    std::vector<std::uint32_t> jointBeams;
+    std::int32_t triangle = -1; ///< Face samples stop participating if their panel face tears.
+};
+
+struct SelfCollisionPanel {
+    std::vector<std::uint32_t> nodes, triangles, releaseBeams;
+    std::vector<SelfCollisionPoint> points; ///< Corners + triangle centroids, no added mass.
+    real skin = 0.008;
+};
+
+struct DoorMechanism {
+    std::vector<std::uint32_t> nodes, hingeBeams, latchBeams, supportBeams;
+    int inputChannel = -1;
+    bool requestedOpen = false, latched = true;
+    real travel = 0;
+};
+
 class SoftBody {
 public:
     explicit SoftBody(std::string name = "body") : name_(std::move(name)) {}
@@ -194,6 +216,14 @@ public:
     std::uint32_t addTriangle(std::uint32_t a, std::uint32_t b, std::uint32_t c, const ColTriParams& p = {});
     std::uint32_t addTriangle(const std::string& a, const std::string& b, const std::string& c,
                               const ColTriParams& p = {});
+
+    /// Opt-in, bounded panel-to-body contact. Register after all nodes, beams and
+    /// collision triangles exist. Empty releaseGroups means always active;
+    /// otherwise contact starts when any listed attachment beam breaks.
+    void addSelfCollisionPanel(const std::string& panelGroup, const std::vector<std::string>& targetGroups,
+                               const std::vector<std::string>& releaseGroups, real skin = 0.008);
+    const std::vector<SelfCollisionPanel>& selfCollisionPanels() const { return selfCollisionPanels_; }
+    bool selfCollisionActive(const SelfCollisionPanel& panel) const;
 
     /// Adds a 4-node torsion bar (anti-roll bar). Rest angle is taken from the current positions.
     std::uint32_t addTorsionbar(std::uint32_t n1, std::uint32_t n2, std::uint32_t n3, std::uint32_t n4,
@@ -213,6 +243,10 @@ public:
 
     /// Index of node `id` or -1.
     std::int64_t findNode(const std::string& id) const;
+
+    void addDoor(const DoorMechanism& door);
+    bool setDoorOpen(std::size_t side, bool open);
+    const std::vector<DoorMechanism>& doors() const { return doors_; }
 
     // ---------------------------------------------------------------- simulation
     /// Computes beam, powertrain and wheel forces into force(); applies plasticity and breaking.
@@ -315,8 +349,11 @@ private:
     std::vector<std::string> groupNames_;
     std::unordered_map<std::string, std::uint32_t> nodeLookup_;
 
+    void updateDoors(real dt);
+    std::vector<DoorMechanism> doors_;
     std::vector<Beam> beams_;
     std::vector<ColTri> triangles_;
+    std::vector<SelfCollisionPanel> selfCollisionPanels_;
     std::vector<Torsionbar> torsionbars_;
     std::vector<std::string> breakGroupNames_;
     std::vector<std::vector<std::uint32_t>> breakGroupMembers_;

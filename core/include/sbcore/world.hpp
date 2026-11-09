@@ -30,6 +30,8 @@ struct WorldStats {
     std::size_t triangles = 0, brokenTriangles = 0;
     std::size_t contacts = 0;      ///< Node-collider contacts in the last step.
     std::size_t bodyContacts = 0;  ///< Inter-body Node-vs-ColTri contacts in the last step.
+    std::size_t selfContacts = 0; ///< Opt-in released panel contacts against its own body.
+    std::size_t selfContactCandidates = 0; ///< Panel-node/triangle pairs after panel AABB culling.
     bool finite = true;            ///< False if any node position became NaN/inf.
 };
 
@@ -68,6 +70,7 @@ private:
     std::size_t collideBody(SoftBody& b);
     std::size_t collideBodies();
     std::size_t collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody);
+    std::size_t collideSelfPanels(SoftBody& body, const std::vector<Vec3>& previous);
 
     WorldSettings settings_;
     std::vector<SoftBody> bodies_;
@@ -76,6 +79,8 @@ private:
     std::uint64_t steps_ = 0;
     std::size_t lastContacts_ = 0;
     std::size_t lastBodyContacts_ = 0;
+    std::size_t lastSelfContacts_ = 0, lastSelfContactCandidates_ = 0;
+    std::vector<Vec3> selfContactPrevious_; ///< Reused only for bodies with active panel contact.
 };
 
 }  // namespace sb

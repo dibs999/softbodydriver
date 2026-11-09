@@ -34,23 +34,30 @@ func _ready() -> void:
 
 
 static func _make_meshes() -> void:
-	var texture := Image.create(64, 64, false, Image.FORMAT_RGBA8)
-	var noise := FastNoiseLite.new()
-	noise.frequency = 0.15
-	noise.seed = 4109
-	for y in 64:
-		for x in 64:
-			var radius := Vector2(x - 31.5, y - 31.5).length() / 31.5
-			var alpha := pow(maxf(0.0, 1.0 - radius * radius), 2.5)
-			alpha *= 0.65 + 0.35 * noise.get_noise_2d(x, y)
-			texture.set_pixel(x, y, Color(1, 1, 1, alpha))
-	var mat := StandardMaterial3D.new()
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	mat.vertex_color_use_as_albedo = true
-	mat.albedo_texture = ImageTexture.create_from_image(texture)
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# Explicit particle tint/alpha avoids opaque black billboards observed with
+	# StandardMaterial3D's particle billboard path on the compatibility renderer.
+	# A continuous radial mask stays soft at any size without texture edge sampling.
+	var shader := Shader.new()
+	shader.code = """shader_type spatial;
+render_mode unshaded, cull_disabled, blend_mix, depth_draw_never;
+void vertex() {
+    mat4 facing = INV_VIEW_MATRIX;
+    facing[0] *= length(MODEL_MATRIX[0].xyz);
+    facing[1] *= length(MODEL_MATRIX[1].xyz);
+    facing[2] *= length(MODEL_MATRIX[2].xyz);
+    facing[3] = MODEL_MATRIX[3];
+    MODELVIEW_MATRIX = VIEW_MATRIX * facing;
+}
+void fragment() {
+    vec2 p = UV * 2.0 - 1.0;
+    float edge = pow(max(0.0, 1.0 - dot(p, p)), 2.5);
+    float wisps = 0.82 + 0.12 * sin(p.x * 16.0 + sin(p.y * 11.0));
+    ALBEDO = COLOR.rgb;
+    ALPHA = clamp(COLOR.a, 0.0, 1.0) * edge * wisps * 0.65;
+}
+"""
+	var mat := ShaderMaterial.new()
+	mat.shader = shader
 	_smoke_mesh = QuadMesh.new()
 	_smoke_mesh.material = mat
 	var spark_mat := StandardMaterial3D.new()
@@ -118,7 +125,7 @@ func _process(delta: float) -> void:
 			var grip := PackedFloat32Array([1, 1, 1, 1])
 			for i in mini(4, wheels.size()):
 				wheel_surfaces[i] = surfaces.at(wheels[i])
-				grip[i] = surfaces.grip(wheel_surfaces[i])
+				grip[i] = surfaces.effective_grip(wheel_surfaces[i])
 			vehicle.set_surface_grip(grip)
 	for p: CPUParticles3D in get_children():
 		p.speed_scale = 0.0 if world.paused else world.time_scale

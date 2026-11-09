@@ -9,6 +9,7 @@
 #include <godot_cpp/variant/utility_functions.hpp>
 
 #include "sb_world.h"
+#include "sbcore/render_motion.hpp"
 
 namespace godot {
 
@@ -35,6 +36,8 @@ Color fallbackColor(const std::string& n) {
 }  // namespace
 
 void SBVehicle::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("refuel", "litres"), &SBVehicle::refuel);
+    ClassDB::bind_method(D_METHOD("release_bonnet"), &SBVehicle::release_bonnet);
     ClassDB::bind_method(D_METHOD("set_input", "throttle", "brake", "steer", "handbrake"), &SBVehicle::set_input);
     ClassDB::bind_method(D_METHOD("set_clutch", "clutch"), &SBVehicle::set_clutch);
     ClassDB::bind_method(D_METHOD("set_surface_grip", "grip"), &SBVehicle::set_surface_grip);
@@ -51,6 +54,11 @@ void SBVehicle::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_abs"), &SBVehicle::get_abs);
     ClassDB::bind_method(D_METHOD("set_steer_rate", "rate"), &SBVehicle::set_steer_rate);
     ClassDB::bind_method(D_METHOD("reset_to", "xform"), &SBVehicle::reset_to);
+    ClassDB::bind_method(D_METHOD("relocate_to", "xform"), &SBVehicle::relocate_to);
+    ClassDB::bind_method(D_METHOD("service_repair"), &SBVehicle::service_repair);
+    ClassDB::bind_method(D_METHOD("set_door_open", "index", "open"), &SBVehicle::set_door_open);
+    ClassDB::bind_method(D_METHOD("toggle_door", "index"), &SBVehicle::toggle_door);
+    ClassDB::bind_method(D_METHOD("get_door_states"), &SBVehicle::get_door_states);
     ClassDB::bind_method(D_METHOD("repair_in_place"), &SBVehicle::repair_in_place);
     ClassDB::bind_method(D_METHOD("set_debug_view", "on"), &SBVehicle::set_debug_view);
     ClassDB::bind_method(D_METHOD("get_debug_view"), &SBVehicle::get_debug_view);
@@ -61,6 +69,7 @@ void SBVehicle::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_chase_target"), &SBVehicle::get_chase_target);
     ClassDB::bind_method(D_METHOD("get_driver_eye"), &SBVehicle::get_driver_eye);
     ClassDB::bind_method(D_METHOD("get_dashboard_transform"), &SBVehicle::get_dashboard_transform);
+    ClassDB::bind_method(D_METHOD("get_mirror_surfaces"), &SBVehicle::get_mirror_surfaces);
     ClassDB::bind_method(D_METHOD("get_visual_basis"), &SBVehicle::get_visual_basis);
     ClassDB::bind_method(D_METHOD("get_forward"), &SBVehicle::get_forward);
     ClassDB::bind_method(D_METHOD("get_up"), &SBVehicle::get_up);
@@ -112,14 +121,21 @@ void SBVehicle::applyTransform(const Transform3D& xform) {
         p[i] = toS(w);
     }
     body.repair(p);
+    bonnetOpenRequested_ = false;
+    bonnetSupportTravel_ = 0.0;
+    body.setInput(1, 0.0);
     visualResetPending_ = true;
 }
 
 Ref<Material> SBVehicle::materialFor(const std::string& name, const Dictionary& lib) const {
-    const String key(name.c_str());
+    std::string base = name;
+    for (const std::string prefix : {"bumper_front_", "bumper_rear_", "door_left_", "door_right_"})
+        if (base.rfind(prefix, 0) == 0) { base = base.substr(prefix.size()); break; }
+    if (base == "mirror_left" || base == "mirror_right") base = "mirror";
+    const String key(base == "bonnet" ? "paint" : base == "bonnet_inner" ? "interior" : base.c_str());
     Ref<Material> m;
     if (lib.has(key)) m = lib[key];
-    if (name == "paint") {
+    if (base == "paint" || base == "bonnet") {
         Ref<StandardMaterial3D> pm;
         if (m.is_valid() && Object::cast_to<StandardMaterial3D>(m.ptr())) pm = m->duplicate();
         else {
@@ -136,16 +152,16 @@ Ref<Material> SBVehicle::materialFor(const std::string& name, const Dictionary& 
     if (m.is_valid()) return m;
     Ref<StandardMaterial3D> sm;
     sm.instantiate();
-    const Color c = fallbackColor(name);
+    const Color c = fallbackColor(base);
     sm->set_albedo(c);
     if (c.a < 1.0f) sm->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA);
-    if (name == "glass") sm->set_cull_mode(BaseMaterial3D::CULL_DISABLED);
-    if (name == "headlight" || name == "taillight") {
+    if (base == "glass") sm->set_cull_mode(BaseMaterial3D::CULL_DISABLED);
+    if (base == "headlight" || base == "taillight") {
         sm->set_feature(BaseMaterial3D::FEATURE_EMISSION, true);
         sm->set_emission(c);
-        sm->set_emission_energy_multiplier(name == "headlight" ? 1.5f : 0.8f);
+        sm->set_emission_energy_multiplier(base == "headlight" ? 1.5f : 0.8f);
     }
-    if (name == "chrome" || name == "rim") {
+    if (base == "chrome" || base == "rim") {
         sm->set_metallic(1.0);
         sm->set_roughness(0.15);
     }
@@ -190,7 +206,8 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
         g.instance = memnew(MeshInstance3D);
         g.instance->set_mesh(g.mesh);
         g.instance->set_name(String(s.material.c_str()));
-        if (s.material == "glass") g.instance->set_cast_shadows_setting(GeometryInstance3D::SHADOW_CASTING_SETTING_OFF);
+        if (s.material == "glass" || s.material.ends_with("_glass"))
+            g.instance->set_cast_shadows_setting(GeometryInstance3D::SHADOW_CASTING_SETTING_OFF);
         add_child(g.instance);
         surfaces_.push_back(g);
     }
@@ -413,6 +430,17 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
             for (int i = 0; i < keys.size(); ++i)
                 if (n.findn(String(keys[i])) >= 0) return overrides[keys[i]];
         }
+        // Some glTF import paths lose the occlusion texture's texCoord=1.
+        // Restore that declared UV channel explicitly for models using a baked
+        // AO atlas. Duplicate the material to avoid changing shared resources.
+        if (static_cast<bool>(options.get("ao_on_uv2", false))) {
+            Ref<BaseMaterial3D> base = m;
+            if (base.is_valid() && base->get_feature(BaseMaterial3D::FEATURE_AMBIENT_OCCLUSION)) {
+                Ref<BaseMaterial3D> local = base->duplicate();
+                local->set_flag(BaseMaterial3D::FLAG_AO_ON_UV2, true);
+                m = local;
+            }
+        }
         return m;
     };
     std::vector<ModelPart> parts;
@@ -521,11 +549,29 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
             garr.resize(Mesh::ARRAY_MAX);
             garr[Mesh::ARRAY_VERTEX] = vb;
             garr[Mesh::ARRAY_NORMAL] = nbv;
-            for (int k : {static_cast<int>(Mesh::ARRAY_TANGENT), static_cast<int>(Mesh::ARRAY_COLOR), static_cast<int>(Mesh::ARRAY_TEX_UV),
+            for (int k : {static_cast<int>(Mesh::ARRAY_COLOR), static_cast<int>(Mesh::ARRAY_TEX_UV),
                           static_cast<int>(Mesh::ARRAY_TEX_UV2)})
                 if (arr[k].get_type() != Variant::NIL) garr[k] = arr[k];
             garr[Mesh::ARRAY_INDEX] = idx;
             SurfaceGpu g;
+            // Transform source tangents with the imported geometry and retain them
+            // for dynamic uploads; zero tangent bytes corrupt normal-map shading.
+            if (arr[Mesh::ARRAY_TANGENT].get_type() != Variant::NIL) {
+                const PackedFloat32Array source = arr[Mesh::ARRAY_TANGENT];
+                if (source.size() == nv * 4) {
+                    g.restTangents.resize(nv * 4);
+                    const float handedness = part.xf.basis.determinant() < 0 ? -1.0f : 1.0f;
+                    for (int i = 0; i < nv; ++i) {
+                        Vector3 tangent = part.xf.basis.xform(Vector3(source[i * 4], source[i * 4 + 1], source[i * 4 + 2]));
+                        tangent = (tangent - nbv[i] * tangent.dot(nbv[i])).normalized();
+                        g.restTangents[i * 4] = tangent.x;
+                        g.restTangents[i * 4 + 1] = tangent.y;
+                        g.restTangents[i * 4 + 2] = tangent.z;
+                        g.restTangents[i * 4 + 3] = source[i * 4 + 3] * handedness;
+                    }
+                    garr[Mesh::ARRAY_TANGENT] = g.restTangents;
+                }
+            }
             g.mesh.instantiate();
             g.mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, garr, Array(), Dictionary(), Mesh::ARRAY_FLAG_USE_DYNAMIC_UPDATE);
             Ref<Material> mat = part.mi->get_surface_override_material(s);
@@ -649,6 +695,8 @@ void SBVehicle::pre_step(double dt) {
         applyTransform(phys_.resetXform);
     }
     sb::VehicleControls& c = body.controls();
+    if (bonnetOpenRequested_) bonnetSupportTravel_ = std::min(1.0, bonnetSupportTravel_ + dt / 1.25);
+    body.setInput(1, bonnetSupportTravel_);
     if (phys_.puncture >= 0 && static_cast<std::size_t>(phys_.puncture) < body.wheels().size()) {
         body.wheels()[static_cast<std::size_t>(phys_.puncture)].puncture(phys_.punctureLeak);
         phys_.puncture = -1;
@@ -746,7 +794,8 @@ void SBVehicle::update_visual(double delta) {
     if (!snapshotValid_ || pos_.empty()) return;
     const sb::Vec3 reference = (pos_[layout_.refFL] + pos_[layout_.refFR] + pos_[layout_.refRL] + pos_[layout_.refRR]) * 0.25;
     const sb::Vec3 movement = reference - renderReference_;
-    const bool snap = visualReset_ || delta <= 0.0 || renderPos_.size() != pos_.size() || sb::lengthSq(movement) > 16.0;
+    const bool snap = visualReset_ || renderPos_.size() != pos_.size() ||
+                      sb::visualMotionDiscontinuity(movement, tel_.velocity, delta);
     visualReset_ = false;
     if (snap) {
         renderPos_ = pos_;
@@ -855,6 +904,18 @@ void SBVehicle::update_visual(double delta) {
             uint16_t enc[2] = {static_cast<uint16_t>(std::clamp(oct.x * 65535.0f, 0.0f, 65535.0f)),
                                static_cast<uint16_t>(std::clamp(oct.y * 65535.0f, 0.0f, 65535.0f))};
             std::memcpy(dst + g.normalOffset + i * g.normalStride, enc, 4);
+            if (g.restTangents.size() == static_cast<int64_t>(nv * 4) && g.normalStride >= 8) {
+                const Vector3 rest(g.restTangents[i * 4], g.restTangents[i * 4 + 1], g.restTangents[i * 4 + 2]);
+                Vector3 tangent(frames_[0] * rest.x + frames_[1] * rest.y + frames_[2] * rest.z,
+                                frames_[3] * rest.x + frames_[4] * rest.y + frames_[5] * rest.z,
+                                frames_[6] * rest.x + frames_[7] * rest.y + frames_[8] * rest.z);
+                const Vector3 normal(tmpNrm_[i * 3], tmpNrm_[i * 3 + 1], tmpNrm_[i * 3 + 2]);
+                tangent = (tangent - normal * tangent.dot(normal)).normalized();
+                const Vector2 octT = tangent.octahedron_tangent_encode(g.restTangents[i * 4 + 3]);
+                const uint16_t packed[2] = {static_cast<uint16_t>(std::clamp(octT.x * 65535.0f, 0.0f, 65535.0f)),
+                                            static_cast<uint16_t>(std::clamp(octT.y * 65535.0f, 0.0f, 65535.0f))};
+                std::memcpy(dst + g.normalOffset + i * g.normalStride + 4, packed, 4);
+            }
         }
         g.mesh->surface_update_vertex_region(0, 0, g.buffer);
         g.mesh->set_custom_aabb(box);
@@ -919,6 +980,193 @@ void SBVehicle::reset_to(const Transform3D& xform) {
     lastDeformed_ = 0;
     lastBroken_ = 0;
     impactAccum_ = 0.0;
+}
+
+bool SBVehicle::relocate_to(const Transform3D& xform) {
+    if (!world_ || bodyIndex_ < 0 || !xform.is_finite()) return false;
+    // Recovery is a rigid motion: reject scales/reflections rather than changing
+    // beam lengths, tyre geometry or deformation with an invalid destination.
+    const double determinant = xform.basis.determinant();
+    if (!std::isfinite(determinant) || determinant <= 1e-8) return false;
+    const Basis destination = xform.basis.orthonormalized();
+    for (int axis = 0; axis < 3; ++axis)
+        if ((xform.basis.get_column(axis) - destination.get_column(axis)).length_squared() > 1e-6) return false;
+    {
+        std::lock_guard<std::mutex> lock(world_->mutex());
+        auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+        auto& p = body.positions();
+        const sb::Vec3 center = (p[layout_.refFL] + p[layout_.refFR] + p[layout_.refRL] + p[layout_.refRR]) * 0.25;
+        const Vector3 forward = toG(forwardOf(p));
+        const Vector3 right = toG((p[layout_.refFR] + p[layout_.refRR]) - (p[layout_.refFL] + p[layout_.refRL])).normalized();
+        const Vector3 up = right.cross(forward).normalized();
+        if (forward.length_squared() < 0.5 || up.length_squared() < 0.5) return false;
+        const Basis source(forward, up, forward.cross(up));
+        const Basis rotation = destination * source.transposed();
+        const double floorY = (restPositions_[layout_.refFL].y + restPositions_[layout_.refFR].y +
+                               restPositions_[layout_.refRL].y + restPositions_[layout_.refRR].y) * 0.25 + 0.03;
+        const Vector3 target = xform.origin + destination.xform(Vector3(0, static_cast<real_t>(floorY), 0));
+        for (auto& node : p) node = toS(target + rotation.xform(toG(node - center)));
+        body.setVelocity({});
+        body.clearContacts();
+        for (auto& wheel : body.wheels()) {
+            wheel.angularVelocity = 0.0;
+            wheel.load = wheel.slipSpeed = 0.0;
+            wheel.contactAge = 1.0;
+            wheel.contactPoint = wheel.center(body);
+            wheel.contactNormal = toS(destination.get_column(1));
+        }
+        // A queued sandbox reset must never silently repair the recovered car.
+        ctl_.reset = phys_.reset = false;
+        ctl_.starter = phys_.starter = false;
+        starterTimer_ = 0.0;
+        ctl_.throttle = phys_.throttle = 0.0;
+        body.controls().throttle = 0.0;
+        visualResetPending_ = true;
+        impactAccum_ = 0.0;
+        sync_from_world();
+    }
+    update_visual(0.0);
+    return true;
+}
+
+bool SBVehicle::service_repair() {
+    if (!world_ || bodyIndex_ < 0) return false;
+    {
+        std::lock_guard<std::mutex> lock(world_->mutex());
+        auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+        const auto& p = body.positions();
+        if (p.empty()) return false;
+        Vector3 forward = toG(forwardOf(p));
+        forward.y = 0;
+        forward = forward.length_squared() > 1e-6 ? forward.normalized() : Vector3(1, 0, 0);
+        Vector3 center = toG((p[layout_.refFL] + p[layout_.refFR] + p[layout_.refRL] + p[layout_.refRR]) * 0.25);
+        double groundY = center.y;
+        for (const auto& wheel : body.wheels()) groundY = std::min(groundY, wheel.center(body).y - def_.tires.radius);
+        center.y = static_cast<real_t>(std::max(groundY, static_cast<double>(center.y) - 0.6) + 0.05);
+        const double fuel = body.hasSystems() ? body.systems().state().fuelL : 0.0;
+        const Vector3 up(0, 1, 0);
+        applyTransform(Transform3D(Basis(forward, up, forward.cross(up)), center));
+        if (body.hasSystems()) {
+            body.systems().state().fuelL = fuel;
+            body.systems().state().running = false;
+        }
+        if (body.hasPowertrain()) body.powertrain().setRunning(false);
+        ctl_.ignition = phys_.ignition = false;
+        ctl_.starter = phys_.starter = false;
+        ctl_.reset = phys_.reset = false;
+        ctl_.puncture = phys_.puncture = -1;
+        ctl_.throttle = phys_.throttle = 0.0;
+        body.controls().ignition = body.controls().starter = false;
+        body.controls().throttle = 0.0;
+        starterTimer_ = 0.0;
+        lastBroken_ = lastDeformed_ = 0;
+        impactAccum_ = 0.0;
+        sync_from_world();
+    }
+    update_visual(0.0);
+    return true;
+}
+
+bool SBVehicle::set_door_open(int index, bool open) {
+    if (!world_ || bodyIndex_ < 0 || index < 0 || hasImportedModel_) return false;
+    std::lock_guard<std::mutex> lock(world_->mutex());
+    auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+    if (static_cast<std::size_t>(index) >= body.doors().size() || body.telemetry().speedKmh > 2.0) return false;
+    return body.setDoorOpen(static_cast<std::size_t>(index), open);
+}
+
+bool SBVehicle::toggle_door(int index) {
+    if (!world_ || bodyIndex_ < 0 || index < 0 || hasImportedModel_) return false;
+    std::lock_guard<std::mutex> lock(world_->mutex());
+    auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+    if (static_cast<std::size_t>(index) >= body.doors().size() || body.telemetry().speedKmh > 2.0) return false;
+    return body.setDoorOpen(static_cast<std::size_t>(index), !body.doors()[static_cast<std::size_t>(index)].requestedOpen);
+}
+
+Array SBVehicle::get_door_states() const {
+    Array result;
+    if (!world_ || bodyIndex_ < 0 || hasImportedModel_) return result;
+    std::lock_guard<std::mutex> lock(world_->mutex());
+    const auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+    const auto& positions = body.positions();
+    const Vector3 forward = toG(forwardOf(positions)).normalized();
+    const Vector3 right = toG((positions[layout_.refFR] + positions[layout_.refRR]) - (positions[layout_.refFL] + positions[layout_.refRL])).normalized();
+    for (std::size_t side = 0; side < body.doors().size(); ++side) {
+        const auto& door = body.doors()[side];
+        bool attached = false, damaged = false;
+        auto inspect = [&](const auto& indices) {
+            for (auto index : indices) {
+                if (index >= body.beams().size()) { damaged = true; continue; }
+                const auto& beam = body.beams()[index];
+                attached = attached || (!beam.broken && !beam.disabled);
+                damaged = damaged || beam.broken || beam.plasticStrain() > 0.005; // Same service threshold as core door mechanism.
+            }
+        };
+        inspect(door.hingeBeams); inspect(door.latchBeams); inspect(door.supportBeams);
+        double angle = 0.0;
+        if (door.nodes.size() >= 8) {
+            sb::Vec3 rear{}, front{}, restRear{}, restFront{};
+            for (int k = 0; k < 4; ++k) {
+                const auto rearIndex = door.nodes[static_cast<std::size_t>(k)];
+                const auto frontIndex = door.nodes[static_cast<std::size_t>(k + 4)];
+                rear += positions[rearIndex];
+                front += positions[frontIndex];
+                restRear += restPositions_[rearIndex];
+                restFront += restPositions_[frontIndex];
+            }
+            const Vector3 along = toG(front - rear).normalized();
+            const sb::Vec3 restAlong = restFront - restRear;
+            // The authored body can taper at the door. Measure opening relative
+            // to that closed shape, rather than assuming every door lies on +X.
+            const double rotation = std::atan2(along.dot(right), along.dot(forward)) - std::atan2(restAlong.z, restAlong.x);
+            angle = std::abs(std::atan2(std::sin(rotation), std::cos(rotation))) * 180.0 / 3.141592653589793;
+        }
+        Dictionary state;
+        state["index"] = static_cast<int>(side);
+        state["requested_open"] = door.requestedOpen;
+        state["travel"] = door.travel;
+        state["latched"] = door.latched;
+        state["attached"] = attached;
+        state["missing"] = !attached;
+        state["damaged"] = damaged;
+        state["angle_degrees"] = angle;
+        state["open"] = !door.latched || angle > 3.0 || !attached;
+        result.push_back(state);
+    }
+    return result;
+}
+
+bool SBVehicle::release_bonnet() {
+    if (!world_ || bodyIndex_ < 0 || layout_.bonnetNodes.size() != 8 || hasImportedModel_) return false;
+    std::lock_guard<std::mutex> lock(world_->mutex());
+    auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+    if (body.telemetry().speedKmh > 2.0) return false;
+    bool released = false;
+    for (std::size_t i = 0; i < body.beams().size(); ++i) {
+        const auto& beam = body.beams()[i];
+        if (!beam.broken && beam.breakGroup >= 0 && body.breakGroupNames()[static_cast<std::size_t>(beam.breakGroup)] == "bonnet_latch") {
+            body.breakBeam(static_cast<std::uint32_t>(i));
+            released = true;
+        }
+    }
+    if (released) {
+        // The damped, breakable support struts lift the panel through channel 1.
+        // Do not add an instantaneous kick on top of the controlled stroke.
+        bonnetOpenRequested_ = true;
+    }
+    return released;
+}
+
+double SBVehicle::refuel(double litres) {
+    if (!world_ || bodyIndex_ < 0 || !std::isfinite(litres) || litres <= 0 || get_velocity().length() > 0.25) return 0.0;
+    std::lock_guard<std::mutex> lock(world_->mutex());
+    auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+    if (!body.hasSystems() || body.systems().state().running) return 0.0;
+    auto& systems = body.systems();
+    const double added = std::clamp(litres, 0.0, std::max(0.0, systems.spec().fuelCapacityL - systems.state().fuelL));
+    systems.state().fuelL += added;
+    sys_.fuelL = systems.state().fuelL;
+    return added;
 }
 
 void SBVehicle::repair_in_place() {
@@ -1065,8 +1313,10 @@ Dictionary SBVehicle::get_info() const {
     d["fuel_capacity"] = def_.engine.fuelCapacity;
     d["mass"] = def_.chassis.curbMass;
     d["length"] = def_.body.length;
+    d["wheelbase"] = def_.body.wheelbase;
     d["width"] = def_.body.width;
     d["height"] = def_.body.height;
+    d["bonnet_supported"] = !hasImportedModel_;
     double peakT = 0, peakP = 0;
     for (const auto& tq : def_.engine.torqueCurve) {
         peakT = std::max(peakT, tq.second);
@@ -1099,6 +1349,71 @@ Vector3 SBVehicle::get_driver_eye() const {
 Variant SBVehicle::get_dashboard_transform() const {
     if (!dashboardAvailable_ || frames_.empty()) return Variant();
     return Transform3D(get_visual_basis(), toG(sb::evalSkin(renderPos_, frames_, visual_.dashboard)));
+}
+
+Array SBVehicle::get_mirror_surfaces() const {
+    Array result;
+    if (renderPos_.empty() || frames_.empty()) return result;
+    auto append = [&](const sb::MeshSurface& surface, const SurfaceGpu& gpu, int side) {
+        if (!gpu.instance || !gpu.instance->is_visible() || surface.skin.size() < 3) return;
+        const std::size_t count = surface.skin.size();
+        std::vector<Vector3> points;
+        points.reserve(count);
+        Vector3 center;
+        double restY = 0, restZ = 0;
+        for (std::size_t i = 0; i < count; ++i) {
+            const Vector3 point = toG(sb::evalSkin(renderPos_, frames_, surface.skin[i]));
+            if (!point.is_finite()) return;
+            points.push_back(point);
+            center += point;
+            restY += surface.positions[i * 3 + 1];
+            restZ += surface.positions[i * 3 + 2];
+        }
+        center /= static_cast<real_t>(count);
+        restY /= static_cast<double>(count);
+        restZ /= static_cast<double>(count);
+        // Correlate the authored vertical/lateral coordinates with the current
+        // bound vertices. This follows a swinging or torn door, not the chassis
+        // transform or the intentionally oversized whole-vehicle render AABB.
+        Vector3 up, right;
+        for (std::size_t i = 0; i < count; ++i) {
+            const Vector3 delta = points[i] - center;
+            up += delta * static_cast<real_t>(surface.positions[i * 3 + 1] - restY);
+            right += delta * static_cast<real_t>(surface.positions[i * 3 + 2] - restZ);
+        }
+        if (up.length_squared() < 1e-14 || right.length_squared() < 1e-14) return;
+        right.normalize();
+        Vector3 normal = right.cross(up).normalized();
+        if (!normal.is_finite() || normal.length_squared() < 0.5) return;
+        up = normal.cross(right).normalized();
+        double minX = 1e20, maxX = -1e20, minY = 1e20, maxY = -1e20;
+        for (const Vector3& point : points) {
+            const Vector3 delta = point - center;
+            const double x = delta.dot(right), y = delta.dot(up);
+            minX = std::min(minX, x); maxX = std::max(maxX, x);
+            minY = std::min(minY, y); maxY = std::max(maxY, y);
+        }
+        center += right * static_cast<real_t>((minX + maxX) * 0.5) + up * static_cast<real_t>((minY + maxY) * 0.5);
+        Dictionary entry;
+        entry["mesh"] = gpu.instance;
+        entry["side"] = side;
+        entry["center"] = center;
+        entry["normal"] = normal;
+        entry["up"] = up;
+        entry["half_extents"] = Vector2(static_cast<real_t>((maxX - minX) * 0.5), static_cast<real_t>((maxY - minY) * 0.5));
+        result.append(entry);
+    };
+    for (std::size_t i = 0; i < visual_.skinned.size() && i < surfaces_.size(); ++i) {
+        const auto& surface = visual_.skinned[i];
+        if (surface.material == "mirror_left" || surface.material == "door_left_mirror") append(surface, surfaces_[i], 0);
+        else if (surface.material == "mirror_right" || surface.material == "door_right_mirror") append(surface, surfaces_[i], 1);
+    }
+    for (std::size_t i = 0; i < importedSurf_.size() && i < importedGpu_.size(); ++i) {
+        const String name = importedGpu_[i].instance->get_name();
+        if (name == "BodyDoorLMirror") append(importedSurf_[i], importedGpu_[i], 0);
+        else if (name == "BodyDoorRMirror") append(importedSurf_[i], importedGpu_[i], 1);
+    }
+    return result;
 }
 
 Basis SBVehicle::get_visual_basis() const {

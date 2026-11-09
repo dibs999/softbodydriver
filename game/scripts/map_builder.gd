@@ -70,7 +70,7 @@ static func _cone(parent: Node3D, pos: Vector3) -> void:
 # =========================================================================== proving grounds
 static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 	world.add_ground_plane(1.0)
-	var grass := C.surface_material("grass", 3.1, Color(0.76, 0.94, 0.69))
+	var grass := C.surface_material("grass", 3.1, Color(0.22, 0.33, 0.16))
 	var asphalt := C.surface_material("asphalt", 2.0, Color.WHITE, 0.30)
 	var concrete := C.surface_material("pavement", 2.1, Color(0.86, 0.86, 0.85), 0.25)
 	var line := _mat(Color(0.92, 0.92, 0.88), 0.6)
@@ -78,6 +78,8 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 
 	_flat_quad(parent, Vector3(0, -0.01, 0), Vector2(3000, 3000), grass)
 	_flat_quad(parent, Vector3(0, 0.0, 0), Vector2(750, 440), asphalt)
+
+	var landscape_regions: Array = preload("res://scripts/maps/proving_surroundings.gd").build(world, parent)
 
 	# Oval track painted on the pad (straights along X).
 	var waypoints := PackedVector3Array()
@@ -151,11 +153,13 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 	for i in 3:
 		_box(parent, world, Vector3(30 + i * 8, 0, -5), Vector3(0.5, 0.05, 3.4), Vector3.ZERO, concrete)
 	C.label3d(parent, "BREMSWEG  /  100 m", Vector3(-103, 1.5, -10), 0, 0.42)
+	_service_campus(world, parent)
+	var facilities := preload("res://scripts/maps/proving_facilities.gd").build(world, parent)
 	var workshop := Vector3(182, 0, -74)
 	for i in 4:
 		var p := workshop + Vector3(0, 0, -i * 10.0)
 		_box(parent, world, p + Vector3(-7.0, 2.7, 0), Vector3(0.24, 2.7, 4.9), Vector3.ZERO, steel)
-		_box(parent, world, p + Vector3(0, 5.4, 0), Vector3(7.4, 0.18, 4.9), Vector3.ZERO, blue, 0.8, false)
+		_box(parent, world, p + Vector3(0, 5.4, 0), Vector3(7.4, 0.18, 4.9), Vector3.ZERO, blue, 0.8, true)
 		_box(parent, world, p + Vector3(0, 2.7, -4.8), Vector3(7.0, 2.7, 0.13), Vector3.ZERO, concrete)
 	C.label3d(parent, "FAHRDYNAMIK   /   BOXEN", workshop + Vector3(7.45, 5.27, -15), PI * 0.5, 0.56)
 	for z: float in [-57.2, -50.8]:
@@ -165,9 +169,9 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 	for x: float in [32.0, 47.0, 62.0]:
 		for offset: float in [-5.3, 5.3]:
 			_box(parent, world, Vector3(x + offset, 1.5, -65), Vector3(0.16, 1.5, 0.18), Vector3.ZERO, steel)
-		_box(parent, world, Vector3(x, 3.03, -65), Vector3(5.8, 0.12, 3.3), Vector3.ZERO, blue, 0.8, false)
+		_box(parent, world, Vector3(x, 3.03, -65), Vector3(5.8, 0.12, 3.3), Vector3.ZERO, blue, 0.8, true)
 
-	# Feature lane along +X starting at the spawn (z = -40).
+	# Dedicated jump/crash lane along +X (z = -40), separate from beginner spawn.
 	# Ramps: rotated slabs whose leading top edge sits exactly on the ground.
 	_ramp(parent, world, 38.0, -40.0, 5.0, deg_to_rad(9.0), concrete)
 	_ramp(parent, world, 120.0, -28.0, 3.5, deg_to_rad(14.0), concrete)
@@ -183,8 +187,6 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 			Vector3(0, rng.randf() * PI, 0), asphalt)
 	# Crash wall at the end of the lane.
 	_box(parent, world, Vector3(225, 1.5, -40), Vector3(1.0, 1.5, 12.0), Vector3.ZERO, concrete, 0.8)
-	for i in 5:
-		_flat_quad(parent, Vector3(223.9, 0.6 + i * 0.5, -40), Vector2(0.01, 0.01), red)
 	# Jersey barriers around the lane.
 	for i in 18:
 		_box(parent, world, Vector3(10 + i * 12, 0.4, -47), Vector3(5.8, 0.4, 0.3), Vector3.ZERO, concrete, 0.7)
@@ -216,18 +218,19 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 			var dx := (ix - 20.0) / 20.0
 			var dz := (iz - 20.0) / 20.0
 			var r2 := dx * dx + dz * dz
-			heights[ix * nz + iz] = maxf(0.0, 7.0 * (1.0 - r2)) if r2 < 1.0 else 0.0
+			heights[ix * nz + iz] = 7.0 * pow(1.0 - r2, 2.0) if r2 < 1.0 else 0.0
 	world.add_heightfield(ox, oz, hcell, nx, nz, heights, 1.0)
 	parent.add_child(C.terrain_mesh(ox, oz, hcell, nx, nz, heights, grass))
 
 	var spawns: Array[Transform3D] = [
-		car_xform(Vector3(0, 0, -40), Vector3(1, 0, 0)),
+		car_xform(Vector3(-145, 0, -5), Vector3(1, 0, 0)),
 		car_xform(Vector3(-15, 0, -32), Vector3(1, 0, 0)),
 		car_xform(Vector3(-30, 0, -32), Vector3(1, 0, 0)),
 	]
 	return {"spawns": spawns, "waypoints": waypoints, "speeds": speeds,
-		"surface_regions": [{"rect": Rect2(-200, -150, 80, 80), "surface": "grass"}],
-		"map_paths": [C.closed_route(waypoints), C.closed_route(training), handling],
+		"rain_shelters": proving_shelters(), "service_approach": facilities["service_approach"], "pit_approach": facilities["pit_approach"],
+		"surface_regions": [{"rect": Rect2(-200, -150, 80, 80), "surface": "grass"}] + landscape_regions,
+		"map_paths": [C.closed_route(waypoints), C.closed_route(training), handling, facilities["service_approach"], facilities["pit_approach"]],
 		"map_places": [{"name": "Sprung- und Crashbahn", "position": Vector3(124, 0, -40)},
 			{"name": "Fahrdynamik-Oval", "position": Vector3(20, 0, -130)},
 			{"name": "Handling-Parcours", "position": handling[3]},
@@ -449,3 +452,62 @@ static func _hill_lookout(world: SBWorld, parent: Node3D, road: PackedVector3Arr
 	_box(parent, world, sign + Vector3.UP * 1.76, Vector3(0.1, 0.43, 2.0), Vector3(0, yaw, 0), wood, 0.75, false)
 	C.label3d(parent, "AUSSICHTSPUNKT", sign + Vector3.UP * 1.76 - forward * 0.11, yaw - PI * 0.5, 0.47)
 	return route
+
+
+static func _service_campus(world: SBWorld, parent: Node3D) -> void:
+	# A sheltered engineering office and landscaped pedestrian frontage behind the pits.
+	# Solid volumes have matching native physics colliders; markings and plants are visual.
+	var campus := Node3D.new()
+	campus.name = "ServiceCampus"
+	parent.add_child(campus)
+	var pavement := C.surface_material("pavement", 1.6, Color(0.84, 0.84, 0.80))
+	var wall := _mat(Color(0.54, 0.51, 0.46))
+	var trim := _mat(Color(0.12, 0.17, 0.20), 0.4, 0.55)
+	var glass := _mat(Color(0.10, 0.20, 0.25), 0.18, 0.65)
+	var soil := _mat(Color(0.17, 0.12, 0.08))
+	var green := _mat(Color(0.16, 0.27, 0.10))
+	var timber := _mat(Color(0.38, 0.23, 0.12))
+	_box(campus, world, Vector3(158, 0.09, -89), Vector3(12, 0.09, 23), Vector3.ZERO, pavement)
+	_box(campus, world, Vector3(151, 2.7, -89), Vector3(6, 2.7, 12), Vector3.ZERO, wall)
+	_box(campus, world, Vector3(151, 5.48, -89), Vector3(6.4, 0.08, 12.4), Vector3.ZERO, trim)
+	# Six recessed window bays separated by frame mullions.
+	for i in 6:
+		var z := -99.0 + i * 4.0
+		_box(campus, world, Vector3(157.03, 2.9, z), Vector3(0.04, 1.3, 1.55), Vector3.ZERO, glass, 1, false)
+		for dz: float in [-1.60, 0, 1.60]:
+			_box(campus, world, Vector3(157.10, 2.9, z + dz), Vector3(0.07, 1.36, 0.045), Vector3.ZERO, trim, 1, false)
+		_box(campus, world, Vector3(157.14, 1.56, z), Vector3(0.18, 0.055, 1.7), Vector3.ZERO, pavement, 1, false)
+	C.label3d(campus, "VEHICLE DEVELOPMENT  /  01", Vector3(157.2, 4.8, -89), PI * 0.5, 0.40)
+	# Raised planting islands edge the walkway; openings remain wide enough for vehicles.
+	for z: float in [-107, -71]:
+		_box(campus, world, Vector3(164, 0.27, z), Vector3(3.5, 0.27, 1.6), Vector3.ZERO, pavement)
+		_box(campus, world, Vector3(164, 0.55, z), Vector3(3.3, 0.025, 1.4), Vector3.ZERO, soil, 1, false)
+		for x: float in [161.5, 164, 166.5]:
+			var shrub := MeshInstance3D.new()
+			var foliage := SphereMesh.new()
+			foliage.radius = 0.75
+			foliage.height = 1.3
+			foliage.radial_segments = 10
+			foliage.rings = 5
+			shrub.mesh = foliage
+			shrub.material_override = green
+			shrub.position = Vector3(x, 1.05, z)
+			campus.add_child(shrub)
+	# Timber benches, bollards and short approach markings make the frontage legible.
+	for z: float in [-99, -79]:
+		_box(campus, world, Vector3(163, 0.60, z), Vector3(0.42, 0.10, 1.5), Vector3.ZERO, timber)
+		_box(campus, world, Vector3(162.6, 0.94, z), Vector3(0.07, 0.4, 1.5), Vector3.ZERO, timber)
+		for dz: float in [-1.1, 1.1]:
+			_box(campus, world, Vector3(163, 0.3, z + dz), Vector3(0.32, 0.3, 0.07), Vector3.ZERO, trim)
+	for z in range(-109, -68, 5):
+		_box(campus, world, Vector3(169, 0.65, z), Vector3(0.12, 0.65, 0.12), Vector3.ZERO, trim)
+		_box(campus, world, Vector3(169, 1.15, z), Vector3(0.125, 0.08, 0.125), Vector3.ZERO, _mat(Color(0.88, 0.72, 0.18)), 1, false)
+
+
+static func proving_shelters() -> Array[Dictionary]:
+	var shelters: Array[Dictionary] = []
+	for i in 4:
+		shelters.append({"center": Vector3(182, 2.61, -74 - i * 10), "half_extents": Vector3(7.4, 2.61, 4.9)})
+	for x: float in [32, 47, 62]:
+		shelters.append({"center": Vector3(x, 1.455, -65), "half_extents": Vector3(5.8, 1.455, 3.3)})
+	return shelters

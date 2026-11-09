@@ -279,6 +279,7 @@ std::size_t World::collideBodies() {
 void World::step() {
     const Vec3 g = settings_.gravity;
     std::size_t contacts = 0;
+    lastSelfContacts_ = lastSelfContactCandidates_ = 0;
     for (SoftBody& b : bodies_) {
         auto& force = b.forces();
         const auto& mass = b.masses();
@@ -286,7 +287,11 @@ void World::step() {
         for (std::size_t i = 0; i < force.size(); ++i) force[i] = invMass[i] > 0 ? g * mass[i] : Vec3{};
         b.accumulateBeamForces(settings_.dt);
         accumulateAerodynamicForces(b);
+        const bool selfContact = std::any_of(b.selfCollisionPanels().begin(), b.selfCollisionPanels().end(),
+                                            [&](const SelfCollisionPanel& p) { return b.selfCollisionActive(p); });
+        if (selfContact) selfContactPrevious_ = b.positions();
         integrateBody(b);
+        if (selfContact) lastSelfContacts_ += collideSelfPanels(b, selfContactPrevious_);
     }
     lastBodyContacts_ = collideBodies();
     for (SoftBody& b : bodies_) {
@@ -308,6 +313,8 @@ WorldStats World::stats() const {
     s.steps = steps_;
     s.contacts = lastContacts_;
     s.bodyContacts = lastBodyContacts_;
+    s.selfContacts = lastSelfContacts_;
+    s.selfContactCandidates = lastSelfContactCandidates_;
     for (const SoftBody& b : bodies_) {
         const BodyStats bs = b.stats();
         s.nodes += bs.nodes;

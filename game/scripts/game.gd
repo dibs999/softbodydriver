@@ -10,6 +10,10 @@ const Minimap := preload("res://scripts/minimap.gd")
 const RoadSurface := preload("res://scripts/road_surface.gd")
 const RoadMarks := preload("res://scripts/road_marks.gd")
 const DrivingActivity := preload("res://scripts/driving_activity.gd")
+const DriverPrompts := preload("res://scripts/driver_prompts.gd")
+var equipment: Node3D
+var weather: Node
+var lesson: Node
 var activity: DrivingActivity
 var surfaces := RoadSurface.new()
 var road_marks: RoadMarks
@@ -30,6 +34,11 @@ var _loading_overlay: CanvasLayer
 var _reverse_hold := 0.0
 var _time_scales := [1.0, 0.5, 0.25, 0.1]
 var _time_idx := 0
+var _pause_activity: OptionButton
+var _pause_weather: OptionButton
+var _pause_time: OptionButton
+var _pause_clock: CheckBox
+var _control_hint: Label
 
 
 func _ready() -> void:
@@ -89,11 +98,21 @@ func _ready() -> void:
 	cam.current = true
 	add_child(cam)
 	cam.target = player
+	weather = preload("res://scripts/world_weather.gd").new()
+	add_child(weather)
+	weather.configure(_env, _sun, cam, surfaces, world)
+	weather.set_shelters(map_data.get("rain_shelters", []))
+	equipment = preload("res://scripts/vehicle_equipment.gd").new()
+	add_child(equipment)
+	equipment.configure(self, map_data["spawns"][0])
+	cam.equipment = equipment
 
 	var ui := CanvasLayer.new()
 	add_child(ui)
 	hud = Hud.new()
 	hud.world = world
+	hud.equipment = equipment
+	hud.weather = weather
 	ui.add_child(hud)
 	hud.show_help = Game.settings["show_help"]
 	Game.driving_help_changed.connect(hud.set_driving_help)
@@ -104,6 +123,9 @@ func _ready() -> void:
 		if entry["id"] == Game.selected_map:
 			map_title = entry["name"]
 			break
+	var places: Array = map_data.get("map_places", []).duplicate()
+	places.append({"name": "Service / Tankstelle", "position": equipment.bay})
+	map_data["map_places"] = places
 	minimap.configure(map_data, vehicles, map_title)
 	audio = VehicleAudio.new()
 	audio.world = world
@@ -120,6 +142,19 @@ func _ready() -> void:
 	for v in vehicles:
 		_configure_effects(v)
 	_set_player(player)
+	lesson = preload("res://scripts/driving_lesson.gd").new()
+	add_child(lesson)
+	lesson.configure(self)
+	lesson.milestone_completed.connect(func(id: String):
+		if not Game.progress.complete_milestone(id): hud.toast("Fortschritt konnte nicht gespeichert werden"))
+	lesson.brake_result.connect(func(distance: float, start_speed: float):
+		Game.progress.record_braking(String(player.get_info()["id"]), distance, start_speed)
+		if Game.progress.last_error != OK: hud.toast("Bremsrekord konnte nicht gespeichert werden"))
+	hud.lesson = lesson
+	minimap.lesson = lesson
+	if Game.start_lesson:
+		lesson.start()
+		Game.start_lesson = false
 	_build_pause_menu(ui)
 	cam.snap()
 	if _loading_overlay:
@@ -235,12 +270,19 @@ func _apply_settings(v: SBVehicle) -> void:
 
 
 func _set_player(v: SBVehicle) -> void:
+	_reverse_hold = 0.0
+	if lesson: lesson.notify_interruption("Fahrzeug gewechselt")
 	if activity:
 		activity.cancel("")
 		activity.vehicle = v
 		activity._read_best()
 	player = v
 	cam.target = v
+	for car in Game.cars:
+		if car.get("id", "") == v.get_info().get("id", ""):
+			var definition: Variant = JSON.parse_string(FileAccess.get_file_as_string(car["path"]))
+			weather.set_vehicle_shelter(v, definition.get("body", {}) if definition is Dictionary else {})
+			break
 	hud.vehicle = v
 	minimap.player = v
 	hud.info = v.get_info()
@@ -264,11 +306,18 @@ func _process(delta: float) -> void:
 			activity.on_impact(imp)
 			cam.shake = maxf(cam.shake, clampf(imp / 150.0, 0.0, 1.0))
 	if map_data.has("waypoints") and player.get_position_ws().y < -30.0:
-		activity.cancel("Lauf abgebrochen: Fahrzeug zurückgesetzt")
-		player.reset_to(map_data["spawns"][0])
+		_reverse_hold = 0.0
+		lesson.notify_interruption("Fahrzeug außerhalb des Geländes")
+		activity.cancel("Lauf abgebrochen: Bergung")
+		if equipment.recover_to_service():
+			cam.snap()
+			hud.toast("Zum Service geborgen · Schäden und Tankinhalt bleiben erhalten")
 
 
 func _drive_player(delta: float) -> void:
+	if world.paused:
+		_reverse_hold = 0.0
+		return
 	if activity and activity.active and activity.countdown > 0:
 		player.set_input(0, 1, 0, 1)
 		return
@@ -279,7 +328,7 @@ func _drive_player(delta: float) -> void:
 	var brk := Input.get_action_strength("brake")
 	var steer := Input.get_action_strength("steer_left") - Input.get_action_strength("steer_right")
 	if Game.settings["steering_assist"]:
-		steer *= clampf(1.0 - kmh / 230.0, 0.32, 1.0)
+		steer = preload("res://scripts/steering_assist.gd").apply(steer, kmh, float(hud.info.get("wheelbase", 2.8)))
 	var hb := Input.get_action_strength("handbrake")
 	# Automatic gearbox: hold brake at standstill to engage reverse, throttle to go forward again.
 	if player.is_automatic():
@@ -334,6 +383,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if pause_menu.visible:
 		return
+	if equipment.handle_action(event):
+		return
 	if event.is_action_pressed("map_overview"):
 		_paused_before_map = world.paused
 		world.paused = true
@@ -349,11 +400,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		audio.cockpit = hud.cockpit
 		hud.toast("Kamera: " + hud.camera_name)
 	elif event.is_action_pressed("reset_vehicle"):
+		_reverse_hold = 0.0
+		lesson.notify_interruption("Fahrzeug zurückgesetzt")
 		activity.cancel("Lauf abgebrochen: Zurücksetzen")
 		player.reset_to(map_data["spawns"][0])
 		cam.snap()
 		hud.toast("Fahrzeug zurückgesetzt")
 	elif event.is_action_pressed("repair_vehicle"):
+		_reverse_hold = 0.0
+		lesson.notify_interruption("Sofortreparatur verwendet")
 		activity.cancel("Lauf abgebrochen: Reparatur")
 		player.repair_in_place()
 		hud.toast("Fahrzeug repariert")
@@ -362,6 +417,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		player.set_debug_view(on)
 		hud.toast("Node-Beam-Ansicht " + ("an" if on else "aus"))
 	elif event.is_action_pressed("activity_next"):
+		lesson.notify_interruption("Andere Aktivität gewählt")
 		activity.choose()
 		minimap._layout()
 		hud.toast(DrivingActivity.MODES[activity.mode])
@@ -370,14 +426,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		cam.snap()
 	elif event.is_action_pressed("toggle_tcs"):
 		player.set_tcs(not player.get_tcs())
+		Game.set_driving_setting("tcs", player.get_tcs())
 		hud.toast("Traktionskontrolle " + ("an" if player.get_tcs() else "aus"))
 	elif event.is_action_pressed("toggle_abs"):
 		player.set_abs(not player.get_abs())
+		Game.set_driving_setting("abs", player.get_abs())
 		hud.toast("ABS " + ("an" if player.get_abs() else "aus"))
 	elif event.is_action_pressed("toggle_gearbox"):
+		_reverse_hold = 0.0
 		player.set_automatic(not player.is_automatic())
+		Game.set_driving_setting("automatic", player.is_automatic())
 		player.set_clutch(-1.0)
-		hud.toast("Getriebe: " + ("Automatik" if player.is_automatic() else "Manuell (Q/E, Shift = Kupplung)"))
+		hud.toast("Getriebe: " + ("Automatik" if player.is_automatic() else "Manuell (%s/%s, %s = Kupplung)" % [DriverPrompts.hint("shift_down"), DriverPrompts.hint("shift_up"), DriverPrompts.hint("clutch")]))
 	elif event.is_action_pressed("shift_up"):
 		player.shift_up()
 	elif event.is_action_pressed("shift_down"):
@@ -426,19 +486,48 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 	pause_menu.add_theme_stylebox_override("panel", palette._box(Color("0b1820"), Color("29434b"), 18, 24))
 	palette.free()
 	pause_menu.set_anchors_preset(Control.PRESET_CENTER)
-	pause_menu.custom_minimum_size = Vector2(420, 450)
-	pause_menu.position = Vector2(-210, -225)
+	pause_menu.custom_minimum_size = Vector2(460, 540)
+	pause_menu.position = Vector2(-230, -270)
 	pause_menu.visible = false
 	ui.add_child(pause_menu)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 12)
-	pause_menu.add_child(v)
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(412, 490)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	pause_menu.add_child(scroll)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(v)
 	var title := Label.new()
 	title.text = "Pause"
 	title.add_theme_font_size_override("font_size", 28)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(title)
-	for entry in [["Weiterfahren", _toggle_pause], ["Neu starten", func(): get_tree().reload_current_scene()],
+	for entry in [["Weiterfahren", _toggle_pause],
+			["Fahrertür öffnen / schließen", func():
+				equipment.toggle_door(0)
+				_toggle_pause()],
+			["Beifahrertür öffnen / schließen", func():
+				equipment.toggle_door(1)
+				_toggle_pause()],
+			["Zum Service bergen · Schäden bleiben", func():
+				lesson.notify_interruption("Bergung zum Service")
+				activity.cancel("Lauf abgebrochen: Bergung")
+				equipment.recover_to_service()
+				cam.snap()
+				_toggle_pause()],
+			["Einführung starten / wiederholen", func():
+				if Game.selected_map != "proving_grounds":
+					Game.selected_map = "proving_grounds"
+					Game.start_lesson = true
+					get_tree().reload_current_scene()
+					return
+				activity.cancel("")
+				activity.mode = 0
+				lesson.start()
+				_toggle_pause()],
+			["Einführung ausblenden", func(): lesson.skip(); _toggle_pause()],
+			["Neu starten", func(): get_tree().reload_current_scene()],
 			["Hauptmenü", func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn")],
 			["Beenden", func(): get_tree().quit()]]:
 		var b := Button.new()
@@ -446,9 +535,64 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 		b.add_theme_font_size_override("font_size", 20)
 		b.pressed.connect(entry[1])
 		v.add_child(b)
+	_pause_activity = _pause_choices(v, "Fahraktivität", DrivingActivity.MODES.slice(0, 4 if Game.selected_map == "city" else 3))
+	_pause_activity.item_selected.connect(func(index: int):
+		activity.cancel("")
+		activity.mode = index
+		activity._read_best()
+		activity.message = "Im Pausenmenü starten" if index else "Freie Fahrt"
+		if index: lesson.notify_interruption("Andere Aktivität gewählt")
+		minimap._layout())
+	var activity_button := Button.new()
+	activity_button.text = "Auswahl starten / laufenden Versuch abbrechen"
+	activity_button.add_theme_font_size_override("font_size", 14)
+	activity_button.pressed.connect(func():
+		if activity.mode > 0:
+			activity.start()
+			cam.snap()
+		_toggle_pause())
+	v.add_child(activity_button)
+	_pause_weather = _pause_choices(v, "Wetter", weather.WEATHER_NAMES)
+	_pause_weather.item_selected.connect(func(index: int): weather.weather_index = index; weather._apply_lighting())
+	_pause_time = _pause_choices(v, "Tageszeit", weather.TIME_NAMES)
+	_pause_time.item_selected.connect(func(index: int):
+		weather.time_index = index
+		weather.hour = weather.TIME_HOURS[index]
+		weather._apply_lighting())
+	_pause_clock = CheckBox.new()
+	_pause_clock.text = "Tag und Nacht automatisch wechseln"
+	_pause_clock.toggled.connect(func(enabled: bool): weather.automatic_time = enabled)
+	v.add_child(_pause_clock)
+	_control_hint = Label.new()
+	_control_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_control_hint.custom_minimum_size.x = 390
+	_control_hint.add_theme_font_size_override("font_size", 13)
+	_control_hint.text = DriverPrompts.control_summary()
+	v.add_child(_control_hint)
+	Game.get_node("DriverPrompts").device_changed.connect(func(): _control_hint.text = DriverPrompts.control_summary())
+	v.add_child(Game.make_driving_option("steering_assist", "Lenkhilfe · Tastatur / Gamepad"))
+	var steering_hint := Label.new()
+	steering_hint.text = "An: sanfte Eingaben und weniger Lenkeinschlag bei Tempo.\nAus: direkte Lenkung für erfahrene Fahrer."
+	steering_hint.add_theme_font_size_override("font_size", 12)
+	steering_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	steering_hint.custom_minimum_size.x = 390
+	v.add_child(steering_hint)
 	v.add_child(Game.make_graphics_options())
 	v.add_child(Game.make_driving_help_option())
 	v.add_child(Game.make_audio_options())
+
+func _pause_choices(parent: VBoxContainer, caption: String, choices: Array) -> OptionButton:
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = caption
+	label.custom_minimum_size.x = 120
+	row.add_child(label)
+	var options := OptionButton.new()
+	options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for choice: String in choices: options.add_item(choice)
+	row.add_child(options)
+	parent.add_child(row)
+	return options
 
 
 func _configure_effects(v: SBVehicle) -> void:
@@ -460,11 +604,16 @@ func _configure_effects(v: SBVehicle) -> void:
 
 func _toggle_pause() -> void:
 	if not pause_menu.visible:
+		_reverse_hold = 0.0
 		_paused_before_menu = world.paused
 	pause_menu.visible = not pause_menu.visible
 	world.paused = true if pause_menu.visible else _paused_before_menu
 	hud.visible = not pause_menu.visible
 	minimap.visible = not pause_menu.visible and minimap._compact_visible
 	if pause_menu.visible:
+		_pause_activity.select(activity.mode)
+		_pause_weather.select(weather.weather_index)
+		_pause_time.select(weather.time_index)
+		_pause_clock.set_pressed_no_signal(weather.automatic_time)
 		player.set_input(0, 0, 0, 0)
-		(pause_menu.get_child(0).get_child(1) as Button).grab_focus()
+		(pause_menu.get_child(0).get_child(0).get_child(1) as Button).grab_focus()

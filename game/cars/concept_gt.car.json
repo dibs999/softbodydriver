@@ -1,15 +1,16 @@
 {
   "_comment": "Imported 3D model as flexbody: the physics structure is generated from the dimensions below, the rendered body is the glTF model, deformed by the soft-body nodes at runtime.",
   "id": "concept_gt",
-  "name": "Concept GT (3D-Modell)",
+  "name": "Concept GT 4.0 Biturbo",
   "brand": "Concept",
-  "description": "Mittelmotor-Concept-Car mit importiertem Detail-Modell (glTF, CC-BY 4.0). Zeigt den Flexbody-Import: jedes glTF-Automodell lässt sich so verformbar machen.",
+  "description": "Flacher Mittelmotor-Sportwagen mit 4,0-l-V8-Biturbo, 750 Nm und Heckantrieb. Viel Leistung, breite Reifen und direkte Reaktionen verlangen einen dosierten Gasfuß.",
   "credits": "3D model \"Car Concept\" by Eric Chadwick / Darmstadt Graphics Group GmbH, CC-BY 4.0 (Khronos glTF Sample Assets), based on a CC0 model by Unity Fan.",
   "visualModel": {
     "path": "res://models/carconcept/CarConcept.glb",
     "forward": "+z",
     "up": "+y",
     "fitLength": true,
+    "aoOnUV2": true,
     "driverEye": [0.0, 0.93, 0.48],
     "dashboard": [0.0, 0.77, 1.192],
     "steeringWheel": {
@@ -18,7 +19,7 @@
     },
     "wheels": { "FL": "WheelFrontL", "FR": "WheelFrontR", "RL": "WheelRearL", "RR": "WheelRearR" },
     "hide": ["BrakePad", "Axles"],
-    "keepProcedural": ["chassis", "spring", "caliper"],
+    "keepProcedural": ["spring", "caliper"],
     "materialOverrides": { "Glass": "glass", "Paint 1": "paint", "Dashboard": "trim" }
   },
   "body": {
@@ -39,7 +40,7 @@
   },
   "tires": { "radius": 0.41, "width": 0.30, "rimRadius": 0.27, "pressurePsi": 34, "friction": 1.32, "tireMass": 13.0, "rimMass": 11.0, "rays": 20 },
   "engine": {
-    "name": "4.0 V8 Biturbo", "layout": "RWD", "cylinders": 8,
+    "name": "4.0 V8 Biturbo", "layout": "RWD", "position": "mid", "cylinders": 8,
     "torqueCurve": [[800, 320], [2000, 640], [2800, 750], [5500, 750], [6800, 640], [7600, 500], [8000, 0]],
     "idleRpm": 850, "redlineRpm": 7800, "inertia": 0.2, "friction": 28, "engineBraking": 0.05, "mass": 210,
     "gears": [3.40, 2.30, 1.70, 1.32, 1.06, 0.87, 0.71], "reverse": -3.0, "finalDrive": 3.35,

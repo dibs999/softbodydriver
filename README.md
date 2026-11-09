@@ -91,7 +91,7 @@ So kommt ein eigenes Auto ins Spiel:
 2. Eine vorhandene `.car.json` kopieren und Maße, Radstand, Spur und Reifenradius an das Modell anpassen.
 3. `visualModel` eintragen: Pfad, Vorwärts- und Hochachse, Namen der vier Rad-Nodes, auszublendende Teile. Details in [docs/CAR_FORMAT.md](docs/CAR_FORMAT.md).
 
-> **Echte Marken (Mercedes, BMW, …):** Freie Modelle solcher Autos gibt es zum Beispiel auf Sketchfab, meist unter CC-BY oder mit „Editorial Use“. Das Urheberrecht am 3D-Modell ist aber nur ein Teil. Name, Logo und Design gehören den Herstellern, und ein veröffentlichtes Spiel braucht dafür deren Lizenz. Deshalb nutzt auch BeamNG erfundene Marken. Für **private Nutzung** kannst du solche Modelle über den Import-Weg oben einbinden, ins Repository oder in Releases sollten sie nicht. Neue Autos legst du an, indem du eine `.car.json` kopierst und anpasst. Das Spiel findet sie automatisch. Das Format ist in [docs/CAR_FORMAT.md](docs/CAR_FORMAT.md) beschrieben.
+> **Modelle realer Autos:** Der Import unterstützt auch solche Modelle. Für die Weiterverteilung müssen die konkreten Assetrechte und mögliche Marken-/Designrechte geprüft werden; eine Lizenz des Demo-Codes genügt dafür nicht. Die bisher geprüften Kandidaten und ihre belegte Lizenzlage stehen in [VEHICLE_QUALITY_TARGET.md](docs/VEHICLE_QUALITY_TARGET.md). Aktuell wird kein zusätzliches Markenfahrzeug mitgeliefert. Neue Autos entstehen durch eine passende `.car.json` und werden automatisch gefunden; das Format steht in [docs/CAR_FORMAT.md](docs/CAR_FORMAT.md).
 
 ### Schadensmodell (aus der Physik abgeleitet, nicht geskriptet)
 
@@ -144,6 +144,14 @@ godot --path game
 
 Für exportierte Release-Builds zusätzlich `-DGODOTCPP_TARGET=template_release` bauen und dann im Editor *Projekt → Exportieren* wählen. Die Presets für Windows, macOS und Linux liegen bereits in `game/export_presets.cfg`.
 
+### Linux-Entwicklungspaket
+
+Ein eigenständig startbares Linux-Entwicklungspaket erzeugt `bash tools/package_linux.sh`
+(Godot 4.5.1, CMake und C++20 vorausgesetzt). Der Ablauf prüft offizielle Export-Templates,
+baut die native Release-Bibliothek, übernimmt Asset-Credits und testet das exportierte
+Spiel ohne Editor. Paketdatei und Protokolle stehen anschließend in `dist/linux-stage.*/`.
+Details und verbleibende Release-Abnahmen: [Linux-Paketierung](docs/RELEASE_LINUX.md).
+
 ### Steuerung
 
 | Taste | Funktion |
@@ -155,7 +163,7 @@ Für exportierte Release-Builds zusätzlich `-DGODOTCPP_TARGET=template_release`
 | `I` | Motor starten / abstellen |
 | `T` / `Z` | Traktionskontrolle / ABS ein/aus |
 | `C`, `V` | Kamera wechseln (Verfolger, Orbit, Cockpit, Motorhaube, Streckenrand), Rückblick |
-| Rechte Maustaste, Mausrad | Umsehen, Zoom |
+| Rechte Maustaste, Mausrad | Umsehen auch im Cockpit, Zoom in Außenkameras |
 | `R` / `Rücktaste` | Zurücksetzen / an Ort und Stelle reparieren |
 | `B` | Node-Beam-Röntgenansicht (verformte Beams gelb bis rot) |
 | `J`, `P` | Zeitlupe (×0,5 / ×0,25 / ×0,1), Physik pausieren |
@@ -184,6 +192,99 @@ Kompakte Fahrdatenkarte mit Tempo, Drehzahl, Gang, Tank und Temperatur. Im Cockp
 die ausführliche Diagnose für Motor, Kupplung, Getriebe und Reifen ist über `F2`
 ausblendbar. Hilfe: `F1`, Minikarte: `N`, Kartenübersicht: `K`.
 
+## Ausbau: Fahrzeugbedienung und Umgebung
+
+Die aktuelle Iteration ergänzt einen detaillierteren prozeduralen Motorraum,
+Projektoroptiken und Reifenprofil, eine Instrumentenanzeige mit Drehzahlbogen sowie
+bedienbare Fahrzeugausrüstung:
+
+| Taste | Funktion |
+|---|---|
+| `L` | Aus → Abblendlicht → Fernlicht |
+| `,` / `.` | Blinker links/rechts |
+| `H` | Warnblinker |
+| `O` | Am stehenden prozeduralen Fahrzeug Motorhaube öffnen |
+| `U` / `Shift`+`U` | Kestrel: Fahrer-/Beifahrertür im Stand öffnen oder schließen; auch im Pausenmenü |
+| `F` halten | Am markierten Serviceplatz tanken; anhalten und Motor mit `I` abstellen |
+| `G` halten | Am Serviceplatz vier Simulationssekunden reparieren; Tankinhalt bleibt erhalten |
+| `F7` | Klar, bedeckt, Regen |
+| `F8` | Mittag, Abend, Nacht, Morgen |
+| `Shift` + `F8` | Automatischen Tagesablauf ein/aus |
+
+Regen baut Nässe allmählich auf; sie reduziert die Reifenhaftung für Spieler und
+Verkehr und trocknet bei klarem Wetter wieder ab. Der Serviceplatz befindet sich
+am Startpunkt der Karte. Tanken füllt den simulierten Tank und repariert keine
+Schäden. Licht und Blinker bleiben je Fahrzeug gespeichert.
+
+Gefiltertes Stereo-Regenrauschen und Tropfenimpulse folgen Wetter, Hauptlautstärke,
+Pause und Zeitlupe. Im geschlossenen Cockpit klingt Regen gedämpft, unter
+Service-Dächern leiser. Eine offene oder fehlende Vordertür hebt die vereinfachte
+Innenraum-Abschirmung auf; eine exakte Abdichtung jeder verformten Fuge fehlt noch.
+
+Die Motorhaube besitzt eigene Massepunkte, brechbare Halterungen und gedämpfte
+Hubstützen. `O` öffnet sie langsam; Reparieren schließt sie und stellt die Halterungen
+wieder her. Lose Hauben kollidieren mit ausgewählten Flächen der eigenen Karosserie
+und dem Motor. Beim Kestrel Hatch können außerdem die unteren Stoßfänger vorn und
+hinten als eigene Bauteile abreißen. Das importierte Concept-Modell besitzt noch
+keine separat bewegliche Haube. Grenzen der Kontaktauflösung und verbleibende
+Schadensbaugruppen stehen in [PHYSICS_ACCEPTANCE.md](docs/PHYSICS_ACCEPTANCE.md).
+
+Beim Kestrel haben beide Vordertüren eigene Massepunkte, brechbare Scharniere,
+reversible Schlösser, Innenverkleidung und mitbewegte Scheiben/Spiegel. Normales
+Öffnen erzeugt keinen Unfallschaden; verbogene oder abgerissene Halter lassen sich
+mit „Schließen“ nicht reparieren. Die übrigen Fahrzeuge besitzen diese Türmechanik
+noch nicht. Im Cockpit verwenden sichtbare Außenspiegel echte planare Ansichten
+der Spielwelt. Rechte Maustaste beziehungsweise rechter Gamepad-Stick ermöglichen
+den Blick auf beide Seiten. Unsichtbare Spiegel benötigen keine eigene Aufnahme.
+
+Das Pausenmenü bietet Aktivitäten, Wetter und Tageszeit auch ohne Funktionstasten.
+Auf dem Gamepad schaltet D-Pad oben das Licht, unten den Getriebemodus, links hält
+die Betankung und rechts die Reparatur; X betätigt die Kupplung. Anzeigen passen
+sich dem zuletzt verwendeten Eingabegerät an. Im Cockpit zeigen die Instrumente
+Kraftstoff, Kühlmittel, Blinker, Licht und technische Warnungen an.
+
+Referenzquellen, Qualitätsziele und noch offene Ausbauschritte stehen in
+[BEAMNG_REFERENCE.md](docs/BEAMNG_REFERENCE.md). Die Modelle bleiben eigenständige,
+prozedurale Fahrzeuge; diese Iteration ist noch kein vollständiger Ersatz für
+handmodellierte Fahrzeuge und ausgearbeitete Karten.
+
+## Qualitätsziel und Concept-GT-Fahrverhalten
+
+Ziel ist eine vollständige Referenz-Spielschleife: ein ausgearbeitetes Fahrzeug
+auf einer ausgearbeiteten Karte, mit Fahren, Schaden, Service, Aktivitäten und
+verlässlich gespeicherten Einstellungen und Ergebnissen. Die verbindlichen
+Abnahmekriterien stehen in [PRODUCT_TARGET.md](docs/PRODUCT_TARGET.md) und
+[VEHICLE_QUALITY_TARGET.md](docs/VEHICLE_QUALITY_TARGET.md).
+
+Der Concept GT verwendet jetzt eine tatsächliche Mittelmotor-Anordnung. Seine
+hintere Spurführung wurde für hohe Seitenkräfte überarbeitet. Die aktivierte
+Lenkhilfe begrenzt den angeforderten Lenkwinkel anhand von Tempo und Radstand;
+sie verändert keine Reifenkräfte und kann für direkte Steuerung deaktiviert
+werden. Die Option ist im Haupt- und Pausenmenü verfügbar. TCS, ABS, Getriebemodus,
+Lenkhilfe und KI-Verkehr bleiben nach einem Neustart gespeichert.
+
+## Erste Fahrt und Service
+
+Im Hauptmenü startet **Fahreinführung** eine optionale Runde auf dem Testgelände:
+Motor prüfen, 20 Meter fahren, über 50 km/h beschleunigen und bis zum Stillstand
+bremsen. Die Anzeige nennt Bremsweg und Ausgangstempo und führt anschließend zum
+Serviceplatz. Dort beendet tatsächliches Tanken die Einführung. In der Pause lässt
+sich die Einführung ausblenden oder wiederholen.
+
+**Zum Service bergen** im Pausenmenü transportiert das vorhandene Fahrzeug;
+Verformungen, defekte Teile und Kraftstoff bleiben erhalten. `G` repariert nach
+vier Simulationssekunden bei Stillstand und ausgeschaltetem Motor. Loslassen,
+Bewegung, Verlassen des Platzes, Pause oder Fahrzeugwechsel brechen die Arbeit ab.
+`F` zeigt die tatsächlich eingefüllte Menge an. Die bisherigen Sofort-Reset- und
+Reparaturtasten bleiben für freie Versuche verfügbar; sie machen eine laufende
+Bremsmessung ungültig.
+
+Einführungsmeilensteine, Bremsrekorde mit Ausgangstempo und letzte Fahrzeug-/Kartenwahl
+liegen im versionierten `user://player_progress.json`. Der Hauptbildschirm zeigt
+Fortschritt und den Bremsrekord des gewählten Autos. Ungültige/neue Profilversionen
+werden nicht still überschrieben; validierte Sicherungen können wiederhergestellt
+werden. Bestzeiten der vorhandenen Aktivitäten bleiben separat gespeichert.
+
 ## Entwicklung
 
 ```bash
@@ -197,6 +298,28 @@ godot --headless --path game -s res://tests/drivetrain_test.gd   # Antrieb, Scha
 godot --headless --path game -s res://tests/activities_test.gd   # Checkpoints, Untergrund und Laufregeln
 godot --headless --path game -s res://tests/offroad_test.gd      # Offroad-Karte, Grip, Anstiege und Streckenanschlüsse
 godot --headless --path game -s res://tests/actions_test.gd      # Gameplay-Eingaben und Kamerawechsel
+godot --headless --path game -s res://tests/equipment_test.gd    # Beleuchtung, Blinker und Tanken
+godot --headless --path game -s res://tests/weather_test.gd      # Tageszeit, Regen und Nasshaftung
+godot --headless --path game -s res://tests/weather_audio_test.gd # Regenklang, Dämpfung und AudioServer-Aufnahme
+godot --headless --path game -s res://tests/weather_door_test.gd # Offene Tür, Regenabschirmung und Akustik
+godot --headless --path game -s res://tests/door_controls_test.gd # Öffnen, Schließen, Scharniere und Reparatur
+godot --headless --path game -s res://tests/mirror_test.gd       # Optische Flächen, Projektion und Kamerawechsel
+godot --headless --path game -s res://tests/bonnet_test.gd       # Entriegelung und Reparatur der Haube
+godot --headless --path game -s res://tests/steering_assist_test.gd # Fahrsteuerung einschließlich Bremsung
+godot --headless --path game -s res://tests/imported_vehicle_test.gd # Modellimport, Räder, Normalen/Tangenten
+godot --headless --path game -s res://tests/settings_test.gd     # Gespeicherte Fahreinstellungen
+godot --headless --path game -s res://tests/first_drive_flow_test.gd # Einführung bis Service und Profil-Neuladen
+godot --headless --path game -s res://tests/native_service_test.gd # Beschädigtes Fahrzeug bergen/reparieren
+godot --headless --path game -s res://tests/service_test.gd      # Reparatur, Abbruchfälle, tatsächliche Tankmenge
+godot --headless --path game -s res://tests/player_progress_test.gd # Speicherung und beschädigte Profile
+godot --headless --path game -s res://tests/driving_lesson_test.gd # Bremsmessung und ungültige Versuche
+godot --headless --path game -s res://tests/gamepad_controls_test.gd # Gamepad bis Service und Licht
+godot --headless --path game -s res://tests/driver_input_test.gd # Rückwärtsfahrt und manueller/automatischer Antrieb
+godot --headless --path game -s res://tests/cockpit_instruments_test.gd # Echte Zustände im Cockpit
+godot --headless --path game -s res://tests/session_controls_test.gd # Pausenmenü, Wetter, Aktivitäten und Bergung
+godot --headless --path game -s res://tests/proving_ground_test.gd # Anfahrt, Service, Gelände und Kollisionen
+godot --headless --path game -s res://tests/wet_braking_test.gd # Gemessene Trocken-/Nassbremsung
+godot --headless --path game -s res://tests/session_soak_test.gd # 30 simulierte Minuten wiederholter Fahr-/Crash-/Serviceabläufe
 ```
 
 Beispielausgabe des Prüfstands:

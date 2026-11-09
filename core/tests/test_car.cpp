@@ -2,9 +2,11 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <algorithm>
 #include <string>
 
 #include "sbcore/sbcore.hpp"
+#include "sbcore/render_motion.hpp"
 
 using namespace sb;
 
@@ -23,6 +25,78 @@ World flatWorld() {
 }
 
 }  // namespace
+
+TEST_CASE("visual filtering survives highway speed and missed render frames") {
+    // Previously a fixed four-metre threshold disabled all body filtering at
+    // 216 km/h and 15 FPS, although the simulation had not teleported.
+    for (const double speed : {0.0, 30.0, 60.0, 90.0}) {
+        for (const double dt : {1.0 / 120.0, 1.0 / 30.0, 1.0 / 15.0, 0.1}) {
+            const Vec3 velocity{speed, 0.0, 0.0};
+            CHECK_FALSE(visualMotionDiscontinuity(velocity * dt, velocity, dt));
+            CHECK_FALSE(visualMotionDiscontinuity(velocity * dt + Vec3{0, 0.03, 0}, velocity, dt));
+            CHECK(visualMotionDiscontinuity({100, 0, 0}, velocity, dt));
+        }
+    }
+    CHECK(visualMotionDiscontinuity({5, 0, 0}, {}, 1.0 / 60.0));
+    CHECK(visualMotionDiscontinuity({}, {}, 0.0));
+}
+
+TEST_CASE("bonnet latch and hinges release a separate physical panel and repair restores it") {
+    auto cb = buildCar(loadCarDefinition(carPath("kestrel_hatch")));
+    CHECK(cb.body.totalMass() == doctest::Approx(cb.def.chassis.curbMass).epsilon(0.001));
+    const real rearAxle = cb.def.body.length - cb.def.body.frontOverhang - cb.def.body.wheelbase;
+    const real frontWeight = (cb.body.centerOfMass().x - rearAxle) / cb.def.body.wheelbase;
+    CHECK(frontWeight == doctest::Approx(cb.def.chassis.frontWeight).epsilon(0.005));
+    const auto bonnet = cb.layout.bonnetNodes;
+    REQUIRE(bonnet.size() == 8);
+    const auto rest = cb.body.positions();
+    auto release = [&](const std::string& group) {
+        for (std::size_t i = 0; i < cb.body.beams().size(); ++i) {
+            const auto& b = cb.body.beams()[i];
+            if (b.breakGroup >= 0 && cb.body.breakGroupNames()[static_cast<std::size_t>(b.breakGroup)] == group)
+                cb.body.breakBeam(static_cast<std::uint32_t>(i));
+        }
+    };
+    auto attachments = [&]() {
+        int count = 0;
+        for (const auto& b : cb.body.beams()) {
+            const bool aPanel = std::find(bonnet.begin(), bonnet.end(), b.a) != bonnet.end();
+            const bool bPanel = std::find(bonnet.begin(), bonnet.end(), b.b) != bonnet.end();
+            if (aPanel != bPanel && !b.broken) ++count;
+        }
+        return count;
+    };
+    CHECK(attachments() == 14);
+    release("bonnet_latch");
+    CHECK(attachments() == 8);
+    release("bonnet_hinge");
+    CHECK(attachments() == 0);
+    WorldSettings settings;
+    settings.gravity = {};
+    settings.airDensity = 0;
+    World w(settings);
+    for (auto n : bonnet) cb.body.velocities()[n] = {0, 10, 0};
+    w.addBody(cb.body);
+    w.simulate(0.05);
+    REQUIRE(w.stats().finite);
+    CHECK(w.body(0).positions()[bonnet[0]].y - rest[bonnet[0]].y == doctest::Approx(0.5).epsilon(0.02));
+    cb.body.repair(rest);
+    CHECK(attachments() == 14);
+}
+
+TEST_CASE("independent panels remain inside shipped vehicle mass and axle-load budgets") {
+    for (const char* id : {"kestrel_hatch", "kestrel_rally", "aurora_sedan", "basalt_suv",
+                           "vortex_gt", "vortex_sprint", "concept_gt"}) {
+        const std::string carId(id);
+        CAPTURE(carId);
+        const auto car = buildCar(loadCarDefinition(carPath(id)));
+        CHECK(car.body.totalMass() == doctest::Approx(car.def.chassis.curbMass).epsilon(0.000001));
+        for (auto n : car.layout.bodyNodes) CHECK(car.body.masses()[n] >= 2.0);
+        const real rearAxle = car.def.body.length - car.def.body.frontOverhang - car.def.body.wheelbase;
+        const real frontWeight = (car.body.centerOfMass().x - rearAxle) / car.def.body.wheelbase;
+        CHECK(std::abs(frontWeight - car.def.chassis.frontWeight) < 0.025);
+    }
+}
 
 TEST_CASE("shock beams damp rebound harder than bump") {
     auto run = [](real v0) {
@@ -196,6 +270,74 @@ TEST_CASE("Concept GT suspension holds alignment under driving loads and can sti
                     CHECK(std::abs(dot(wheel.axis(car), forward)) < (scenario == Landing ? 0.12 : 0.30));
                 }
             }
+        }
+    }
+}
+
+TEST_CASE("Concept GT mid-engine packaging matches mass distribution and keeps front radiator separate") {
+    const auto car = buildCar(loadCarDefinition(carPath("concept_gt")));
+    REQUIRE(car.def.engine.position == "mid");
+    REQUIRE(car.layout.engineNodes.size() == 8);
+    const real rearAxle = car.def.body.length - car.def.body.frontOverhang - car.def.body.wheelbase;
+    real engineFront = 0, engineRear = car.def.body.length;
+    for (auto n : car.layout.engineNodes) {
+        engineFront = std::max(engineFront, car.body.positions()[n].x);
+        engineRear = std::min(engineRear, car.body.positions()[n].x);
+    }
+    CHECK(engineRear > rearAxle);
+    CHECK(engineFront < rearAxle + 0.8);
+    for (std::size_t n = 0; n < car.body.nodeCount(); ++n)
+        if (car.body.groupNames()[car.body.nodeGroups()[n]] == "fueltank")
+            CHECK(car.body.positions()[n].x > engineFront);
+    for (const auto& beam : car.body.beams()) {
+        const auto& ga = car.body.groupNames()[car.body.nodeGroups()[beam.a]];
+        const auto& gb = car.body.groupNames()[car.body.nodeGroups()[beam.b]];
+        const bool crossesCabin = (ga == "engine" && gb == "radiator") || (ga == "radiator" && gb == "engine");
+        CHECK_FALSE(crossesCabin);
+    }
+    const auto conventional = buildCar(loadCarDefinition(carPath("kestrel_hatch")));
+    CHECK(conventional.def.engine.position == "front");
+    CHECK(conventional.body.positions()[conventional.layout.engineNodes[0]].x > conventional.def.body.length * 0.6);
+}
+
+TEST_CASE("Concept GT holds rear toe through highway lane changes in both directions") {
+    const auto def = loadCarDefinition(carPath("concept_gt"));
+    for (real initialKmh : {100.0, 200.0}) {
+        for (real direction : {-1.0, 1.0}) {
+            CAPTURE(initialKmh);
+            CAPTURE(direction);
+            World world = flatWorld();
+            auto build = buildCar(def);
+            const auto layout = build.layout;
+            world.addBody(std::move(build.body));
+            auto& car = world.body(0);
+            world.simulate(2.0);
+            const real speed = initialKmh / 3.6;
+            car.setVelocity({speed, 0, 0});
+            for (const auto& wheel : car.wheels()) {
+                const auto center = wheel.center(car), axis = wheel.axis(car);
+                for (auto node : wheel.treadNodes)
+                    car.velocities()[node] += cross(axis, car.positions()[node] - center) * (speed / wheel.spec.radius);
+            }
+            VehicleControls controls;
+            controls.gear = 0;
+            controls.ignition = false;
+            controls.steer = direction * (initialKmh == 100.0 ? 0.07 : 0.017);
+            car.setControls(controls);
+            real peakToe = 0.0;
+            for (int sample = 0; sample < 400; ++sample) {
+                world.simulate(0.01);
+                const auto& p = car.positions();
+                const Vec3 forward = normalize(p[layout.refFL] + p[layout.refFR] - p[layout.refRL] - p[layout.refRR]);
+                for (const auto& wheel : car.wheels())
+                    if (!wheel.spec.steered) peakToe = std::max(peakToe, std::abs(dot(wheel.axis(car), forward)));
+            }
+            REQUIRE(world.stats().finite);
+            CHECK(world.stats().brokenBeams == 0);
+            CHECK(world.stats().deformedBeams == 0);
+            // Much tighter than the extreme full-lock test: <=5.7 deg at the
+            // high lateral-load 100 km/h corner, <=2 deg on the 200 km/h lane change.
+            CHECK(peakToe < (initialKmh == 100.0 ? 0.10 : 0.035));
         }
     }
 }

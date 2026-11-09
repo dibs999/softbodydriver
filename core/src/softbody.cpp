@@ -151,11 +151,13 @@ void SoftBody::setSystems(const CarSystemsSpec& spec) {
 }
 
 void SoftBody::repair(const std::vector<Vec3>& restPositions) {
+    for (auto& door : doors_) { door.requestedOpen = false; door.latched = true; door.travel = 0; }
     clearContacts();
     if (restPositions.size() == pos_.size()) pos_ = restPositions;
     for (auto& v : vel_) v = {};
     for (Beam& b : beams_) {
         b.broken = false;
+        b.disabled = false;
         b.hydroOffset = 0;
         b.restLength = b.baseRestLength;
         b.deformThreshold = b.params.deform;
@@ -176,6 +178,9 @@ void SoftBody::repair(const std::vector<Vec3>& restPositions) {
     }
     if (systems_) systems_->repair();
     smoothedSteer_ = 0;
+    // A repaired mechanism returns to its rest pose. Leaving a non-steering
+    // hydro channel extended can immediately force fresh latches apart.
+    std::fill(inputs_.begin(), inputs_.end(), 0.0);
 }
 
 std::int64_t SoftBody::findNode(const std::string& id) const {
@@ -430,6 +435,7 @@ void SoftBody::stepDrivetrain(real dt) {
 }
 
 void SoftBody::accumulateBeamForces(real dt) {
+    updateDoors(dt);
     if (!wheels_.empty() || powertrain_) {
         const real targetSteer = std::clamp(controls_.steer, -1.0, 1.0);
         if (controls_.steerRate > 0.0 && dt > 0.0) {
@@ -448,7 +454,7 @@ void SoftBody::accumulateBeamForces(real dt) {
 
     for (std::size_t i = 0; i < n; ++i) {
         Beam& bm = beams_[i];
-        if (bm.broken) continue;
+        if (bm.broken || bm.disabled) continue;
 
         const Vec3 d = pos[bm.b] - pos[bm.a];
         const real len = length(d);
@@ -609,7 +615,7 @@ real SoftBody::kineticEnergy() const {
 real SoftBody::elasticEnergy() const {
     real e = 0;
     for (const Beam& bm : beams_) {
-        if (bm.broken) continue;
+        if (bm.broken || bm.disabled) continue;
         const real ext = length(pos_[bm.b] - pos_[bm.a]) - bm.restLength;
         if (bm.type == BeamType::Support && ext > 0) continue;
         const real k = (bm.type == BeamType::Anisotropic && ext > 0) ? bm.springExp : bm.spring;
@@ -647,7 +653,7 @@ BodyStats SoftBody::stats() const {
 real SoftBody::stabilityRatio(real dt) const {
     std::vector<real> sumK(pos_.size(), 0.0), sumC(pos_.size(), 0.0);
     for (const Beam& bm : beams_) {
-        if (bm.broken) continue;
+        if (bm.broken || bm.disabled) continue;
         const real k = std::max(bm.spring, bm.springExp);
         const real c = std::max(bm.damp, bm.dampExp);
         sumK[bm.a] += k; sumK[bm.b] += k;

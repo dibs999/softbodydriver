@@ -6,10 +6,12 @@ set(SBCORE_SOURCES
   src/car_visual.cpp
   src/c_api.cpp
   src/colliders.cpp
+  src/doors.cpp
   src/powertrain.cpp
   src/recorder.cpp
   src/sbeam_io.cpp
   src/scenes.cpp
+  src/self_contact.cpp
   src/softbody.cpp
   src/vehicle.cpp
   src/wheel.cpp
