@@ -18,6 +18,7 @@ static func build(world: SBWorld, parent: Node3D) -> Array:
 		flat(root, rect.grow(1.0), 0.009, gravel)
 		flat(root, rect, 0.012, grass)
 		regions.append({"rect": rect, "surface": "grass"})
+		V.field_grass(root, rect.grow(-1.5), 0.9, int(rect.position.x) + 700, func(_x: float, _z: float) -> float: return 0.012)
 		for x in range(int(rect.position.x + 8), int(rect.end.x - 6), 18):
 			for z: float in [rect.position.y + 9, rect.end.y - 9]:
 				tree_points.append(Vector3(x, 0, z))
@@ -40,6 +41,12 @@ static func build(world: SBWorld, parent: Node3D) -> Array:
 		world.add_heightfield(rect.position.x, rect.position.y, cell, nx, nz, heights, 0.75)
 		root.add_child(C.terrain_mesh(rect.position.x, rect.position.y, cell, nx, nz, heights, grass))
 		regions.append({"rect": rect, "surface": "grass"})
+		# Ground cover on the berms, denser along the toe facing the test pad.
+		var sample_h := func(x: float, z: float) -> float: return C.sample(heights, nx, nz, rect.position.x, rect.position.y, cell, x, z)
+		var pad := Rect2(-376, -221, 752, 442)
+		V.field_grass(root, rect, 0.10, int(rect.position.y) + 900, sample_h, func(p: Vector3) -> bool: return pad.has_point(Vector2(p.x, p.z)))
+		V.field_grass(root, rect.intersection(pad.grow(24.0)), 0.6, int(rect.position.x) + 950, sample_h,
+			func(p: Vector3) -> bool: return pad.has_point(Vector2(p.x, p.z)))
 		var count := int((rect.size.x if along_x else rect.size.y) / 20)
 		for i in count:
 			if i % 9 == 5: continue

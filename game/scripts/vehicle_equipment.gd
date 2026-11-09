@@ -244,6 +244,28 @@ func status_text() -> String:
 			result += "  |  " + ("%s tanken · %s reparieren (halten)" % [DriverPrompts.hint("refuel"), DriverPrompts.hint("service_repair")] if can_refuel() else "Service: anhalten · %s Motor aus" % DriverPrompts.hint("ignition"))
 	return result
 
+## Structured state for the HUD telltales and context prompt.
+func hud_state() -> Dictionary:
+	if not game or not is_instance_valid(game.player): return {}
+	var s := state_for(game.player)
+	var door := ""
+	for d in game.player.get_door_states():
+		if d["missing"]:
+			door = "missing"
+			break
+		if d["open"]:
+			door = "open"
+	var prompt := ""
+	if game.player.get_position_ws().distance_to(bay) < 3.5:
+		if service_progress > 0.0:
+			prompt = "Reparatur %d %% · %s halten" % [roundi(service_progress * 100.0), DriverPrompts.hint("service_repair")]
+		elif refueling:
+			prompt = "Getankt %.1f l · %s halten" % [refuel_delivered_litres, DriverPrompts.hint("refuel")]
+		else:
+			prompt = "%s tanken · %s reparieren (halten)" % [DriverPrompts.hint("refuel"), DriverPrompts.hint("service_repair")] if can_refuel() else "Service: anhalten · %s Motor aus" % DriverPrompts.hint("ignition")
+	return {"light_mode": int(s["light_mode"]), "signal": int(s["signal"]), "hazards": bool(s["hazards"]),
+		"blink": fmod(clock, 0.8) < 0.4, "door": door, "prompt": prompt}
+
 func _process(delta: float) -> void:
 	if not game: return
 	for old_vehicle in states.keys():

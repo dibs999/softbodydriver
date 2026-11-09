@@ -20,7 +20,8 @@ Game="*res://scripts/game_state.gd"
 
 window/size/viewport_width=1600
 window/size/viewport_height=900
-window/stretch/mode="disabled"
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
 window/vsync/vsync_mode=1
 
 [editor_plugins]

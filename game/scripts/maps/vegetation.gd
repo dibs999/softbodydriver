@@ -409,3 +409,19 @@ static func roadside_grass(parent: Node3D, path: PackedVector3Array, closed: boo
 				continue
 			points.append(p)
 	grass(parent, points, seed, dry)
+
+
+## Grass tufts scattered over a rectangle (x/z), `density` per square metre.
+static func field_grass(parent: Node3D, rect: Rect2, density: float, seed: int, height := Callable(),
+		blocked := Callable(), dry := false) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var points: Array[Vector3] = []
+	for i in int(rect.get_area() * density):
+		var p := Vector3(rng.randf_range(rect.position.x, rect.end.x), 0.0, rng.randf_range(rect.position.y, rect.end.y))
+		if height.is_valid():
+			p.y = height.call(p.x, p.z)
+		if blocked.is_valid() and blocked.call(p):
+			continue
+		points.append(p)
+	grass(parent, points, seed, dry)

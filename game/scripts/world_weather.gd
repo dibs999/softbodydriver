@@ -149,6 +149,10 @@ func cycle_time() -> void:
 	hour = TIME_HOURS[time_index]
 	_apply_lighting()
 
+## Short HUD form: clock and weather only (keys are listed in the F1 help).
+func get_brief() -> String:
+	return "%02d:%02d  ·  %s%s" % [int(hour), int(fmod(hour, 1.0) * 60), WEATHER_NAMES[weather_index], "" if automatic_time else "  ·  Zeit steht"]
+
 func get_status() -> String:
 	return "%02d:%02d · %s · F7 Wetter / F8 Tageszeit / Umschalt+F8 Zeitlauf %s" % [int(hour), int(fmod(hour, 1.0) * 60), WEATHER_NAMES[weather_index], "an" if automatic_time else "aus"]
 
