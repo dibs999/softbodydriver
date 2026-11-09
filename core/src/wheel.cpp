@@ -179,9 +179,21 @@ void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, rea
     angularVelocity = measureAngularVelocity(body, &inertia);
 
     // Brake torque opposes current wheel rotation, bounded so it cannot reverse the wheel in one step.
-    const real maxStopTorque = dt > 0 ? std::abs(angularVelocity) * inertia / dt : 0.0;
+    // A brake locks the wheel to its knuckle, so it acts on the rotation *relative to the
+    // upright*. Using the absolute spin made a locked brake fight every pitch motion of the body
+    // (the knuckle rotates with it) and pump energy into a fore-aft rocking limit cycle.
+    real knuckleOmega = 0.0;
+    if (spec.brakeReactionA >= 0 && spec.brakeReactionB >= 0) {
+        const auto& vel = body.velocities();
+        const auto ia = static_cast<std::size_t>(spec.brakeReactionA), ib = static_cast<std::size_t>(spec.brakeReactionB);
+        const Vec3 d = pos[ia] - pos[ib];
+        const real d2 = lengthSq(d);
+        if (d2 > 1e-6) knuckleOmega = dot(cross(d, vel[ia] - vel[ib]), a) / d2;
+    }
+    const real relOmega = angularVelocity - knuckleOmega;
+    const real maxStopTorque = dt > 0 ? std::abs(relOmega) * inertia / dt : 0.0;
     const real clampedBrake = std::min( std::max<real>(0.0, brakeTorque), maxStopTorque);
-    const real signedBrake = angularVelocity > 0 ? -clampedBrake : (angularVelocity < 0 ? clampedBrake : 0.0);
+    const real signedBrake = relOmega > 0 ? -clampedBrake : (relOmega < 0 ? clampedBrake : 0.0);
     const real totalTorque = driveTorque + signedBrake;
     lastDriveTorque = driveTorque;
     lastBrakeTorque = signedBrake;

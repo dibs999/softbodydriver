@@ -26,7 +26,9 @@ Soft-Body-Fahrzeugsimulation als **native Desktop-App für Windows, macOS und Li
 ## Fahrzeuge
 
 Die reproduzierbaren Chassis-Messungen und ihre Grenzen stehen in
-[CHASSIS_STABILITY_MEASUREMENTS.md](docs/CHASSIS_STABILITY_MEASUREMENTS.md).
+[CHASSIS_STABILITY_MEASUREMENTS.md](docs/CHASSIS_STABILITY_MEASUREMENTS.md),
+Fahrwiderstand, Höchstgeschwindigkeiten und Fahrwerkssteifigkeit in
+[DRIVING_RESISTANCE.md](docs/DRIVING_RESISTANCE.md).
 Der Prüfstand unterscheidet hochfrequente Schwingungen, langsames Ausbrechen
 und ungültige Geschwindigkeitsfenster. Eine kleine RMS-Zahl allein bestätigt
 keine stabile Hochgeschwindigkeitsfahrt.

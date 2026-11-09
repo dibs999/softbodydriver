@@ -376,6 +376,24 @@ CarBuild buildCar(const CarDefinition& def) {
         // Subframe nodes are bolted to the body.
         for (std::uint32_t n : {cn.lowerF, cn.lowerR, cn.upperF, cn.upperR, cn.rackEnd, cn.tower})
             attach(n, 4, mountBeam, &sb);
+        // Strut tower: the spring's top mount is a pressed box welded down to the chassis rail and
+        // the sill. Hung only from the nearest (fender/crumple-zone) shell nodes, the front of the
+        // body sank ~5 cm around the towers under its own weight and dragged the steering geometry
+        // into ~1.8 deg toe-out.
+        {
+            std::vector<std::pair<real, std::uint32_t>> lower;
+            for (std::size_t station = 0; station < rig.shell.size(); ++station)
+                for (int slot : {0, 1}) {
+                    const auto nIdx = rig.shell[station][static_cast<std::size_t>(slot)][cn.right ? 1 : 0];
+                    if (nIdx < 0) continue;
+                    const auto un = static_cast<std::uint32_t>(nIdx);
+                    lower.push_back({std::abs(car.positions()[un].x - xa), un});
+                }
+            std::sort(lower.begin(), lower.end());
+            const BeamParams towerBox = makeBeam(1.5e6, 150.0, 8.0e4, 2.0e5);
+            for (std::size_t k = 0; k < std::min<std::size_t>(4, lower.size()); ++k)
+                sb.push_back(car.addBeam(cn.tower, lower[k].second, towerBox));
+        }
         car.addBeam(cn.lowerF, cn.lowerR, mountBeam);
         car.addBeam(cn.upperF, cn.upperR, mountBeam);
         // Rear toe links need a triangulated subframe anchorage. Mounting the
@@ -475,6 +493,19 @@ CarBuild buildCar(const CarDefinition& def) {
         tb.damp = tb.spring * 0.01;
         tb.strength = 3.0e4;
         if (sd.antiRollRate > 0.0) car.addTorsionbar(l.arbEnd, l.arbPivot, r.arbPivot, r.arbEnd, tb);
+
+        // Subframe: on a real car all wishbone pivots and the steering rack (front) or toe-link
+        // pivots (rear) sit on one rigid cross-member that is bolted to the body. Anchoring each
+        // pivot to the shell on its own let the body's own sag and twist move the pivots against
+        // the tie-rod joints: ~1.8 deg static front toe-out on the Concept and wheels that toed
+        // in and out by several degrees under drive torque.
+        {
+            const BeamParams frame = makeBeam(1.2e6, 120.0, 1.4e5, 3.0e5);
+            std::vector<std::uint32_t> sub;
+            for (CarCorner* cn : {&l, &r})
+                for (std::uint32_t n : {cn->lowerF, cn->lowerR, cn->upperF, cn->upperR, cn->rackEnd}) sub.push_back(n);
+            connectAll(car, sub, frame, nullptr);
+        }
     }
 
     // ------------------------------------------------------------------ engine, radiator, oil pan

@@ -694,3 +694,33 @@ TEST_CASE("full throttle runs straight to autobahn top-speed range without steer
     CHECK(car.stats().brokenBeams == 0);
     CHECK(w.stats().finite);
 }
+
+TEST_CASE("cars settle onto their tyres without body sag, toe-out or brake chatter") {
+    // The body used to sink ~5 cm around soft strut-tower mounts (front toe-out up to 1.8 deg), and
+    // a held brake that fought body pitch rocked a parked Concept GT with ~4 kJ.
+    for (const char* id : {"kestrel_hatch", "vortex_gt", "basalt_suv", "concept_gt"}) {
+        CAPTURE(id);
+        CarBuild cb = buildCar(loadCarDefinition(carPath(id)));
+        const auto layout = cb.layout;
+        World w = flatWorld();
+        w.addBody(std::move(cb.body));
+        auto& car = w.body(0);
+        const real designFloor = car.positions()[layout.refFL].y;
+        VehicleControls controls;
+        controls.brake = 1.0;
+        car.setControls(controls);
+        w.simulate(4.0);
+        CHECK(designFloor - car.positions()[layout.refFL].y < 0.035);
+        const auto& p = car.positions();
+        const Vec3 forward = normalize(p[layout.refFL] + p[layout.refFR] - p[layout.refRL] - p[layout.refRR]);
+        for (const auto& wheel : car.wheels())
+            if (wheel.spec.steered) CHECK(std::abs(std::asin(dot(wheel.axis(car), forward))) * 180.0 / 3.14159265358979 < 0.6);
+        real energy = 0.0;
+        for (int i = 0; i < 20; ++i) {
+            w.simulate(0.05);
+            energy = std::max(energy, car.kineticEnergy());
+        }
+        CHECK(energy < 100.0);
+        CHECK(car.stats().deformedBeams == 0);
+    }
+}

@@ -8,7 +8,7 @@ konkrete Teilergebnisse und erklärt das Gesamtprodukt noch nicht für fertig.
 |---|---|---|
 | Fahrzeugdarstellung | Abgerundetes Cockpit, Instrumente mit realer Telemetrie, sichtbarer Motorraum unter gestützter Haube; Tages-/Nachtbilder in 1920×1080 geprüft; echte Cockpit-Außenspiegel mit korrigierter Kestrel-Blickrichtung | Handmodellierte Detailqualität, vollständige Referenzbildserie |
 | Teile und Schaden | Kestrel-Stoßfänger vorn/hinten besitzen eigene Käfige/Masse, brechbare Halter und unabhängige Darstellung; Haube stößt gegen eigene Dach-/Motorflächen; Kestrel-Vordertüren öffnen/schließen mit getrennten Schlössern und Scharnieren und können abreißen | Hintertüren, Heckklappe, Leuchten und kompatible Segmentierung des importierten Concept; allgemeiner Kantenkontakt |
-| Fahrphysik | Alle sieben nativen Prüfstände bestehen Einfedern, Beschleunigen, Bremsen und Kurvenfahrt. Concept-Ansteuerung und Importvergleich erneut geprüft | Konstante 200 km/h im normalen Antrieb nicht erreicht; Renderfrequenz-Vergleich und Langzeitfahrt mit mehreren beschädigten Fahrzeugen |
+| Fahrphysik | Alle sieben nativen Prüfstände bestehen Einfedern, Beschleunigen, Bremsen und Kurvenfahrt. Fahrwiderstand kalibriert (Kestrel 100 km/h: 1.910 → 908 N), starrer Radträger, Federbeindom, Achsträger: Vollgas-Spitzen 142–253 km/h, Vortex GT/Kestrel Rally/Vortex Sprint fahren stabil über 200 km/h ([Messung](DRIVING_RESISTANCE.md)) | Rollwiderstand noch 2–3× real; Kestrel nur ~142 km/h; Concept bricht oberhalb ~240 km/h aus; Renderfrequenz-Vergleich und Langzeitfahrt mit mehreren beschädigten Fahrzeugen |
 | Testgelände | Freie Bremsgerade als Start, Wegweiser, Servicezufahrt, Nachtlampen, kollidierende Dächer, bepflanzte Innenflächen, Geländebermen und Randbegrenzung | Flächendeckende Streckenabnahme und dieselbe Qualität auf weiteren Karten |
 | Spielablauf | Einführung → gemessene Bremsung → Bergung → Reparatur → Tanken → gespeicherten Abschluss neu laden; Aktivitäten und Wetter auch über Pausenmenü bedienbar | Eine komplette manuelle Referenzsitzung einschließlich beendeter Zeitfahrrunde und realem Gamepad |
 | Wetter | Innenraum-/Dachvolumen halten sichtbaren Regen fern; Tageszeit, Pause, Zeitlupe und Nässe geprüft; Abblend-/Fernlicht visuell geprüft; Stereo-Regen mit Innenraum-/Dachdämpfung und tatsächlicher AudioServer-Aufnahme geprüft | Verformungsgenaue Regenabdichtung, bewegliche Scheibenwischer, subjektive Hörabnahme der neuen Regenakustik |
@@ -97,8 +97,9 @@ auf. Schleppprüfstand, freies Ausrollen und normaler Antrieb werden getrennt
 ausgewertet. Die Hochfrequenzgrenzen werden in den aufgezeichneten Fenstern
 eingehalten. Der synthetische Concept-Schlepplauf bei 200 km/h ist wegen
 Ausbrechens und überschrittenem Geschwindigkeitsband ungültig. Im normalen
-Vollgasversuch erreichen Kestrel und Concept in 60 Sekunden nur etwa 113,70 bzw.
-174,66 km/h. Das belegt eine noch offene Leistungs-/Verlustkalibrierung; es
+Vollgasversuch erreichten Kestrel und Concept in 60 Sekunden zunächst nur etwa 113,70 bzw.
+174,66 km/h (nach der Kalibrierung in [DRIVING_RESISTANCE.md](DRIVING_RESISTANCE.md):
+~142 bzw. ~240 km/h). Das belegt eine noch offene Leistungs-/Verlustkalibrierung; es
 bescheinigt weder stabile konstante 200 km/h noch eine bestandene Renderprüfung.
 
 Die neue Zeitfahr-Bildserie liegt unter
