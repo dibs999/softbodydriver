@@ -1,0 +1,883 @@
+{
+  "cases": [
+    {
+      "acceleration_seconds": 3.2000000000000024,
+      "broken_beams": {
+        "after_speed_warmup": 0,
+        "final": 0,
+        "settled": 0
+      },
+      "car": "kestrel_hatch",
+      "chassis_vy_m_s": {
+        "max": 0.008452088436310038,
+        "mean": 2.258016943038943e-06,
+        "min": -0.00886490085696938,
+        "stddev": 0.0036656648910847424
+      },
+      "chassis_y_m": {
+        "max": 0.16330467874840107,
+        "mean": 0.16328478017857145,
+        "min": 0.16325404633957988,
+        "stddev": 7.968489994454451e-06
+      },
+      "constant_speed_window_valid": true,
+      "definition": "game/cars/kestrel_hatch.car.json",
+      "definition_fnv1a64": "986652f0a689dd46",
+      "deformed_beams": {
+        "after_speed_warmup": 0,
+        "final": 0,
+        "settled": 0
+      },
+      "finite": true,
+      "hf_limits_pass": true,
+      "high_frequency_rms": {
+        "pitch_deg": 0.0003822660852721108,
+        "roll_deg": 0.000604861148703672,
+        "vertical_mm": 0.005450190168948922
+      },
+      "lateral_displacement_m": {
+        "max": 0.2787013277416568,
+        "mean": 0.12667920402094354,
+        "min": 9.907210831883173e-06,
+        "stddev": 0.08043608053796034
+      },
+      "lateral_velocity_m_s": {
+        "max": 0.0357741334519302,
+        "mean": 0.027870922007211255,
+        "min": 0.01978962931917366,
+        "stddev": 0.00440828203329339
+      },
+      "measurement_status": "valid_speed_window",
+      "mode": "powered",
+      "pass": true,
+      "pitch_deg": {
+        "max": 0.05933934522853204,
+        "mean": 0.0578843778123637,
+        "min": 0.056706875484594875,
+        "stddev": 0.0004103529412365564
+      },
+      "raw_csv": "kestrel_hatch_50_powered.csv",
+      "roll_deg": {
+        "max": 0.0008302680702865629,
+        "mean": -0.0010118982784488586,
+        "min": -0.003146039018261683,
+        "stddev": 0.0006341770737827697
+      },
+      "spectrum_csv": "kestrel_hatch_50_powered_spectrum.csv",
+      "speed_kmh": {
+        "max": 49.99493202702062,
+        "mean": 49.97559760429957,
+        "min": 49.940132416500305,
+        "stddev": 0.013591819922871354
+      },
+      "target_kmh": 50.0,
+      "wall_seconds": 3.679555294,
+      "wheels": [
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 3878.765281456674,
+            "mean": 3823.929114740559,
+            "min": 3775.9061138246248,
+            "stddev": 32.43673030230865
+          },
+          "name": "FL",
+          "normal_force_N": {
+            "max": 8670.525809401423,
+            "mean": 3823.9395717260463,
+            "min": 3017.056109315781,
+            "stddev": 892.9117719573466
+          },
+          "pressure_psi": 34.16732500313175,
+          "temperature_C": 23.014085722265555,
+          "wear": 0.00012315169648699948
+        },
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 3879.7384196868684,
+            "mean": 3824.815121118648,
+            "min": 3777.2958150453264,
+            "stddev": 32.354896766568494
+          },
+          "name": "FR",
+          "normal_force_N": {
+            "max": 8648.433676325376,
+            "mean": 3824.707292554123,
+            "min": 3021.510717751498,
+            "stddev": 895.7516031330961
+          },
+          "pressure_psi": 34.16726928037657,
+          "temperature_C": 23.013748010331557,
+          "wear": 0.00012243583083246305
+        },
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 2593.707078240956,
+            "mean": 2530.113048939683,
+            "min": 2501.0617773216636,
+            "stddev": 22.21023241655526
+          },
+          "name": "RL",
+          "normal_force_N": {
+            "max": 6156.722084082092,
+            "mean": 2530.1042516009725,
+            "min": 1648.9684999792605,
+            "stddev": 736.6781787720879
+          },
+          "pressure_psi": 34.1040690925074,
+          "temperature_C": 22.63071853498066,
+          "wear": 0.0
+        },
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 2593.3365218840145,
+            "mean": 2529.9525899295995,
+            "min": 2500.6683655685583,
+            "stddev": 22.181760172355098
+          },
+          "name": "RR",
+          "normal_force_N": {
+            "max": 6150.416440390994,
+            "mean": 2529.9406173938223,
+            "min": 1648.944499683686,
+            "stddev": 734.8313355816925
+          },
+          "pressure_psi": 34.10406242206173,
+          "temperature_C": 22.630678108244688,
+          "wear": 0.0
+        }
+      ],
+      "yaw_deg": {
+        "max": 0.1478367591783715,
+        "mean": 0.11567028428152303,
+        "min": 0.08296792622004666,
+        "stddev": 0.018040950409029637
+      }
+    },
+    {
+      "acceleration_seconds": 10.999999999999854,
+      "broken_beams": {
+        "after_speed_warmup": 0,
+        "final": 0,
+        "settled": 0
+      },
+      "car": "kestrel_hatch",
+      "chassis_vy_m_s": {
+        "max": 0.003953347877175425,
+        "mean": -5.2328593449299924e-06,
+        "min": -0.0037514001806945117,
+        "stddev": 0.0011704232672506475
+      },
+      "chassis_y_m": {
+        "max": 0.16379313278375313,
+        "mean": 0.16375037475701004,
+        "min": 0.1637174574151116,
+        "stddev": 1.486397154597098e-05
+      },
+      "constant_speed_window_valid": false,
+      "definition": "game/cars/kestrel_hatch.car.json",
+      "definition_fnv1a64": "986652f0a689dd46",
+      "deformed_beams": {
+        "after_speed_warmup": 0,
+        "final": 0,
+        "settled": 0
+      },
+      "finite": true,
+      "hf_limits_pass": true,
+      "high_frequency_rms": {
+        "pitch_deg": 0.00034688520540324927,
+        "roll_deg": 0.0009055868948403701,
+        "vertical_mm": 0.005581756640123045
+      },
+      "lateral_displacement_m": {
+        "max": 4.1782875329402955,
+        "mean": 1.841002397649362,
+        "min": 0.0001468815334968454,
+        "stddev": 1.199713074342275
+      },
+      "lateral_velocity_m_s": {
+        "max": 0.5714118883829795,
+        "mean": 0.41784750029974155,
+        "min": 0.2937207128925512,
+        "stddev": 0.08663400154453878
+      },
+      "measurement_status": "invalid_speed_window_not_a_vehicle_hf_failure",
+      "mode": "powered",
+      "pass": false,
+      "pitch_deg": {
+        "max": 0.290550819823805,
+        "mean": 0.2830032199399983,
+        "min": 0.2788263376473237,
+        "stddev": 0.002861754430779265
+      },
+      "raw_csv": "kestrel_hatch_100_powered.csv",
+      "roll_deg": {
+        "max": 0.016842321695584236,
+        "mean": 0.004348398088091166,
+        "min": -0.0070589933401316324,
+        "stddev": 0.003935402745772117
+      },
+      "spectrum_csv": "kestrel_hatch_100_powered_spectrum.csv",
+      "speed_kmh": {
+        "max": 99.83330336363387,
+        "mean": 99.4930482878349,
+        "min": 98.85076614294263,
+        "stddev": 0.27500331320878313
+      },
+      "target_kmh": 100.0,
+      "wall_seconds": 4.873923611,
+      "wheels": [
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 3879.994759019895,
+            "mean": 3759.2982838052735,
+            "min": 3668.12872989519,
+            "stddev": 51.30800164802802
+          },
+          "name": "FL",
+          "normal_force_N": {
+            "max": 12561.38069036003,
+            "mean": 3759.1412972600306,
+            "min": 2072.397570842164,
+            "stddev": 2774.3001200405947
+          },
+          "pressure_psi": 34.36791931889931,
+          "temperature_C": 24.229802607251205,
+          "wear": 0.00012315169648699948
+        },
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 3871.471618668787,
+            "mean": 3755.166819571267,
+            "min": 3670.547828386539,
+            "stddev": 51.0873672648353
+          },
+          "name": "FR",
+          "normal_force_N": {
+            "max": 12552.085625935266,
+            "mean": 3755.211110868767,
+            "min": 2071.4745529292154,
+            "stddev": 2759.5819906571146
+          },
+          "pressure_psi": 34.36759583648366,
+          "temperature_C": 24.227842117826487,
+          "wear": 0.00012243583083246305
+        },
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 2772.6432630647614,
+            "mean": 2672.5344095223145,
+            "min": 2614.594457183597,
+            "stddev": 35.42051080206769
+          },
+          "name": "RL",
+          "normal_force_N": {
+            "max": 9828.211470153898,
+            "mean": 2672.5355310164095,
+            "min": 803.844532598989,
+            "stddev": 1950.8169848165694
+          },
+          "pressure_psi": 34.260574463648936,
+          "temperature_C": 23.579231066652593,
+          "wear": 0.0
+        },
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 2768.343065154015,
+            "mean": 2667.4513420063167,
+            "min": 2608.5999727088056,
+            "stddev": 35.20256445050734
+          },
+          "name": "RR",
+          "normal_force_N": {
+            "max": 9778.038516217073,
+            "mean": 2667.4548389834476,
+            "min": 795.2533343787654,
+            "stddev": 1917.3584726221395
+          },
+          "pressure_psi": 34.260238311093715,
+          "temperature_C": 23.57719378889753,
+          "wear": 0.0
+        }
+      ],
+      "yaw_deg": {
+        "max": 1.18869481731834,
+        "mean": 0.8785028720622491,
+        "min": 0.6185905939584094,
+        "stddev": 0.17957517744296364
+      }
+    },
+    {
+      "acceleration_seconds": 60.00000000000378,
+      "broken_beams": 0,
+      "car": "kestrel_hatch",
+      "constant_speed_window_valid": false,
+      "deformed_beams": 0,
+      "finite": true,
+      "hf_limits_pass": null,
+      "measurement_status": "target_unattained_not_validated",
+      "mode": "powered",
+      "pass": false,
+      "peak_kmh": 113.70164330621962,
+      "raw_csv": "kestrel_hatch_160_powered_acceleration.csv",
+      "reason": "normal full-throttle powertrain did not reach99% oftarget within60s;10s target-speed measurement not performed",
+      "target_kmh": 160.0,
+      "target_reached": false,
+      "terminal_engine_power_W": 110866.09947672024,
+      "terminal_engine_rpm": 4498.3639652864595,
+      "terminal_gear": 4,
+      "terminal_kmh": 113.673374079184
+    },
+    {
+      "acceleration_seconds": 60.00000000000378,
+      "broken_beams": 0,
+      "car": "kestrel_hatch",
+      "constant_speed_window_valid": false,
+      "deformed_beams": 0,
+      "finite": true,
+      "hf_limits_pass": null,
+      "measurement_status": "target_unattained_not_validated",
+      "mode": "powered",
+      "pass": false,
+      "peak_kmh": 113.70164330621962,
+      "raw_csv": "kestrel_hatch_200_powered_acceleration.csv",
+      "reason": "normal full-throttle powertrain did not reach99% oftarget within60s;10s target-speed measurement not performed",
+      "target_kmh": 200.0,
+      "target_reached": false,
+      "terminal_engine_power_W": 110866.09947672024,
+      "terminal_engine_rpm": 4498.3639652864595,
+      "terminal_gear": 4,
+      "terminal_kmh": 113.673374079184
+    },
+    {
+      "acceleration_seconds": 1.8600000000000012,
+      "broken_beams": {
+        "after_speed_warmup": 0,
+        "final": 0,
+        "settled": 0
+      },
+      "car": "concept_gt",
+      "chassis_vy_m_s": {
+        "max": 0.01294135760348108,
+        "mean": 2.3476336068505904e-06,
+        "min": -0.013937459479602394,
+        "stddev": 0.0069293685758509945
+      },
+      "chassis_y_m": {
+        "max": 0.1248475499961739,
+        "mean": 0.12480291057617596,
+        "min": 0.12474588705832104,
+        "stddev": 1.996415394998084e-05
+      },
+      "constant_speed_window_valid": true,
+      "definition": "game/cars/concept_gt.car.json",
+      "definition_fnv1a64": "f4717d048f3edda8",
+      "deformed_beams": {
+        "after_speed_warmup": 0,
+        "final": 0,
+        "settled": 0
+      },
+      "finite": true,
+      "hf_limits_pass": true,
+      "high_frequency_rms": {
+        "pitch_deg": 0.0006500989521997453,
+        "roll_deg": 0.00017044592303765228,
+        "vertical_mm": 0.010441691723089794
+      },
+      "lateral_displacement_m": {
+        "max": 0.1687987148988105,
+        "mean": 0.07085019533139605,
+        "min": 4.800368520983811e-06,
+        "stddev": 0.048585810402540154
+      },
+      "lateral_velocity_m_s": {
+        "max": 0.025090218909010063,
+        "mean": 0.01688054373734017,
+        "min": 0.00935982213732627,
+        "stddev": 0.004728605652644691
+      },
+      "measurement_status": "valid_speed_window",
+      "mode": "powered",
+      "pass": true,
+      "pitch_deg": {
+        "max": -0.9078818018230912,
+        "mean": -0.9093856049001683,
+        "min": -0.9113689425531487,
+        "stddev": 0.000712530234302531
+      },
+      "raw_csv": "concept_gt_50_powered.csv",
+      "roll_deg": {
+        "max": 0.0007617973702289002,
+        "mean": -7.934309568044298e-05,
+        "min": -0.0009162432409221105,
+        "stddev": 0.0002452933968806281
+      },
+      "spectrum_csv": "concept_gt_50_powered_spectrum.csv",
+      "speed_kmh": {
+        "max": 50.179491809244105,
+        "mean": 50.078524218626896,
+        "min": 50.0237002879967,
+        "stddev": 0.04284770653926078
+      },
+      "target_kmh": 50.0,
+      "wall_seconds": 3.546920268,
+      "wheels": [
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 3431.0658205105356,
+            "mean": 3400.951001389378,
+            "min": 3348.0216939411334,
+            "stddev": 21.657976080177157
+          },
+          "name": "FL",
+          "normal_force_N": {
+            "max": 5512.524894340876,
+            "mean": 3400.9686954554923,
+            "min": 2795.739949801917,
+            "stddev": 707.5820010026182
+          },
+          "pressure_psi": 34.097077493512856,
+          "temperature_C": 22.588345425263164,
+          "wear": 0.0
+        },
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 3432.514422544812,
+            "mean": 3401.5486892450353,
+            "min": 3348.806395737912,
+            "stddev": 21.641775496529974
+          },
+          "name": "FR",
+          "normal_force_N": {
+            "max": 5510.953295055642,
+            "mean": 3401.571582376816,
+            "min": 2796.997668676542,
+            "stddev": 707.5518007155241
+          },
+          "pressure_psi": 34.097095724845886,
+          "temperature_C": 22.588455917623467,
+          "wear": 0.0
+        },
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 4427.700329499461,
+            "mean": 4384.575374565646,
+            "min": 4308.931011469745,
+            "stddev": 31.4774582349105
+          },
+          "name": "RL",
+          "normal_force_N": {
+            "max": 6215.643657749986,
+            "mean": 4384.712370843286,
+            "min": 3452.9831246078556,
+            "stddev": 784.6363571076967
+          },
+          "pressure_psi": 34.154484113460114,
+          "temperature_C": 22.93626254800313,
+          "wear": 0.0003017931967438221
+        },
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 4428.309129886232,
+            "mean": 4385.217709400409,
+            "min": 4309.19098189165,
+            "stddev": 31.481862075978842
+          },
+          "name": "RR",
+          "normal_force_N": {
+            "max": 6219.470062495644,
+            "mean": 4385.338513526662,
+            "min": 3453.873226656111,
+            "stddev": 784.7867773448161
+          },
+          "pressure_psi": 34.15452189042847,
+          "temperature_C": 22.936491498151224,
+          "wear": 0.0003020107864286181
+        }
+      ],
+      "yaw_deg": {
+        "max": 0.10388546720896452,
+        "mean": 0.07041965719620386,
+        "min": 0.04023296057726523,
+        "stddev": 0.019590693055198255
+      }
+    },
+    {
+      "acceleration_seconds": 4.259999999999997,
+      "broken_beams": {
+        "after_speed_warmup": 0,
+        "final": 0,
+        "settled": 0
+      },
+      "car": "concept_gt",
+      "chassis_vy_m_s": {
+        "max": 0.00418314727157071,
+        "mean": 2.838529558543613e-06,
+        "min": -0.004264291408213805,
+        "stddev": 0.0012706951757819817
+      },
+      "chassis_y_m": {
+        "max": 0.1262978124975661,
+        "mean": 0.1262640712438188,
+        "min": 0.12622542367591033,
+        "stddev": 1.7258485054936927e-05
+      },
+      "constant_speed_window_valid": true,
+      "definition": "game/cars/concept_gt.car.json",
+      "definition_fnv1a64": "f4717d048f3edda8",
+      "deformed_beams": {
+        "after_speed_warmup": 0,
+        "final": 0,
+        "settled": 0
+      },
+      "finite": true,
+      "hf_limits_pass": true,
+      "high_frequency_rms": {
+        "pitch_deg": 0.00011514294927583257,
+        "roll_deg": 0.00041058937155730174,
+        "vertical_mm": 0.0040623602827777935
+      },
+      "lateral_displacement_m": {
+        "max": 6.7365877730611885,
+        "mean": 3.308818210565548,
+        "min": 0.00031777516051878507,
+        "stddev": 1.945902795890692
+      },
+      "lateral_velocity_m_s": {
+        "max": 0.7089840679856151,
+        "mean": 0.6736699465441573,
+        "min": 0.63530159712661,
+        "stddev": 0.020742668943732435
+      },
+      "measurement_status": "valid_speed_window",
+      "mode": "powered",
+      "pass": true,
+      "pitch_deg": {
+        "max": -0.8238814120771459,
+        "mean": -0.8261273591053135,
+        "min": -0.82769842621866,
+        "stddev": 0.0011295604331440772
+      },
+      "raw_csv": "concept_gt_100_powered.csv",
+      "roll_deg": {
+        "max": 0.0038648859037883,
+        "mean": -8.661974071366275e-05,
+        "min": -0.00400515381240972,
+        "stddev": 0.0013077366697431157
+      },
+      "spectrum_csv": "concept_gt_100_powered_spectrum.csv",
+      "speed_kmh": {
+        "max": 99.9868032001693,
+        "mean": 99.94821182117963,
+        "min": 99.87898214778761,
+        "stddev": 0.029606578759575113
+      },
+      "target_kmh": 100.0,
+      "wall_seconds": 3.940654181,
+      "wheels": [
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 3444.8269260829493,
+            "mean": 3387.466420230052,
+            "min": 3312.383256503379,
+            "stddev": 27.750054942674847
+          },
+          "name": "FL",
+          "normal_force_N": {
+            "max": 7671.161854369253,
+            "mean": 3387.46165501996,
+            "min": 2018.6688832418924,
+            "stddev": 1743.2164970293168
+          },
+          "pressure_psi": 34.19859153525675,
+          "temperature_C": 23.203578883594044,
+          "wear": 0.0
+        },
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 3445.60482401538,
+            "mean": 3389.695407286516,
+            "min": 3318.3682441342594,
+            "stddev": 27.782213939796762
+          },
+          "name": "FR",
+          "normal_force_N": {
+            "max": 7668.073191366973,
+            "mean": 3389.770200997087,
+            "min": 1992.888470306573,
+            "stddev": 1743.8648657782398
+          },
+          "pressure_psi": 34.19842259886629,
+          "temperature_C": 23.20255503193812,
+          "wear": 0.0
+        },
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 4586.425108244862,
+            "mean": 4500.109826375535,
+            "min": 4398.32440750894,
+            "stddev": 46.91876726592128
+          },
+          "name": "RL",
+          "normal_force_N": {
+            "max": 13145.972942804778,
+            "mean": 4500.15609308381,
+            "min": 2959.638886805435,
+            "stddev": 2196.872795909186
+          },
+          "pressure_psi": 34.419989879507895,
+          "temperature_C": 24.545380142438507,
+          "wear": 0.0017305416879663741
+        },
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 4591.793274442755,
+            "mean": 4503.2355771990715,
+            "min": 4404.555906282033,
+            "stddev": 46.86965013377231
+          },
+          "name": "RR",
+          "normal_force_N": {
+            "max": 13151.946400321747,
+            "mean": 4503.294875242474,
+            "min": 2963.9850645726247,
+            "stddev": 2190.940089870615
+          },
+          "pressure_psi": 34.43470886742689,
+          "temperature_C": 24.634585671890036,
+          "wear": 0.0019084917060855288
+        }
+      ],
+      "yaw_deg": {
+        "max": 1.464871190004877,
+        "mean": 1.3927392126928402,
+        "min": 1.3158999813742727,
+        "stddev": 0.041515728759906674
+      }
+    },
+    {
+      "acceleration_seconds": 10.959999999999855,
+      "broken_beams": {
+        "after_speed_warmup": 0,
+        "final": 0,
+        "settled": 0
+      },
+      "car": "concept_gt",
+      "chassis_vy_m_s": {
+        "max": 0.02654956090326824,
+        "mean": -3.726027707880685e-05,
+        "min": -0.02541674438624426,
+        "stddev": 0.009745170448925967
+      },
+      "chassis_y_m": {
+        "max": 0.13237849012569933,
+        "mean": 0.13109593365465014,
+        "min": 0.12971508908495616,
+        "stddev": 0.0007569410765283208
+      },
+      "constant_speed_window_valid": true,
+      "definition": "game/cars/concept_gt.car.json",
+      "definition_fnv1a64": "f4717d048f3edda8",
+      "deformed_beams": {
+        "after_speed_warmup": 0,
+        "final": 0,
+        "settled": 0
+      },
+      "finite": true,
+      "hf_limits_pass": true,
+      "high_frequency_rms": {
+        "pitch_deg": 0.002153824956219666,
+        "roll_deg": 0.003826942776863284,
+        "vertical_mm": 0.026915666002508592
+      },
+      "lateral_displacement_m": {
+        "max": 19.22268586833149,
+        "mean": 9.27763208315516,
+        "min": 0.0007412692266690613,
+        "stddev": 5.518158488258672
+      },
+      "lateral_velocity_m_s": {
+        "max": 2.5778773237875243,
+        "mean": 1.9223564398736297,
+        "min": 1.2135667871103648,
+        "stddev": 0.34507968234637915
+      },
+      "measurement_status": "valid_speed_window",
+      "mode": "powered",
+      "pass": true,
+      "pitch_deg": {
+        "max": -0.6494286152332555,
+        "mean": -0.7192154918893991,
+        "min": -0.783923563206362,
+        "stddev": 0.039784557844020206
+      },
+      "raw_csv": "concept_gt_160_powered.csv",
+      "roll_deg": {
+        "max": 0.641165274092437,
+        "mean": 0.014999590605121812,
+        "min": -0.6400401053728855,
+        "stddev": 0.39104895860746625
+      },
+      "spectrum_csv": "concept_gt_160_powered_spectrum.csv",
+      "speed_kmh": {
+        "max": 159.85419181299434,
+        "mean": 159.43688228891617,
+        "min": 158.7675864779136,
+        "stddev": 0.295055850563733
+      },
+      "target_kmh": 160.0,
+      "wall_seconds": 4.32692449,
+      "wheels": [
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 3854.6335778423054,
+            "mean": 3336.6673268651007,
+            "min": 2824.542295994391,
+            "stddev": 211.14165767336104
+          },
+          "name": "FL",
+          "normal_force_N": {
+            "max": 18551.295107963208,
+            "mean": 3335.744403770524,
+            "min": 0.0,
+            "stddev": 3880.2662485773462
+          },
+          "pressure_psi": 34.361764563240754,
+          "temperature_C": 24.192501249291773,
+          "wear": 0.0
+        },
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 3903.302294054463,
+            "mean": 3326.0275367479435,
+            "min": 2841.24851435414,
+            "stddev": 210.48673098462172
+          },
+          "name": "FR",
+          "normal_force_N": {
+            "max": 18979.075201447406,
+            "mean": 3327.185326171851,
+            "min": 0.0,
+            "stddev": 3789.3265248502485
+          },
+          "pressure_psi": 34.36166589394327,
+          "temperature_C": 24.19190325661916,
+          "wear": 0.0
+        },
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 5726.588021152676,
+            "mean": 4775.746174583763,
+            "min": 3850.1664285836323,
+            "stddev": 458.26711920155526
+          },
+          "name": "RL",
+          "normal_force_N": {
+            "max": 22533.641601208263,
+            "mean": 4773.845379288548,
+            "min": 0.0,
+            "stddev": 4769.968956623198
+          },
+          "pressure_psi": 35.164582904339355,
+          "temperature_C": 29.05804197568294,
+          "wear": 0.007804942292225162
+        },
+        {
+          "burst": false,
+          "estimated_load_N": {
+            "max": 5725.541629675781,
+            "mean": 4743.32148734055,
+            "min": 3863.695376857759,
+            "stddev": 459.85622438549905
+          },
+          "name": "RR",
+          "normal_force_N": {
+            "max": 22606.23460305745,
+            "mean": 4744.920034905496,
+            "min": 0.0,
+            "stddev": 4769.710310201653
+          },
+          "pressure_psi": 35.20288135440785,
+          "temperature_C": 29.290152602740843,
+          "wear": 0.008311473726087126
+        }
+      ],
+      "yaw_deg": {
+        "max": 4.052385400726627,
+        "mean": 2.5245201179389944,
+        "min": 0.8974491926796706,
+        "stddev": 0.9832504243313025
+      }
+    },
+    {
+      "acceleration_seconds": 60.00000000000378,
+      "broken_beams": 0,
+      "car": "concept_gt",
+      "constant_speed_window_valid": false,
+      "deformed_beams": 0,
+      "finite": true,
+      "hf_limits_pass": null,
+      "measurement_status": "target_unattained_not_validated",
+      "mode": "powered",
+      "pass": false,
+      "peak_kmh": 174.65790632636046,
+      "raw_csv": "concept_gt_200_powered_acceleration.csv",
+      "reason": "normal full-throttle powertrain did not reach99% oftarget within60s;10s target-speed measurement not performed",
+      "target_kmh": 200.0,
+      "target_reached": false,
+      "terminal_engine_power_W": 439585.0034287281,
+      "terminal_engine_rpm": 7058.814104154571,
+      "terminal_gear": 3,
+      "terminal_kmh": 174.57442556263817
+    }
+  ],
+  "compiler": "14.2.0",
+  "controls": "normal powertrain acceleration from rest, automatic gears,50Hz throttle/brake PI cruise,zero steering; no velocity changes",
+  "ground_settle_seconds": 3.0,
+  "limits": {
+    "pitch_hf_rms_deg": 0.15,
+    "roll_hf_rms_deg": 0.15,
+    "vertical_hf_rms_mm": 5
+  },
+  "measurement": "unfiltered four safety-cell reference nodes; native solver, no renderer",
+  "measurement_seconds": 10.0,
+  "revision": "dc374de18ec837d420c3bdd40edfb60b716e5275+worktree",
+  "sample_count": 20000,
+  "sample_hz": 2000.0,
+  "schema": 1,
+  "spectral_method": {
+    "band_hz": [
+      10,
+      1000
+    ],
+    "bin_spacing_hz": 0.06103515625,
+    "detrend": "least-squares linear trend removed for spectral analysis only",
+    "fft_size": 32768,
+    "lower_bound_exclusive": true,
+    "note": "zero padding interpolates bins; Hann broadens transitions around10Hz",
+    "window": "symmetric Hann, power normalized by sum(window^2)",
+    "window_resolution_hz": 0.1
+  },
+  "speed_mode": "normal powertrain only,60s target acquisition limit,then10s cruise warmup and10s measurement",
+  "speed_warmup_seconds": 10.0,
+  "surface": "flat horizontal plane, friction1",
+  "validity_note": "Tow/powered constant-speed claim requires total measured speed within1% oftarget; HF-pass alone does not establish directional stability. Coast cases report actual speedrange."
+}

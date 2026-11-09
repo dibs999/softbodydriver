@@ -150,12 +150,21 @@ func _layout() -> void:
 		var height := clampf(viewport.y * 0.28, 110.0, 211.0)
 		size = Vector2(width, height)
 		position = viewport - size - Vector2(16, 16)
-		if cockpit: position.y = 184 if activity and activity.mode > 0 else 90
+		if cockpit: position.y = _cockpit_top(viewport)
 	_clip.position = Vector2(9, 30)
 	_clip.size = size - Vector2(18 + legend_width, 54)
 	_map.size = _clip.size
 	queue_redraw()
 	_update_view()
+
+
+func _cockpit_top(viewport: Vector2) -> float:
+	var scale_ui := minf(1.0, minf(viewport.x / 960.0, viewport.y / 600.0))
+	var top := 90.0
+	if activity and activity.mode > 0:
+		top = 210.0 if activity.active and activity.mode != 2 else 184.0
+		if not activity.active and not activity.last_result.is_empty(): top = 348.0
+	return top * scale_ui
 
 
 func _process(delta: float) -> void:
@@ -164,7 +173,10 @@ func _process(delta: float) -> void:
 	_elapsed += delta
 	if _elapsed >= 1.0 / 20.0:
 		_elapsed = 0.0
-		_update_view()
+		if cockpit and not overview_open and not is_equal_approx(position.y, _cockpit_top(get_viewport_rect().size)):
+			_layout()
+		else:
+			_update_view()
 
 
 func _update_view() -> void:

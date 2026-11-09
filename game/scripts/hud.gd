@@ -117,8 +117,11 @@ func _draw() -> void:
 	_warnings(canvas)
 	if is_instance_valid(equipment):
 		var label: String = equipment.status_text()
-		_panel(Rect2(20, canvas.y - 282, 580, 34))
-		_text(Vector2(34, canvas.y - 260), label, 12, ACCENT)
+		var equipment_width := 580.0
+		if activity and activity.mode > 0 and not activity.active and not activity.last_result.is_empty():
+			equipment_width = minf(equipment_width, canvas.x - 422.0)
+		_panel(Rect2(20, canvas.y - 282, equipment_width, 34))
+		draw_string(font, Vector2(34, canvas.y - 260), label, HORIZONTAL_ALIGNMENT_LEFT, equipment_width - 28.0, 12, ACCENT)
 	if is_instance_valid(weather):
 		var status: String = weather.get_status()
 		var width := font.get_string_size(status, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x + 24
@@ -126,12 +129,16 @@ func _draw() -> void:
 		_right(Vector2(canvas.x - 26, 63), status, 12, TEXT)
 	if activity and activity.mode > 0 and not show_diagnostics and not show_help:
 		var p := Vector2(canvas.x - 390, 82)
-		_panel(Rect2(p, Vector2(370, 91)))
+		_panel(Rect2(p, Vector2(370, 116 if activity.active and activity.mode != 2 else 91)))
 		_text(p + Vector2(16, 24), activity.MODES[activity.mode].to_upper(), 12, ACCENT)
 		_text(p + Vector2(16, 47), activity.message, 13)
 		var best_label := "Best: %d Pkt." % activity.best if activity.mode == 2 else "Best: %.2f s" % activity.best
 		_text(p + Vector2(16, 72), "Start · Aktivitätenmenü" if DriverPrompts.using_gamepad else "F3 Wechseln · F4 " + ("Abbruch" if activity.active else "Start"), 11, MUTED)
 		if activity.best > 0: _right(p + Vector2(354, 72), best_label, 11, ACCENT)
+		if activity.active and activity.mode != 2:
+			_text(p + Vector2(16, 98), activity.navigation_hint(), 13, ACCENT)
+		elif not activity.last_result.is_empty():
+			_activity_result(canvas, activity.last_result)
 	if show_diagnostics:
 		_diagnostics(canvas)
 	if show_help:
@@ -145,6 +152,24 @@ func _draw() -> void:
 		_panel(Rect2(p, Vector2(width, 40)))
 		_text(p + Vector2(18, 26), _toast, 15)
 	draw_set_transform(Vector2.ZERO)
+
+
+func _activity_result(canvas: Vector2, result: Dictionary) -> void:
+	var p := Vector2(canvas.x - 390, 184)
+	_panel(Rect2(p, Vector2(370, 152)))
+	_text(p + Vector2(16, 25), "NEUE BESTLEISTUNG" if result.get("improved", false) else "LAUF ABGESCHLOSSEN", 15, ACCENT)
+	var drift := int(result.get("mode", 1)) == 2
+	var value := float(result.get("result", 0))
+	_text(p + Vector2(16, 58), "%d Punkte" % value if drift else "%.2f Sekunden" % value, 23)
+	var previous := float(result.get("previous_best", 0))
+	if previous > 0:
+		var difference := value - previous if drift else previous - value
+		var comparison := "%+.0f Punkte zur bisherigen Bestleistung" % difference if drift else "%.2f s %s als die bisherige Bestzeit" % [absf(difference), "schneller" if difference >= 0 else "langsamer"]
+		_text(p + Vector2(16, 83), comparison, 12, MUTED)
+	else:
+		_text(p + Vector2(16, 83), "Erster abgeschlossener Lauf", 12, MUTED)
+	_text(p + Vector2(16, 108), "Rekord gespeichert" if result.get("record_saved", false) else "Rekord nicht gespeichert · nur diese Sitzung", 12, MUTED if result.get("record_saved", false) else AMBER)
+	_text(p + Vector2(16, 135), "Start → Aktivitäten: erneut fahren" if DriverPrompts.using_gamepad else "F4 Erneut fahren · Esc Aktivitäten / Hauptmenü", 11, TEXT)
 
 func _drive_card(canvas: Vector2) -> void:
 	var p := Vector2(20, canvas.y - 238)
