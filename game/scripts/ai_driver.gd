@@ -10,6 +10,9 @@ var _stuck := 0.0
 var _reverse_t := 0.0
 ## Other vehicles to keep a distance to (set by the game scene).
 var others: Array = []
+## Optional traffic signal controller with stop_distance(position, forward, speed).
+var signals: Node
+var _half_length := 2.2
 
 
 func _init(v: SBVehicle, wp: PackedVector3Array, sp: PackedFloat32Array, scale := 1.0) -> void:
@@ -18,6 +21,7 @@ func _init(v: SBVehicle, wp: PackedVector3Array, sp: PackedFloat32Array, scale :
 	speeds = sp
 	speed_scale = scale
 	idx = _nearest()
+	_half_length = float(v.get_info().get("length", 4.4)) * 0.5
 
 
 func _nearest() -> int:
@@ -71,6 +75,14 @@ func update(delta: float) -> void:
 		if free < 1.0:
 			gap_limit = 0.0
 	target_v = minf(target_v, gap_limit)
+	# Stop at the line on red (and on amber when there is room to stop).
+	if is_instance_valid(signals):
+		var line := float(signals.stop_distance(p, fwd, v))
+		if not is_inf(line):
+			# Distance from the front bumper, with a metre to spare.
+			line -= _half_length + 1.0
+			gap_limit = minf(gap_limit, sqrt(maxf(0.0, 2.0 * 3.0 * line)))
+			target_v = minf(target_v, gap_limit)
 	var throttle := clampf((target_v - v) * 0.3, 0.0, 1.0)
 	var brake := clampf((v - target_v - (1.5 if is_inf(gap_limit) else 0.3)) * 0.25, 0.0, 1.0)
 	if gap_limit < 0.5 and v < 2.0:

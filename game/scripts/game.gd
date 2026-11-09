@@ -98,6 +98,7 @@ func _ready() -> void:
 				vehicles.append(v)
 				ai[v] = AIDriver.new(v, routes[i]["waypoints"], routes[i]["speeds"], 0.9)
 				ai[v].others = vehicles
+				ai[v].signals = map_data.get("traffic_signals")
 
 	cam = CameraRig.new()
 	cam.current = true

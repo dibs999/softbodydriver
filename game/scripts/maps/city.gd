@@ -206,37 +206,46 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 
 	# Traffic lights (colliding poles) at intersections, street lamps along the kerbs.
 	var light_box := C.mat(Color(0.1, 0.1, 0.1), 0.6)
-	var red := C.mat(Color(0.9, 0.1, 0.05), 0.3)
-	red.emission_enabled = true
-	red.emission = Color(1, 0.1, 0.05)
-	var green := C.mat(Color(0.1, 0.9, 0.2), 0.3)
-	green.emission_enabled = true
-	green.emission = Color(0.1, 1.0, 0.25)
 	var lens := SphereMesh.new()
 	lens.radius = 0.1
 	lens.height = 0.2
 	lens.radial_segments = 8
 	lens.rings = 4
+	var signals := preload("res://scripts/maps/traffic_signals.gd").new()
+	signals.name = "TrafficSignals"
+	signals.stop_offset = STREET * 0.5 + 1.5
+	var colours := [Color(1.0, 0.12, 0.05), Color(1.0, 0.62, 0.05), Color(0.1, 1.0, 0.3)]
+	var heights := [4.6, 4.32, 4.04]
+	var lens_xforms := {"x": [[], [], []], "z": [[], [], []]}
 	var signal_posts: Array[Transform3D] = []
 	var signal_heads: Array[Transform3D] = []
-	var reds: Array[Transform3D] = []
-	var greens: Array[Transform3D] = []
 	for ix in BLOCKS + 1:
 		for iz in BLOCKS + 1:
 			var cx := origin + STREET * 0.5 + ix * PITCH
 			var cz := origin + STREET * 0.5 + iz * PITCH
+			signals.centers.append(Vector2(cx, cz))
 			for corner in [Vector2(1, 1), Vector2(-1, -1)]:
 				var p := Vector3(cx + corner.x * (STREET * 0.5 + 1.2), 0, cz + corner.y * (STREET * 0.5 + 1.2))
 				world.add_box(p + Vector3(0, 2.0, 0), Vector3(0.09, 2.0, 0.09), Vector3.ZERO, 0.6)
 				signal_posts.append(Transform3D(Basis.from_scale(Vector3(0.18, 4.0, 0.18)), p + Vector3.UP * 2.0))
 				signal_heads.append(Transform3D(Basis.from_scale(Vector3(0.36, 0.90, 0.36)), p + Vector3.UP * 4.3))
-				var red_axis := (ix + iz) % 2 == 0
-				reds.append(Transform3D(Basis(), p + (Vector3(-corner.x * 0.18, 4.55, 0) if red_axis else Vector3(0, 4.55, -corner.y * 0.18))))
-				greens.append(Transform3D(Basis(), p + (Vector3(0, 4.04, -corner.y * 0.18) if red_axis else Vector3(-corner.x * 0.18, 4.04, 0))))
+				for k in 3:
+					# One lens set faces traffic along X, the other traffic along Z.
+					lens_xforms["x"][k].append(Transform3D(Basis(), p + Vector3(-corner.x * 0.19, heights[k], 0)))
+					lens_xforms["z"][k].append(Transform3D(Basis(), p + Vector3(0, heights[k], -corner.y * 0.19)))
 	C.scatter_multimesh(parent, box_mesh, metal, signal_posts, false)
 	C.scatter_multimesh(parent, box_mesh, light_box, signal_heads, false)
-	C.scatter_multimesh(parent, lens, red, reds, false)
-	C.scatter_multimesh(parent, lens, green, greens, false)
+	for axis in ["x", "z"]:
+		for k in 3:
+			var m := C.mat(colours[k] * 0.25, 0.3)
+			m.emission_enabled = true
+			m.emission = colours[k]
+			m.emission_energy_multiplier = 0.0
+			signals.lenses[axis].append(m)
+			var arr: Array[Transform3D] = []
+			for xf in lens_xforms[axis][k]: arr.append(xf)
+			C.scatter_multimesh(parent, lens, m, arr, false)
+	parent.add_child(signals)
 	var lamp_pole := CylinderMesh.new()
 	lamp_pole.top_radius = 0.06
 	lamp_pole.bottom_radius = 0.1
@@ -305,6 +314,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		"waypoints": route, "speeds": speeds,
 		"map_paths": map_paths, "map_places": places,
 		"surface_regions": surface_regions,
+		"traffic_signals": signals,
 		"ai_routes": [
 			{"waypoints": route, "speeds": speeds, "spawn": C.car_xform(route[3], route[4] - route[3])},
 			{"waypoints": route, "speeds": speeds, "spawn": C.car_xform(route[route.size() / 2], route[route.size() / 2 + 1] - route[route.size() / 2])},
