@@ -967,7 +967,10 @@ CarBuild buildCar(const CarDefinition& def) {
         const real rayScale = 12.0 / static_cast<real>(tire.rays);
         ws.spokeSpring = 1.05e5 * rayScale;
         ws.treadSpring = 1.3e5;
-        ws.spokeDamp = 40.0 * rayScale;
+        // Sidewall and belt damping are the main source of rolling loss. Halved from 40 / 45 N*s/m:
+        // rolling resistance at 100 km/h ~280 -> ~200 N (Kestrel), closer to real tyres (~130 N).
+        ws.spokeDamp = 20.0 * rayScale;
+        ws.treadDamp = 22.5;
         // Compliant tread contact: the rubber stores the leading-edge impact of each tread node
         // instead of a rigid projection destroying it: ~35 % less rolling loss at 100 km/h. Softer
         // contact saves more but lets the tread chatter at the grip limit (rear toe flutter).

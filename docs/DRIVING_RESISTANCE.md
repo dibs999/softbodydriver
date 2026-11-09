@@ -152,7 +152,30 @@ Messreihe (Werkzeug: Vollgas- bzw. Tempomatlauf mit Lenkimpuls, 0,1-s-Protokoll)
   * Andere Fahrzeuge unverändert (Kestrel 197, Vortex 277, Aurora 234 km/h; alle unter 1,2° Gierwinkel).
   * Prüfung: `staggered tyres keep grip at top speed…` in `core/tests/test_car.cpp`.
 
+## Vierte Iteration: Reifendämpfung
+
+Zerlegung des Ausrollwiderstands beim Kestrel (100 km/h):
+
+| Anteil | Wert |
+|---|---:|
+| Insgesamt | 557 N |
+| Luftwiderstand | 279 N, entspricht dem kalibrierten Cd·A |
+| Rollwiderstand | 278 N, ein Rollwiderstandsbeiwert von 0,022 statt real ~0,010 |
+
+Den größten Teil liefert die viskose Dämpfung der Flanken- und Gürtel-Beams. Halbiert
+(Flanke 40 → 20, Gürtel 45 → 22,5 N·s/m) sinkt der Rollwiderstand auf 213 N und der
+Ausrollwiderstand auf **498 N**. Das Spurflattern im Grenzbereich, an dem frühere Versuche
+scheiterten, tritt nicht auf:
+
+* alle Kernprüfungen bestehen, darunter Spurwechsel, Grenzkurve, Bremsen, Höchstgeschwindigkeit und
+  Karosseriesteifigkeit;
+* alle Prüfstände `cartest --quick` bestehen;
+* die Höchstgeschwindigkeiten bleiben unverändert, alle Fahrzeuge fahren geradeaus.
+
+Die Prüfgrenze für den Ausrollwiderstand ist auf 560 N verschärft.
+
 ## Offen
 
-* Ausrollwiderstand liegt noch ~30–40 % über typischen Realwerten.
+* Rollwiderstand noch ~60 % über real (213 statt ~130 N). Für den Rest bräuchte es eine
+  hysteretische statt einer viskosen Dämpfung, ohne die Laufflächenstabilität zu verlieren.
 * Spieler mit Tastatur/Gamepad und die Fahrhilfe korrigieren kleinere Abweichungen.

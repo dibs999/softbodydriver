@@ -668,7 +668,7 @@ TEST_CASE("coast-down resistance of the reference hatch stays in a realistic ran
     const real v1 = car.centerOfMassVelocity().x;
     const real resistance = car.totalMass() * (v0 - v1) / 2.0;
     CHECK(resistance > 250.0);
-    CHECK(resistance < 750.0);
+    CHECK(resistance < 560.0);
     CHECK(car.stats().deformedBeams == 0);
 }
 
