@@ -803,3 +803,31 @@ TEST_CASE("tail-heavy Concept GT on staggered tyres settles into steady cornerin
     CHECK(late < early * 1.15);  // converging, not an oversteer divergence
     CHECK(late * v < 0.6 * 9.81);
 }
+
+TEST_CASE("automatic cars pull away with a gentle throttle and stop fully under the brake") {
+    for (const char* id : {"kestrel_hatch", "basalt_suv"}) {
+        CAPTURE(id);
+        CarBuild cb = buildCar(loadCarDefinition(carPath(id)));
+        World w = flatWorld();
+        w.addBody(std::move(cb.body));
+        auto& car = w.body(0);
+        VehicleControls controls;
+        controls.gear = -99;
+        car.setControls(controls);
+        w.simulate(1.5);
+        const Vec3 start = car.centerOfMass();
+        controls.throttle = 0.25;
+        car.setControls(controls);
+        w.simulate(5.0);
+        CHECK(car.powertrain().running());
+        CHECK(length(car.centerOfMass() - start) > 3.0);
+        controls.throttle = 0.0;
+        controls.brake = 1.0;
+        car.setControls(controls);
+        w.simulate(4.0);
+        CHECK(car.telemetry().speedKmh < 0.5);
+        real worstSpin = 0.0;
+        for (const auto& wheel : car.wheels()) worstSpin = std::max(worstSpin, std::abs(wheel.angularVelocity));
+        CHECK(worstSpin < 0.3);  // a held brake does not chatter
+    }
+}

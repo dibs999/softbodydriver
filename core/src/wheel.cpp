@@ -183,15 +183,23 @@ void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, rea
     // upright*. Using the absolute spin made a locked brake fight every pitch motion of the body
     // (the knuckle rotates with it) and pump energy into a fore-aft rocking limit cycle.
     real knuckleOmega = 0.0;
+    real stopInertia = inertia;
     if (spec.brakeReactionA >= 0 && spec.brakeReactionB >= 0) {
         const auto& vel = body.velocities();
         const auto ia = static_cast<std::size_t>(spec.brakeReactionA), ib = static_cast<std::size_t>(spec.brakeReactionB);
         const Vec3 d = pos[ia] - pos[ib];
         const real d2 = lengthSq(d);
-        if (d2 > 1e-6) knuckleOmega = dot(cross(d, vel[ia] - vel[ib]), a) / d2;
+        if (d2 > 1e-6) {
+            knuckleOmega = dot(cross(d, vel[ia] - vel[ib]), a) / d2;
+            // The reaction couple acts on these two nodes within the step: stop the *relative* spin
+            // with the reduced inertia of ring and node pair, or the lock overshoots and chatters.
+            const real ma = mass[ia], mb = mass[ib];
+            const real knuckleInertia = ma * mb / (ma + mb) * d2;
+            if (inertia > 1e-9) stopInertia = inertia * knuckleInertia / (inertia + knuckleInertia);
+        }
     }
     const real relOmega = angularVelocity - knuckleOmega;
-    const real maxStopTorque = dt > 0 ? std::abs(relOmega) * inertia / dt : 0.0;
+    const real maxStopTorque = dt > 0 ? std::abs(relOmega) * stopInertia / dt : 0.0;
     const real clampedBrake = std::min( std::max<real>(0.0, brakeTorque), maxStopTorque);
     const real signedBrake = relOmega > 0 ? -clampedBrake : (relOmega < 0 ? clampedBrake : 0.0);
     const real totalTorque = driveTorque + signedBrake;
