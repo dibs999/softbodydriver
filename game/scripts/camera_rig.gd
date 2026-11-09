@@ -5,6 +5,7 @@ enum Mode { CHASE, ORBIT, COCKPIT, HOOD, TRACKSIDE }
 const MODE_NAMES := ["Verfolger", "Orbit (Maus)", "Cockpit", "Motorhaube", "Streckenrand"]
 const Instruments := preload("res://scripts/instrument_cluster.gd")
 
+var equipment: Node
 var target: SBVehicle
 var mode: int = Mode.CHASE
 var _chase_offset := Vector3.ZERO
@@ -30,9 +31,15 @@ var _center_mesh: MeshInstance3D
 var _shake_phase := 0.0
 var shake := 0.0
 var look_back := false
+var _cockpit_yaw := 0.0
+var _cockpit_pitch := 0.0
+var mirrors: Node
 
 
 func _ready() -> void:
+	mirrors = preload("res://scripts/vehicle_mirrors.gd").new()
+	mirrors.name = "VehicleMirrors"
+	add_child(mirrors)
 	_dashboard = Node3D.new()
 	_dashboard.name = "Dashboard"
 	_dashboard.top_level = true
@@ -82,6 +89,8 @@ func _update_dashboard(delta: float) -> void:
 	var opening := not _dashboard.visible
 	_dashboard.visible = anchor is Transform3D
 	if not _dashboard.visible:
+		_instrument_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		_center_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 		return
 	_dashboard.global_transform = anchor
 	if _instrument_car != target:
@@ -93,16 +102,30 @@ func _update_dashboard(delta: float) -> void:
 	_instrument_time += delta
 	if opening or _instrument_time >= 1.0 / 24.0:
 		_instrument_time = 0.0
-		_instruments.set_readings(target.get_speed_kmh(), target.get_engine_rpm(), target.get_telemetry()["gear"])
+		var telemetry := target.get_telemetry()
+		var info := target.get_info()
+		var controls := {"automatic": target.is_automatic(), "tcs": target.get_tcs(), "abs": target.get_abs()}
+		controls["door_open"] = false
+		for door: Dictionary in target.get_door_states():
+			if bool(door.get("open", false)) or bool(door.get("missing", false)):
+				controls["door_open"] = true
+		if is_instance_valid(equipment):
+			var state: Dictionary = equipment.state_for(target)
+			controls["light_mode"] = state["light_mode"]
+			controls["signal"] = state["signal"]
+			controls["hazards"] = state["hazards"]
+			controls["blink"] = fmod(float(equipment.clock), 0.8) < 0.4
+		_instruments.set_vehicle_readings(telemetry, info, controls)
 		_instrument_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 		if _center_mesh.visible:
-			_center_display.telemetry = target.get_telemetry()
-			_center_display.queue_redraw()
+			_center_display.set_readings(telemetry, info, controls)
 			_center_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 
 func cycle() -> String:
 	mode = (mode + 1) % MODE_NAMES.size()
+	_cockpit_yaw = 0.0
+	_cockpit_pitch = 0.0
 	_track_pos = Vector3.ZERO
 	return MODE_NAMES[mode]
 
@@ -129,13 +152,20 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif mode == Mode.ORBIT:
 				_dist = minf(30.0, _dist * 1.1)
 	elif event is InputEventMouseMotion and (_dragging or mode == Mode.ORBIT and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)):
-		_yaw -= event.relative.x * 0.006
-		_pitch = clampf(_pitch + event.relative.y * 0.004, -0.2, 1.3)
+		if mode == Mode.COCKPIT:
+			_cockpit_yaw = clampf(_cockpit_yaw - event.relative.x * 0.004, -1.9, 1.9)
+			_cockpit_pitch = clampf(_cockpit_pitch - event.relative.y * 0.003, -0.55, 0.45)
+		else:
+			_yaw -= event.relative.x * 0.006
+			_pitch = clampf(_pitch + event.relative.y * 0.004, -0.2, 1.3)
 
 
 func _process(delta: float) -> void:
 	if target == null or not is_instance_valid(target):
 		_dashboard.hide()
+		_instrument_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		_center_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		mirrors.update_views(delta, self, null, false)
 		return
 	var tgt := target.get_chase_target()
 	var basis := target.get_visual_basis()
@@ -186,8 +216,17 @@ func _process(delta: float) -> void:
 			look_at(tgt, Vector3.UP)
 		Mode.COCKPIT:
 			global_position = target.get_driver_eye()
-			var look_dir := -fwd if look_back else fwd
-			var desired_basis := Basis.looking_at(look_dir - up * 0.09, up)
+			var pads := Input.get_connected_joypads()
+			if not pads.is_empty() and not _dragging:
+				var axis_x := Input.get_joy_axis(pads[0], JOY_AXIS_RIGHT_X)
+				var axis_y := Input.get_joy_axis(pads[0], JOY_AXIS_RIGHT_Y)
+				var yaw_target := -axis_x * 1.7 if absf(axis_x) > 0.18 else 0.0
+				var pitch_target := -axis_y * 0.45 if absf(axis_y) > 0.18 else 0.0
+				_cockpit_yaw = lerpf(_cockpit_yaw, yaw_target, 1.0 - exp(-delta * 10.0))
+				_cockpit_pitch = lerpf(_cockpit_pitch, pitch_target, 1.0 - exp(-delta * 10.0))
+			var look_dir := (-fwd if look_back else fwd).rotated(up, _cockpit_yaw)
+			look_dir = look_dir.rotated(look_dir.cross(up).normalized(), _cockpit_pitch - 0.09)
+			var desired_basis := Basis.looking_at(look_dir, up)
 			if _cockpit_ready and -global_basis.z.dot(look_dir) > 0.9:
 				global_basis = global_basis.orthonormalized().slerp(desired_basis, 1.0 - exp(-delta * 18.0))
 			else:
@@ -215,3 +254,4 @@ func _process(delta: float) -> void:
 		h_offset = 0.0
 		v_offset = 0.0
 	_update_dashboard(delta)
+	mirrors.update_views(delta, self, target, mode == Mode.COCKPIT)

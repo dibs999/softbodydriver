@@ -88,6 +88,16 @@ CarBuild buildCar(const CarDefinition& def) {
         for (int e = 1; e <= extra; ++e) stations.push_back(st[i] + gap * e / (extra + 1));
     }
     stations.push_back(st.back());
+    if (bd.detachableDoors) {
+        // Collision skin must end at the actual aperture, not bridge across it
+        // from coarse neighbouring stations and obstruct a closing door.
+        for (real boundary : {prof.xB - 0.025, prof.xCowl - 0.06}) {
+            stations.erase(std::remove_if(stations.begin(), stations.end(),
+                [&](real x) { return std::abs(x - boundary) < 0.08; }), stations.end());
+            stations.push_back(boundary);
+        }
+        std::sort(stations.begin(), stations.end());
+    }
     rig.stationX = stations;
     const std::size_t NS = stations.size();
 
@@ -331,13 +341,17 @@ CarBuild buildCar(const CarDefinition& def) {
         // Ball joints sit inside the rim: small scrub radius, ~9 deg kingpin inclination.
         cn.lbj = node("lbj", {xa, R - 0.15, tr - 0.07}, 6.0, up);
         cn.ubj = node("ubj", {xa - 0.02, R + 0.19, tr - 0.125}, 5.0, up);
-        cn.steerArm = node("steer_arm", {xa - 0.14, R - 0.03, tr - 0.12}, 5.0, up);
+        // A non-steering rear upright uses a longer toe-control arm. Reusing
+        // the short front steering arm gives lateral tyre forces too little
+        // leverage and allows large rear steer without any structural damage.
+        const real toeLever = cn.front ? 0.14 : std::min<real>(0.34, 0.85 * R);
+        cn.steerArm = node("steer_arm", {xa - toeLever, R - 0.03, tr - 0.12}, 5.0, up);
         const real pivZ = std::min<real>(0.36, tr - 0.40);
         cn.lowerF = node("lower_f", {xa + 0.18, R - 0.12, pivZ}, 4.0, "subframe");
         cn.lowerR = node("lower_r", {xa - 0.18, R - 0.12, pivZ}, 4.0, "subframe");
         cn.upperF = node("upper_f", {xa + 0.13, R + 0.21, tr - 0.45}, 3.5, "subframe");
         cn.upperR = node("upper_r", {xa - 0.13, R + 0.21, tr - 0.45}, 3.5, "subframe");
-        cn.rackEnd = node("rack_end", {xa - 0.14, R - 0.03, pivZ}, 3.5, "subframe");
+        cn.rackEnd = node("rack_end", {xa - toeLever, R - 0.03, pivZ}, 3.5, "subframe");
         // The coilover acts directly on the knuckle at the lower ball joint (motion ratio ~0.95),
         // which keeps the spring path rigid under bump-stop loads.
         cn.armMid = cn.lbj;
@@ -349,6 +363,13 @@ CarBuild buildCar(const CarDefinition& def) {
             attach(n, 4, mountBeam, &sb);
         car.addBeam(cn.lowerF, cn.lowerR, mountBeam);
         car.addBeam(cn.upperF, cn.upperR, mountBeam);
+        // Rear toe links need a triangulated subframe anchorage. Mounting the
+        // anchor only to flexible shell nodes lets it steer the rear wheel under
+        // cornering loads even though no suspension beam has yielded.
+        if (!cn.front) {
+            for (auto pivot : {cn.lowerF, cn.lowerR, cn.upperR})
+                sb.push_back(car.addBeam(cn.rackEnd, pivot, mountBeam));
+        }
 
         // Upright: rigid knuckle.
         const BeamParams knuckle = makeBeam(3.5e6, 220.0, 1.6e5, 4.0e5);
@@ -443,8 +464,10 @@ CarBuild buildCar(const CarDefinition& def) {
 
     // ------------------------------------------------------------------ engine, radiator, oil pan
     const EngineDef& ed = def.engine;
+    const bool midEngine = ed.position == "mid";
     {
-        const real ex0 = prof.xFA - 0.42, ex1 = prof.xFA + 0.14;
+        const real ex0 = midEngine ? prof.xRA + 0.14 : prof.xFA - 0.42;
+        const real ex1 = ex0 + 0.56;
         const real ey0 = R - 0.02, ey1 = std::min<real>(R + 0.46, bd.hoodHeight - 0.12);
         const real ez = 0.27;
         NodeParams np;
@@ -488,7 +511,7 @@ CarBuild buildCar(const CarDefinition& def) {
                     sys.oilPanBeams.push_back(car.addBeam(p, rig.engine[static_cast<std::size_t>(ix * 4 + iz)], panB));
         sys.oilPanBeams.push_back(car.addBeam(rig.oilPan[0], rig.oilPan[1], panB));
 
-        // Radiator in front of the engine, behind the bumper.
+        // Front radiator (also used by mid-engine cars through coolant plumbing).
         NodeParams rad;
         rad.mass = 2.2;
         rad.friction = 0.5;
@@ -508,6 +531,7 @@ CarBuild buildCar(const CarDefinition& def) {
         contact.type = BeamType::Support;
         contact.precompression = 0.25;
         for (std::uint32_t n : rig.radiator) {
+            if (midEngine) continue; // No physical contact beam through the passenger compartment.
             const auto e = nearestNodes(car, rig.engine, car.positions()[n], 1);
             if (!e.empty()) sys.radiatorBeams.push_back(car.addBeam(n, e[0], contact));
         }
@@ -520,16 +544,18 @@ CarBuild buildCar(const CarDefinition& def) {
                 if (!r.empty()) sys.radiatorBeams.push_back(car.addBeam(static_cast<std::uint32_t>(f), r[0], contact));
             }
         }
-        // Engine -> firewall.
+        // Engine -> nearest passenger bulkhead, front or rear according to packaging.
         BeamParams fw = contact;
         fw.precompression = 0.35;
         std::size_t cowlStation = 0;
         real best = 1e9;
         for (std::size_t i = 0; i < NS; ++i)
-            if (std::abs(stations[i] - prof.xCowl) < best) { best = std::abs(stations[i] - prof.xCowl); cowlStation = i; }
+            if (std::abs(stations[i] - (midEngine ? prof.xRwTop : prof.xCowl)) < best) {
+                best = std::abs(stations[i] - (midEngine ? prof.xRwTop : prof.xCowl)); cowlStation = i;
+            }
         for (int iy = 0; iy < 2; ++iy)
             for (int iz = 0; iz < 2; ++iz) {
-                const std::uint32_t n = rig.engine[static_cast<std::size_t>(0 * 4 + iy * 2 + iz)];
+                const std::uint32_t n = rig.engine[static_cast<std::size_t>((midEngine ? 1 : 0) * 4 + iy * 2 + iz)];
                 const auto f = rig.shell[cowlStation][static_cast<std::size_t>(iy ? 3 : 0)][static_cast<std::size_t>(iz)];
                 if (f >= 0) car.addBeam(n, static_cast<std::uint32_t>(f), fw);
             }
@@ -542,11 +568,12 @@ CarBuild buildCar(const CarDefinition& def) {
         np.mass = (fuelKg + 12.0) / 4.0;
         np.friction = 0.5;
         np.group = "fueltank";
-        const real y = prof.yBottom(prof.xRA + 0.5) + 0.07;
+        const real tankOffset = midEngine ? 0.70 : 0.0;
+        const real y = prof.yBottom(prof.xRA + 0.5 + tankOffset) + 0.07;
         for (int ix = 0; ix < 2; ++ix)
             for (int iz = 0; iz < 2; ++iz)
                 rig.fuelTank.push_back(car.addNode("tank" + std::to_string(ix * 2 + iz),
-                                                   {prof.xRA + (ix ? 0.82 : 0.30), y, iz ? 0.33 : -0.33}, np));
+                                                   {prof.xRA + (ix ? 0.82 : 0.30) + tankOffset, y, iz ? 0.33 : -0.33}, np));
         BeamParams tank = makeBeam(3.0e5, 60.0, 6.0e3, 3.0e4);
         connectAll(car, rig.fuelTank, tank, &sys.fuelTankBeams);
         BeamParams tm = makeBeam(3.0e5, 80.0, 1.5e4, 6.0e4);
@@ -571,6 +598,201 @@ CarBuild buildCar(const CarDefinition& def) {
             sys.driveshaftBeams.push_back(car.addBeam(rig.engine[static_cast<std::size_t>(iz)], d, shaft));
     }
 
+    // A separate panel with sacrificial latch and hinge mounts. Its structure stays
+    // intact when the mounts break, so it can leave the vehicle as a physical part.
+    auto& bonnet = build.layout.bonnetNodes;
+    for (int layer = 0; layer < 2; ++layer) {
+        for (int corner = 0; corner < 4; ++corner) {
+            const real x = corner < 2 ? prof.xCowl + 0.025 : L - 0.12;
+            const real z = prof.halfW(x) * 0.78 * (corner % 2 ? 1.0 : -1.0);
+            const real y = prof.section(x).y[9] - 0.035 + layer * 0.025;
+            NodeParams p;
+            p.mass = 2.25;
+            p.group = "bonnet";
+            p.friction = 0.5;
+            bonnet.push_back(car.addNode("bonnet_" + std::to_string(layer * 4 + corner), {x, y, z}, p));
+        }
+    }
+    connectAll(car, bonnet, makeBeam(8.0e4, 35.0, 1.2e4, 5.0e4), nullptr);
+    for (int corner = 0; corner < 4; ++corner) {
+        const auto n = bonnet[static_cast<std::size_t>(corner)];
+        BeamParams mount = makeBeam(1.0e5, 55.0, 8.0e3, corner < 2 ? 1.2e4 : 5.0e3);
+        mount.breakGroup = corner < 2 ? "bonnet_hinge" : "bonnet_latch";
+        for (auto anchor : nearestNodes(car, rig.bodyNodes, car.positions()[n], 3))
+            car.addBeam(n, anchor, mount);
+    }
+    // Two low-force gas supports make inspection an actual held-open pose.
+    // Their target lengths come from rotating the bonnet by 65 degrees around
+    // its rear hinge line; they release with that hinge instead of tethering a
+    // crash-detached hood to the car. Native controls ramp input channel 1.
+    for (std::size_t side = 0; side < 2; ++side) {
+        const auto rear = bonnet[side], front = bonnet[side + 2];
+        const Vec3 hinge = car.positions()[rear];
+        const auto candidates = nearestNodes(car, rig.bodyNodes, hinge + Vec3{-0.08, -0.32, 0}, 1);
+        const auto anchor = candidates.front();
+        const Vec3 delta = car.positions()[front] - hinge;
+        const real angle = 65.0 * kPi / 180.0;
+        const Vec3 openPoint = hinge + Vec3{delta.x * std::cos(angle) - delta.y * std::sin(angle),
+                                           delta.x * std::sin(angle) + delta.y * std::cos(angle), delta.z};
+        const real closedLength = length(car.positions()[front] - car.positions()[anchor]);
+        const real openLength = length(openPoint - car.positions()[anchor]);
+        // A gas support must still push at the requested angle. Without this
+        // weight preload its force is zero at 65 degrees and gravity lets the
+        // bonnet settle much lower despite reaching the nominal stroke.
+        real panelMass = 0, hingeInertia = 0;
+        Vec3 panelCenter{};
+        for (auto node : bonnet) {
+            panelMass += car.masses()[node];
+            panelCenter += car.positions()[node] * car.masses()[node];
+            const Vec3 leverArm = car.positions()[node] - hinge;
+            hingeInertia += car.masses()[node] * (leverArm.x * leverArm.x + leverArm.y * leverArm.y);
+        }
+        panelCenter = panelCenter / panelMass - hinge;
+        const real openComX = panelCenter.x * std::cos(angle) - panelCenter.y * std::sin(angle);
+        const real lever = std::max<real>(0.04, std::abs(cross(openPoint - hinge,
+                                              normalize(openPoint - car.positions()[anchor])).z));
+        const real holdingForce = std::clamp(panelMass * 9.81 * std::max<real>(0, openComX) / (2.0 * lever), 0.0, 1000.0);
+        BeamParams support = makeBeam(3.0e3, 60.0, kInf, 3.0e3);
+        // Convert near-critical rotational damping back to each actuator's
+        // linear damping through its actual moment arm. A fixed 60 Ns/m caused
+        // the long bonnet to oscillate instead of staying open for inspection.
+        support.damp = std::clamp(0.7 * std::sqrt(2.0 * hingeInertia * support.spring) / lever, 300.0, 1800.0);
+        support.type = BeamType::Hydro;
+        support.hydroInput = 1;
+        support.hydroRatio = (openLength + holdingForce / support.spring) / closedLength - 1.0;
+        support.breakGroup = "bonnet_hinge";
+        build.layout.bonnetStrutBeams.push_back(car.addBeam(anchor, front, support));
+    }
+    ColTriParams panel;
+    panel.dragCoef = 1.0;
+    car.addTriangle(bonnet[4], bonnet[6], bonnet[7], panel);
+    car.addTriangle(bonnet[4], bonnet[7], bonnet[5], panel);
+
+
+    // Independent lower bumper skins. Their mass is allocated before the shell
+    // budget, so opting in preserves curb mass and the specified axle loading.
+    auto addBoxCollision = [&](const std::vector<std::uint32_t>& nodes, real drag) {
+        const int faces[6][4] = {{0, 1, 3, 2}, {4, 6, 7, 5}, {0, 4, 5, 1},
+                                 {2, 3, 7, 6}, {0, 2, 6, 4}, {1, 5, 7, 3}};
+        Vec3 center{};
+        for (auto node : nodes) center += car.positions()[node];
+        center *= 1.0 / static_cast<real>(nodes.size());
+        ColTriParams params;
+        params.dragCoef = drag;
+        params.friction = 0.5;
+        for (const auto& face : faces) {
+            auto a = nodes[static_cast<std::size_t>(face[0])];
+            auto b = nodes[static_cast<std::size_t>(face[1])];
+            auto c = nodes[static_cast<std::size_t>(face[2])];
+            auto d = nodes[static_cast<std::size_t>(face[3])];
+            const Vec3 normal = cross(car.positions()[b] - car.positions()[a], car.positions()[c] - car.positions()[a]);
+            if (dot(normal, car.positions()[a] - center) < 0) std::swap(b, d);
+            car.addTriangle(a, b, c, params);
+            car.addTriangle(a, c, d, params);
+        }
+    };
+    // A real obstacle under a loose hood, rather than an empty engine bay.
+    addBoxCollision(rig.engine, 0.0);
+    if (bd.detachableBumpers) {
+        for (int end = 0; end < 2; ++end) {
+            const bool front = end == 0;
+            auto& nodes = front ? build.layout.frontBumperNodes : build.layout.rearBumperNodes;
+            const std::string group = front ? "bumper_front" : "bumper_rear";
+            const real innerX = front ? L - 0.28 : 0.28;
+            const real outerX = front ? L + 0.025 : -0.025;
+            const real y0 = prof.yBottom(innerX) + 0.035;
+            const real y1 = front ? bd.noseHeight - 0.16 : bd.tailHeight - 0.28;
+            const real halfWidth = prof.halfW(innerX) * 0.97;
+            for (int ix = 0; ix < 2; ++ix)
+                for (int iy = 0; iy < 2; ++iy)
+                    for (int iz = 0; iz < 2; ++iz) {
+                        NodeParams params;
+                        params.mass = (front ? 12.0 : 10.0) / 8.0;
+                        params.group = group;
+                        params.friction = 0.55;
+                        nodes.push_back(car.addNode(group + "_" + std::to_string(ix * 4 + iy * 2 + iz),
+                            {ix ? outerX : innerX, iy ? y1 : y0, iz ? halfWidth : -halfWidth}, params));
+                    }
+            // A compliant plastic skin on a coherent cage; sacrificial mount
+            // groups release the complete assembly instead of stretching a mesh.
+            connectAll(car, nodes, makeBeam(6.0e4, 24.0, 1.2e4, 8.0e4), nullptr);
+            BeamParams mount = makeBeam(8.0e4, 40.0, 5.0e3, 2.2e3); // clips fail before plastic yielding
+            mount.breakGroup = group + "_mounts";
+            for (std::size_t corner = 0; corner < 4; ++corner)
+                for (auto anchor : nearestNodes(car, rig.bodyNodes, car.positions()[nodes[corner]], 3))
+                    car.addBeam(nodes[corner], anchor, mount);
+            addBoxCollision(nodes, 0.0); // body exterior already supplies aerodynamic load
+        }
+    }
+
+    // Two independent door cages. Latch disengagement is a mechanism state,
+    // not a broken beam; every hinge/check strap can still fail in a collision.
+    if (bd.detachableDoors) {
+        for (int side = 0; side < 2; ++side) {
+            auto& door = build.layout.frontDoors[static_cast<std::size_t>(side)];
+            const real sign = side ? 1.0 : -1.0;
+            const std::string group = side ? "door_right" : "door_left";
+            door.rearX = prof.xB + 0.004;
+            door.frontX = prof.xCowl - 0.09;
+            door.inputChannel = 2 + side;
+            for (int ix = 0; ix < 2; ++ix)
+                for (int iy = 0; iy < 2; ++iy)
+                    for (int iz = 0; iz < 2; ++iz) {
+                        const real x = ix ? door.frontX : door.rearX;
+                        const auto section = prof.section(x);
+                        const auto slot = iy ? 8 : 4;
+                        NodeParams node;
+                        node.mass = 26.0 / 8.0; node.group = group; node.friction = 0.5;
+                        door.nodes.push_back(car.addNode(group + "_" + std::to_string(ix * 4 + iy * 2 + iz),
+                            {x, section.y[slot] + (iy ? -0.03 : 0.03), sign * (section.z[slot] - (iz ? 0.0 : 0.11))}, node));
+                    }
+            const real hingeX = door.frontX - 0.015;
+            const real hingeZ = sign * (prof.halfW(door.frontX) - 0.07);
+            for (int end = 0; end < 2; ++end) {
+                NodeParams node;
+                node.mass = 2.0; node.group = group; node.friction = 0.5;
+                const real y = end ? prof.yBelt(door.frontX) - 0.07 : prof.ySill(door.frontX) + 0.12;
+                door.hingeNodes.push_back(car.addNode(group + "_hinge_" + std::to_string(end), {hingeX, y, hingeZ}, node));
+            }
+            auto cage = door.nodes;
+            cage.insert(cage.end(), door.hingeNodes.begin(), door.hingeNodes.end());
+            connectAll(car, cage, makeBeam(1.2e5, 45.0, 1.2e4, 8.0e4), nullptr);
+            BeamParams hinge = makeBeam(1.5e5, 55.0, 8.0e3, 6.0e3);
+            hinge.breakGroup = group + "_hinges";
+            for (auto node : door.hingeNodes)
+                for (auto anchor : nearestNodes(car, rig.bodyNodes, car.positions()[node], 4))
+                    door.hingeBeams.push_back(car.addBeam(node, anchor, hinge));
+            BeamParams latch = makeBeam(1.0e5, 40.0, 8.0e3, 5.0e3);
+            latch.breakGroup = group + "_latch";
+            for (auto node : {door.nodes[0], door.nodes[2]})
+                for (auto anchor : nearestNodes(car, rig.bodyNodes, car.positions()[node], 3))
+                    door.latchBeams.push_back(car.addBeam(node, anchor, latch));
+            // A breakable check strap/assisted opening actuator, rooted inside
+            // the A-pillar, provides a stable 68-degree inspection position.
+            const auto moving = door.nodes[0];
+            const auto anchor = nearestNodes(car, rig.bodyNodes,
+                {hingeX - 0.15, car.positions()[moving].y + 0.1, hingeZ - sign * 0.45}, 1).front();
+            const Vec3 pivot{hingeX, car.positions()[moving].y, hingeZ};
+            const Vec3 delta = car.positions()[moving] - pivot;
+            const real angle = sign * 68.0 * kPi / 180.0;
+            const Vec3 opened = pivot + Vec3{std::cos(angle) * delta.x + std::sin(angle) * delta.z,
+                delta.y, -std::sin(angle) * delta.x + std::cos(angle) * delta.z};
+            const real closedLength = length(car.positions()[moving] - car.positions()[anchor]);
+            BeamParams support = makeBeam(2.0e3, 500.0, kInf, 3.0e3);
+            support.type = BeamType::Hydro;
+            support.hydroInput = door.inputChannel;
+            support.hydroRatio = length(opened - car.positions()[anchor]) / closedLength - 1.0;
+            support.breakGroup = group + "_hinges";
+            door.supportBeams.push_back(car.addBeam(anchor, moving, support));
+            addBoxCollision(door.nodes, 0.55);
+            DoorMechanism mechanism;
+            mechanism.nodes = std::move(cage);
+            mechanism.hingeBeams = door.hingeBeams; mechanism.latchBeams = door.latchBeams;
+            mechanism.supportBeams = door.supportBeams; mechanism.inputChannel = door.inputChannel;
+            car.addDoor(mechanism);
+        }
+    }
+
     // ------------------------------------------------------------------ mass distribution
     {
         real fixedMass = 0.0;
@@ -579,7 +801,7 @@ CarBuild buildCar(const CarDefinition& def) {
         for (std::size_t i = 0; i < car.nodeCount(); ++i)
             if (!isBody[i]) fixedMass += car.masses()[i];
         fixedMass += 4.0 * tire.tireMass;  // tyres are added below
-        const real bodyMass = std::max<real>(300.0, def.chassis.curbMass - fixedMass);
+        const real bodyMass = std::max({300.0, 2.0 * static_cast<real>(rig.bodyNodes.size()), def.chassis.curbMass - fixedMass});
         const real targetX = prof.xRA + def.chassis.frontWeight * bd.wheelbase;
         auto comFor = [&](real tilt, std::vector<real>& masses) {
             real wsum = 0;
@@ -589,9 +811,20 @@ CarBuild buildCar(const CarDefinition& def) {
                 masses[k] = w;
                 wsum += w;
             }
+            // Include the minimum-node constraint in the allocation itself.
+            // Clamping afterwards used to invent mass and shift the axle loads,
+            // particularly on light cars with a heavily rear-biased shell.
+            real scaleLo = 0.0, scaleHi = bodyMass / wsum;
+            for (int iteration = 0; iteration < 45; ++iteration) {
+                const real scale = 0.5 * (scaleLo + scaleHi);
+                real total = 0.0;
+                for (real weight : masses) total += std::max<real>(2.0, weight * scale);
+                if (total > bodyMass) scaleHi = scale; else scaleLo = scale;
+            }
+            const real scale = 0.5 * (scaleLo + scaleHi);
             real mx = 0, m = 0;
             for (std::size_t k = 0; k < rig.bodyNodes.size(); ++k) {
-                masses[k] *= bodyMass / wsum;
+                masses[k] = std::max<real>(2.0, masses[k] * scale);
                 mx += masses[k] * car.positions()[rig.bodyNodes[k]].x;
                 m += masses[k];
             }
@@ -724,6 +957,25 @@ CarBuild buildCar(const CarDefinition& def) {
             const Vec3 n = cross(pb - pa, pc - pa);
             if (length(n) < 1e-6) return;
             const Vec3 ctr = (pa + pb + pc) / 3.0;
+            auto isShellTop = [&](std::uint32_t node) {
+                for (const auto& station : rig.shell)
+                    if (station[4][0] == node || station[4][1] == node) return true;
+                return false;
+            };
+            if (ctr.x > prof.xCowl + 0.025 && ctr.x < L - 0.12 &&
+                isShellTop(ua) && isShellTop(ub) && isShellTop(uc)) return;
+            // Lower outer end skins belong to the bumper, not a second fixed
+            // collision sheet remaining in space after the fascia detaches.
+            if (bd.detachableBumpers) {
+                if (std::min({pa.x, pb.x, pc.x}) > L - 0.12 &&
+                    std::max({pa.y, pb.y, pc.y}) < bd.noseHeight - 0.16) return;
+                if (std::max({pa.x, pb.x, pc.x}) < 0.12 &&
+                    std::max({pa.y, pb.y, pc.y}) < bd.tailHeight - 0.28) return;
+            }
+            if (bd.detachableDoors && ctr.x > prof.xB - 0.025 && ctr.x < prof.xCowl - 0.06 &&
+                std::abs(ctr.z) > prof.hw * 0.6 &&
+                (pa.z * pb.z > 0 && pb.z * pc.z > 0) &&
+                ctr.y > prof.ySill(ctr.x) - 0.01) return;
             Vec3 out{0.0, ctr.y - yAxis, ctr.z};
             if (ctr.x > L - 0.05) out.x += 1.0;
             if (ctr.x < 0.05) out.x -= 1.0;
@@ -759,6 +1011,18 @@ CarBuild buildCar(const CarDefinition& def) {
             const auto loop = ring(i);
             for (std::size_t k = 1; k + 1 < loop.size(); ++k) addTri(loop[0], loop[k], loop[k + 1]);
         }
+    }
+
+    // Register only after every target collision triangle and mount exists.
+    car.addSelfCollisionPanel("bonnet", {"body", "engine"}, {"bonnet_latch", "bonnet_hinge"});
+    if (bd.detachableBumpers) {
+        car.addSelfCollisionPanel("bumper_front", {"body"}, {"bumper_front_mounts"});
+        car.addSelfCollisionPanel("bumper_rear", {"body"}, {"bumper_rear_mounts"});
+    }
+
+    if (bd.detachableDoors) {
+        car.addSelfCollisionPanel("door_left", {"body"}, {"door_left_latch", "door_left_hinges"});
+        car.addSelfCollisionPanel("door_right", {"body"}, {"door_right_latch", "door_right_hinges"});
     }
 
     // ------------------------------------------------------------------ systems
@@ -828,6 +1092,7 @@ CarBuild buildCar(const CarDefinition& def) {
     build.layout.length = bd.length;
     build.layout.width = bd.width;
     build.layout.height = bd.height;
+
 
     buildCarVisual(build, prof, rig);
     build.restPositions = car.positions();

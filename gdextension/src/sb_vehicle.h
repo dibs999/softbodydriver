@@ -12,6 +12,7 @@
 #include <godot_cpp/classes/mesh_instance3d.hpp>
 #include <godot_cpp/classes/node3d.hpp>
 #include <godot_cpp/classes/standard_material3d.hpp>
+#include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/transform3d.hpp>
 
@@ -54,6 +55,13 @@ public:
     void set_steer_rate(double r) { ctl_.steerRate = r; }
 
     void reset_to(const Transform3D& xform);  ///< Repair and place.
+    bool relocate_to(const Transform3D& xform); ///< Rigid recovery preserving damage and fuel; ground-origin convention.
+    bool service_repair(); ///< Repair in place without adding fuel; leave ignition off.
+    double refuel(double litres); ///< Adds fuel while stopped with engine off; returns accepted litres.
+    bool set_door_open(int index, bool open); ///< 0 driver/left, 1 passenger/right; stationary operation.
+    bool toggle_door(int index);
+    Array get_door_states() const; ///< Actual latch/attachment/angle state under the physics lock.
+    bool release_bonnet(); ///< Releases latch once; hinges may subsequently break under impact.
     void repair_in_place();                   ///< Repair, keep position and heading, set upright.
 
     void set_debug_view(bool on);
@@ -68,6 +76,7 @@ public:
     Vector3 get_chase_target() const;
     Vector3 get_driver_eye() const;
     Variant get_dashboard_transform() const;
+    Array get_mirror_surfaces() const; ///< Live optical faces and their deformed planes, in world space.
     Basis get_visual_basis() const;
     Vector3 get_forward() const;
     Vector3 get_up() const;
@@ -77,7 +86,8 @@ public:
     double get_engine_rpm() const;
     /// Replaces the procedural body with an imported model (e.g. a glTF scene). `to_build` maps model
     /// coordinates to the car's build frame (rear bumper at x = 0, ground y = 0, +x forward, +z right).
-    /// options: wheels {"FL": node name, ...}, hide [name substrings], keep_procedural [material names].
+    /// options: wheels {"FL": node name, ...}, hide [name substrings], keep_procedural [material names],
+    /// ao_on_uv2 (restore an imported AO atlas authored on the second UV channel).
     void attach_model(Node3D* root, const Transform3D& to_build, const Dictionary& options);
     PackedFloat32Array get_wheel_slip() const;   ///< m/s sliding speed per wheel
     PackedFloat32Array get_wheel_load() const;   ///< contact indicator 0..1 per wheel
@@ -93,6 +103,7 @@ private:
         int64_t format = 0;
         uint32_t vertexStride = 12, normalOffset = 0, normalStride = 4;
         PackedByteArray buffer;
+        PackedFloat32Array restTangents; // imported tangent frames in build coordinates
     };
     Ref<Material> materialFor(const std::string& name, const Dictionary& lib) const;
     void buildMeshes(const Dictionary& materials);
@@ -140,6 +151,9 @@ private:
     };
     Controls ctl_, phys_;
     double starterTimer_ = 0.0;
+    // Physical bonnet support uses hydro channel 1; state is world-mutex protected.
+    bool bonnetOpenRequested_ = false;
+    double bonnetSupportTravel_ = 0.0;
 
     // Rendering.
     std::vector<SurfaceGpu> surfaces_;

@@ -58,6 +58,7 @@ Koordinaten im Generator: `x` zeigt nach vorne (hintere Stoßstange bei 0), `y` 
 
   "engine": {
     "name": "1.5 I4 Turbo", "layout": "FWD", "cylinders": 4,   // FWD | RWD | AWD
+    "position": "front", // front (Standard) | mid: Motor vor Hinterachse, Tank vor Motor
     "torqueCurve": [[700, 120], [1600, 250], [3500, 250], [6000, 190], [6500, 0]],  // [U/min, Nm]
     "idleRpm": 780, "redlineRpm": 6200,
     "inertia": 0.15, "friction": 16, "engineBraking": 0.032,
@@ -88,6 +89,7 @@ Koordinaten im Generator: `x` zeigt nach vorne (hintere Stoßstange bei 0), `y` 
   "wheels": { "FL": "WheelFrontL", "FR": "WheelFrontR", "RL": "WheelRearL", "RR": "WheelRearR" },
   "hide": ["BrakePad", "Axles"],                  // Teile (Namens-Teilstrings), die entfallen
   "keepProcedural": ["chassis", "spring", "caliper"],  // eigene Teile, die sichtbar bleiben
+  "aoOnUV2": true,  // nur für Modelle mit AO-Atlas auf der zweiten UV-Koordinate (glTF texCoord=1)
   "materialOverrides": { "Glass": "glass", "Paint 1": "paint" }  // Modell-Material -> Spiel-Material
 }
 ```
@@ -103,3 +105,33 @@ Die Physik-Struktur entsteht weiterhin aus `body` und den übrigen Abschnitten. 
 - **Visual**: Querschnitte werden über Catmull-Rom-Kurven verfeinert, mit Radausschnitten, Front- und Heckabschluss, Materialzonen (Lack, Glas, Leuchten, Fugen, Griffe, Kunststoff) und Innenraum. Jeder Vertex ist an die 4 nächsten Nodes gebunden. Die Position setzt sich zusammen aus der starren Bewegung der Fahrgastzelle plus den interpolierten Verschiebungen der Nodes.
 
 Mit `cartest <datei>` prüfst du ein neues Auto: Stabilität, Einfedern, 0-100, Bremsweg, Kurve, Crash und Kühlsystem.
+
+`aoOnUV2` stellt bei importierten Materialien den zweiten UV-Kanal für Ambient Occlusion wieder her, wenn der Godot-Import diese glTF-Angabe nicht übernimmt. Standard ist `false`. Die Materialkopien des Fahrzeugs werden angepasst; das gemeinsam geladene Originalmaterial bleibt unverändert.
+
+### Abtrennbare Stoßfänger (Referenzfahrzeug)
+
+`body.detachableBumpers: true` aktiviert getrennte vordere und hintere untere Stoßfänger-Verkleidungen. Aktuell ist diese Option im Kestrel Hatch aktiviert; bei anderen Fahrzeugen bleibt der Standard `false`. Die Verkleidungen bestehen aus jeweils acht Physik-Nodes mit zwölf Befestigungs-Beams an der Karosserie. Die Breakgroups heißen `bumper_front_mounts` und `bumper_rear_mounts`. Beim Versagen einer Befestigung löst die jeweilige Gruppe aus; der Stoßfänger bleibt eine eigene Struktur statt als gestreckte Karosseriehaut zurückzubleiben.
+
+Die vordere Baugruppe wiegt 12 kg, die hintere 10 kg. Diese Masse wird vom Karosseriebudget abgezogen, sodass Gesamtmasse und vorgegebene Achslastverteilung erhalten bleiben. Verkleidung, unterer Lufteinlass und innere Rückkantungen sind ausschließlich an ihren eigenen Käfig gebunden. Querträger und Befestigungskonsolen bleiben am Fahrzeug sichtbar. Die Reparatur stellt Positionen, Verbindungen und Kollisionszustand wieder her.
+
+Die Option beschreibt die **untere Verkleidung**, nicht komplette Kotflügel, Türen oder Leuchten. Importierte Karosseriemodelle müssen ihre Bauteile gesondert zuordnen; diese Option erzeugt keine automatische Segmentierung eines GLB-Modells. Der Concept GT verwendet weiterhin sein importiertes Modell ohne zusätzliche Stoßfänger-Verkleidung.
+
+Die Motorhaube besitzt zwei zusätzliche Hubstützen (Hydro-Kanal 1). Die ausgefahrene Soll-Länge wird aus einer Öffnung um 65° gegenüber der geschlossenen Haubenlage berechnet; Federkraft und Dämpfung halten die Haube gegen die Schwerkraft. Die Stützen verwenden dieselbe `bonnet_hinge`-Breakgroup wie die Scharniere und halten ein abgerissenes Bauteil deshalb nicht unsichtbar am Fahrzeug fest. Das Spiel fährt den Kanal beim manuellen Öffnen allmählich aus und setzt ihn beim Reparieren zurück. Dies ist eine Inspektionsfunktion am stehenden prozeduralen Fahrzeug, keine automatische Animation importierter Modelle.
+
+`body.detachableDoors: true` aktiviert zwei eigenständige vordere Türen beim
+prozeduralen Fahrzeug. Aktuell nutzt der Kestrel Hatch diese Option. Jede Tür
+besitzt acht Eck-Nodes und zwei vertikale Scharnierpunkte mit zusammen 30 kg;
+die Masse gehört zum bestehenden Leergewichtsbudget. `door_left_hinges` und
+`door_right_hinges` enthalten auch den jeweiligen Öffnungsantrieb, damit nach
+einem Scharnierbruch kein unsichtbarer Antrieb die Tür festhält. Die separaten
+Latch-Gruppen heißen `door_left_latch` und `door_right_latch`.
+
+Die Hydro-Kanäle 2 und 3 werden vom Türmechanismus verwaltet. Anwendungen rufen
+`SoftBody::setDoorOpen(side, open)` auf, statt diese Kanäle direkt zu ändern.
+Manuelles Entriegeln deaktiviert die Latch-Beams reversibel (`disabled`), ohne
+sie als Unfallschaden zu zählen. Schließen verriegelt erst bei intakten
+Befestigungen, weniger als 15 mm Abweichung der Latch-Längen und weniger als
+0,15 m/s relativer Geschwindigkeit. Ein beschädigtes Scharnier oder Schloss
+wird dadurch nicht repariert. `repair()` stellt Geometrie, Verriegelung und
+Antriebszustand gemeinsam zurück. Diese Option segmentiert keine importierten
+Fahrzeugmodelle automatisch.

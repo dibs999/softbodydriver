@@ -5,7 +5,7 @@
   "brand": "Kestrel",
   "description": "Kompakter Fronttriebler (C-Segment), 1.5-l-Turbo-Vierzylinder, 110 kW, 7-Gang-Doppelkupplung.",
   "body": {
-    "style": "hatchback", "doors": 4,
+    "style": "hatchback", "doors": 4, "detachableBumpers": true, "detachableDoors": true,
     "length": 4.28, "width": 1.79, "height": 1.46,
     "wheelbase": 2.63, "frontOverhang": 0.89,
     "trackFront": 1.54, "trackRear": 1.51, "groundClearance": 0.14,

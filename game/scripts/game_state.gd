@@ -6,6 +6,11 @@ const GRAPHICS_CONFIG := "user://graphics.cfg"
 
 signal graphics_preset_changed
 signal driving_help_changed(visible: bool)
+signal driving_setting_changed(key: String, enabled: bool)
+
+const DRIVING_SETTINGS := ["tcs", "abs", "automatic", "steering_assist", "traffic"]
+# An explicit path also allows isolated profile tests without touching the player profile.
+var settings_config_path := GRAPHICS_CONFIG
 
 enum GraphicsPreset { PERFORMANCE, BALANCED, HIGH, NATIVE }
 
@@ -19,6 +24,8 @@ const GRAPHICS_PRESETS := [
 var _graphics_preset: int = GraphicsPreset.BALANCED
 
 var cars: Array[Dictionary] = []          # {path, id, name, brand, description, ...}
+var progress := preload("res://scripts/player_progress.gd").new()
+var start_lesson := false
 var selected_car := "res://cars/kestrel_hatch.car.json"
 var selected_map := "proving_grounds"
 var settings := {
@@ -43,8 +50,23 @@ const MAPS := [
 
 
 func _ready() -> void:
+	load_settings()
+	_apply_viewport_graphics()
+	_setup_input()
+	scan_cars()
+	progress.load_profile()
+	var selection: Dictionary = progress.get_selection()
+	for car in cars:
+		if car["path"] == selection.get("last_car", ""):
+			selected_car = car["path"]
+	for map in MAPS:
+		if map["id"] == selection.get("last_map", ""):
+			selected_map = map["id"]
+
+
+func load_settings() -> void:
 	var config := ConfigFile.new()
-	if config.load(GRAPHICS_CONFIG) == OK:
+	if config.load(settings_config_path) == OK:
 		var saved: Variant = config.get_value("graphics", "preset", _graphics_preset)
 		if saved is int and saved >= 0 and saved < GRAPHICS_PRESETS.size():
 			_graphics_preset = saved
@@ -55,9 +77,31 @@ func _ready() -> void:
 			var volume: Variant = config.get_value("audio", key, settings[key])
 			if volume is float or volume is int:
 				settings[key] = clampf(float(volume), 0.0, 1.0)
-	_apply_viewport_graphics()
-	_setup_input()
-	scan_cars()
+		for key in DRIVING_SETTINGS:
+			var enabled: Variant = config.get_value("driving", key, settings[key])
+			if enabled is bool:
+				settings[key] = enabled
+
+
+func set_driving_setting(key: String, enabled: bool) -> void:
+	if key not in DRIVING_SETTINGS or settings[key] == enabled:
+		return
+	settings[key] = enabled
+	driving_setting_changed.emit(key, enabled)
+	_save_display_settings()
+
+
+func make_driving_option(key: String, caption: String) -> CheckBox:
+	var option := CheckBox.new()
+	option.text = caption
+	option.set_pressed_no_signal(settings[key])
+	option.toggled.connect(func(enabled: bool): set_driving_setting(key, enabled))
+	var refresh := func(changed_key: String, enabled: bool):
+		if is_instance_valid(option) and changed_key == key:
+			option.set_pressed_no_signal(enabled)
+	driving_setting_changed.connect(refresh)
+	option.tree_exiting.connect(func(): driving_setting_changed.disconnect(refresh), CONNECT_ONE_SHOT)
+	return option
 
 
 func make_graphics_options() -> HBoxContainer:
@@ -126,24 +170,27 @@ func set_driving_help(visible: bool) -> void:
 
 func _save_display_settings() -> void:
 	var config := ConfigFile.new()
-	config.load(GRAPHICS_CONFIG)
+	config.load(settings_config_path)
 	config.set_value("graphics", "preset", _graphics_preset)
 	config.set_value("interface", "show_help", settings["show_help"])
 	for key in ["master_volume", "engine_volume"]:
 		config.set_value("audio", key, settings[key])
-	var err := config.save(GRAPHICS_CONFIG)
+	for key in DRIVING_SETTINGS:
+		config.set_value("driving", key, settings[key])
+	var err := config.save(settings_config_path)
 	if err != OK:
-		push_warning("Could not save display settings: %s" % error_string(err))
+		push_warning("Could not save settings: %s" % error_string(err))
 
 
 func _apply_viewport_graphics() -> void:
 	var viewport := get_viewport()
+	var advanced := RenderingServer.get_current_rendering_method() != "gl_compatibility"
 	var high := _graphics_preset == GraphicsPreset.HIGH
 	var balanced := _graphics_preset == GraphicsPreset.BALANCED
-	viewport.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if balanced else Viewport.SCALING_3D_MODE_BILINEAR
+	viewport.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if balanced and advanced else Viewport.SCALING_3D_MODE_BILINEAR
 	viewport.scaling_3d_scale = GRAPHICS_PRESETS[_graphics_preset]["scale"]
 	viewport.msaa_3d = Viewport.MSAA_4X if high else Viewport.MSAA_DISABLED
-	viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if balanced or _graphics_preset == GraphicsPreset.NATIVE else Viewport.SCREEN_SPACE_AA_DISABLED
+	viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if advanced and (balanced or _graphics_preset == GraphicsPreset.NATIVE) else Viewport.SCREEN_SPACE_AA_DISABLED
 
 
 func apply_environment_graphics(environment: Environment, sun: DirectionalLight3D) -> void:
@@ -265,7 +312,7 @@ func apply_visual_model(v: SBVehicle, info: Dictionary) -> void:
 		if lib.has(target):
 			overrides[k] = lib[target]
 	var options := {"wheels": cfg.get("wheels", {}), "hide": hide, "keep_procedural": cfg.get("keepProcedural", []),
-		"material_overrides": overrides}
+		"material_overrides": overrides, "ao_on_uv2": bool(cfg.get("aoOnUV2", false))}
 	var eye: Variant = _model_point(cfg.get("driverEye"))
 	if eye is Vector3:
 		options["driver_eye"] = xf * eye
@@ -328,15 +375,19 @@ func _action(name: String, deadzone := 0.2) -> void:
 
 
 func _setup_input() -> void:
+	if not has_node("DriverPrompts"):
+		var prompts := preload("res://scripts/driver_prompts.gd").new()
+		prompts.name = "DriverPrompts"
+		add_child(prompts)
 	_action("throttle", 0.05); _key("throttle", [KEY_W, KEY_UP]); _joy_axis("throttle", JOY_AXIS_TRIGGER_RIGHT, 1.0)
 	_action("brake", 0.05); _key("brake", [KEY_S, KEY_DOWN]); _joy_axis("brake", JOY_AXIS_TRIGGER_LEFT, 1.0)
 	_action("steer_left", 0.08); _key("steer_left", [KEY_A, KEY_LEFT]); _joy_axis("steer_left", JOY_AXIS_LEFT_X, -1.0)
 	_action("steer_right", 0.08); _key("steer_right", [KEY_D, KEY_RIGHT]); _joy_axis("steer_right", JOY_AXIS_LEFT_X, 1.0)
 	_action("handbrake"); _key("handbrake", [KEY_SPACE]); _joy_button("handbrake", JOY_BUTTON_A)
-	_action("clutch"); _key("clutch", [KEY_SHIFT])
+	_action("clutch"); _key("clutch", [KEY_SHIFT]); _joy_button("clutch", JOY_BUTTON_X)
 	_action("shift_up"); _key("shift_up", [KEY_E]); _joy_button("shift_up", JOY_BUTTON_RIGHT_SHOULDER)
 	_action("shift_down"); _key("shift_down", [KEY_Q]); _joy_button("shift_down", JOY_BUTTON_LEFT_SHOULDER)
-	_action("toggle_gearbox"); _key("toggle_gearbox", [KEY_M])
+	_action("toggle_gearbox"); _key("toggle_gearbox", [KEY_M]); _joy_button("toggle_gearbox", JOY_BUTTON_DPAD_DOWN)
 	_action("ignition"); _key("ignition", [KEY_I]); _joy_button("ignition", JOY_BUTTON_BACK)
 	_action("reset_vehicle"); _key("reset_vehicle", [KEY_R]); _joy_button("reset_vehicle", JOY_BUTTON_B)
 	_action("repair_vehicle"); _key("repair_vehicle", [KEY_BACKSPACE, KEY_INSERT])
@@ -355,6 +406,19 @@ func _setup_input() -> void:
 	_action("map_overview"); _key("map_overview", [KEY_K])
 	_action("map_compact"); _key("map_compact", [KEY_N])
 	_action("menu"); _key("menu", [KEY_ESCAPE]); _joy_button("menu", JOY_BUTTON_START)
+	_action("bonnet_release"); _key("bonnet_release", [KEY_O])
+	_action("headlights"); _key("headlights", [KEY_L]); _joy_button("headlights", JOY_BUTTON_DPAD_UP)
+	_action("indicator_left"); _key("indicator_left", [KEY_COMMA])
+	_action("indicator_right"); _key("indicator_right", [KEY_PERIOD])
+	_action("hazards"); _key("hazards", [KEY_H])
+	_action("refuel"); _key("refuel", [KEY_F]); _joy_button("refuel", JOY_BUTTON_DPAD_LEFT)
+	_action("service_repair"); _key("service_repair", [KEY_G]); _joy_button("service_repair", JOY_BUTTON_DPAD_RIGHT)
+	_action("driver_door"); _key("driver_door", [KEY_U])
+	_action("passenger_door")
+	var passenger_door_key := InputEventKey.new()
+	passenger_door_key.physical_keycode = KEY_U
+	passenger_door_key.shift_pressed = true
+	InputMap.action_add_event("passenger_door", passenger_door_key)
 	_action("look_back"); _key("look_back", [KEY_V])
 
 

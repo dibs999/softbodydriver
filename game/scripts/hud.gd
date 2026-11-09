@@ -1,10 +1,14 @@
 extends Control
 ## Quiet driving HUD. Detailed mechanical telemetry is an explicit F2 overlay.
+const DriverPrompts := preload("res://scripts/driver_prompts.gd")
 
 var vehicle: SBVehicle
 var info: Dictionary = {}
 var world: SBWorld
 var activity: Node3D
+var lesson: Node
+var equipment: Node
+var weather: Node
 var _frame_ms := PackedFloat32Array()
 var _p95_ms := 0.0
 var _mean_ms := 0.0
@@ -100,17 +104,33 @@ func _draw() -> void:
 	draw_line(Vector2(36, 36), Vector2(36, 68), ACCENT, 3)
 	_text(Vector2(50, 47), String(info.get("name", "Fahrzeug")), 17)
 	_text(Vector2(50, 69), "%s   /   %s" % [camera_name, activity.MODES[activity.mode] if activity else "Freie Fahrt"], 12, MUTED)
-	_right(Vector2(canvas.x - 22, 38), "F1  Hilfe     F2  Diagnose     F3  Aktivitäten     Esc  Pause", 12, TEXT)
+	_right(Vector2(canvas.x - 22, 38), "Start  Pause · Aktivitäten · Steuerung" if DriverPrompts.using_gamepad else "F1  Hilfe     F2  Diagnose     F3  Aktivitäten     Esc  Pause", 12, TEXT)
 	if not cockpit or not in_dash_instruments:
 		_drive_card(canvas)
+	if lesson and lesson.visible_in_hud() and not show_help and not show_diagnostics:
+		_panel(Rect2(20, 98, 460, 138))
+		_text(Vector2(36, 123), "FAHREINFÜHRUNG", 12, ACCENT)
+		draw_multiline_string(font, Vector2(36, 148), lesson.text, HORIZONTAL_ALIGNMENT_LEFT, 428, 14, 2, TEXT)
+		draw_string(font, Vector2(36, 192), lesson.status, HORIZONTAL_ALIGNMENT_LEFT, 428, 11, MUTED)
+		_bar(Vector2(36, 204), 428, lesson.progress)
+		_text(Vector2(36, 224), "%s · Einführung ausblenden oder neu starten" % DriverPrompts.hint("menu"), 11, MUTED)
 	_warnings(canvas)
+	if is_instance_valid(equipment):
+		var label: String = equipment.status_text()
+		_panel(Rect2(20, canvas.y - 282, 580, 34))
+		_text(Vector2(34, canvas.y - 260), label, 12, ACCENT)
+	if is_instance_valid(weather):
+		var status: String = weather.get_status()
+		var width := font.get_string_size(status, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x + 24
+		_panel(Rect2(canvas.x - width - 14, 44, width, 28))
+		_right(Vector2(canvas.x - 26, 63), status, 12, TEXT)
 	if activity and activity.mode > 0 and not show_diagnostics and not show_help:
-		var p := Vector2(canvas.x - 390, 62)
+		var p := Vector2(canvas.x - 390, 82)
 		_panel(Rect2(p, Vector2(370, 91)))
 		_text(p + Vector2(16, 24), activity.MODES[activity.mode].to_upper(), 12, ACCENT)
 		_text(p + Vector2(16, 47), activity.message, 13)
 		var best_label := "Best: %d Pkt." % activity.best if activity.mode == 2 else "Best: %.2f s" % activity.best
-		_text(p + Vector2(16, 72), "F3 Wechseln · F4 " + ("Abbruch" if activity.active else "Start"), 11, MUTED)
+		_text(p + Vector2(16, 72), "Start · Aktivitätenmenü" if DriverPrompts.using_gamepad else "F3 Wechseln · F4 " + ("Abbruch" if activity.active else "Start"), 11, MUTED)
 		if activity.best > 0: _right(p + Vector2(354, 72), best_label, 11, ACCENT)
 	if show_diagnostics:
 		_diagnostics(canvas)
@@ -127,32 +147,43 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO)
 
 func _drive_card(canvas: Vector2) -> void:
-	var p := Vector2(20, canvas.y - 168)
-	_panel(Rect2(p, Vector2(318, 148)))
-	_text(p + Vector2(18, 25), "FAHRDATEN", 11, MUTED)
-	_text(p + Vector2(18, 85), "%03d" % roundi(absf(_kmh_disp)), 54)
-	_text(p + Vector2(133, 82), "km/h", 14, MUTED)
+	var p := Vector2(20, canvas.y - 238)
+	_panel(Rect2(p, Vector2(338, 218)))
+	_text(p + Vector2(18, 24), "FAHRINSTRUMENTE", 11, MUTED)
+	_right(p + Vector2(320, 24), "AUTO" if vehicle.is_automatic() else "MANUELL", 11, ACCENT)
+	var center := p + Vector2(115, 116)
+	var redline := maxf(1000.0, float(info.get("redline_rpm", 6500)))
+	var fraction := clampf(_rpm_disp / redline, 0.0, 1.15)
+	var start := deg_to_rad(140.0)
+	var sweep := deg_to_rad(260.0)
+	draw_arc(center, 78, start, start + sweep, 64, Color(1, 1, 1, 0.12), 7, true)
+	draw_arc(center, 78, start + sweep * 0.85, start + sweep, 16, RED.darkened(0.45), 7, true)
+	if fraction > 0.001:
+		draw_arc(center, 78, start, start + sweep * minf(fraction, 1), 64, RED if fraction > 0.9 else ACCENT, 5, true)
+	for i in range(int(redline / 1000.0) + 1):
+		var angle := start + sweep * (i * 1000.0 / redline)
+		var ray := Vector2(cos(angle), sin(angle))
+		draw_line(center + ray * 65, center + ray * 70, MUTED, 1.5, true)
+		var label := str(i)
+		_text(center + ray * 55 - Vector2(3, -4), label, 10, MUTED)
+	var speed := str(roundi(absf(_kmh_disp)))
+	_text(center + Vector2(-font.get_string_size(speed, HORIZONTAL_ALIGNMENT_LEFT, -1, 42).x / 2, 15), speed, 42)
+	_text(center + Vector2(-16, 34), "km/h", 11, MUTED)
+	_text(p + Vector2(60, 202), "%d U/min" % (roundi(_rpm_disp / 50) * 50), 12, MUTED)
 	var gear := int(_t["gear"])
-	var gear_label := "R" if gear < 0 else ("N" if gear == 0 else str(gear))
-	_text(p + Vector2(256, 77), gear_label, 42, ACCENT)
-	_right(p + Vector2(298, 26), "AUTO" if vehicle.is_automatic() else "MANUELL", 11, ACCENT)
-	var rpm := _rpm_disp / float(info.get("redline_rpm", 6500))
-	for i in 28:
-		var col := (RED if i > 23 else ACCENT) if rpm * 28 > i else Color(1, 1, 1, 0.08)
-		draw_rect(Rect2(p + Vector2(18 + i * 10, 98), Vector2(7, 7)), col)
-	_text(p + Vector2(18, 128), "%d U/min" % (roundi(_rpm_disp / 50) * 50), 12, MUTED)
-	_right(p + Vector2(298, 128), "%.0f l   ·   %.0f °C" % [_t["fuel_l"], _t["coolant_temp"]], 12, MUTED)
-	var aids := ""
-	if not vehicle.get_tcs(): aids += "TCS AUS   "
-	elif bool(_t["tcs_active"]): aids += "TCS REGELT   "
-	if not vehicle.get_abs(): aids += "ABS AUS   "
-	elif bool(_t["abs_active"]): aids += "ABS REGELT   "
-	if not aids.is_empty(): _text(p + Vector2(0, -12), aids, 12, AMBER)
+	_text(p + Vector2(244, 92), "R" if gear < 0 else ("N" if gear == 0 else str(gear)), 46, ACCENT)
+	_text(p + Vector2(224, 114), "GANG", 10, MUTED)
+	_text(p + Vector2(218, 144), "%.1f l" % float(_t["fuel_l"]), 17)
+	_text(p + Vector2(218, 167), "%.0f °C" % float(_t["coolant_temp"]), 15, AMBER if float(_t["coolant_temp"]) > 110 else MUTED)
+	var aids := "TCS" if vehicle.get_tcs() else "TCS AUS"
+	aids += "  ·  ABS" if vehicle.get_abs() else "  ·  ABS AUS"
+	_text(p + Vector2(210, 199), aids, 10, AMBER if bool(_t["tcs_active"]) or bool(_t["abs_active"]) else MUTED)
+
 
 func _warnings(canvas: Vector2) -> void:
 	var messages: Array[String] = []
 	var status: String = _t.get("status", "")
-	if not status.is_empty(): messages.append(STATUS.get(status, status))
+	if not status.is_empty(): messages.append("Motor aus · %s starten" % DriverPrompts.hint("ignition") if status == "ENGINE OFF" else STATUS.get(status, status))
 	var names := ["vorne links", "vorne rechts", "hinten links", "hinten rechts"]
 	var pressure: Array = _t.get("tire_pressure", [])
 	for i in mini(4, pressure.size()):
@@ -161,16 +192,16 @@ func _warnings(canvas: Vector2) -> void:
 		elif pressure[i] < 19.0:
 			messages.append("Reifendruck niedrig · " + names[i])
 	if messages.is_empty(): return
-	var p := Vector2(20, 132)
+	var p := Vector2(20, 250 if lesson and lesson.visible_in_hud() else 132)
 	var width := minf(canvas.x - 40, 440)
 	_panel(Rect2(p, Vector2(width, 61 + mini(3, messages.size()) * 23)))
 	_text(p + Vector2(16, 23), "FAHRZEUG PRÜFEN   ·   F2 DETAILS", 11, AMBER)
 	for i in mini(3, messages.size()):
 		_text(p + Vector2(16, 47 + i * 23), messages[i], 14, RED)
-	var advice := "Langsam anhalten · Rücktaste repariert das Fahrzeug"
+	var advice := "Langsam anhalten · %s: Bergung zum Service" % DriverPrompts.hint("menu")
 	if status == "CLUTCH OVERHEATING": advice = "Gas wegnehmen · Kupplung schließen und abkühlen lassen"
-	elif status == "OVERHEATING": advice = "Anhalten · I Motor aus · Kühlung prüfen"
-	elif status == "ENGINE OFF": advice = "I Motor starten · beim Schalten Shift drücken"
+	elif status == "OVERHEATING": advice = "Anhalten · %s Motor aus · Kühlung prüfen" % DriverPrompts.hint("ignition")
+	elif status == "ENGINE OFF": advice = "%s Motor starten · %s Kupplung (manuell)" % [DriverPrompts.hint("ignition"), DriverPrompts.hint("clutch")]
 	_text(p + Vector2(16, 48 + mini(3, messages.size()) * 23), advice, 11, MUTED)
 
 func _row(p: Vector2, title: String, value: String, fraction: float, color := ACCENT) -> void:
@@ -207,10 +238,14 @@ func _diagnostics(canvas: Vector2) -> void:
 	_text(p + Vector2(22, 385), "Physik %d Hz · %.0f %% Echtzeit · Messfenster bis 240 Bilder" % [_stats.get("physics_hz", 2000), 100 * float(_stats.get("realtime_factor", 1))], 11, MUTED)
 
 func _help(canvas: Vector2) -> void:
-	var p := Vector2((canvas.x - 610) * 0.5, (canvas.y - 360) * 0.5)
-	_panel(Rect2(p, Vector2(610, 360)))
+	var p := Vector2((canvas.x - 610) * 0.5, (canvas.y - 496) * 0.5)
+	_panel(Rect2(p, Vector2(610, 496)))
 	_text(p + Vector2(24, 35), "DEINE STEUERUNG", 20)
 	_right(p + Vector2(586, 33), "F1  Schließen", 12, MUTED)
+	if DriverPrompts.using_gamepad:
+		draw_multiline_string(font, p + Vector2(24, 82), DriverPrompts.control_summary(), HORIZONTAL_ALIGNMENT_LEFT, 560, 18, -1, TEXT)
+		draw_multiline_string(font, p + Vector2(24, 368), "Start öffnet auch Aktivitäten, Wetter und Bergung.\nTanken und Reparatur: im markierten Servicebereich anhalten,\nMotor ausschalten und D-Pad halten.", HORIZONTAL_ALIGNMENT_LEFT, 560, 15, -1, MUTED)
+		return
 	var lines := [
 		["W / S  ·  A / D", "Gas & Bremse / Rückwärts  ·  Lenken"],
 		["Leertaste", "Handbremse"], ["Shift  ·  Q / E  ·  M", "Kupplung  ·  Schalten  ·  Automatik / Manuell"],
@@ -220,6 +255,10 @@ func _help(canvas: Vector2) -> void:
 		["K / N  ·  F2", "Karte / Minikarte  ·  Fahrzeugdiagnose"],
 		["F3  ·  F4", "Aktivität wählen  ·  Start / Abbruch"],
 		["J  ·  P  ·  Tab  ·  B", "Zeitlupe  ·  Physikpause  ·  Fahrzeug  ·  Debug"],
+		["L  ·  , / .  ·  H", "Licht  ·  Blinker links / rechts  ·  Warnblinker"],
+		["F / G halten  ·  O", "Tanken / Service (Motor aus)  ·  Haube entriegeln"],
+		["U  ·  Shift+U", "Fahrer- / Beifahrertür im Stand öffnen / schließen"],
+		["F7  ·  F8", "Wetter wechseln  ·  Tageszeit wechseln"],
 		["Gamepad", "RT/LT Gas/Bremse · Stick lenkt · A Handbremse"],
 	]
 	for i in lines.size():

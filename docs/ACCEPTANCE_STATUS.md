@@ -1,0 +1,78 @@
+# Abnahmestand – 9. November 2026
+
+Die laufende Referenz ist Kestrel Hatch auf dem Testgelände. Die Zielkriterien in
+[PRODUCT_TARGET.md](PRODUCT_TARGET.md) bleiben verbindlich; dieser Stand belegt
+konkrete Teilergebnisse und erklärt das Gesamtprodukt noch nicht für fertig.
+
+| Bereich | Nachgewiesene Änderung | Noch offen |
+|---|---|---|
+| Fahrzeugdarstellung | Abgerundetes Cockpit, Instrumente mit realer Telemetrie, sichtbarer Motorraum unter gestützter Haube; Tages-/Nachtbilder in 1920×1080 geprüft; echte Cockpit-Außenspiegel mit korrigierter Kestrel-Blickrichtung | Handmodellierte Detailqualität, vollständige Referenzbildserie |
+| Teile und Schaden | Kestrel-Stoßfänger vorn/hinten besitzen eigene Käfige/Masse, brechbare Halter und unabhängige Darstellung; Haube stößt gegen eigene Dach-/Motorflächen; Kestrel-Vordertüren öffnen/schließen mit getrennten Schlössern und Scharnieren und können abreißen | Hintertüren, Heckklappe, Leuchten und kompatible Segmentierung des importierten Concept; allgemeiner Kantenkontakt |
+| Fahrphysik | Alle sieben nativen Prüfstände bestehen Einfedern, Beschleunigen, Bremsen und Kurvenfahrt. Concept-Ansteuerung und Importvergleich erneut geprüft | Vollständige RMS-Messreihe bei allen Zielgeschwindigkeiten und Renderfrequenzen; Langzeitfahrt mit mehreren beschädigten Fahrzeugen |
+| Testgelände | Freie Bremsgerade als Start, Wegweiser, Servicezufahrt, Nachtlampen, kollidierende Dächer, bepflanzte Innenflächen, Geländebermen und Randbegrenzung | Flächendeckende Streckenabnahme und dieselbe Qualität auf weiteren Karten |
+| Spielablauf | Einführung → gemessene Bremsung → Bergung → Reparatur → Tanken → gespeicherten Abschluss neu laden; Aktivitäten und Wetter auch über Pausenmenü bedienbar | Eine komplette manuelle Referenzsitzung einschließlich beendeter Zeitfahrrunde und realem Gamepad |
+| Wetter | Innenraum-/Dachvolumen halten sichtbaren Regen fern; Tageszeit, Pause, Zeitlupe und Nässe geprüft; Abblend-/Fernlicht visuell geprüft; Stereo-Regen mit Innenraum-/Dachdämpfung und tatsächlicher AudioServer-Aufnahme geprüft | Verformungsgenaue Regenabdichtung, bewegliche Scheibenwischer, subjektive Hörabnahme der neuen Regenakustik |
+| Fortschritt | Versionierte Profile mit Sicherung/Wiederherstellung, Bremsrekorden, Einführungszielen und letzter Auswahl; Einstellungen bleiben erhalten | Weiterer Spielverlauf über Einführung und vorhandene Aktivitäten hinaus |
+| Linux-Paket | Wiederholbarer Export mit Debug-/Release-Bibliothek, offiziellen geprüften Templates, Credits und isolierter Standalone-Prüfung | GPU-Benchmark, 30-minütige kombinierte Fahrsitzung, ältere Distributionen und andere Betriebssysteme |
+
+## Funktionale Prüfungen
+
+* Native Kernprüfung: **69 Testfälle, 83.766 Assertions bestanden**. Darin echte
+  Aufprallversuche, Haubenstabilität, Kontaktimpulse und Reparaturzustände.
+* Alle sieben `cartest … --quick`-Prüfstände: `RESULT: OK`.
+* Erweiterter Headless-Belastungstest: **30 Minuten 1,75 Sekunden simuliert**
+  in **5 Minuten 5,753 Sekunden Laufzeit**. **51 vollständige Zyklen** mit echter
+  Beschleunigung über 70 km/h, Bremsung, Öffnen und erneutem Verriegeln beider
+  Vordertüren, Aufprall an der Crashwand, Bergung mit erhaltenem Schaden,
+  Service-Reparatur und Kraftstoffabgabe. Wetter, Tageszeit, Licht und Kameras
+  wechselten wiederholt. Physikwerte, Tankgrenzen, Fahrzeugzugehörigkeit und
+  Szenen-Node-Anzahl blieben gültig; keine Fehler oder Warnungen.
+  Audioverarbeitung und GPU-Darstellung gehören nicht zu diesem Test.
+  Wiederholung: `session_soak_test.gd`.
+* Türbedienung: **20 Prüfungen**; Cockpitinstrumente einschließlich Türwarnung:
+  **15 Prüfungen**; Tür-/Regen-/Akustikintegration: **8 Prüfungen** bestanden.
+  Die normale Türbewegung erhält vorhandene Schäden und Tankinhalt.
+* Spiegelintegration: **42 Prüfungen** für optische Flächen, Blickrichtung,
+  Projektionsgrenzen, Fahrzeugwechsel und stabile Abbildung zwischen Aufnahmen
+  sowie mitbewegte Spiegelflächen beim tatsächlichen Türöffnen bestanden.
+  Kestrel-Spiegelglas und Gehäuse sind am Modell zum rückwärtigen
+  Horizont ausgerichtet; Concept verwendet seine vorhandene Spiegelgeometrie.
+* Regenakustik: **14 Prüfungen** einschließlich tatsächlicher Master-Bus-Aufnahme
+  bestanden. Die Aufnahme ist bei aktivem Regen hörbar ausgesteuert und bei
+  Hauptlautstärke null exakt stumm. Eine subjektive Hörabnahme ist separat offen.
+* Godot-Prüfungen umfassen Fahrsteuerung, Aktivitäten, importiertes Modell,
+  Fahrerassistenz, Gamepad-Ereignisse, Cockpit, Service, Wetter, Kartenzugang,
+  Einführung und gespeicherte Profile. Befehle stehen in der README.
+* Gemessene Kestrel-Bremsung über den tatsächlichen Untergrund-/Reifengriffpfad:
+  trocken **16,89 m aus 60,194 km/h**, nass **19,45 m aus 60,000 km/h**;
+  beide Läufe ohne gebrochene Beams. Das ist ein Regressionsvergleich, keine
+  Messung an einem realen Fahrzeug.
+
+## Bildprüfung und Grenzen
+
+Die aktuelle Cloud-Prüfung verwendet Godot 4.5.1 mit Software-OpenGL/llvmpipe.
+Geprüft wurden Fahransicht, Cockpit, Service, Nachtlicht, Regen unter Dächern und
+geöffnete Haube. Die neue Türserie zeigt eine tatsächlich um 68,36° geöffnete
+Tür, erneutes Verriegeln bei 0,01°, Abtrennung nach einem Fahrzeug-Seitenaufprall
+und Reparatur. Scheibe, Innenverkleidung und Spiegel bleiben am Türkäfig; die
+Öffnung ist frei von zurückbleibender Außenhaut. Beide Fahrzeuge zeigen im
+Cockpit echte Spiegelbilder bewegter und umgefärbter Weltobjekte. Der Kestrel
+zeigt nach Korrektur der Glasneigung die Straße und Böschung hinter dem Auto;
+beim Concept nimmt die eigene Karosserie noch einen großen Teil des Spiegels ein.
+Ein mit tatsächlichen Gas-/Bremseingaben erstelltes Video fährt
+von 0 auf 75,8 km/h und wieder bis zum Stillstand, ohne neue gebrochene Beams.
+Seine wenigen Software-Renderbilder belegen
+keine gleichmäßige Darstellung mit 60 FPS. Bildschirmfotos und Video liegen im
+Arbeitsbereich unter `/workspace/.softbody-tools/visual/reference/`.
+
+Gamepad-Prüfungen speisen echte Godot-Gamepad-Ereignisse ein, verwenden aber kein
+physisches Eingabegerät. Headless-Testskripte melden teilweise weiterhin
+ObjectDB-Aufräumwarnungen beim Prozessende; Script-/Enginefehler gelten als Fehler.
+Der Paketprüfer erfordert einen erfolgreichen Standalone-Start beider Referenz-
+fahrzeuge und eine Rückkehr ins Hauptmenü ohne Script-/Enginefehler.
+
+Die Tür-/Spiegelbilder liegen unter
+`/workspace/.softbody-tools/visual/doors-mirrors/`, die Regenaufnahmen unter
+`/workspace/.softbody-tools/audio/`. Bei geöffneter oder fehlender Vordertür wird
+aktuell der gesamte vereinfachte Innenraum-Regenausschluss aufgehoben. Das ist
+keine verformungsgenaue Simulation von eindringendem Wasser an der Türöffnung.

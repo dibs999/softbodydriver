@@ -52,6 +52,8 @@ void parseBody(CarBodyDef& b, const json& j) {
         SB_REAL("cornerRadiusFront", b.cornerRadiusFront) SB_REAL("cornerRadiusRear", b.cornerRadiusRear)
         SB_REAL("archClearance", b.archClearance) SB_INT("doors", b.doors)
         SB_REAL("paintMetallic", b.paintMetallic)
+        SB_BOOL("detachableBumpers", b.detachableBumpers)
+        SB_BOOL("detachableDoors", b.detachableDoors)
         return false;
     });
 }
@@ -129,6 +131,12 @@ CarDefinition parseCarDefinition(const std::string& text, const std::string& sou
                     if (kk == "gears") { e.gears = vv.get<std::vector<real>>(); return true; }
                     if (kk == "name") { e.name = v2.get<std::string>(); return true; }
                     if (kk == "layout") { e.layout = v2.get<std::string>(); return true; }
+                    if (kk == "position") {
+                        e.position = v2.get<std::string>();
+                        if (e.position != "front" && e.position != "mid")
+                            throw std::runtime_error("engine.position must be front or mid");
+                        return true;
+                    }
                     if (kk == "automatic") { e.automatic = v2.get<bool>(); return true; }
                     if (kk == "cylinders") { e.cylinders = v2.get<int>(); return true; }
                     static const std::pair<const char*, real EngineDef::*> reals[] = {

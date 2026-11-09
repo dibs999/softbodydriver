@@ -67,6 +67,7 @@ class MapDrawing extends Control:
 
 var player: SBVehicle
 var activity: Node3D
+var lesson: Node
 var cockpit := false
 var _map := MapDrawing.new()
 var _clip := Control.new()
@@ -149,7 +150,7 @@ func _layout() -> void:
 		var height := clampf(viewport.y * 0.28, 110.0, 211.0)
 		size = Vector2(width, height)
 		position = viewport - size - Vector2(16, 16)
-		if cockpit: position.y = 164 if activity and activity.mode > 0 else 58
+		if cockpit: position.y = 184 if activity and activity.mode > 0 else 90
 	_clip.position = Vector2(9, 30)
 	_clip.size = size - Vector2(18 + legend_width, 54)
 	_map.size = _clip.size
@@ -171,6 +172,9 @@ func _update_view() -> void:
 	if activity:
 		var target: Vector3 = activity.target()
 		_map.destination = Vector2(target.x, target.z)
+	if lesson and lesson.visible_in_hud() and lesson.stage == "service":
+		var bay: Vector3 = lesson.game.equipment.bay
+		_map.destination = Vector2(bay.x, bay.z)
 	if overview_open:
 		_map.center = _bounds.get_center()
 		var fit := maxf(_bounds.size.x / maxf(1.0, _map.size.x), _bounds.size.y / maxf(1.0, _map.size.y))
