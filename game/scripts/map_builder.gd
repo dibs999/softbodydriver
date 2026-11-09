@@ -357,6 +357,7 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 			p.y = ground_height.call(p.x, p.z)
 			hedges.append(p)
 	V.plant(parent, "bush", hedges, 33, 0.8, 2.0, false)
+	V.roadside_grass(parent, road, true, half_w + 0.7, half_w + 16.0, 6.0, 34, ground_height)
 	_hill_landmarks(world, parent, road, ground_height)
 	var lookout := _hill_lookout(world, parent, road, ground_height)
 

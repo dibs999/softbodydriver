@@ -83,6 +83,9 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	# A ground-following apron instead of a floating horizontal yard slab.
 	var yard := PackedVector3Array([farm - forward * 15, farm + forward * 15])
 	parent.add_child(C.road_mesh(yard, 15, _track_material(30, 0), false, 0.06, 9.0, ground))
+	for i in paths.size():
+		V.roadside_grass(parent, paths[i], false, widths[i] + 0.3, widths[i] + 12.0, 4.5, 77 + i, ground,
+			func(p: Vector3) -> bool: return _near_paths(Vector2(p.x, p.z), paths, 3.2) or p.distance_to(yard[0]) < 30.0)
 	_vegetation(parent, world, paths, ground, farm)
 	_farm(parent, world, farm, ground)
 	var timber := forest[forest.size()/3] + Vector3(-14,0,9)

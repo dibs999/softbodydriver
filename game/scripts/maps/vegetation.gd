@@ -226,11 +226,27 @@ static func _leaf_texture(kind: String) -> ImageTexture:
 	var bg := Color(0.17, 0.27, 0.08, 0.0)
 	if kind == "needle":
 		bg = Color(0.1, 0.19, 0.11, 0.0)
-	elif kind == "dry":
+	elif kind == "dry" or kind == "grass_dry":
 		bg = Color(0.34, 0.31, 0.2, 0.0)
 	# Transparent texels carry the leaf colour so mip levels do not darken the fringes.
 	img.fill(bg)
-	if kind == "needle":
+	if kind.begins_with("grass"):
+		# Tuft of blades rising from the bottom edge, slightly curved, varied height.
+		var dry_grass := kind == "grass_dry"
+		for b in 70:
+			var x0 := rng.randf_range(30, 226)
+			var top := Vector2(x0 + rng.randf_range(-40, 40), rng.randf_range(20, 150))
+			var bend := Vector2(rng.randf_range(-18, 18), 0)
+			var base_col := Color(0.2, 0.32, 0.1) if not dry_grass else Color(0.5, 0.44, 0.28)
+			base_col = base_col.lerp(Color(0.36, 0.42, 0.18) if not dry_grass else Color(0.62, 0.55, 0.36), rng.randf()) * rng.randf_range(0.8, 1.15)
+			var steps := 24
+			var prev := Vector2(x0, 255)
+			for k in range(1, steps + 1):
+				var f := float(k) / steps
+				var pt := Vector2(x0, 255).lerp(top, f) + bend * f * f
+				_line(img, prev, pt, lerpf(4.0, 1.0, f), base_col.lerp(base_col * 1.3, f))
+				prev = pt
+	elif kind == "needle":
 		# Spruce spray: stem from bottom to top with side shoots, all covered in needles.
 		var shoots: Array = [[Vector2(128, 250), Vector2(128, 8), 3.0]]
 		for i in 9:
@@ -307,3 +323,89 @@ static func _leaf(img: Image, center: Vector2, angle: float, length: float, widt
 			if absf(v) < 0.08 and u > -0.9:
 				shade *= 1.18                                              # midrib
 			img.set_pixel(x, y, Color(color.r * shade, color.g * shade, color.b * shade, 1.0))
+
+
+## Ground cover: grass tufts (crossed blade cards), only drawn near the camera.
+static func grass(parent: Node3D, ground: Array[Vector3], seed := 1, dry := false, min_scale := 0.7, max_scale := 1.3) -> void:
+	if ground.is_empty():
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var xforms: Array[Transform3D] = []
+	for p in ground:
+		var s := rng.randf_range(min_scale, max_scale)
+		xforms.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.8, 1.25), s)), p))
+	var tuft := _tuft_mesh(dry)
+	var chunks: Dictionary = {}
+	for xf in xforms:
+		var key := Vector2i(floori(xf.origin.x / 48.0), floori(xf.origin.z / 48.0))
+		if not chunks.has(key):
+			var list: Array[Transform3D] = []
+			chunks[key] = list
+		chunks[key].append(xf)
+	for list: Array[Transform3D] in chunks.values():
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = tuft
+		mm.instance_count = list.size()
+		for i in list.size():
+			mm.set_instance_transform(i, list[i])
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mmi.visibility_range_end = 85.0
+		mmi.visibility_range_end_margin = 15.0
+		parent.add_child(mmi)
+
+
+static func _tuft_mesh(dry: bool) -> ArrayMesh:
+	var key := "tuft_dry" if dry else "tuft"
+	if _meshes.has(key):
+		return _meshes[key]
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in 3:
+		var a := PI * i / 3.0
+		var facing := Vector3(cos(a), 0, sin(a))
+		_card(st, Vector3(0, 0.22, 0), facing, Vector3.UP, Vector2(0.75, 0.46), Vector3.UP, 1.0, float(i) / 3.0)
+	var m := ArrayMesh.new()
+	st.commit(m)
+	var mat := _leaf_material("grass_dry" if dry else "grass", Color(0.74, 0.76, 0.64), Color(0.6, 0.66, 0.5))
+	mat.set_shader_parameter("autumn_amount", 0.0)
+	mat.set_shader_parameter("ground_ao", true)
+	m.surface_set_material(0, mat)
+	_meshes[key] = m
+	return m
+
+
+## Grass bands on both sides of a road polyline, `inner`..`outer` metres from its centre line.
+## `height` (x, z) -> y follows the terrain; `blocked` (Vector3) -> bool skips occupied ground.
+static func roadside_grass(parent: Node3D, path: PackedVector3Array, closed: bool, inner: float, outer: float,
+		per_metre: float, seed: int, height := Callable(), blocked := Callable(), dry := false) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var points: Array[Vector3] = []
+	var segments := path.size() if closed else path.size() - 1
+	for i in segments:
+		var a := path[i]
+		var b := path[(i + 1) % path.size()]
+		var d := b - a
+		d.y = 0
+		var length := d.length()
+		if length < 0.01:
+			continue
+		var side := Vector3(-d.z, 0, d.x) / length
+		var count := int(length * per_metre)
+		for k in count:
+			var along := a.lerp(b, rng.randf())
+			var lateral := rng.randf_range(inner, outer)
+			# Denser near the road edge, thinning out into the field.
+			if rng.randf() > 1.0 - 0.6 * (lateral - inner) / maxf(outer - inner, 0.1):
+				continue
+			var p := along + side * lateral * (1.0 if rng.randf() < 0.5 else -1.0)
+			if height.is_valid():
+				p.y = height.call(p.x, p.z)
+			if blocked.is_valid() and blocked.call(p):
+				continue
+			points.append(p)
+	grass(parent, points, seed, dry)

@@ -54,6 +54,9 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var b_center := _offset(center, -CARRIAGE_OFFSET)
 	parent.add_child(C.road_mesh(a_center, CARRIAGE_HALF, road, true, 0.03, 14.0))
 	parent.add_child(C.road_mesh(b_center, CARRIAGE_HALF, road, true, 0.03, 14.0))
+	# Verges beyond the guard rails; the service area keeps its paving.
+	V.roadside_grass(parent, center, true, CARRIAGE_OFFSET + CARRIAGE_HALF + 1.6, CARRIAGE_OFFSET + CARRIAGE_HALF + 22.0, 1.6, 93,
+		Callable(), func(p: Vector3) -> bool: return p.x > SERVICE_START - 40.0 and p.x < SERVICE_END + 40.0 and p.z < -RADIUS + 120.0)
 	# Central reservation: concrete step barrier; guard rails on both outer edges.
 	C.barrier(parent, world, center, 0.0, 0.85, 0.55, concrete)
 	var open_start := 0

@@ -37,6 +37,11 @@ func _initialize() -> void:
 		for j in 3:
 			pts.append(Vector3(-24 + k * 12, 0, -10 - j * 14))
 		V.plant(root3d, kinds[k], pts, 3 + k)
+	var tufts: Array[Vector3] = []
+	var rng := RandomNumberGenerator.new()
+	for i in 6000:
+		tufts.append(Vector3(rng.randf_range(-40, 40), 0, rng.randf_range(-50, 14)))
+	V.grass(root3d, tufts, 7)
 	var cam := Camera3D.new()
 	cam.fov = 60
 	root3d.add_child(cam)

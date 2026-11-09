@@ -73,6 +73,15 @@ Alle Karten verwenden die neuen Pflanzen:
 
 Die Vorschau `tests/vegetation_shots.gd` rendert alle Arten nebeneinander.
 
+**Bodenbewuchs:**
+
+* `V.grass` setzt Grasbüschel aus je drei gekreuzten Halmkarten. Sie sind zu den Wurzeln hin dunkler
+  und bewegen sich nur an den Spitzen im Wind.
+* Die Büschel werden in 48-m-Blöcken gebündelt und nur bis 85 m gezeichnet.
+* `V.roadside_grass` streut sie in Bändern entlang einer Straße und dünnt sie zum Feld hin aus. Die Höhe
+  folgt dem Gelände; belegte Flächen werden ausgelassen.
+* Im Einsatz auf Hügelland, Offroad-Wegen und den Autobahnböschungen.
+
 ## Stadtfassaden
 
 `materials/facade.gdshader` ersetzt die gemalten Fassadentexturen:
@@ -94,4 +103,4 @@ Vorschau: `tests/facade_shots.gd -- <png> <stil> [debug]`.
 ## Offen
 
 * Felsen und Klippen der Wüste haben nur Vertexfarben.
-* Grasbüschel und Bodenbewuchs in Fahrbahnnähe fehlen noch.
+* Testgelände, Stadtpark und Wüste haben noch keinen Bodenbewuchs.
