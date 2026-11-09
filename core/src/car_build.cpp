@@ -371,7 +371,7 @@ CarBuild buildCar(const CarDefinition& def) {
         // which keeps the spring path rigid under bump-stop loads.
         cn.armMid = cn.lbj;
         cn.tower = node("tower", {xa, R + 0.43, tr - 0.29}, 10.0, "subframe");
-        unsprungMass[static_cast<std::size_t>(c)] = 2 * hubMass + caliperMass + 6 + 5 + 5 + tire.tireMass;
+        unsprungMass[static_cast<std::size_t>(c)] = 2 * hubMass + caliperMass + 6 + 5 + 5 + tire.massFor(cn.front);
 
         // Subframe nodes are bolted to the body.
         for (std::uint32_t n : {cn.lowerF, cn.lowerR, cn.upperF, cn.upperR, cn.rackEnd, cn.tower})
@@ -846,7 +846,7 @@ CarBuild buildCar(const CarDefinition& def) {
         for (std::uint32_t n : rig.bodyNodes) isBody[n] = true;
         for (std::size_t i = 0; i < car.nodeCount(); ++i)
             if (!isBody[i]) fixedMass += car.masses()[i];
-        fixedMass += 4.0 * tire.tireMass;  // tyres are added below
+        fixedMass += tire.totalMass();  // tyres are added below
         const real bodyMass = std::max({300.0, 2.0 * static_cast<real>(rig.bodyNodes.size()), def.chassis.curbMass - fixedMass});
         const real targetX = prof.xRA + def.chassis.frontWeight * bd.wheelbase;
         auto comFor = [&](real tilt, std::vector<real>& masses) {
@@ -877,8 +877,8 @@ CarBuild buildCar(const CarDefinition& def) {
             for (std::size_t i = 0; i < car.nodeCount(); ++i)
                 if (!isBody[i]) { mx += car.masses()[i] * car.positions()[i].x; m += car.masses()[i]; }
             // Tyres sit at the axles.
-            mx += 2.0 * tire.tireMass * (prof.xFA + prof.xRA);
-            m += 4.0 * tire.tireMass;
+            mx += 2.0 * (tire.massFor(true) * prof.xFA + tire.massFor(false) * prof.xRA);
+            m += tire.totalMass();
             return mx / m;
         };
         std::vector<real> masses(rig.bodyNodes.size());
@@ -894,7 +894,7 @@ CarBuild buildCar(const CarDefinition& def) {
     // ------------------------------------------------------------------ spring preload for design ride height
     {
         const real g = 9.81;
-        real mTotal = car.totalMass() + 4.0 * tire.tireMass;
+        real mTotal = car.totalMass() + tire.totalMass();
         real unsprung = 0.0;
         for (real u : unsprungMass) unsprung += u;
         const real sprung = mTotal - unsprung;
@@ -938,7 +938,7 @@ CarBuild buildCar(const CarDefinition& def) {
         ws.radius = tire.radius;
         ws.width = cn.front ? tire.width : tire.rearWidth();
         ws.numRays = tire.rays;
-        ws.tireMass = tire.tireMass;
+        ws.tireMass = tire.massFor(cn.front);
         ws.friction = tire.friction;
         ws.pressurePsi = tire.pressurePsi;
         const real rayScale = 12.0 / static_cast<real>(tire.rays);

@@ -122,8 +122,37 @@ Alle Fahrzeuge fahren ohne Lenkeingabe bis 200 km/h mit unter 1,5° Gierwinkel g
 beim Kestrel von 1.838 auf ~500 N. Zusätzliche Prüfungen: kein Resonanzmaximum bei
 145 km/h, Ausrollwiderstand unter 750 N, stationäre Kurvenfahrt des Concept GT.
 
+## Dritte Iteration: Pendeln des Concept GT an der Höchstgeschwindigkeit
+
+Der Concept GT fuhr bei Vollgas ohne Lenkeingabe nicht geradeaus. Ab ~320 km/h ging er in einen
+selbsterhaltenden Kreis mit ~0,5 g über, mit bis zu 36° Gierwinkel auf gerader Fläche.
+Messreihe (Werkzeug: Vollgas- bzw. Tempomatlauf mit Lenkimpuls, 0,1-s-Protokoll):
+
+* **Ohne Luftwiderstand** blieb er bei 320 km/h exakt geradeaus. Ein Lenkimpuls klang bei
+  200/280 km/h ab, bei 320 km/h nur noch schleppend. Die Stabilitätsreserve fiel also mit der
+  Geschwindigkeit; die Aerodynamik lieferte lediglich den Anstoß.
+* **Ausgeschlossen:**
+  * Asymmetrie der Haut-Triangulierung: Knotenlasten bis 258 N links/rechts verschieden, eine
+    spiegelsymmetrische Triangulierung änderte aber nichts.
+  * Aero-Giermoment (46 Nm bei 3° Schräganströmung) und Aero-Balance.
+  * Sperrdifferenzial, Nachlauf (3,4° → 7°) und Hilfsrahmenlager (Faktor 3 steifer).
+* **Ursache:**
+  * Die Vorderreifen schlupften schon bei 310 km/h 5–7-mal stärker als die angetriebenen
+    Hinterreifen, mit steil steigender Tendenz. Bei ~320 km/h brach ihre Haftung ein.
+  * Die schmalen Vorderreifen (0,27 m) trugen dieselbe Reifenmasse (13 kg) wie die breiten
+    Hinterreifen (0,35 m). Bei gleicher Laufflächenmasse, aber nur 77 % Membranspannung lag die
+    Wellengeschwindigkeit des Laufflächenrings ~12 % niedriger, und die stehende Welle setzte vorn
+    knapp oberhalb von 300 km/h ein.
+* **Änderung:** `TireDef::massFor(front)`. `tireMass` gilt für den breiteren Reifen; der schmalere
+  Reifen ist im Verhältnis der Breiten leichter (Concept vorn 10,0 kg). Masse, Schwerpunkt und
+  ungefederte Masse verwenden die achsweise Masse.
+* **Ergebnis:**
+  * Concept GT bei Vollgas 338,5 km/h, über 80 s 2,4° Gesamtgierwinkel.
+  * Ein Lenkimpuls bei 337 km/h klingt in ~3 s ab.
+  * Andere Fahrzeuge unverändert (Kestrel 197, Vortex 277, Aurora 234 km/h; alle unter 1,2° Gierwinkel).
+  * Prüfung: `staggered tyres keep grip at top speed…` in `core/tests/test_car.cpp`.
+
 ## Offen
 
 * Ausrollwiderstand liegt noch ~30–40 % über typischen Realwerten.
-* Concept GT pendelt an seiner Höchstgeschwindigkeit (~324 km/h) auf.
 * Spieler mit Tastatur/Gamepad und die Fahrhilfe korrigieren kleinere Abweichungen.

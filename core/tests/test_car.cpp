@@ -697,6 +697,38 @@ TEST_CASE("full throttle runs straight to autobahn top-speed range without steer
     CHECK(w.stats().finite);
 }
 
+TEST_CASE("staggered tyres keep grip at top speed and the Concept GT runs straight beyond 320 km/h") {
+    // The narrow fronts used to carry the rear tyre mass: less membrane tension per tread mass,
+    // so their standing wave arrived near 320 km/h. Front grip faded, the car swung into a
+    // self-sustained 0.5 g circle with up to 36 deg of yaw on a straight road.
+    const auto def = loadCarDefinition(carPath("concept_gt"));
+    CHECK(def.tires.massFor(true) < def.tires.massFor(false));
+    CHECK(def.tires.massFor(false) == doctest::Approx(def.tires.tireMass));
+    CarBuild cb = buildCar(def);
+    const auto layout = cb.layout;
+    World w = flatWorld();
+    w.addBody(std::move(cb.body));
+    auto& car = w.body(0);
+    VehicleControls controls;
+    controls.gear = -99;
+    car.setControls(controls);
+    w.simulate(2.0);
+    controls.throttle = 1.0;
+    car.setControls(controls);
+    real worstYaw = 0.0, peak = 0.0;
+    for (int i = 0; i < 60; ++i) {
+        w.simulate(1.0);
+        const auto& p = car.positions();
+        const Vec3 forward = normalize(p[layout.refFL] + p[layout.refFR] - p[layout.refRL] - p[layout.refRR]);
+        worstYaw = std::max(worstYaw, std::abs(std::atan2(forward.z, forward.x)) * 180.0 / 3.14159265358979);
+        peak = std::max(peak, car.telemetry().speedKmh);
+    }
+    CHECK(peak > 320.0);
+    CHECK(worstYaw < 4.0);
+    CHECK(std::abs(car.centerOfMass().z) < 150.0);
+    CHECK(w.stats().finite);
+}
+
 TEST_CASE("cars settle onto their tyres without body sag, toe-out or brake chatter") {
     // The body used to sink ~5 cm around soft strut-tower mounts (front toe-out up to 1.8 deg), and
     // a held brake that fought body pitch rocked a parked Concept GT with ~4 kJ.

@@ -17,6 +17,7 @@
 //   * rotating wheel meshes (tyre + rim + brake disc) in wheel-local coordinates.
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <string>
@@ -83,6 +84,16 @@ struct TireDef {
     real width = 0.205;
     real widthRear = 0.0;         ///< Staggered rear tyres (0 = same as width).
     real rearWidth() const { return widthRear > 0.0 ? widthRear : width; }
+    /// Tyre mass for one axle. `tireMass` is the wider tyre's; with staggered widths the narrower
+    /// tyre is lighter in proportion. A narrow front with the full rear-tyre mass had ~12 % less
+    /// tread-ring wave speed (same mass, less membrane tension) and lost grip to the standing wave
+    /// at ~320 km/h, which sent the Concept GT weaving at top speed.
+    real massFor(bool front) const {
+        const real w = front ? width : rearWidth();
+        return tireMass * w / std::max(width, rearWidth());
+    }
+    /// Combined mass of all four tyres.
+    real totalMass() const { return 2.0 * (massFor(true) + massFor(false)); }
     real rimRadius = 0.203;
     real pressurePsi = 33.0;
     real friction = 1.15;
