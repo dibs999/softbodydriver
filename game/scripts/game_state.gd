@@ -607,7 +607,18 @@ func make_material_library() -> Dictionary:
 	lib["seam"] = _plastic(Color(0.01, 0.01, 0.01), 0.9)
 	lib["grille"] = _plastic(Color(0.02, 0.02, 0.025), 0.35)
 	lib["interior"] = _plastic(Color(0.07, 0.07, 0.075), 0.85)
-	lib["upholstery"] = _plastic(Color(0.24, 0.19, 0.145), 0.94)
+	lib["upholstery"] = _textile(Color(0.24, 0.19, 0.145), 0.94, 0.9, 0.35)
+	lib["fabric"] = _textile(Color(0.15, 0.15, 0.16), 0.96, 1.0, 0.5)
+	lib["seat_insert"] = _textile(Color(0.07, 0.072, 0.08), 0.97, 2.2, 0.8)
+	lib["headliner"] = _textile(Color(0.44, 0.43, 0.41), 0.95, 0.6, 0.25)
+	lib["carpet"] = _textile(Color(0.05, 0.05, 0.055), 1.0, 1.6, 0.7)
+	lib["belt"] = _textile(Color(0.04, 0.04, 0.045), 0.8, 2.0, 0.3)
+	lib["arch_liner"] = _textile(Color(0.035, 0.035, 0.037), 0.9, 0.7, 0.6)
+	lib["underbody"] = _textile(Color(0.11, 0.11, 0.115), 0.85, 0.5, 0.4)
+	lib["exhaust"] = _metal(Color(0.30, 0.27, 0.24), 0.65, 0.62)
+	lib["heatshield"] = _metal(Color(0.62, 0.62, 0.60), 0.85, 0.45)
+	lib["tank"] = _plastic(Color(0.10, 0.10, 0.105), 0.7)
+	lib["seat_frame"] = _metal(Color(0.32, 0.32, 0.33), 0.8, 0.35)
 	lib["tire"] = _plastic(Color(0.035, 0.035, 0.035), 0.92)
 	lib["radiator"] = _metal(Color(0.15, 0.15, 0.16), 0.6, 0.5)
 	lib["spring"] = _plastic(Color(0.75, 0.08, 0.06), 0.35)
@@ -631,6 +642,31 @@ func make_material_library() -> Dictionary:
 	tail.emission_energy_multiplier = 0.9
 	lib["taillight"] = tail
 	return lib
+
+
+## Fabric, carpet and textured plastics: a noise normal map gives the weave or grain
+## that tells them apart from smooth moulded plastic.
+var _textile_normal: NoiseTexture2D
+func _textile(c: Color, rough: float, scale: float, strength: float) -> StandardMaterial3D:
+	if _textile_normal == null:
+		var noise := FastNoiseLite.new()
+		noise.noise_type = FastNoiseLite.TYPE_CELLULAR
+		noise.frequency = 0.09
+		_textile_normal = NoiseTexture2D.new()
+		_textile_normal.width = 256
+		_textile_normal.height = 256
+		_textile_normal.seamless = true
+		_textile_normal.as_normal_map = true
+		_textile_normal.bump_strength = 6.0
+		_textile_normal.noise = noise
+	var m := StandardMaterial3D.new()
+	m.albedo_color = c
+	m.roughness = rough
+	m.normal_enabled = true
+	m.normal_texture = _textile_normal
+	m.normal_scale = strength
+	m.uv1_scale = Vector3.ONE * 18.0 * scale   # generated meshes carry rest-pose UVs in metres
+	return m
 
 
 func _metal(c: Color, metallic: float, rough: float) -> StandardMaterial3D:

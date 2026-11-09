@@ -58,7 +58,7 @@ TEST_CASE("reference bumpers have independent mass-budgeted cages and sacrificia
             if (a && b) ++internal;
             if (a != b) {
                 REQUIRE(beam.breakGroup >= 0);
-                CHECK(car.body.breakGroupNames()[static_cast<std::size_t>(beam.breakGroup)] == group);
+                CHECK(car.body.breakGroupNames()[static_cast<std::size_t>(beam.breakGroup)].rfind(group + "_", 0) == 0);
             }
         }
         CHECK(internal == 28);
@@ -118,9 +118,14 @@ TEST_CASE("front and rear impact release bumper mounts and repair restores the c
         for (auto& v : car.body.velocities()) v = {direction * 18.0, 0, 0};
         world.addBody(std::move(car.body));
         world.addCollider(StaticCollider::plane({end == 0 ? car.def.body.length + 0.25 : -0.25, 0, 0}, {-direction, 0, 0}, 0.0));
+        const auto farNodes = end == 0 ? car.layout.rearBumperNodes : car.layout.frontBumperNodes;
         world.simulate(0.12);
         REQUIRE(world.stats().finite);
-        CHECK(attached(world.body(0), nodes) == 0);
+        // The struck bumper tears loose clip by clip (at least half its clips at 65 km/h); the
+        // bumper at the other end stays on despite the deceleration spike.
+        MESSAGE("clip beams still attached at the struck end: " << attached(world.body(0), nodes));
+        CHECK(attached(world.body(0), nodes) <= 6);
+        CHECK(attached(world.body(0), farNodes) == 12);
         CHECK(connected(world.body(0), nodes)); // A released bumper remains a physical part, not eight loose particles.
         world.body(0).repair(rest);
         CHECK(attached(world.body(0), nodes) == 12);

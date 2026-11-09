@@ -64,6 +64,9 @@ public:
     /// Lamp corners (head/tail x left/right): crush of the body structure around each lamp.
     /// [{name, front, side, damage, broken}]; a broken lamp stays dark until repaired.
     Array get_lamp_states() const;
+    /// Glass panes of the generated body: [{name, instance, damage, center}]. Damage is the crush
+    /// of the structure the pane is bonded to (0 intact, >= 1 shattered); repair resets it.
+    Array get_glass_states() const;
     bool release_bonnet(); ///< Releases latch once; hinges may subsequently break under impact.
     void repair_in_place();                   ///< Repair, keep position and heading, set upright.
 
@@ -200,6 +203,9 @@ private:
     bool dashboardAvailable_ = true;
     /// Beams around each lamp corner (head left/right, tail left/right), collected on first use.
     mutable std::vector<std::vector<std::uint32_t>> lampBeams_;
+    struct GlassPane { std::size_t surface; std::vector<std::uint32_t> beams, nodes; std::vector<bool> bonded; };
+    mutable std::vector<GlassPane> glassPanes_;
+    mutable bool glassPanesBuilt_ = false;
     std::vector<WheelGpu> wheels_;
     bool debugView_ = false;
     MeshInstance3D* debugInstance_ = nullptr;

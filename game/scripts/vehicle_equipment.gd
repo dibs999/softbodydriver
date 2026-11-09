@@ -313,10 +313,36 @@ func _process(delta: float) -> void:
 			signal_material.set_shader_parameter("vehicle_right", right)
 			signal_material.set_shader_parameter("left_on", blink and (s["hazards"] or s["signal"] == -1))
 			signal_material.set_shader_parameter("right_on", blink and (s["hazards"] or s["signal"] == 1))
+	_update_cabin_light()
 	var sim_time := float(game.world.get_stats()["sim_time"])
 	var elapsed := maxf(0.0, sim_time - _last_sim_time) if _last_sim_time >= 0.0 else 0.0
 	_last_sim_time = sim_time
 	update_service(elapsed, Input.is_action_pressed("service_repair"), Input.is_action_pressed("refuel"))
+
+## Daylight scattered in through the windows. Without global illumination the cabin only gets
+## sky ambient, which leaves the headliner and the seat fronts nearly black in daylight. One weak,
+## shadowless light in the player's cabin stands in for that bounce light and fades out at night.
+var _cabin_light: OmniLight3D
+func _update_cabin_light() -> void:
+	var car: SBVehicle = game.player if is_instance_valid(game.player) else null
+	if car == null:
+		if _cabin_light: _cabin_light.visible = false
+		return
+	if _cabin_light == null:
+		_cabin_light = OmniLight3D.new()
+		_cabin_light.name = "CabinFill"
+		_cabin_light.shadow_enabled = false
+		_cabin_light.omni_range = 1.7
+		_cabin_light.omni_attenuation = 1.2
+		_cabin_light.light_color = Color(1.0, 0.97, 0.92)
+		_cabin_light.light_specular = 0.05
+		add_child(_cabin_light)
+	var weather: Node = game.get("weather")
+	var day := float(weather.get("daylight")) if weather and weather.get("daylight") != null else 1.0
+	_cabin_light.visible = day > 0.05
+	_cabin_light.light_energy = 0.55 * day
+	var eye := car.get_driver_eye()
+	_cabin_light.global_position = eye + car.get_right() * 0.36 - car.get_up() * 0.28 - car.get_forward() * 0.25
 
 const LAMP_CAPTIONS := {"head_left": "Scheinwerfer links", "head_right": "Scheinwerfer rechts",
 	"tail_left": "Rückleuchte links", "tail_right": "Rückleuchte rechts"}
@@ -326,6 +352,7 @@ func _update_lamp_damage(v: SBVehicle, s: Dictionary, delta: float) -> void:
 	s["lamp_check"] = float(s["lamp_check"]) - delta
 	if float(s["lamp_check"]) > 0.0 or not v.has_method("get_lamp_states"): return
 	s["lamp_check"] = 0.2
+	_update_glass(v, s)
 	var broken: Dictionary = s["broken"]
 	for lamp in v.get_lamp_states():
 		var corner: String = lamp["name"]
@@ -333,6 +360,82 @@ func _update_lamp_damage(v: SBVehicle, s: Dictionary, delta: float) -> void:
 		if now and not broken.get(corner, false) and v == game.player and game.get("hud"):
 			game.hud.toast("%s zerstört" % LAMP_CAPTIONS.get(corner, corner))
 		broken[corner] = now
+
+const CRACKED_GLASS := preload("res://materials/cracked_glass.gdshader")
+const GLASS_CRACK := 0.3      # pane damage at which the first cracks show
+const GLASS_SHATTER := 1.0    # tempered side and rear glass falls out
+
+## Glass follows the frame it is bonded to: it cracks as the aperture distorts and side and rear
+## panes shatter out of a badly crushed frame. The laminated windscreen stays in, crazed. A repair
+## (damage back to zero) restores the glass.
+func _update_glass(v: SBVehicle, s: Dictionary) -> void:
+	if not v.has_method("get_glass_states"): return
+	if not s.has("panes"): s["panes"] = {}
+	var panes: Dictionary = s["panes"]
+	for g in v.get_glass_states():
+		var inst: MeshInstance3D = g["instance"]
+		if not is_instance_valid(inst): continue
+		var key := String(g["name"])
+		var damage := float(g["damage"])
+		if not panes.has(key): panes[key] = {"material": null, "shattered": false}
+		var pane: Dictionary = panes[key]
+		if damage < GLASS_CRACK:
+			if pane["material"] != null:
+				inst.material_override = null
+				pane["material"] = null
+			if pane["shattered"]:
+				inst.visible = true
+				pane["shattered"] = false
+			continue
+		if damage >= GLASS_SHATTER and key != "windscreen":
+			if not pane["shattered"]:
+				inst.visible = false
+				pane["shattered"] = true
+				_spawn_shards(g["center"], v.get_velocity())
+			continue
+		if pane["material"] == null:
+			var m := ShaderMaterial.new()
+			m.shader = CRACKED_GLASS
+			m.set_shader_parameter("seed", float(hash(key) % 997))
+			inst.material_override = m
+			pane["material"] = m
+		var mat: ShaderMaterial = pane["material"]
+		mat.set_shader_parameter("origin", g["origin_uv"])
+		mat.set_shader_parameter("crack", clampf((damage - GLASS_CRACK) / (GLASS_SHATTER - GLASS_CRACK), 0.05, 1.0))
+
+static var _shard_mesh: BoxMesh
+func _spawn_shards(at: Vector3, velocity: Vector3) -> void:
+	if _shard_mesh == null:
+		_shard_mesh = BoxMesh.new()
+		_shard_mesh.size = Vector3(0.018, 0.003, 0.014)
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.75, 0.82, 0.85, 0.7)
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.metallic = 0.4
+		m.roughness = 0.1
+		_shard_mesh.material = m
+	var p := CPUParticles3D.new()
+	p.mesh = _shard_mesh
+	p.amount = 90 if Game.graphics.get("effects", 1) > 0 else 35
+	p.one_shot = true
+	p.explosiveness = 0.95
+	p.lifetime = 1.4
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	p.emission_sphere_radius = 0.25
+	p.direction = Vector3.UP
+	p.spread = 80.0
+	p.initial_velocity_min = 0.6
+	p.initial_velocity_max = 2.6
+	p.gravity = Vector3(0, -9.8, 0)
+	p.angular_velocity_min = -720.0
+	p.angular_velocity_max = 720.0
+	p.particle_flag_rotate_y = true
+	p.scale_amount_min = 0.6
+	p.scale_amount_max = 1.4
+	add_child(p)
+	p.global_position = at + velocity * 0.05
+	p.emitting = true
+	get_tree().create_timer(p.lifetime + 0.5).timeout.connect(p.queue_free)
 
 ## A lamp mesh covering both sides (imported models) goes dark only once both corners are smashed.
 static func _lamp_dead(broken: Dictionary, front: bool, side: int) -> bool:

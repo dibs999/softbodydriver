@@ -58,10 +58,19 @@
     },
     "hide": [
       "seat_H_point",
-      "wheel_center_"
+      "wheel_center_",
+      "seat_FL",
+      "seat_FR",
+      "seat_rear"
     ],
     "keepProcedural": [
-      "spring"
+      "spring",
+      "underbody",
+      "heatshield",
+      "arch_liner",
+      "fabric",
+      "seat_insert",
+      "seat_frame"
     ],
     "materialOverrides": {
       "glass": "glass",
@@ -122,6 +131,9 @@
     "roofWidthRatio": 0.78,
     "cornerRadiusFront": 0.14,
     "cornerRadiusRear": 0.12,
+    "seatShift": -0.50,
+    "rearSeatShift": -0.72,
+    "seatDrop": 0.10,
     "archClearance": 0.07,
     "paint": [
       0.22,

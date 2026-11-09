@@ -30,6 +30,9 @@ Koordinaten im Generator: `x` zeigt nach vorne (hintere Stoßstange bei 0), `y` 
     "cornerRadiusFront": 0.32,           // Rundung der Ecken in der Draufsicht
     "cornerRadiusRear": 0.24,
     "archClearance": 0.06,               // Radhaus-Radius = Reifenradius + dieser Wert
+    "seatShift": 0.0,                    // optional: Vordersitze nach vorn (+) / hinten (−) in m
+    "rearSeatShift": 0.0,                // optional: Rückbank ebenso
+    "seatDrop": 0.0,                     // optional: Vordersitze tiefer in m (Rückbank die Hälfte)
     "paint": [0.62, 0.05, 0.04],         // Lackfarbe (linear RGB)
     "paintMetallic": 0.5,
     "dragCoefficient": 0.32,             // optional: cw-Wert (Standard je Karosserieform)
@@ -95,6 +98,9 @@ Koordinaten im Generator: `x` zeigt nach vorne (hintere Stoßstange bei 0), `y` 
   // oder je Rad eine Liste einzelner Knoten: "FL": ["rim_FL", "tyre_FL", "brake_disc_FL"]
   "hide": ["BrakePad", "Axles"],                  // Teile (Namens-Teilstrings), die entfallen
   "keepProcedural": ["chassis", "spring", "caliper"],  // eigene Teile, die sichtbar bleiben
+  // Nützlich für einfache Modelle: "underbody", "heatshield", "arch_liner" (Unterboden, Hitzeschild,
+  // Radhausschalen) und "fabric", "seat_insert", "seat_frame" (Sitze; dazu die Modellsitze unter
+  // "hide" ausblenden und die Sitzlage mit body.seatShift/rearSeatShift/seatDrop anpassen).
   "aoOnUV2": true,  // nur für Modelle mit AO-Atlas auf der zweiten UV-Koordinate (glTF texCoord=1)
   "materialOverrides": { "Glass": "glass", "Paint 1": "paint" }  // Modell-Material -> Spiel-Material ("paint" übernimmt body.paint)
 }
@@ -109,7 +115,9 @@ Die Physik-Struktur entsteht weiterhin aus `body` und den übrigen Abschnitten. 
 - **Reifen und Luft**: Laufflächen-Nodes haben einen nachgiebigen Bodenkontakt (Gummi speichert den Einlaufstoß). Der Luftdruck wirkt als Membran auf jedes Laufflächensegment, mit passender Gürtelspannung in der Radebene; das hebt die Wellengeschwindigkeit des Laufflächenrings über die Höchstgeschwindigkeit. Die Bremse hält das Rad relativ zum Radträger. Der Druckwiderstand der Kollisionshaut wird auf `dragCoefficient · frontalArea` kalibriert. Messwerte: [DRIVING_RESISTANCE.md](DRIVING_RESISTANCE.md).
 - **Antrieb**: Das Reaktionsmoment des Antriebs wirkt auf Motorblock bzw. Differenzial, das Reaktionsmoment der Bremse auf den Radträger. Damit bleibt der Drehimpuls erhalten, Anfahren lässt das Heck einfedern und Bremsen die Front eintauchen.
 - **Systeme**: Die Beam-Indizes von Kühler, Motorblock, Ölwanne, Tank, Motorlagern, Kardanwelle, Fahrwerk und Schadenszonen gehen an `CarSystems`.
-- **Visual**: Querschnitte werden über Catmull-Rom-Kurven verfeinert, mit Radausschnitten, Front- und Heckabschluss, Materialzonen (Lack, Glas, Leuchten, Fugen, Griffe, Kunststoff) und Innenraum. Jeder Vertex ist an die 4 nächsten Nodes gebunden. Die Position setzt sich zusammen aus der starren Bewegung der Fahrgastzelle plus den interpolierten Verschiebungen der Nodes.
+- **Visual**: Querschnitte werden über Catmull-Rom-Kurven verfeinert, mit Radausschnitten, Front- und Heckabschluss, Materialzonen (Lack, Glas, Leuchten, Fugen, Griffe, Kunststoff) und Innenraum. Dazu gehören:
+  - Innenraum: Sitze mit Seitenwangen, zweifarbiger Mitte und Kopfstützen auf Stangen; Rückbank; Teppich mit Mitteltunnel und Fußraumschräge; hellerer Dachhimmel mit Sonnenblenden und Innenspiegel; Säulenverkleidungen mit Gurten; Pedale (mit Kupplung bei Schaltgetriebe); Mittelkonsole mit Armlehne.
+  - Unterboden: Unterbodenschutz, Abgasanlage mit Kat, Mittel- und Endschalldämpfer, geriffeltes Hitzeschild, Längs- und Querträger, vorderer Hilfsrahmen, Tank mit Spannbändern, Leitungen, Reserveradmulde und texturierte Radhausschalen. Jeder Vertex ist an die 4 nächsten Nodes gebunden. Die Position setzt sich zusammen aus der starren Bewegung der Fahrgastzelle plus den interpolierten Verschiebungen der Nodes.
 
 Mit `cartest <datei>` prüfst du ein neues Auto: Stabilität, Einfedern, 0-100, Bremsweg, Kurve, Crash und Kühlsystem.
 

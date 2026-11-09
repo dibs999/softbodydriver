@@ -16,6 +16,9 @@ namespace godot {
 namespace {
 // Plastic strain of a beam around a lamp at which the lamp counts as smashed (3 % crush).
 constexpr double kLampBreakStrain = 0.03;
+// Plastic strain of the frame around a pane at which the glass gives way (bonded glass does not
+// follow more than about 1.5 % distortion of its aperture).
+constexpr double kGlassBreakStrain = 0.015;
 
 inline Vector3 toG(const sb::Vec3& v) { return Vector3(static_cast<real_t>(v.x), static_cast<real_t>(v.y), static_cast<real_t>(v.z)); }
 inline sb::Vec3 toS(const Vector3& v) { return {v.x, v.y, v.z}; }
@@ -28,6 +31,17 @@ Color fallbackColor(const std::string& n) {
     if (n == "taillight") return Color(0.7, 0.02, 0.02);
     if (n == "plate") return Color(0.92, 0.92, 0.9);
     if (n == "interior") return Color(0.08, 0.08, 0.09);
+    if (n == "headliner") return Color(0.56, 0.55, 0.52);
+    if (n == "fabric") return Color(0.14, 0.14, 0.15);
+    if (n == "carpet") return Color(0.05, 0.05, 0.055);
+    if (n == "belt") return Color(0.04, 0.04, 0.045);
+    if (n == "arch_liner") return Color(0.035, 0.035, 0.035);
+    if (n == "underbody") return Color(0.11, 0.11, 0.115);
+    if (n == "exhaust") return Color(0.30, 0.27, 0.24);
+    if (n == "heatshield") return Color(0.62, 0.62, 0.60);
+    if (n == "tank") return Color(0.10, 0.10, 0.105);
+    if (n == "seat_frame") return Color(0.25, 0.25, 0.26);
+    if (n == "seat_insert") return Color(0.07, 0.072, 0.08);
     if (n == "spring") return Color(0.75, 0.1, 0.08);
     if (n == "caliper") return Color(0.8, 0.15, 0.1);
     if (n == "engine") return Color(0.35, 0.36, 0.38);
@@ -62,6 +76,7 @@ void SBVehicle::_bind_methods() {
     ClassDB::bind_method(D_METHOD("toggle_door", "index"), &SBVehicle::toggle_door);
     ClassDB::bind_method(D_METHOD("get_door_states"), &SBVehicle::get_door_states);
     ClassDB::bind_method(D_METHOD("get_lamp_states"), &SBVehicle::get_lamp_states);
+    ClassDB::bind_method(D_METHOD("get_glass_states"), &SBVehicle::get_glass_states);
     ClassDB::bind_method(D_METHOD("repair_in_place"), &SBVehicle::repair_in_place);
     ClassDB::bind_method(D_METHOD("set_debug_view", "on"), &SBVehicle::set_debug_view);
     ClassDB::bind_method(D_METHOD("get_debug_view"), &SBVehicle::get_debug_view);
@@ -178,11 +193,19 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
         g.mesh.instantiate();
         const std::size_t nv = s.positions.size() / 3;
         PackedVector3Array v, n;
+        PackedVector2Array uv;
         v.resize(static_cast<int64_t>(nv));
         n.resize(static_cast<int64_t>(nv));
+        uv.resize(static_cast<int64_t>(nv));
         for (std::size_t i = 0; i < nv; ++i) {
-            v[static_cast<int64_t>(i)] = Vector3(s.positions[i * 3], s.positions[i * 3 + 1], s.positions[i * 3 + 2]);
-            n[static_cast<int64_t>(i)] = Vector3(s.normals[i * 3], s.normals[i * 3 + 1], s.normals[i * 3 + 2]);
+            const Vector3 p(s.positions[i * 3], s.positions[i * 3 + 1], s.positions[i * 3 + 2]);
+            const Vector3 nr(s.normals[i * 3], s.normals[i * 3 + 1], s.normals[i * 3 + 2]);
+            v[static_cast<int64_t>(i)] = p;
+            n[static_cast<int64_t>(i)] = nr;
+            // Box projection of the rest pose (metres): fabric and grain textures stay on the panel
+            // while the vertices themselves are rewritten in world space every frame.
+            const Vector3 a = nr.abs();
+            uv[static_cast<int64_t>(i)] = a.x >= a.y && a.x >= a.z ? Vector2(p.z, p.y) : (a.y >= a.z ? Vector2(p.x, p.z) : Vector2(p.x, p.y));
         }
         PackedInt32Array idx;
         idx.resize(static_cast<int64_t>(s.indices.size()));
@@ -196,6 +219,7 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
         arrays.resize(Mesh::ARRAY_MAX);
         arrays[Mesh::ARRAY_VERTEX] = v;
         arrays[Mesh::ARRAY_NORMAL] = n;
+        arrays[Mesh::ARRAY_TEX_UV] = uv;
         arrays[Mesh::ARRAY_INDEX] = idx;
         g.mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, arrays, Array(), Dictionary(),
                                         Mesh::ARRAY_FLAG_USE_DYNAMIC_UPDATE);
@@ -208,7 +232,9 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
         g.buffer.resize(static_cast<int64_t>(g.normalOffset) + static_cast<int64_t>(nv) * g.normalStride);
         g.instance = memnew(MeshInstance3D);
         g.instance->set_mesh(g.mesh);
-        g.instance->set_name(String(s.material.c_str()) + (s.side < 0 ? "_left" : s.side > 0 ? "_right" : ""));
+        static const char* paneNames[5] = {"", "_windscreen", "_rear", "_left", "_right"};
+        g.instance->set_name(String(s.material.c_str()) + (s.side < 0 ? "_left" : s.side > 0 ? "_right" : "") +
+                             (s.material == "glass" ? paneNames[std::clamp<int>(s.pane, 0, 4)] : ""));
         if (s.material == "glass" || s.material.ends_with("_glass"))
             g.instance->set_cast_shadows_setting(GeometryInstance3D::SHADOW_CASTING_SETTING_OFF);
         add_child(g.instance);
@@ -1282,6 +1308,74 @@ Array SBVehicle::get_lamp_states() const {
         state["torn_beams"] = torn;
         state["beams"] = static_cast<int>(lampBeams_[static_cast<std::size_t>(c)].size());
         state["broken"] = damage >= 1.0;
+        result.push_back(state);
+    }
+    return result;
+}
+
+Array SBVehicle::get_glass_states() const {
+    Array result;
+    if (!world_ || bodyIndex_ < 0 || hasImportedModel_) return result;
+    std::lock_guard<std::mutex> lock(world_->mutex());
+    const auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+    const auto& beams = body.beams();
+    if (!glassPanesBuilt_) {
+        glassPanesBuilt_ = true;
+        // The frame a pane is bonded to: every node its vertices are skinned to, and every beam
+        // attached to those nodes (the aperture also distorts through the cowl and pillar feet).
+        for (std::size_t si = 0; si < visual_.skinned.size() && si < surfaces_.size(); ++si) {
+            const sb::MeshSurface& s = visual_.skinned[si];
+            if (s.pane == 0) continue;
+            std::vector<char> in(restPositions_.size(), 0);
+            GlassPane pane;
+            pane.surface = si;
+            for (const auto& sk : s.skin)
+                for (int k = 0; k < 4; ++k)
+                    if (sk.weight[k] > 0.0f && sk.node[k] < in.size() && !in[sk.node[k]]) {
+                        in[sk.node[k]] = 1;
+                        pane.nodes.push_back(sk.node[k]);
+                    }
+            for (std::size_t i = 0; i < beams.size(); ++i)
+                if (beams[i].a < in.size() && beams[i].b < in.size() && (in[beams[i].a] || in[beams[i].b])) {
+                    pane.beams.push_back(static_cast<std::uint32_t>(i));
+                    pane.bonded.push_back(in[beams[i].a] && in[beams[i].b]);
+                }
+            glassPanes_.push_back(std::move(pane));
+        }
+    }
+    static const char* names[5] = {"", "windscreen", "rear", "left", "right"};
+    for (const GlassPane& pane : glassPanes_) {
+        double damage = 0.0;
+        std::uint32_t worst = pane.beams.empty() ? 0 : pane.beams.front();
+        for (std::size_t k = 0; k < pane.beams.size(); ++k) {
+            const auto bi = pane.beams[k];
+            if (bi >= beams.size()) continue;
+            const auto& beam = beams[bi];
+            // Beams of the frame itself count fully; members only attached to it (crush zones,
+            // pillars' lower ends) a quarter, so a crumpled bonnet alone does not burst the glass.
+            const double weight = pane.bonded[k] ? 1.0 : 0.25;
+            const double d = beam.broken ? (pane.bonded[k] ? 1.5 : 0.5) : weight * beam.plasticStrain() / kGlassBreakStrain;
+            if (d > damage) { damage = d; worst = bi; }
+        }
+        // Fracture origin in the pane's texture space (rest pose, box projection as in buildMeshes).
+        Vector2 originUv;
+        if (worst < beams.size()) {
+            const sb::Vec3 p = (restPositions_[beams[worst].a] + restPositions_[beams[worst].b]) * 0.5;
+            const sb::MeshSurface& ps = visual_.skinned[pane.surface];
+            double nx = 0, ny = 0, nz = 0;
+            for (std::size_t i = 0; i + 2 < ps.normals.size(); i += 3) { nx += std::abs(ps.normals[i]); ny += std::abs(ps.normals[i + 1]); nz += std::abs(ps.normals[i + 2]); }
+            originUv = nx >= ny && nx >= nz ? Vector2(p.z, p.y) : (ny >= nz ? Vector2(p.x, p.z) : Vector2(p.x, p.y));
+        }
+        sb::Vec3 c{};
+        for (auto n : pane.nodes) c += body.positions()[n];
+        if (!pane.nodes.empty()) c = c / static_cast<double>(pane.nodes.size());
+        const sb::MeshSurface& s = visual_.skinned[pane.surface];
+        Dictionary state;
+        state["name"] = s.material == "glass" ? String(names[std::clamp<int>(s.pane, 0, 4)]) : String(s.material.c_str());
+        state["instance"] = surfaces_[pane.surface].instance;
+        state["damage"] = damage;
+        state["center"] = toG(c);
+        state["origin_uv"] = originUv;
         result.push_back(state);
     }
     return result;
