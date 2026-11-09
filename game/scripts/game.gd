@@ -13,6 +13,7 @@ const DrivingActivity := preload("res://scripts/driving_activity.gd")
 const DriverPrompts := preload("res://scripts/driver_prompts.gd")
 var equipment: Node3D
 var weather: Node
+var wipers: Node3D
 var lesson: Node
 var activity: DrivingActivity
 var surfaces := RoadSurface.new()
@@ -102,6 +103,9 @@ func _ready() -> void:
 	add_child(weather)
 	weather.configure(_env, _sun, cam, surfaces, world)
 	weather.set_shelters(map_data.get("rain_shelters", []))
+	wipers = preload("res://scripts/vehicle_wipers.gd").new()
+	wipers.name = "Wipers"
+	add_child(wipers)
 	equipment = preload("res://scripts/vehicle_equipment.gd").new()
 	add_child(equipment)
 	equipment.configure(self, map_data["spawns"][0])
@@ -211,7 +215,7 @@ func _warm_up_rendering() -> void:
 
 
 var _env: Environment
-var _sky_mat: ProceduralSkyMaterial
+var _sky_mat: GameSky
 var _sun: DirectionalLight3D
 
 
@@ -239,12 +243,10 @@ func _build_environment() -> void:
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
 	var sky := Sky.new()
-	var sm := ProceduralSkyMaterial.new()
-	sm.sky_top_color = Color(0.25, 0.45, 0.78)
-	sm.sky_horizon_color = Color(0.66, 0.74, 0.84)
-	sm.ground_horizon_color = Color(0.6, 0.65, 0.7)
-	sm.sun_angle_max = 20.0
+	var sm := GameSky.new()
 	sky.sky_material = sm
+	sky.radiance_size = Sky.RADIANCE_SIZE_128
+	sky.process_mode = Sky.PROCESS_MODE_INCREMENTAL
 	_sky_mat = sm
 	_env = e
 	e.background_mode = Environment.BG_SKY
@@ -258,6 +260,9 @@ func _build_environment() -> void:
 	e.fog_enabled = true
 	e.fog_light_color = Color(0.7, 0.76, 0.85)
 	e.fog_density = 0.00035
+	# Fog only hazes the sky slightly near the horizon; at sky_affect = 1 the infinitely distant
+	# sky turned completely into flat fog colour.
+	e.fog_sky_affect = 0.12
 	env.environment = e
 	add_child(env)
 	var sun := DirectionalLight3D.new()
@@ -290,7 +295,10 @@ func _set_player(v: SBVehicle) -> void:
 	for car in Game.cars:
 		if car.get("id", "") == v.get_info().get("id", ""):
 			var definition: Variant = JSON.parse_string(FileAccess.get_file_as_string(car["path"]))
-			weather.set_vehicle_shelter(v, definition.get("body", {}) if definition is Dictionary else {})
+			var body: Dictionary = definition.get("body", {}) if definition is Dictionary else {}
+			weather.set_vehicle_shelter(v, body)
+			# Imported models bring their own wiper geometry; procedural bodies get arms.
+			wipers.attach(v, body, not (definition is Dictionary and definition.has("visualModel")))
 			break
 	hud.vehicle = v
 	minimap.player = v
@@ -306,6 +314,8 @@ func _process(delta: float) -> void:
 		return
 	if not pause_menu.visible:
 		_drive_player(delta)
+	if wipers:
+		wipers.update(0.0 if world.paused else delta * world.time_scale, weather.weather_index == 2, weather.wetness)
 	for v in ai.keys():
 		ai[v].update(delta)
 	for v in vehicles:
@@ -421,6 +431,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		activity.cancel("Lauf abgebrochen: Reparatur")
 		player.repair_in_place()
 		hud.toast("Fahrzeug repariert")
+	elif event.is_action_pressed("wipers"):
+		hud.toast(wipers.cycle_mode())
 	elif event.is_action_pressed("debug_view"):
 		var on := not player.get_debug_view()
 		player.set_debug_view(on)
@@ -518,6 +530,9 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 				_toggle_pause()],
 			["Beifahrertür öffnen / schließen", func():
 				equipment.toggle_door(1)
+				_toggle_pause()],
+			["Scheibenwischer umschalten", func():
+				hud.toast(wipers.cycle_mode())
 				_toggle_pause()],
 			["Zum Service bergen · Schäden bleiben", func():
 				lesson.notify_interruption("Bergung zum Service")

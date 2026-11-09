@@ -1,0 +1,223 @@
+{
+  "id": "meridian_sedan",
+  "name": "Meridian 2.5 Sedan",
+  "brand": "Meridian",
+  "description": "Mittelklasse-Limousine mit 2,5-l-Vierzylinder (140 kW), Frontantrieb und Automatik. Ruhig, berechenbar und mit großem Kofferraum – der Alltagswagen für lange Strecken.",
+  "credits": "Body, interior and wheels: \"sedan\" from Rubble (https://github.com/Glavin001/rubble, engine/scenes/vehicles/sedan) by the Rubble authors, CC-BY 4.0. Used unmodified as the visual flexbody.",
+  "visualModel": {
+    "path": "res://models/rubble/sedan.glb",
+    "forward": "+z",
+    "up": "+y",
+    "scale": 1.0,
+    "driverEye": [
+      0.38,
+      1.055,
+      -0.63
+    ],
+    "dashboard": [
+      0.0,
+      0.95,
+      0.475
+    ],
+    "steeringWheel": {
+      "pivot": [
+        0.38,
+        0.84,
+        0.191
+      ],
+      "axis": [
+        0.0,
+        0.407,
+        -0.914
+      ],
+      "parts": [
+        "steering_wheel"
+      ]
+    },
+    "wheels": {
+      "FL": [
+        "rim_FL",
+        "tyre_FL",
+        "brake_disc_FL"
+      ],
+      "FR": [
+        "rim_FR",
+        "tyre_FR",
+        "brake_disc_FR"
+      ],
+      "RL": [
+        "rim_RL",
+        "tyre_RL",
+        "brake_disc_RL"
+      ],
+      "RR": [
+        "rim_RR",
+        "tyre_RR",
+        "brake_disc_RR"
+      ]
+    },
+    "hide": [
+      "seat_H_point",
+      "wheel_center_"
+    ],
+    "keepProcedural": [
+      "spring"
+    ],
+    "materialOverrides": {
+      "glass": "glass",
+      "paint": "paint"
+    },
+    "parts": {
+      "bonnet": [
+        "hood",
+        "latch_hood"
+      ],
+      "door_left": [
+        "door_FL",
+        "door_trim_FL",
+        "glass_door_FL",
+        "handle_FL",
+        "latch_door_FL",
+        "mirror_L",
+        "mount_mirror_L"
+      ],
+      "door_right": [
+        "door_FR",
+        "door_trim_FR",
+        "glass_door_FR",
+        "handle_FR",
+        "latch_door_FR",
+        "mirror_R",
+        "mount_mirror_R"
+      ],
+      "bumper_front": [
+        "bumper_front",
+        "bolt_bumper_front"
+      ],
+      "bumper_rear": [
+        "bumper_rear",
+        "bolt_bumper_rear"
+      ]
+    }
+  },
+  "body": {
+    "style": "sedan",
+    "doors": 4,
+    "length": 4.88,
+    "width": 1.882,
+    "height": 1.45,
+    "wheelbase": 2.83,
+    "frontOverhang": 0.97,
+    "trackFront": 1.6,
+    "trackRear": 1.6,
+    "groundClearance": 0.14,
+    "noseHeight": 0.78,
+    "hoodHeight": 0.977,
+    "beltHeight": 0.961,
+    "tailHeight": 1.06,
+    "hoodLength": 1.6,
+    "windshieldRun": 0.89,
+    "roofLength": 0.88,
+    "rearWindowRun": 0.71,
+    "roofWidthRatio": 0.68,
+    "cornerRadiusFront": 0.3,
+    "cornerRadiusRear": 0.26,
+    "archClearance": 0.05,
+    "paint": [
+      0.42,
+      0.02,
+      0.03
+    ],
+    "paintMetallic": 0.55,
+    "dragCoefficient": 0.29,
+    "detachableDoors": true,
+    "detachableBumpers": true
+  },
+  "chassis": {
+    "curbMass": 1520,
+    "frontWeight": 0.6,
+    "bodyStiffness": 1.1,
+    "bodyStrength": 1.0
+  },
+  "suspension": {
+    "front": {
+      "wheelRate": 30000,
+      "bumpDamping": 2200,
+      "reboundDamping": 4400,
+      "antiRollRate": 10000,
+      "bumpTravel": 0.08,
+      "droopTravel": 0.1
+    },
+    "rear": {
+      "wheelRate": 32000,
+      "bumpDamping": 2300,
+      "reboundDamping": 4600,
+      "antiRollRate": 6000,
+      "bumpTravel": 0.08,
+      "droopTravel": 0.1
+    }
+  },
+  "tires": {
+    "radius": 0.342,
+    "width": 0.235,
+    "rimRadius": 0.24,
+    "pressurePsi": 35,
+    "friction": 1.16,
+    "tireMass": 10.5,
+    "rimMass": 10.0,
+    "rays": 16
+  },
+  "engine": {
+    "name": "2.5 I4",
+    "layout": "FWD",
+    "cylinders": 4,
+    "torqueCurve": [
+      [
+        700,
+        150
+      ],
+      [
+        1500,
+        215
+      ],
+      [
+        4000,
+        250
+      ],
+      [
+        5800,
+        225
+      ],
+      [
+        6500,
+        0
+      ]
+    ],
+    "idleRpm": 750,
+    "redlineRpm": 6300,
+    "inertia": 0.17,
+    "friction": 18,
+    "engineBraking": 0.034,
+    "mass": 160,
+    "gears": [
+      4.2,
+      2.4,
+      1.55,
+      1.16,
+      0.86,
+      0.69
+    ],
+    "reverse": -3.4,
+    "finalDrive": 3.9,
+    "automatic": true,
+    "shiftUpRpm": 5900,
+    "shiftDownRpm": 1700,
+    "maxBrakeTorque": 2700,
+    "frontBrakeBias": 0.68,
+    "handbrakeTorque": 1700,
+    "lsd": 3,
+    "fuelCapacity": 60,
+    "bsfc": 240,
+    "radiatorUA": 2500
+  }
+}

@@ -225,6 +225,7 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
         const sb::Vec3 com = body.centerOfMass();
         const sb::Vec3 rgt = toS(get_right());
         wg.right = sb::dot(c - com, rgt) > 0.0;
+        wg.width = pw.spec.width;
         wg.node = memnew(Node3D);
         wg.node->set_name(String(pw.spec.name.c_str()));
         add_child(wg.node);
@@ -334,7 +335,7 @@ void SBVehicle::updateWheelMeshes(WheelGpu& w, const sb::Vec3& c, const sb::Vec3
     const bool ring0Outside = z0 > 0.0;
     const double sgn = w.right ? -1.0 : 1.0;
     const bool deformed = worst > 0.006 || flat > 0.01;
-    const double halfW = 0.5 * def_.tires.width;
+    const double halfW = 0.5 * w.width;
     for (WheelSurf& ws : w.surfs) {
         if (ws.restPos.empty()) continue;  // rims and brake discs are rigid
         if (!deformed && !ws.deformed) continue;
@@ -405,11 +406,21 @@ void collectParts(Node* n, const Transform3D& parent, const Dictionary& wheels, 
     const String name = n->get_name();
     if (!isRoot && nameMatches(name, hide)) return;
     const Array keys = wheels.keys();
-    for (int k = 0; k < keys.size(); ++k)
-        if (name == String(wheels[keys[k]])) {
+    for (int k = 0; k < keys.size(); ++k) {
+        // A wheel is one node name, or a list of names (rim, tyre and disc as separate nodes).
+        const Variant entry = wheels[keys[k]];
+        bool match = false;
+        if (entry.get_type() == Variant::ARRAY) {
+            const Array names = entry;
+            for (int a = 0; a < names.size() && !match; ++a) match = name == String(names[a]);
+        } else {
+            match = name == String(entry);
+        }
+        if (match) {
             const String key = keys[k];
             wheel = key == "FL" ? 0 : (key == "FR" ? 1 : (key == "RL" ? 2 : 3));
         }
+    }
     if (MeshInstance3D* mi = Object::cast_to<MeshInstance3D>(n)) {
         if (mi->get_mesh().is_valid()) out.push_back({mi, xf, wheel});
     }
@@ -423,6 +434,7 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
     const Array hide = options.get("hide", Array());
     const Array keep = options.get("keep_procedural", Array());
     const Dictionary overrides = options.get("material_overrides", Dictionary());
+    const Dictionary physicsParts = options.get("parts", Dictionary());
     auto pickMaterial = [&](Ref<Material> m) -> Ref<Material> {
         if (m.is_valid()) {
             const String n = m->get_name();
@@ -511,6 +523,31 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
             sb::MeshSurface ms;
             ms.material = "imported";
             const String partName = part.mi->get_name();
+            // Panels that are separate physics parts (bonnet, front doors, bumpers) follow only that
+            // part's nodes, so they open, dent and come off with it instead of staying with the shell.
+            const std::vector<std::uint32_t>* bindCandidates = &layout_.bodyNodes;
+            {
+                const Array partKeys = physicsParts.keys();
+                for (int k = 0; k < partKeys.size(); ++k) {
+                    const String key = partKeys[k];
+                    const std::vector<std::uint32_t>* nodes = nullptr;
+                    if (key == "bonnet") nodes = &layout_.bonnetNodes;
+                    else if (key == "door_left") nodes = &layout_.frontDoors[0].nodes;
+                    else if (key == "door_right") nodes = &layout_.frontDoors[1].nodes;
+                    else if (key == "bumper_front") nodes = &layout_.frontBumperNodes;
+                    else if (key == "bumper_rear") nodes = &layout_.rearBumperNodes;
+                    if (!nodes || nodes->size() < 4) continue;
+                    const Array prefixes = physicsParts[key];
+                    bool match = false;
+                    for (int a = 0; a < prefixes.size() && !match; ++a) match = partName.begins_with(String(prefixes[a]));
+                    if (match) {
+                        bindCandidates = nodes;
+                        if (key == "bonnet") importedBonnet_ = true;
+                        if (key.begins_with("door_")) importedDoors_ = true;
+                        break;
+                    }
+                }
+            }
             for (int i = 0; i < steeringParts.size(); ++i) {
                 if (partName.begins_with(String(steeringParts[i]))) {
                     ms.steeringWheel = true;
@@ -536,8 +573,9 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
                 ms.normals[static_cast<std::size_t>(i) * 3] = q.x;
                 ms.normals[static_cast<std::size_t>(i) * 3 + 1] = q.y;
                 ms.normals[static_cast<std::size_t>(i) * 3 + 2] = q.z;
-                ms.skin[static_cast<std::size_t>(i)] = sb::bindToNodes(restPositions_, layout_.bodyNodes, toS(p));
+                ms.skin[static_cast<std::size_t>(i)] = sb::bindToNodes(restPositions_, *bindCandidates, toS(p));
             }
+            sb::tagRigidPartVertices(visual_, ms);
             // Our normal recomputation expects counter-clockwise triangles; Godot's are clockwise.
             ms.indices.resize(static_cast<std::size_t>(idx.size()));
             for (int i = 0; i + 2 < idx.size(); i += 3) {
@@ -578,6 +616,9 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
             if (mat.is_null()) mat = mesh->surface_get_material(s);
             mat = pickMaterial(mat);
             if (mat.is_valid()) g.mesh->surface_set_material(0, mat);
+            g.arrays = garr;
+            g.material = mat;
+            g.torn.assign(static_cast<std::size_t>(idx.size() / 3), 0);
             g.format = static_cast<int64_t>(g.mesh->surface_get_format(0));
             const auto fmt = static_cast<BitField<RenderingServer::ArrayFormat>>(g.format);
             g.vertexStride = rs->mesh_surface_get_format_vertex_stride(fmt, nv);
@@ -646,7 +687,7 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
         }
         const double radialScale = maxRadius > 1e-4 ? def_.tires.radius / maxRadius : 1.0;
         const double width = hi.z - lo.z;
-        const double widthScale = width > 1e-4 ? def_.tires.width / width : 1.0;
+        const double widthScale = width > 1e-4 ? wg.width / width : 1.0;
         const Vector3 scale(radialScale, radialScale, widthScale);
         if (!acc.rubberPts.empty()) {
             wg.visualRimRadius = std::clamp(minRadius * radialScale, 0.50 * def_.tires.radius, 0.88 * def_.tires.radius);
@@ -790,6 +831,57 @@ void SBVehicle::sync_from_world() {
 
 // ============================================================================ rendering
 
+// Sheet metal tears where the nodes it is bound to have been ripped apart: triangles whose edges
+// stretch to more than 2.2x their rest length (and by more than 6 cm) are removed instead of being
+// drawn as long slivers between a torn-off node and the body. Repair restores them.
+void SBVehicle::tearOverstretched(SurfaceGpu& g, const sb::MeshSurface& s, bool reset) {
+    if (g.torn.empty() || g.arrays.is_empty()) return;
+    bool changed = false;
+    if (reset) {
+        if (g.tornCount > 0) {
+            std::fill(g.torn.begin(), g.torn.end(), 0);
+            g.tornCount = 0;
+            changed = true;
+        }
+    } else {
+        const std::size_t nt = std::min(g.torn.size(), s.indices.size() / 3);
+        for (std::size_t t = 0; t < nt; ++t) {
+            if (g.torn[t]) continue;
+            for (int e = 0; e < 3; ++e) {
+                const std::uint32_t a = s.indices[t * 3 + static_cast<std::size_t>(e)], b = s.indices[t * 3 + static_cast<std::size_t>((e + 1) % 3)];
+                const float rx = s.positions[a * 3] - s.positions[b * 3], ry = s.positions[a * 3 + 1] - s.positions[b * 3 + 1],
+                            rz = s.positions[a * 3 + 2] - s.positions[b * 3 + 2];
+                const float cx = tmpPos_[a * 3] - tmpPos_[b * 3], cy = tmpPos_[a * 3 + 1] - tmpPos_[b * 3 + 1],
+                            cz = tmpPos_[a * 3 + 2] - tmpPos_[b * 3 + 2];
+                const float rest = std::sqrt(rx * rx + ry * ry + rz * rz), now = std::sqrt(cx * cx + cy * cy + cz * cz);
+                if (now > 2.2f * rest && now - rest > 0.06f) {
+                    g.torn[t] = 1;
+                    ++g.tornCount;
+                    changed = true;
+                    break;
+                }
+            }
+        }
+    }
+    if (!changed) return;
+    const PackedInt32Array source = g.arrays[Mesh::ARRAY_INDEX];
+    PackedInt32Array kept;
+    kept.resize(source.size() - static_cast<int64_t>(g.tornCount) * 3);
+    int64_t w = 0;
+    for (std::size_t t = 0; t < g.torn.size(); ++t) {
+        if (g.torn[t]) continue;
+        kept[w++] = source[static_cast<int64_t>(t) * 3];
+        kept[w++] = source[static_cast<int64_t>(t) * 3 + 1];
+        kept[w++] = source[static_cast<int64_t>(t) * 3 + 2];
+    }
+    Array arrays = g.arrays.duplicate();
+    arrays[Mesh::ARRAY_INDEX] = kept;
+    g.mesh->clear_surfaces();
+    if (kept.size() == 0) return;
+    g.mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, arrays, Array(), Dictionary(), Mesh::ARRAY_FLAG_USE_DYNAMIC_UPDATE);
+    if (g.material.is_valid()) g.mesh->surface_set_material(0, g.material);
+}
+
 void SBVehicle::update_visual(double delta) {
     if (!snapshotValid_ || pos_.empty()) return;
     const sb::Vec3 reference = (pos_[layout_.refFL] + pos_[layout_.refFR] + pos_[layout_.refRL] + pos_[layout_.refRR]) * 0.25;
@@ -893,6 +985,7 @@ void SBVehicle::update_visual(double delta) {
         const sb::MeshSurface& s = importedSurf_[si];
         if (s.steeringWheel) g.instance->set_transform(steeringTransform);
         sb::deformSurfaceBlended(renderPos_, frames_, s, tmpPos_, tmpNrm_);
+        if (snap || (++tearCheckCounter_ % 8) == 0) tearOverstretched(g, s, snap && tel_.brokenBeams == 0);
         const std::size_t nv = s.skin.size();
         uint8_t* dst = g.buffer.ptrw();
         for (std::size_t i = 0; i < nv; ++i) {
@@ -906,9 +999,10 @@ void SBVehicle::update_visual(double delta) {
             std::memcpy(dst + g.normalOffset + i * g.normalStride, enc, 4);
             if (g.restTangents.size() == static_cast<int64_t>(nv * 4) && g.normalStride >= 8) {
                 const Vector3 rest(g.restTangents[i * 4], g.restTangents[i * 4 + 1], g.restTangents[i * 4 + 2]);
-                Vector3 tangent(frames_[0] * rest.x + frames_[1] * rest.y + frames_[2] * rest.z,
-                                frames_[3] * rest.x + frames_[4] * rest.y + frames_[5] * rest.z,
-                                frames_[6] * rest.x + frames_[7] * rest.y + frames_[8] * rest.z);
+                const float* F = sb::skinFrame(frames_, renderPos_.size(), s.skin[i].part);
+                Vector3 tangent(F[0] * rest.x + F[1] * rest.y + F[2] * rest.z,
+                                F[3] * rest.x + F[4] * rest.y + F[5] * rest.z,
+                                F[6] * rest.x + F[7] * rest.y + F[8] * rest.z);
                 const Vector3 normal(tmpNrm_[i * 3], tmpNrm_[i * 3 + 1], tmpNrm_[i * 3 + 2]);
                 tangent = (tangent - normal * tangent.dot(normal)).normalized();
                 const Vector2 octT = tangent.octahedron_tangent_encode(g.restTangents[i * 4 + 3]);
@@ -917,7 +1011,7 @@ void SBVehicle::update_visual(double delta) {
                 std::memcpy(dst + g.normalOffset + i * g.normalStride + 4, packed, 4);
             }
         }
-        g.mesh->surface_update_vertex_region(0, 0, g.buffer);
+        if (g.mesh->get_surface_count() > 0) g.mesh->surface_update_vertex_region(0, 0, g.buffer);
         g.mesh->set_custom_aabb(box);
     }
 
@@ -1068,7 +1162,7 @@ bool SBVehicle::service_repair() {
 }
 
 bool SBVehicle::set_door_open(int index, bool open) {
-    if (!world_ || bodyIndex_ < 0 || index < 0 || hasImportedModel_) return false;
+    if (!world_ || bodyIndex_ < 0 || index < 0 || (hasImportedModel_ && !importedDoors_)) return false;
     std::lock_guard<std::mutex> lock(world_->mutex());
     auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     if (static_cast<std::size_t>(index) >= body.doors().size() || body.telemetry().speedKmh > 2.0) return false;
@@ -1076,7 +1170,7 @@ bool SBVehicle::set_door_open(int index, bool open) {
 }
 
 bool SBVehicle::toggle_door(int index) {
-    if (!world_ || bodyIndex_ < 0 || index < 0 || hasImportedModel_) return false;
+    if (!world_ || bodyIndex_ < 0 || index < 0 || (hasImportedModel_ && !importedDoors_)) return false;
     std::lock_guard<std::mutex> lock(world_->mutex());
     auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     if (static_cast<std::size_t>(index) >= body.doors().size() || body.telemetry().speedKmh > 2.0) return false;
@@ -1085,7 +1179,7 @@ bool SBVehicle::toggle_door(int index) {
 
 Array SBVehicle::get_door_states() const {
     Array result;
-    if (!world_ || bodyIndex_ < 0 || hasImportedModel_) return result;
+    if (!world_ || bodyIndex_ < 0 || (hasImportedModel_ && !importedDoors_)) return result;
     std::lock_guard<std::mutex> lock(world_->mutex());
     const auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     const auto& positions = body.positions();
@@ -1137,7 +1231,7 @@ Array SBVehicle::get_door_states() const {
 }
 
 bool SBVehicle::release_bonnet() {
-    if (!world_ || bodyIndex_ < 0 || layout_.bonnetNodes.size() != 8 || hasImportedModel_) return false;
+    if (!world_ || bodyIndex_ < 0 || layout_.bonnetNodes.size() != 8 || (hasImportedModel_ && !importedBonnet_)) return false;
     std::lock_guard<std::mutex> lock(world_->mutex());
     auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     if (body.telemetry().speedKmh > 2.0) return false;
@@ -1316,7 +1410,7 @@ Dictionary SBVehicle::get_info() const {
     d["wheelbase"] = def_.body.wheelbase;
     d["width"] = def_.body.width;
     d["height"] = def_.body.height;
-    d["bonnet_supported"] = !hasImportedModel_;
+    d["bonnet_supported"] = !hasImportedModel_ || importedBonnet_;
     double peakT = 0, peakP = 0;
     for (const auto& tq : def_.engine.torqueCurve) {
         peakT = std::max(peakT, tq.second);

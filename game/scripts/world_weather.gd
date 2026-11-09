@@ -14,7 +14,7 @@ var _sun: DirectionalLight3D
 var _camera: Camera3D
 var _surfaces: RefCounted
 var _world: Node
-var _sky: ProceduralSkyMaterial
+var _sky: GameSky
 var _rain: CPUParticles3D
 var _day_top: Color
 var _day_horizon: Color
@@ -38,7 +38,7 @@ func configure(environment: Environment, sun: DirectionalLight3D, camera: Camera
 	_camera = camera
 	_surfaces = surfaces
 	_world = world
-	_sky = environment.sky.sky_material as ProceduralSkyMaterial
+	_sky = environment.sky.sky_material as GameSky
 	_day_top = _sky.sky_top_color
 	_day_horizon = _sky.sky_horizon_color
 	_day_energy = sun.light_energy
@@ -149,6 +149,10 @@ func cycle_time() -> void:
 	hour = TIME_HOURS[time_index]
 	_apply_lighting()
 
+## Short HUD form: clock and weather only (keys are listed in the F1 help).
+func get_brief() -> String:
+	return "%02d:%02d  ·  %s%s" % [int(hour), int(fmod(hour, 1.0) * 60), WEATHER_NAMES[weather_index], "" if automatic_time else "  ·  Zeit steht"]
+
 func get_status() -> String:
 	return "%02d:%02d · %s · F7 Wetter / F8 Tageszeit / Umschalt+F8 Zeitlauf %s" % [int(hour), int(fmod(hour, 1.0) * 60), WEATHER_NAMES[weather_index], "an" if automatic_time else "aus"]
 
@@ -176,6 +180,7 @@ func _process(delta: float) -> void:
 	wetness = move_toward(wetness, 1.0 if weather_index == 2 else 0.0, step / (20.0 if weather_index == 2 else 90.0))
 	if _surfaces:
 		_surfaces.set("wetness", wetness)
+	RenderingServer.global_shader_parameter_set("road_wetness", wetness)
 	if is_instance_valid(_camera):
 		_rain.global_position = _camera.global_position + Vector3(0, 9, 0)
 	_update_cabin()
@@ -193,6 +198,7 @@ func _apply_lighting() -> void:
 		return
 	var elevation := sin((hour - 6.0) * TAU / 24.0)
 	var daylight := smoothstep(-0.12, 0.35, elevation)
+	RenderingServer.global_shader_parameter_set("city_night", 1.0 - smoothstep(-0.05, 0.2, elevation))
 	var dusk := (1.0 - smoothstep(0.0, 0.4, absf(elevation))) * daylight
 	var cloud := float(weather_index) / 2.0
 	_sun.rotation_degrees.x = -maxf(8.0, elevation * 75.0) if elevation > 0 else -35.0
@@ -201,7 +207,11 @@ func _apply_lighting() -> void:
 	_sun.light_color = Color(0.42, 0.53, 0.8).lerp(Color(1.0, 0.97, 0.9).lerp(Color(1.0, 0.48, 0.22), dusk), daylight)
 	_sky.sky_top_color = Color(0.008, 0.015, 0.04).lerp(_day_top.lerp(Color(0.22, 0.27, 0.33), cloud), daylight)
 	_sky.sky_horizon_color = Color(0.025, 0.04, 0.075).lerp(_day_horizon.lerp(Color(0.44, 0.48, 0.52), cloud).lerp(Color(0.9, 0.40, 0.20), dusk * (1.0 - cloud)), daylight)
-	_sky.ground_horizon_color = _sky.sky_horizon_color
+	_sky.ground_horizon_color = _sky.sky_horizon_color.darkened(0.25)
+	_sky.ground_bottom_color = Color(0.03, 0.03, 0.04).lerp(Color(0.22, 0.21, 0.2), daylight)
+	_sky.cloud_coverage = [0.32, 0.82, 1.0][clampi(weather_index, 0, 2)]
+	_sky.cloud_light = Color(0.25, 0.27, 0.33).lerp(Color(1.0, 0.98, 0.95).lerp(Color(1.0, 0.72, 0.52), dusk), daylight)
+	_sky.cloud_shadow = Color(0.06, 0.07, 0.1).lerp(Color(0.56, 0.61, 0.69).lerp(Color(0.42, 0.45, 0.5), cloud), daylight)
 	_environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	_environment.ambient_light_color = Color(0.35, 0.45, 0.65).lerp(Color(0.78, 0.84, 0.94), daylight)
 	_environment.ambient_light_energy = lerpf(0.10, 0.72 - cloud * 0.16, daylight)

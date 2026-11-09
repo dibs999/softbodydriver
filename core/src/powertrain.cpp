@@ -166,7 +166,11 @@ void Powertrain::step(const PowertrainInputs& in,
         // Engage smoothly as RPM rises above idle, or when already moving faster than idle speed.
         const real rpmEngage = std::clamp((rpm - (spec_.idleRpm + 40.0)) / 750.0, 0.0, 1.0);
         const real speedEngage = std::clamp((wheelReferredRpm - spec_.idleRpm) / 400.0, 0.0, 1.0);
-        clutchEngagement_ = std::max(rpmEngage, speedEngage);
+        // Pulling away with little throttle: the clutch bites in proportion to the pedal (the idle
+        // governor keeps the engine alive). Purely rpm-based engagement balanced the engine at idle
+        // against a 5 % clutch and a gentle 25 % throttle never moved the car.
+        const real pedalEngage = throttle > 0.05 ? 0.4 * throttle : 0.0;
+        clutchEngagement_ = std::max({rpmEngage, speedEngage, pedalEngage});
     }
 
     // Coupling between engine and driven axle.

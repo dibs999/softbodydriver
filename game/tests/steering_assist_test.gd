@@ -35,10 +35,13 @@ func run() -> void:
 	scene.world.step_blocking(1.0)
 	scene.world.sync_visuals()
 	Input.action_press("throttle", 1)
-	for i in 24:
-		scene._drive_player(0.5)
-		scene.world.step_blocking(0.5)
+	# Stop at highway speed: with realistic driving resistance 12 s of full throttle reach
+	# ~200 km/h, more than the flat strip leaves room to brake from.
+	for i in 48:
+		scene._drive_player(0.25)
+		scene.world.step_blocking(0.25)
 		scene.world.sync_visuals()
+		if scene.player.get_speed_kmh() > 130: break
 	Input.action_release("throttle")
 	var speed: float = scene.player.get_speed_kmh()
 	print("Speed before steering: ", speed)

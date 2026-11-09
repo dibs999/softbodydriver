@@ -10,6 +10,11 @@ std::size_t World::addBody(SoftBody body) {
     return bodies_.size() - 1;
 }
 
+namespace {
+constexpr real kSoftContactMaxDepth = 0.02;   // beyond this the rubber is "bottomed": rigid stop
+constexpr real kSoftContactDampingRatio = 0.02; // rubber loss lives in the tyre beams
+}  // namespace
+
 void World::removeBody(std::size_t i) {
     if (i < bodies_.size()) bodies_.erase(bodies_.begin() + static_cast<std::ptrdiff_t>(i));
 }
@@ -76,6 +81,8 @@ std::size_t World::collideBody(SoftBody& b) {
     const auto& invMass = b.invMasses();
     const auto& friction = b.frictions();
     const auto& collision = b.collisionFlags();
+    const auto& soft = b.contactStiffnesses();
+    const real dt = settings_.dt;
     std::size_t contacts = 0;
 
     // Broadphase: only colliders whose bounds overlap the body's bounds.
@@ -105,6 +112,37 @@ std::size_t World::collideBody(SoftBody& b) {
             real depth;
             if (!c.contact(pos[i], n, depth)) continue;
             ++contacts;
+            const real mu = friction[i] * c.friction;
+            if (soft[i] > 0.0) {
+                // Compliant tread rubber: spring-damper normal force, rigid stop beyond kSoftContactMaxDepth.
+                const real m = 1.0 / invMass[i];
+                const real k = soft[i];
+                const real maxDepth = kSoftContactMaxDepth;
+                real d = depth;
+                real stopDv = 0.0;
+                if (d > maxDepth) {
+                    pos[i] += n * (d - maxDepth);
+                    d = maxDepth;
+                    const real vIn = dot(vel[i], n);
+                    if (vIn < 0) {
+                        vel[i] -= n * vIn;
+                        stopDv = -vIn;
+                        b.addContact(i, n * (stopDv * m));
+                    }
+                }
+                const real vn = dot(vel[i], n);
+                const real cDamp = 2.0 * kSoftContactDampingRatio * std::sqrt(k * m);
+                const real fN = std::max<real>(0.0, k * d - cDamp * vn);
+                const real dvN = fN * dt * invMass[i];
+                vel[i] += n * dvN;
+                b.addContact(i, n * (dvN * m));
+                const Vec3 vt = vel[i] - n * dot(vel[i], n);
+                const real vtLen = length(vt);
+                const real maxDv = mu * (dvN + stopDv);
+                if (vtLen <= maxDv) vel[i] -= vt;
+                else if (vtLen > 0) vel[i] -= vt * (maxDv / vtLen);
+                continue;
+            }
             // 1) Positional projection out of the collider.
             pos[i] += n * depth;
             // 2) Velocity: remove approaching normal velocity (optionally bounce),
@@ -113,7 +151,6 @@ std::size_t World::collideBody(SoftBody& b) {
             if (vn < 0) {
                 b.addContact(i, n * (-vn / invMass[i]));
                 vel[i] -= n * (vn * (1.0 + c.restitution));
-                const real mu = friction[i] * c.friction;
                 const Vec3 vt = vel[i] - n * dot(vel[i], n);
                 const real vtLen = length(vt);
                 const real maxDv = mu * (-vn);

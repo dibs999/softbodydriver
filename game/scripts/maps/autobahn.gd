@@ -2,6 +2,7 @@ extends RefCounted
 ## An 8.5 km motorway loop with service access, overpasses and opposing traffic.
 
 const C := preload("res://scripts/maps/common.gd")
+const V := preload("res://scripts/maps/vegetation.gd")
 const STRAIGHT := 2600.0
 const RADIUS := 520.0
 const CARRIAGE_OFFSET := 7.6   # centre of a carriageway from the median
@@ -53,6 +54,9 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var b_center := _offset(center, -CARRIAGE_OFFSET)
 	parent.add_child(C.road_mesh(a_center, CARRIAGE_HALF, road, true, 0.03, 14.0))
 	parent.add_child(C.road_mesh(b_center, CARRIAGE_HALF, road, true, 0.03, 14.0))
+	# Verges beyond the guard rails; the service area keeps its paving.
+	V.roadside_grass(parent, center, true, CARRIAGE_OFFSET + CARRIAGE_HALF + 1.6, CARRIAGE_OFFSET + CARRIAGE_HALF + 22.0, 1.6, 93,
+		Callable(), func(p: Vector3) -> bool: return p.x > SERVICE_START - 40.0 and p.x < SERVICE_END + 40.0 and p.z < -RADIUS + 120.0)
 	# Central reservation: concrete step barrier; guard rails on both outer edges.
 	C.barrier(parent, world, center, 0.0, 0.85, 0.55, concrete)
 	var open_start := 0
@@ -136,13 +140,8 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var fixture := BoxMesh.new()
 	fixture.size = Vector3(0.42, 0.18, 2.6)
 	C.scatter_multimesh(parent, fixture, C.mat(Color(0.83, 0.83, 0.75)), fixtures, false)
-	var tree := CylinderMesh.new()
-	tree.top_radius = 0.0
-	tree.bottom_radius = 2.2
-	tree.height = 9.0
-	tree.radial_segments = 9
-	tree.rings = 0
-	var trees: Array[Transform3D] = []
+	var trees: Array[Vector3] = []
+	var conifers: Array[Vector3] = []
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 9
 	for i in 2100:
@@ -155,9 +154,9 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			dist = absf(Vector2(q.x, p.z).length() - RADIUS)
 		if dist < 45.0 or (p.x > SERVICE_START and p.x < SERVICE_END and p.z < -RADIUS + 87.0):
 			continue
-		var s := rng.randf_range(0.7, 1.5)
-		trees.append(Transform3D(Basis().scaled(Vector3(s, s, s)), p + Vector3(0, 4.5 * s, 0)))
-	C.scatter_multimesh(parent, tree, C.mat(Color(0.12, 0.27, 0.12), 0.9), trees, false)
+		(conifers if rng.randf() < 0.35 else trees).append(p)
+	V.plant(parent, "broadleaf", trees, 91, 0.8, 1.3, false)
+	V.plant(parent, "conifer", conifers, 92, 0.7, 1.05, false)
 	_landmarks(parent, world, metal)
 
 	# Traffic: right-hand traffic, carriageway A follows the loop, B goes the other way.

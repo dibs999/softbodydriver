@@ -26,7 +26,9 @@ Soft-Body-Fahrzeugsimulation als **native Desktop-App für Windows, macOS und Li
 ## Fahrzeuge
 
 Die reproduzierbaren Chassis-Messungen und ihre Grenzen stehen in
-[CHASSIS_STABILITY_MEASUREMENTS.md](docs/CHASSIS_STABILITY_MEASUREMENTS.md).
+[CHASSIS_STABILITY_MEASUREMENTS.md](docs/CHASSIS_STABILITY_MEASUREMENTS.md),
+Fahrwiderstand, Höchstgeschwindigkeiten und Fahrwerkssteifigkeit in
+[DRIVING_RESISTANCE.md](docs/DRIVING_RESISTANCE.md).
 Der Prüfstand unterscheidet hochfrequente Schwingungen, langsames Ausbrechen
 und ungültige Geschwindigkeitsfenster. Eine kleine RMS-Zahl allein bestätigt
 keine stabile Hochgeschwindigkeitsfahrt.
@@ -85,10 +87,10 @@ Aus einer Datei erzeugt der Generator:
 | Datei | Fahrzeug | Antrieb | Leistung | Masse |
 |---|---|---|---|---|
 | `concept_gt` | Concept-GT mit **importiertem Detail-Modell** (glTF, CC-BY 4.0) | RWD | 4,0 l V8 Biturbo, 456 kW | 1580 kg |
-| `kestrel_hatch` | Kompakt-Fließheck (C-Segment) | FWD | 1,5 l Turbo, 110 kW | 1290 kg |
-| `aurora_sedan` | Mittelklasse-Limousine | RWD | 2,0 l Turbo, 190 kW | 1590 kg |
-| `vortex_gt` | V8-Sportcoupé | RWD, Sperre | 5,0 l V8, 335 kW | 1720 kg |
-| `basalt_suv` | Mittelgroßer SUV | AWD | 3,5 l V6, 220 kW | 2050 kg |
+| `kestrel_hatch` | Kompakt-Fließheck (C-Segment) | FWD | 1,5 l Turbo, 119 kW | 1290 kg |
+| `aurora_sedan` | Mittelklasse-Limousine | RWD | 2,0 l Turbo, 196 kW | 1590 kg |
+| `vortex_gt` | V8-Sportcoupé | RWD, Sperre | 5,0 l V8, 323 kW | 1720 kg |
+| `basalt_suv` | Mittelgroßer SUV | AWD | 3,5 l V6, 210 kW | 2050 kg |
 
 Marken und Modelle sind frei erfunden, Maße und Fahrleistungen entsprechen echten Autos der jeweiligen Klasse.
 
@@ -318,6 +320,7 @@ godot --headless --path game -s res://tests/mirror_test.gd       # Optische Flä
 godot --headless --path game -s res://tests/bonnet_test.gd       # Entriegelung und Reparatur der Haube
 godot --headless --path game -s res://tests/steering_assist_test.gd # Fahrsteuerung einschließlich Bremsung
 godot --headless --path game -s res://tests/imported_vehicle_test.gd # Modellimport, Räder, Normalen/Tangenten
+godot --headless --path game -s res://tests/rubble_vehicles_test.gd # Fünf importierte Detailmodelle: Räder, Lack, Fahrbarkeit
 godot --headless --path game -s res://tests/settings_test.gd     # Gespeicherte Fahreinstellungen
 godot --headless --path game -s res://tests/first_drive_flow_test.gd # Einführung bis Service und Profil-Neuladen
 godot --headless --path game -s res://tests/native_service_test.gd # Beschädigtes Fahrzeug bergen/reparieren

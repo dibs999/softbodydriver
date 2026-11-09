@@ -1,0 +1,223 @@
+{
+  "id": "trailhead_4x4",
+  "name": "Trailhead 4.0 4x4",
+  "brand": "Trailhead",
+  "description": "Kantiger Geländewagen auf Leiterrahmen mit 4,0-l-Reihensechszylinder (180 kW), Allrad, Starrachs-Optik, Stahlfelgen und 265/75 R16. Langsam, schwer, aber kaum aufzuhalten.",
+  "credits": "Body, interior and wheels: \"suv_4x4\" from Rubble (https://github.com/Glavin001/rubble, engine/scenes/vehicles/suv_4x4) by the Rubble authors, CC-BY 4.0. Used unmodified as the visual flexbody.",
+  "visualModel": {
+    "path": "res://models/rubble/suv_4x4.glb",
+    "forward": "+z",
+    "up": "+y",
+    "scale": 1.0,
+    "driverEye": [
+      0.38,
+      1.25,
+      -0.53
+    ],
+    "dashboard": [
+      0.0,
+      1.18,
+      0.52
+    ],
+    "steeringWheel": {
+      "pivot": [
+        0.38,
+        1.04,
+        0.225
+      ],
+      "axis": [
+        0.0,
+        0.5,
+        -0.866
+      ],
+      "parts": [
+        "steering_wheel"
+      ]
+    },
+    "wheels": {
+      "FL": [
+        "rim_FL",
+        "tyre_FL",
+        "brake_disc_FL"
+      ],
+      "FR": [
+        "rim_FR",
+        "tyre_FR",
+        "brake_disc_FR"
+      ],
+      "RL": [
+        "rim_RL",
+        "tyre_RL",
+        "brake_disc_RL"
+      ],
+      "RR": [
+        "rim_RR",
+        "tyre_RR",
+        "brake_disc_RR"
+      ]
+    },
+    "hide": [
+      "seat_H_point",
+      "wheel_center_"
+    ],
+    "keepProcedural": [
+      "spring"
+    ],
+    "materialOverrides": {
+      "glass": "glass",
+      "paint": "paint"
+    },
+    "parts": {
+      "bonnet": [
+        "hood",
+        "latch_hood"
+      ],
+      "door_left": [
+        "door_FL",
+        "door_trim_FL",
+        "glass_door_FL",
+        "handle_FL",
+        "latch_door_FL",
+        "mirror_L",
+        "mount_mirror_L"
+      ],
+      "door_right": [
+        "door_FR",
+        "door_trim_FR",
+        "glass_door_FR",
+        "handle_FR",
+        "latch_door_FR",
+        "mirror_R",
+        "mount_mirror_R"
+      ],
+      "bumper_front": [
+        "bumper_front",
+        "bolt_bumper_front"
+      ],
+      "bumper_rear": [
+        "bumper_rear",
+        "bolt_bumper_rear"
+      ]
+    }
+  },
+  "body": {
+    "style": "suv",
+    "doors": 4,
+    "length": 4.7,
+    "width": 2.002,
+    "height": 1.907,
+    "wheelbase": 2.7,
+    "frontOverhang": 0.921,
+    "trackFront": 1.56,
+    "trackRear": 1.56,
+    "groundClearance": 0.25,
+    "noseHeight": 0.95,
+    "hoodHeight": 1.166,
+    "beltHeight": 1.157,
+    "tailHeight": 1.78,
+    "hoodLength": 1.55,
+    "windshieldRun": 0.43,
+    "roofLength": 2.56,
+    "rearWindowRun": 0.05,
+    "roofWidthRatio": 0.78,
+    "cornerRadiusFront": 0.14,
+    "cornerRadiusRear": 0.12,
+    "archClearance": 0.07,
+    "paint": [
+      0.22,
+      0.3,
+      0.14
+    ],
+    "paintMetallic": 0.15,
+    "dragCoefficient": 0.44,
+    "detachableDoors": true,
+    "detachableBumpers": true
+  },
+  "chassis": {
+    "curbMass": 2080,
+    "frontWeight": 0.53,
+    "bodyStiffness": 1.3,
+    "bodyStrength": 1.35
+  },
+  "suspension": {
+    "front": {
+      "wheelRate": 32000,
+      "bumpDamping": 2600,
+      "reboundDamping": 5200,
+      "antiRollRate": 9000,
+      "bumpTravel": 0.11,
+      "droopTravel": 0.14
+    },
+    "rear": {
+      "wheelRate": 36000,
+      "bumpDamping": 2800,
+      "reboundDamping": 5600,
+      "antiRollRate": 5000,
+      "bumpTravel": 0.11,
+      "droopTravel": 0.14
+    }
+  },
+  "tires": {
+    "radius": 0.401,
+    "width": 0.265,
+    "rimRadius": 0.215,
+    "pressurePsi": 32,
+    "friction": 1.08,
+    "tireMass": 15.0,
+    "rimMass": 13.0,
+    "rays": 18
+  },
+  "engine": {
+    "name": "4.0 I6",
+    "layout": "AWD",
+    "cylinders": 6,
+    "torqueCurve": [
+      [
+        650,
+        260
+      ],
+      [
+        1500,
+        360
+      ],
+      [
+        3200,
+        400
+      ],
+      [
+        4800,
+        360
+      ],
+      [
+        5600,
+        0
+      ]
+    ],
+    "idleRpm": 650,
+    "redlineRpm": 5400,
+    "inertia": 0.24,
+    "friction": 24,
+    "engineBraking": 0.045,
+    "mass": 240,
+    "gears": [
+      4.17,
+      2.34,
+      1.52,
+      1.14,
+      0.87,
+      0.69
+    ],
+    "reverse": -3.4,
+    "finalDrive": 4.1,
+    "automatic": true,
+    "shiftUpRpm": 5000,
+    "shiftDownRpm": 1500,
+    "maxBrakeTorque": 3600,
+    "frontBrakeBias": 0.66,
+    "handbrakeTorque": 2200,
+    "lsd": 30,
+    "fuelCapacity": 90,
+    "bsfc": 255,
+    "radiatorUA": 3400
+  }
+}

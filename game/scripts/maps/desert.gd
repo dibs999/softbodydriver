@@ -2,6 +2,7 @@ extends RefCounted
 ## Dunes, a sandstone plateau and a rally loop with a field station at the start.
 
 const C := preload("res://scripts/maps/common.gd")
+const V := preload("res://scripts/maps/vegetation.gd")
 
 
 static func build(world: SBWorld, parent: Node3D) -> Dictionary:
@@ -94,11 +95,11 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			var cliff := rock.lerp(Color(0.86, 0.58, 0.41), band * 0.52)
 			var dust := sand.lerp(Color(0.88, 0.72, 0.53), 0.28 + 0.22 * sin(ix * 0.022 + iz * 0.036))
 			colors[i] = dust.lerp(cliff, smoothstep(0.17, 0.73, slope)).darkened(clampf(heights[i] / 330.0, 0.0, 0.22))
-	C.terrain_tiles(parent, ox, oz, cell, nx, nz, heights, C.terrain_material("sand", 10.0), colors)
+	C.terrain_tiles(parent, ox, oz, cell, nx, nz, heights, C.terrain_material("gravel", 5.0, Color(0.80, 0.72, 0.62)), colors)
 	var ground_height := func(x: float, z: float) -> float:
 		return C.sample(heights, nx, nz, ox, oz, cell, x, z)
-	parent.add_child(C.road_mesh(track, half_w, C.road_material(2, half_w * 2.0, 12.0, "dirt"), true, 0.052, 12.0, ground_height))
-	parent.add_child(C.road_mesh(shortcut, 3.6, C.road_material(2, 7.2, 12.0, "dirt"), false, 0.043, 12.0, ground_height))
+	parent.add_child(C.road_mesh(track, half_w, C.road_material(2, half_w * 2.0, 12.0, "desert"), true, 0.052, 12.0, ground_height))
+	parent.add_child(C.road_mesh(shortcut, 3.6, C.road_material(2, 7.2, 12.0, "desert"), false, 0.043, 12.0, ground_height))
 	var mine := _mine(parent, world, shortcut, ground_height)
 
 	# Boulders (colliding) and cacti / shrubs (visual).
@@ -169,20 +170,13 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var cactus_mat := C.mat(Color(0.25, 0.42, 0.2), 0.8)
 	C.scatter_multimesh(parent, cactus, cactus_mat, xfs)
 	C.scatter_multimesh(parent, cactus, cactus_mat, arms, false)
-	var shrub := SphereMesh.new()
-	shrub.radius = 0.7
-	shrub.height = 0.8
-	shrub.radial_segments = 9
-	shrub.rings = 4
-	var sx: Array[Transform3D] = []
+	var sx: Array[Vector3] = []
 	for i in 680:
 		var p := Vector2(rng.randf_range(-840, 840), rng.randf_range(-840, 840))
 		if _near_track(p, track, 8.0) or _near_track(p, shortcut, 6.0, false):
 			continue
-		var y := C.sample(heights, nx, nz, ox, oz, cell, p.x, p.y)
-		var s := rng.randf_range(0.5, 1.4)
-		sx.append(Transform3D(Basis().scaled(Vector3(s, s * 0.6, s)), Vector3(p.x, y + 0.1, p.y)))
-	C.scatter_multimesh(parent, shrub, C.mat(Color(0.45, 0.42, 0.25), 1.0), sx, false)
+		sx.append(Vector3(p.x, C.sample(heights, nx, nz, ox, oz, cell, p.x, p.y), p.y))
+	V.plant(parent, "dry_shrub", sx, 680, 0.45, 1.1, false)
 	var pebble := SphereMesh.new()
 	pebble.radius = 0.55
 	pebble.height = 0.45

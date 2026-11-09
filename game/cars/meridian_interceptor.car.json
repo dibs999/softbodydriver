@@ -1,0 +1,228 @@
+{
+  "id": "meridian_interceptor",
+  "name": "Meridian Interceptor 3.5 V6",
+  "brand": "Meridian",
+  "description": "Einsatzfahrzeug auf Basis der Meridian: 3,5-l-V6 mit 214 kW, Heckantrieb, straffes Fahrwerk, Rammschutz und Signalanlage.",
+  "credits": "Body, interior and wheels: \"police_sedan\" from Rubble (https://github.com/Glavin001/rubble, engine/scenes/vehicles/police_sedan) by the Rubble authors, CC-BY 4.0. Used unmodified as the visual flexbody.",
+  "visualModel": {
+    "path": "res://models/rubble/police_sedan.glb",
+    "forward": "+z",
+    "up": "+y",
+    "scale": 1.0,
+    "driverEye": [
+      0.38,
+      1.055,
+      -0.63
+    ],
+    "dashboard": [
+      0.0,
+      0.95,
+      0.475
+    ],
+    "steeringWheel": {
+      "pivot": [
+        0.38,
+        0.84,
+        0.191
+      ],
+      "axis": [
+        0.0,
+        0.407,
+        -0.914
+      ],
+      "parts": [
+        "steering_wheel"
+      ]
+    },
+    "wheels": {
+      "FL": [
+        "rim_FL",
+        "tyre_FL",
+        "brake_disc_FL"
+      ],
+      "FR": [
+        "rim_FR",
+        "tyre_FR",
+        "brake_disc_FR"
+      ],
+      "RL": [
+        "rim_RL",
+        "tyre_RL",
+        "brake_disc_RL"
+      ],
+      "RR": [
+        "rim_RR",
+        "tyre_RR",
+        "brake_disc_RR"
+      ]
+    },
+    "hide": [
+      "seat_H_point",
+      "wheel_center_"
+    ],
+    "keepProcedural": [
+      "spring"
+    ],
+    "materialOverrides": {
+      "glass": "glass",
+      "paint": "paint"
+    },
+    "parts": {
+      "bonnet": [
+        "hood",
+        "latch_hood"
+      ],
+      "door_left": [
+        "door_FL",
+        "door_trim_FL",
+        "glass_door_FL",
+        "handle_FL",
+        "latch_door_FL",
+        "mirror_L",
+        "mount_mirror_L"
+      ],
+      "door_right": [
+        "door_FR",
+        "door_trim_FR",
+        "glass_door_FR",
+        "handle_FR",
+        "latch_door_FR",
+        "mirror_R",
+        "mount_mirror_R"
+      ],
+      "bumper_front": [
+        "bumper_front",
+        "bolt_bumper_front",
+        "push_bar"
+      ],
+      "bumper_rear": [
+        "bumper_rear",
+        "bolt_bumper_rear"
+      ]
+    }
+  },
+  "body": {
+    "style": "sedan",
+    "doors": 4,
+    "length": 4.985,
+    "width": 1.882,
+    "height": 1.45,
+    "wheelbase": 2.83,
+    "frontOverhang": 1.075,
+    "trackFront": 1.6,
+    "trackRear": 1.6,
+    "groundClearance": 0.14,
+    "noseHeight": 0.78,
+    "hoodHeight": 0.977,
+    "beltHeight": 0.961,
+    "tailHeight": 1.06,
+    "hoodLength": 1.71,
+    "windshieldRun": 0.89,
+    "roofLength": 0.88,
+    "rearWindowRun": 0.71,
+    "roofWidthRatio": 0.68,
+    "cornerRadiusFront": 0.3,
+    "cornerRadiusRear": 0.26,
+    "archClearance": 0.05,
+    "paint": [
+      0.02,
+      0.02,
+      0.025
+    ],
+    "paintMetallic": 0.2,
+    "dragCoefficient": 0.29,
+    "detachableDoors": true,
+    "detachableBumpers": true
+  },
+  "chassis": {
+    "curbMass": 1780,
+    "frontWeight": 0.55,
+    "bodyStiffness": 1.25,
+    "bodyStrength": 1.2
+  },
+  "suspension": {
+    "front": {
+      "wheelRate": 38000,
+      "bumpDamping": 2700,
+      "reboundDamping": 5400,
+      "antiRollRate": 14000,
+      "bumpTravel": 0.08,
+      "droopTravel": 0.1
+    },
+    "rear": {
+      "wheelRate": 40000,
+      "bumpDamping": 2800,
+      "reboundDamping": 5600,
+      "antiRollRate": 9000,
+      "bumpTravel": 0.08,
+      "droopTravel": 0.1
+    }
+  },
+  "tires": {
+    "radius": 0.342,
+    "width": 0.235,
+    "rimRadius": 0.24,
+    "pressurePsi": 35,
+    "friction": 1.2,
+    "tireMass": 11.0,
+    "rimMass": 10.0,
+    "rays": 16
+  },
+  "engine": {
+    "name": "3.5 V6",
+    "layout": "RWD",
+    "cylinders": 6,
+    "torqueCurve": [
+      [
+        700,
+        230
+      ],
+      [
+        1800,
+        320
+      ],
+      [
+        4500,
+        370
+      ],
+      [
+        6200,
+        330
+      ],
+      [
+        6900,
+        0
+      ]
+    ],
+    "idleRpm": 700,
+    "redlineRpm": 6800,
+    "inertia": 0.19,
+    "friction": 22,
+    "engineBraking": 0.04,
+    "mass": 200,
+    "gears": [
+      4.7,
+      2.99,
+      2.15,
+      1.77,
+      1.52,
+      1.28,
+      1.0,
+      0.85,
+      0.69,
+      0.64
+    ],
+    "reverse": -4.87,
+    "finalDrive": 3.15,
+    "automatic": true,
+    "shiftUpRpm": 6400,
+    "shiftDownRpm": 1900,
+    "maxBrakeTorque": 3600,
+    "frontBrakeBias": 0.64,
+    "handbrakeTorque": 2000,
+    "lsd": 20,
+    "fuelCapacity": 70,
+    "bsfc": 245,
+    "radiatorUA": 3600
+  }
+}

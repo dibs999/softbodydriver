@@ -154,13 +154,15 @@ TEST_CASE("torsion bar resists relative rotation and is linear for small angles"
 }
 
 TEST_CASE("all shipped car definitions build, are stable and settle on their suspension") {
-    for (const char* id : {"kestrel_hatch", "aurora_sedan", "vortex_gt", "basalt_suv"}) {
+    for (const char* id : {"kestrel_hatch", "aurora_sedan", "vortex_gt", "basalt_suv", "meridian_sedan", "meridian_wagon",
+                           "meridian_interceptor", "trailhead_4x4", "fastback_69"}) {
         CAPTURE(id);
         const CarDefinition def = loadCarDefinition(carPath(id));
         CarBuild cb = buildCar(def);
         CHECK(cb.body.nodeCount() > 250);
         CHECK(cb.body.wheels().size() == 4);
-        CHECK(cb.body.torsionbars().size() == 2);
+        const std::size_t bars = (def.front.antiRollRate > 0.0 ? 1u : 0u) + (def.rear.antiRollRate > 0.0 ? 1u : 0u);
+        CHECK(cb.body.torsionbars().size() == bars);
         CHECK(cb.body.stabilityRatio(1.0 / 2000.0) < 1.0);
         CHECK(cb.visual.skinned.size() > 8);
         CHECK(std::abs(cb.body.totalMass() - def.chassis.curbMass) < 0.06 * def.chassis.curbMass);
@@ -322,7 +324,10 @@ TEST_CASE("Concept GT holds rear toe through highway lane changes in both direct
             VehicleControls controls;
             controls.gear = 0;
             controls.ignition = false;
-            controls.steer = direction * (initialKmh == 100.0 ? 0.07 : 0.017);
+            // 0.008 at 200 km/h is a real lane change (~0.5 g). The former 0.017 kinematically
+            // demands ~1.2 g and only stayed below the grip limit while excessive rolling and air
+            // drag bled the coasting car from 200 to 145 km/h within the 4 s window.
+            controls.steer = direction * (initialKmh == 100.0 ? 0.07 : 0.008);
             car.setControls(controls);
             real peakToe = 0.0;
             for (int sample = 0; sample < 400; ++sample) {
@@ -614,4 +619,293 @@ TEST_CASE("road surface grip changes tyre friction independently of camera dista
     CHECK(car.wheels()[0].grip < asphaltGrip * 0.7);
     CHECK(car.wheels()[1].grip > asphaltGrip * 0.95);
     CHECK(car.frictions()[car.wheels()[0].treadNodes[0]] < car.frictions()[car.wheels()[1].treadNodes[0]] * 0.7);
+}
+
+TEST_CASE("collision skin aerodynamics reproduce the specified drag area") {
+    for (const char* id : {"kestrel_hatch", "basalt_suv", "concept_gt"}) {
+        CAPTURE(id);
+        CarBuild cb = buildCar(loadCarDefinition(carPath(id)));
+        const real dragArea = cb.layout.dragArea;
+        REQUIRE(dragArea > 0.4);
+        REQUIRE(dragArea < 1.2);
+        WorldSettings settings;
+        settings.gravity = {0, 0, 0};
+        World w(settings);
+        w.addBody(std::move(cb.body));
+        auto& car = w.body(0);
+        const real v = 30.0;
+        car.setVelocity({v, 0, 0});
+        w.simulate(0.02);
+        const real force = car.totalMass() * (v - car.centerOfMassVelocity().x) / 0.02;
+        const real expected = 0.5 * settings.airDensity * dragArea * v * v;
+        CHECK(force == doctest::Approx(expected).epsilon(0.05));
+    }
+}
+
+TEST_CASE("coast-down resistance of the reference hatch stays in a realistic range") {
+    // Rolling + aerodynamic resistance at 100 km/h. A real compact hatch needs ~400 N; rigid
+    // contact, flat-plate aero and an untensioned tread ring needed ~1900 N, which capped the
+    // 110 kW car at 113 km/h (now ~560 N and ~197 km/h).
+    CarBuild cb = buildCar(loadCarDefinition(carPath("kestrel_hatch")));
+    World w = flatWorld();
+    w.addBody(std::move(cb.body));
+    auto& car = w.body(0);
+    VehicleControls controls;
+    controls.gear = 0;
+    controls.ignition = false;
+    car.setControls(controls);
+    w.simulate(3.0);
+    const real v = 100.0 / 3.6;
+    car.setVelocity({v, 0, 0});
+    for (const auto& wheel : car.wheels()) {
+        const auto center = wheel.center(car), axis = wheel.axis(car);
+        for (auto node : wheel.treadNodes)
+            car.velocities()[node] += cross(axis, car.positions()[node] - center) * (v / wheel.spec.radius);
+    }
+    w.simulate(1.0);
+    const real v0 = car.centerOfMassVelocity().x;
+    w.simulate(2.0);
+    const real v1 = car.centerOfMassVelocity().x;
+    const real resistance = car.totalMass() * (v0 - v1) / 2.0;
+    CHECK(resistance > 250.0);
+    CHECK(resistance < 750.0);
+    CHECK(car.stats().deformedBeams == 0);
+}
+
+TEST_CASE("full throttle runs straight to autobahn top-speed range without steering input") {
+    CarBuild cb = buildCar(loadCarDefinition(carPath("vortex_gt")));
+    const auto layout = cb.layout;
+    World w = flatWorld();
+    w.addBody(std::move(cb.body));
+    auto& car = w.body(0);
+    VehicleControls controls;
+    controls.gear = -99;
+    car.setControls(controls);
+    w.simulate(2.0);
+    controls.throttle = 1.0;
+    car.setControls(controls);
+    real worstYaw = 0.0;
+    for (int i = 0; i < 36; ++i) {
+        w.simulate(1.0);
+        const auto& p = car.positions();
+        const Vec3 forward = normalize(p[layout.refFL] + p[layout.refFR] - p[layout.refRL] - p[layout.refRR]);
+        worstYaw = std::max(worstYaw, std::abs(std::atan2(forward.z, forward.x)) * 180.0 / 3.14159265358979);
+    }
+    CHECK(car.telemetry().speedKmh > 210.0);
+    CHECK(worstYaw < 4.0);
+    CHECK(car.stats().brokenBeams == 0);
+    CHECK(w.stats().finite);
+}
+
+TEST_CASE("staggered tyres keep grip at top speed and the Concept GT runs straight beyond 320 km/h") {
+    // The narrow fronts used to carry the rear tyre mass: less membrane tension per tread mass,
+    // so their standing wave arrived near 320 km/h. Front grip faded, the car swung into a
+    // self-sustained 0.5 g circle with up to 36 deg of yaw on a straight road.
+    const auto def = loadCarDefinition(carPath("concept_gt"));
+    CHECK(def.tires.massFor(true) < def.tires.massFor(false));
+    CHECK(def.tires.massFor(false) == doctest::Approx(def.tires.tireMass));
+    CarBuild cb = buildCar(def);
+    const auto layout = cb.layout;
+    World w = flatWorld();
+    w.addBody(std::move(cb.body));
+    auto& car = w.body(0);
+    VehicleControls controls;
+    controls.gear = -99;
+    car.setControls(controls);
+    w.simulate(2.0);
+    controls.throttle = 1.0;
+    car.setControls(controls);
+    real worstYaw = 0.0, peak = 0.0;
+    for (int i = 0; i < 60; ++i) {
+        w.simulate(1.0);
+        const auto& p = car.positions();
+        const Vec3 forward = normalize(p[layout.refFL] + p[layout.refFR] - p[layout.refRL] - p[layout.refRR]);
+        worstYaw = std::max(worstYaw, std::abs(std::atan2(forward.z, forward.x)) * 180.0 / 3.14159265358979);
+        peak = std::max(peak, car.telemetry().speedKmh);
+    }
+    CHECK(peak > 320.0);
+    CHECK(worstYaw < 4.0);
+    CHECK(std::abs(car.centerOfMass().z) < 150.0);
+    CHECK(w.stats().finite);
+}
+
+TEST_CASE("cars settle onto their tyres without body sag, toe-out or brake chatter") {
+    // The body used to sink ~5 cm around soft strut-tower mounts (front toe-out up to 1.8 deg), and
+    // a held brake that fought body pitch rocked a parked Concept GT with ~4 kJ.
+    for (const char* id : {"kestrel_hatch", "vortex_gt", "basalt_suv", "concept_gt"}) {
+        CAPTURE(id);
+        CarBuild cb = buildCar(loadCarDefinition(carPath(id)));
+        const auto layout = cb.layout;
+        World w = flatWorld();
+        w.addBody(std::move(cb.body));
+        auto& car = w.body(0);
+        const real designFloor = car.positions()[layout.refFL].y;
+        VehicleControls controls;
+        controls.brake = 1.0;
+        car.setControls(controls);
+        w.simulate(4.0);
+        CHECK(designFloor - car.positions()[layout.refFL].y < 0.035);
+        const auto& p = car.positions();
+        const Vec3 forward = normalize(p[layout.refFL] + p[layout.refFR] - p[layout.refRL] - p[layout.refRR]);
+        for (const auto& wheel : car.wheels())
+            if (wheel.spec.steered) CHECK(std::abs(std::asin(dot(wheel.axis(car), forward))) * 180.0 / 3.14159265358979 < 0.6);
+        real energy = 0.0;
+        for (int i = 0; i < 20; ++i) {
+            w.simulate(0.05);
+            energy = std::max(energy, car.kineticEnergy());
+        }
+        CHECK(energy < 100.0);
+        CHECK(car.stats().deformedBeams == 0);
+    }
+}
+
+TEST_CASE("tyre tread has no standing-wave resonance below autobahn top speeds") {
+    // Without the inflated-membrane hoop tension the tread ring's wave speed was ~40 m/s and the
+    // rolling loss peaked near 145 km/h (~1800 N without air).
+    CarBuild cb = buildCar(loadCarDefinition(carPath("kestrel_hatch")));
+    WorldSettings settings;
+    settings.airDensity = 0.0;
+    World w(settings);
+    w.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}, 1.0));
+    w.addBody(std::move(cb.body));
+    auto& car = w.body(0);
+    VehicleControls controls;
+    controls.gear = 0;
+    car.setControls(controls);
+    w.simulate(2.0);
+    const real v = 145.0 / 3.6;
+    car.setVelocity({v, 0, 0});
+    for (const auto& wheel : car.wheels()) {
+        const auto center = wheel.center(car), axis = wheel.axis(car);
+        for (auto node : wheel.treadNodes)
+            car.velocities()[node] += cross(axis, car.positions()[node] - center) * (v / wheel.spec.radius);
+    }
+    real tow = 0.0;
+    int samples = 0;
+    for (int s = 0; s < 8000; ++s) {
+        const real dv = v - car.centerOfMassVelocity().x;
+        car.addVelocity({dv, 0, 0});
+        if (s >= 3000) { tow += dv; ++samples; }
+        w.step();
+    }
+    const real force = car.totalMass() * tow / (samples * settings.dt);
+    CHECK(force > 100.0);
+    CHECK(force < 800.0);
+    CHECK(w.stats().finite);
+}
+
+TEST_CASE("tail-heavy Concept GT on staggered tyres settles into steady cornering at 150 km/h") {
+    CarBuild cb = buildCar(loadCarDefinition(carPath("concept_gt")));
+    CHECK(cb.def.tires.rearWidth() > cb.def.tires.width);
+    const auto layout = cb.layout;
+    World w = flatWorld();
+    w.addBody(std::move(cb.body));
+    auto& car = w.body(0);
+    VehicleControls controls;
+    controls.gear = 0;
+    car.setControls(controls);
+    w.simulate(2.0);
+    const real v = 150.0 / 3.6;
+    car.setVelocity({v, 0, 0});
+    for (const auto& wheel : car.wheels()) {
+        const auto center = wheel.center(car), axis = wheel.axis(car);
+        for (auto node : wheel.treadNodes)
+            car.velocities()[node] += cross(axis, car.positions()[node] - center) * (v / wheel.spec.radius);
+    }
+    controls.steer = 0.012;
+    car.setControls(controls);
+    auto heading = [&] {
+        const auto& p = car.positions();
+        const Vec3 f = normalize(p[layout.refFL] + p[layout.refFR] - p[layout.refRL] - p[layout.refRR]);
+        return std::atan2(f.z, f.x);
+    };
+    auto yawRateOver = [&](real seconds) {
+        const real h0 = heading();
+        for (int s = 0; s < static_cast<int>(seconds * 2000.0); ++s) {
+            const Vec3 vc = car.centerOfMassVelocity();
+            const real speed = std::sqrt(vc.x * vc.x + vc.z * vc.z);
+            car.addVelocity(vc * ((v - speed) / std::max<real>(speed, 1.0)));
+            w.step();
+        }
+        return (heading() - h0) / seconds;
+    };
+    yawRateOver(2.0);
+    const real early = std::abs(yawRateOver(0.5));
+    yawRateOver(0.5);
+    const real late = std::abs(yawRateOver(0.5));
+    CHECK(early > 0.02);
+    CHECK(late < early * 1.15);  // converging, not an oversteer divergence
+    CHECK(late * v < 0.6 * 9.81);
+}
+
+TEST_CASE("automatic cars pull away with a gentle throttle and stop fully under the brake") {
+    for (const char* id : {"kestrel_hatch", "basalt_suv"}) {
+        CAPTURE(id);
+        CarBuild cb = buildCar(loadCarDefinition(carPath(id)));
+        World w = flatWorld();
+        w.addBody(std::move(cb.body));
+        auto& car = w.body(0);
+        VehicleControls controls;
+        controls.gear = -99;
+        car.setControls(controls);
+        w.simulate(1.5);
+        const Vec3 start = car.centerOfMass();
+        controls.throttle = 0.25;
+        car.setControls(controls);
+        w.simulate(5.0);
+        CHECK(car.powertrain().running());
+        CHECK(length(car.centerOfMass() - start) > 3.0);
+        controls.throttle = 0.0;
+        controls.brake = 1.0;
+        car.setControls(controls);
+        w.simulate(4.0);
+        CHECK(car.telemetry().speedKmh < 0.5);
+        real worstSpin = 0.0;
+        for (const auto& wheel : car.wheels()) worstSpin = std::max(worstSpin, std::abs(wheel.angularVelocity));
+        CHECK(worstSpin < 0.3);  // a held brake does not chatter
+    }
+}
+
+TEST_CASE("panels on their own rigid frame keep their shape when they swing open or come off") {
+    // Imported panels are bound to their part's nodes; linear blending of node displacements
+    // stretched a door or bonnet swinging through 60 degrees. Each separate part now carries its
+    // vertices on a best-fit rigid frame of its own nodes.
+    CarBuild cb = buildCar(loadCarDefinition(carPath("kestrel_hatch")));
+    const CarVisual& vis = cb.visual;
+    REQUIRE(vis.parts.size() >= 3);
+    const auto& door = cb.layout.frontDoors[0].nodes;
+    REQUIRE(door.size() == 8);
+    // A door skin like the importer builds it: points spread over and beyond the cage.
+    Vec3 lo{1e9, 1e9, 1e9}, hi{-1e9, -1e9, -1e9};
+    for (auto n : door) {
+        lo = Vec3{std::min(lo.x, vis.restNodes[n].x), std::min(lo.y, vis.restNodes[n].y), std::min(lo.z, vis.restNodes[n].z)};
+        hi = Vec3{std::max(hi.x, vis.restNodes[n].x), std::max(hi.y, vis.restNodes[n].y), std::max(hi.z, vis.restNodes[n].z)};
+    }
+    MeshSurface surf;
+    for (int ix = -1; ix <= 5; ++ix)
+        for (int iy = -1; iy <= 5; ++iy) {
+            const Vec3 p{lo.x + (hi.x - lo.x) * ix / 4.0, lo.y + (hi.y - lo.y) * iy / 4.0, lo.z - 0.02};
+            surf.positions.insert(surf.positions.end(), {static_cast<float>(p.x), static_cast<float>(p.y), static_cast<float>(p.z)});
+            surf.skin.push_back(bindToNodes(vis.restNodes, door, p));
+        }
+    tagRigidPartVertices(vis, surf);
+    for (const auto& sk : surf.skin) REQUIRE(sk.part >= 0);
+    // Swing the door cage 60 degrees about a vertical hinge at its front edge and lift it 5 cm.
+    std::vector<Vec3> pos = vis.restNodes;
+    const Vec3 hinge{hi.x, 0.0, lo.z};
+    const real a = 60.0 * 3.14159265358979 / 180.0;
+    auto swing = [&](const Vec3& q) {
+        const Vec3 r = q - hinge;
+        return hinge + Vec3{r.x * std::cos(a) - r.z * std::sin(a), r.y + 0.05, r.x * std::sin(a) + r.z * std::cos(a)};
+    };
+    for (auto n : door) pos[n] = swing(pos[n]);
+    std::vector<float> frames;
+    computeNodeFrames(pos, vis, frames);
+    computeNodeFrames(pos, vis, frames);  // warm-started second evaluation must agree
+    real worst = 0.0;
+    for (std::size_t i = 0; i < surf.skin.size(); ++i) {
+        const Vec3 rest{surf.positions[i * 3], surf.positions[i * 3 + 1], surf.positions[i * 3 + 2]};
+        worst = std::max(worst, length(evalSkin(pos, frames, surf.skin[i]) - swing(rest)));
+    }
+    CHECK(worst < 0.002);
 }

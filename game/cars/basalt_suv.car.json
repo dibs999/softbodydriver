@@ -3,7 +3,7 @@
   "id": "basalt_suv",
   "name": "Basalt Ridge 3.5 V6 AWD",
   "brand": "Basalt",
-  "description": "Mittelgroßer SUV mit Allradantrieb, 3.5-l-V6 mit 220 kW, 8-Gang-Automatik, viel Bodenfreiheit.",
+  "description": "Mittelgroßer SUV mit Allradantrieb, 3.5-l-V6 mit 210 kW, 8-Gang-Automatik, viel Bodenfreiheit.",
   "body": {
     "style": "suv", "doors": 4,
     "length": 4.75, "width": 1.92, "height": 1.75,

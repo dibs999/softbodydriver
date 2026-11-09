@@ -94,7 +94,9 @@ func run() -> void:
 	equipment._process(0)
 	check(car.get_telemetry()["tire_pressure"][0] < 1, "Repair fixture has actual tire damage")
 	button(JOY_BUTTON_DPAD_RIGHT)
-	world.step_blocking(4.0)
+	# Hold a little longer than REPAIR_SECONDS (4 s): fixed 2 kHz steps can end a 4.0 s request
+	# at 3.9995 s of simulated time, which made this check flaky.
+	world.step_blocking(4.2)
 	world.sync_visuals()
 	car.relocate_to(Transform3D(Basis.IDENTITY, equipment.bay))
 	equipment._process(0)

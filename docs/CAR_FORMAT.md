@@ -31,7 +31,9 @@ Koordinaten im Generator: `x` zeigt nach vorne (hintere Stoßstange bei 0), `y` 
     "cornerRadiusRear": 0.24,
     "archClearance": 0.06,               // Radhaus-Radius = Reifenradius + dieser Wert
     "paint": [0.62, 0.05, 0.04],         // Lackfarbe (linear RGB)
-    "paintMetallic": 0.5
+    "paintMetallic": 0.5,
+    "dragCoefficient": 0.32,             // optional: cw-Wert (Standard je Karosserieform)
+    "frontalArea": 2.12                  // optional: Stirnfläche in m² (Standard 0,84·Breite·(Höhe−Bodenfreiheit))
   },
 
   "chassis": {
@@ -48,12 +50,15 @@ Koordinaten im Generator: `x` zeigt nach vorne (hintere Stoßstange bei 0), `y` 
       "reboundDamping": 4000,            // N·s/m Zugstufe
       "antiRollRate": 9000,              // N/m Stabilisator (0 = keiner)
       "bumpTravel": 0.085,               // Einfederweg bis zum Anschlagpuffer
-      "droopTravel": 0.10                // Ausfederweg bis zum Fangband
+      "droopTravel": 0.10,               // Ausfederweg bis zum Fangband
+      "toe": 0.0                         // optional: statische Spur je Rad in Grad, + = Vorspur (Standard vorn 0, hinten 0,25)
     },
     "rear": { "...": "wie front" }
   },
 
   "tires": { "radius": 0.317, "width": 0.225, "rimRadius": 0.216, "pressurePsi": 34,
+             // optional "widthRear": 0.35 für Mischbereifung (breitere Hinterreifen, z. B. Mittelmotor);
+             // "tireMass" gilt dann für den breiteren Reifen, der schmalere ist im Verhältnis der Breiten leichter
              "friction": 1.15, "tireMass": 9.5, "rimMass": 9.0, "rays": 16 },
 
   "engine": {
@@ -87,10 +92,11 @@ Koordinaten im Generator: `x` zeigt nach vorne (hintere Stoßstange bei 0), `y` 
   "steeringWheel": { "pivot": [0.0, 0.654, 0.934], "axis": [0.0, 0.38, -0.925],
     "parts": ["InteriorSteeringWheel", "InteriorSteeringEmblem"] }, // Namenspräfixe beweglicher Teile
   "wheels": { "FL": "WheelFrontL", "FR": "WheelFrontR", "RL": "WheelRearL", "RR": "WheelRearR" },
+  // oder je Rad eine Liste einzelner Knoten: "FL": ["rim_FL", "tyre_FL", "brake_disc_FL"]
   "hide": ["BrakePad", "Axles"],                  // Teile (Namens-Teilstrings), die entfallen
   "keepProcedural": ["chassis", "spring", "caliper"],  // eigene Teile, die sichtbar bleiben
   "aoOnUV2": true,  // nur für Modelle mit AO-Atlas auf der zweiten UV-Koordinate (glTF texCoord=1)
-  "materialOverrides": { "Glass": "glass", "Paint 1": "paint" }  // Modell-Material -> Spiel-Material
+  "materialOverrides": { "Glass": "glass", "Paint 1": "paint" }  // Modell-Material -> Spiel-Material ("paint" übernimmt body.paint)
 }
 ```
 
@@ -99,7 +105,8 @@ Die Physik-Struktur entsteht weiterhin aus `body` und den übrigen Abschnitten. 
 ## Was der Generator daraus baut
 
 - **Karosserie**: Ring-Stationen entlang der Fahrzeuglänge mit den Knoten Schweller-Träger, Schweller, Flanke, Gürtellinie und Dach bzw. Haube. Zwischen benachbarten Stationen liegen Längsträger und Schubdiagonalen. Die Fahrgastzelle ist steifer und fester, die Knautschzonen vorne und hinten sind weicher. Die Diagonalen über den Seitenfenstern verhalten sich wie Glas: schwach und spröde.
-- **Fahrwerk**: Doppelquerlenker mit Radträger aus 5 starr verbundenen Nodes und Subframe-Punkten, die mit einem "Käfig" aus Beams in alle Raumrichtungen verankert sind. Die Feder ist vorgespannt, sodass das Auto auf Konstruktionshöhe steht. Dazu kommen Dämpfer mit Druck- und Zugstufe (`shock`), Anschlagpuffer (`support`), Fangband (`anisotropic`) und ein Stabilisator als 4-Node-Torsionsstab mit senkrechter Koppelstange.
+- **Fahrwerk**: Doppelquerlenker mit Radträger aus 6 starr verbundenen Nodes (Naben, Kugelgelenke, Spurstangenhebel, Bremssattelpunkt vor der Achse) und Achsträger-Punkten, die mit einem "Käfig" aus Beams in alle Raumrichtungen verankert sind. Querlenkerlager beider Seiten und Spurstangenlager bilden einen gemeinsamen starren Achsträger; der obere Federteller ist über einen Federbeindom bis zu Längsträger und Schweller abgestützt. Die Feder ist vorgespannt, sodass das Auto auf Konstruktionshöhe steht. Dazu kommen Dämpfer mit Druck- und Zugstufe (`shock`), Anschlagpuffer (`support`), Fangband (`anisotropic`) und ein Stabilisator als 4-Node-Torsionsstab mit senkrechter Koppelstange.
+- **Reifen und Luft**: Laufflächen-Nodes haben einen nachgiebigen Bodenkontakt (Gummi speichert den Einlaufstoß). Der Luftdruck wirkt als Membran auf jedes Laufflächensegment, mit passender Gürtelspannung in der Radebene; das hebt die Wellengeschwindigkeit des Laufflächenrings über die Höchstgeschwindigkeit. Die Bremse hält das Rad relativ zum Radträger. Der Druckwiderstand der Kollisionshaut wird auf `dragCoefficient · frontalArea` kalibriert. Messwerte: [DRIVING_RESISTANCE.md](DRIVING_RESISTANCE.md).
 - **Antrieb**: Das Reaktionsmoment des Antriebs wirkt auf Motorblock bzw. Differenzial, das Reaktionsmoment der Bremse auf den Radträger. Damit bleibt der Drehimpuls erhalten, Anfahren lässt das Heck einfedern und Bremsen die Front eintauchen.
 - **Systeme**: Die Beam-Indizes von Kühler, Motorblock, Ölwanne, Tank, Motorlagern, Kardanwelle, Fahrwerk und Schadenszonen gehen an `CarSystems`.
 - **Visual**: Querschnitte werden über Catmull-Rom-Kurven verfeinert, mit Radausschnitten, Front- und Heckabschluss, Materialzonen (Lack, Glas, Leuchten, Fugen, Griffe, Kunststoff) und Innenraum. Jeder Vertex ist an die 4 nächsten Nodes gebunden. Die Position setzt sich zusammen aus der starren Bewegung der Fahrgastzelle plus den interpolierten Verschiebungen der Nodes.

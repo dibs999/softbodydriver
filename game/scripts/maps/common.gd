@@ -5,6 +5,7 @@ extends RefCounted
 static var _noise_textures: Dictionary = {}
 const SURFACE_PATH := "res://materials/surfaces/"
 const ROAD_SHADER := preload("res://materials/surfaces/road.gdshader")
+const GROUND_SHADER := preload("res://materials/surfaces/ground.gdshader")
 
 static func car_xform(pos: Vector3, heading: Vector3) -> Transform3D:
 	var f := Vector3(heading.x, 0, heading.z).normalized()
@@ -27,27 +28,43 @@ static func mat(color: Color, rough := 0.9, metallic := 0.0) -> StandardMaterial
 	return m
 
 
+## Per-surface look of the large-scale variation: [brightness, patch scale m, patch tint, tint amount,
+## roughness, wet response].
+const GROUND_LOOK := {
+	"grass": [0.16, 46.0, Color(0.78, 0.70, 0.42), 0.55, 0.96, 0.35],
+	"asphalt": [0.18, 34.0, Color(0.62, 0.62, 0.64), 0.35, 0.86, 1.0],
+	"pavement": [0.07, 28.0, Color(0.70, 0.68, 0.62), 0.25, 0.88, 0.9],
+	"gravel": [0.12, 22.0, Color(0.72, 0.64, 0.52), 0.45, 0.96, 0.6],
+	"sand": [0.10, 60.0, Color(0.80, 0.62, 0.44), 0.50, 0.98, 0.4],
+}
+
+
 static func surface_material(kind: String, tile_metres: float, tint := Color.WHITE,
-		normal_strength := 0.0) -> StandardMaterial3D:
-	var m := mat(tint)
-	m.albedo_texture = load(SURFACE_PATH + kind + ".jpg")
-	m.uv1_scale = Vector3.ONE / tile_metres
-	m.uv1_triplanar = true
-	m.uv1_world_triplanar = true
-	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
-	if normal_strength > 0.0:
-		m.normal_enabled = true
-		m.normal_texture = load(SURFACE_PATH + kind + "_normal.jpg")
-		m.normal_scale = normal_strength
+		normal_strength := 0.0) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = GROUND_SHADER
+	m.set_shader_parameter("albedo_tex", load(SURFACE_PATH + kind + ".jpg"))
+	m.set_shader_parameter("tile_metres", tile_metres)
+	m.set_shader_parameter("tint", tint)
+	var look: Array = GROUND_LOOK.get(kind, [0.08, 30.0, Color.WHITE, 0.0, 0.9, 0.6])
+	m.set_shader_parameter("macro_strength", look[0])
+	m.set_shader_parameter("macro_scale", look[1])
+	m.set_shader_parameter("macro_tint", look[2])
+	m.set_shader_parameter("macro_tint_amount", look[3])
+	m.set_shader_parameter("roughness", look[4])
+	m.set_shader_parameter("wet_response", look[5])
+	if normal_strength > 0.0 and ResourceLoader.exists(SURFACE_PATH + kind + "_normal.jpg"):
+		m.set_shader_parameter("has_normal", true)
+		m.set_shader_parameter("normal_tex", load(SURFACE_PATH + kind + "_normal.jpg"))
+		m.set_shader_parameter("normal_strength", normal_strength)
 	return m
 
 
-static func terrain_material(kind: String, tile_metres: float) -> StandardMaterial3D:
-	var m := surface_material(kind, tile_metres)
-	# Heightfield UVs are already world-aligned and repeat every ten metres.
-	m.uv1_scale *= 10.0
-	m.uv1_triplanar = false
-	m.vertex_color_use_as_albedo = true
+static func terrain_material(kind: String, tile_metres: float, tint := Color.WHITE) -> ShaderMaterial:
+	if kind == "grass" and tint == Color.WHITE:
+		tint = Color(0.6, 0.78, 0.52)   # the photo is late-summer grass; maps are greener
+	var m := surface_material(kind, tile_metres, tint)
+	m.set_shader_parameter("use_vertex_color", true)
 	return m
 
 
@@ -228,7 +245,7 @@ static func terrain_tiles(parent: Node3D, ox: float, oz: float, cell: float, nx:
 static func road_material(lanes: int, width: float, texture_length: float, style: String) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
 	m.shader = ROAD_SHADER
-	var dirt := style == "dirt"
+	var dirt := style == "dirt" or style == "desert"
 	var kind := "gravel" if dirt else "asphalt"
 	m.set_shader_parameter("surface_color", load(SURFACE_PATH + kind + ".jpg"))
 	m.set_shader_parameter("surface_normal", load(SURFACE_PATH + kind + "_normal.jpg"))
@@ -238,6 +255,8 @@ static func road_material(lanes: int, width: float, texture_length: float, style
 	m.set_shader_parameter("dirt", dirt)
 	if style == "rural":
 		m.set_shader_parameter("divider_color", Color(0.93, 0.82, 0.44))
+	elif style == "desert":
+		m.set_shader_parameter("dirt_tint", Color(0.66, 0.56, 0.46))   # compacted, darker than the loose sand
 	return m
 
 

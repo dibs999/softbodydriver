@@ -179,9 +179,29 @@ void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, rea
     angularVelocity = measureAngularVelocity(body, &inertia);
 
     // Brake torque opposes current wheel rotation, bounded so it cannot reverse the wheel in one step.
-    const real maxStopTorque = dt > 0 ? std::abs(angularVelocity) * inertia / dt : 0.0;
+    // A brake locks the wheel to its knuckle, so it acts on the rotation *relative to the
+    // upright*. Using the absolute spin made a locked brake fight every pitch motion of the body
+    // (the knuckle rotates with it) and pump energy into a fore-aft rocking limit cycle.
+    real knuckleOmega = 0.0;
+    real stopInertia = inertia;
+    if (spec.brakeReactionA >= 0 && spec.brakeReactionB >= 0) {
+        const auto& vel = body.velocities();
+        const auto ia = static_cast<std::size_t>(spec.brakeReactionA), ib = static_cast<std::size_t>(spec.brakeReactionB);
+        const Vec3 d = pos[ia] - pos[ib];
+        const real d2 = lengthSq(d);
+        if (d2 > 1e-6) {
+            knuckleOmega = dot(cross(d, vel[ia] - vel[ib]), a) / d2;
+            // The reaction couple acts on these two nodes within the step: stop the *relative* spin
+            // with the reduced inertia of ring and node pair, or the lock overshoots and chatters.
+            const real ma = mass[ia], mb = mass[ib];
+            const real knuckleInertia = ma * mb / (ma + mb) * d2;
+            if (inertia > 1e-9) stopInertia = inertia * knuckleInertia / (inertia + knuckleInertia);
+        }
+    }
+    const real relOmega = angularVelocity - knuckleOmega;
+    const real maxStopTorque = dt > 0 ? std::abs(relOmega) * stopInertia / dt : 0.0;
     const real clampedBrake = std::min( std::max<real>(0.0, brakeTorque), maxStopTorque);
-    const real signedBrake = angularVelocity > 0 ? -clampedBrake : (angularVelocity < 0 ? clampedBrake : 0.0);
+    const real signedBrake = relOmega > 0 ? -clampedBrake : (relOmega < 0 ? clampedBrake : 0.0);
     const real totalTorque = driveTorque + signedBrake;
     lastDriveTorque = driveTorque;
     lastBrakeTorque = signedBrake;
@@ -209,6 +229,34 @@ void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, rea
         }
         force[idx] += f;
         sumForce += f;
+    }
+    // Inflated tread membrane: the air pushes every tread segment outward (p * width * length along
+    // its outward normal) and the belt carries the matching hoop tension T = p * width * R. On a
+    // round ring both cancel exactly; on a deflected ring they give the geometric stiffness that
+    // sets the tread's wave speed (a real tyre's standing-wave speed is ~250-300 km/h). Internal
+    // forces only: the pressure on a closed polygon and the tension both sum to zero.
+    if (spec.membranePressure > 0.0 && pressurePa > 0.0) {
+        const int N = spec.numRays;
+        const real lineLoad = spec.membranePressure * pressurePa * spec.width * 0.5;  // per ring, N/m
+        const real tension = lineLoad * spec.radius;
+        for (int ring = 0; ring < 2; ++ring)
+            for (int i = 0; i < N; ++i) {
+                const std::uint32_t na = treadNodes[static_cast<std::size_t>(ring * N + i)];
+                const std::uint32_t nb = treadNodes[static_cast<std::size_t>(ring * N + (i + 1) % N)];
+                const Vec3 e = pos[nb] - pos[na];
+                const real len = length(e);
+                if (len < 1e-6) continue;
+                const Vec3 tRaw = e / len;
+                // In-plane only: the tension sets the radial wave speed; an axial component would
+                // make the tread band a taut lateral string and reverse the self-aligning torque.
+                const Vec3 t = tRaw - a * dot(tRaw, a);
+                Vec3 nOut = cross(tRaw, a);
+                const Vec3 mid = (pos[na] + pos[nb]) * 0.5 - c;
+                if (dot(nOut, mid) < 0.0) nOut = nOut * -1.0;
+                const Vec3 fp = nOut * (0.5 * lineLoad * len);
+                force[na] += t * tension + fp;
+                force[nb] += t * -tension + fp;
+            }
     }
     // Equal and opposite reaction on the spindle nodes -> exact linear momentum conservation.
     force[spec.hubLeft] -= sumForce * 0.5;
@@ -249,6 +297,7 @@ PressureWheel addPressureWheel(SoftBody& body, const PressureWheelSpec& spec) {
     np.mass = spec.tireMass / static_cast<real>(2 * spec.numRays);
     np.friction = spec.friction;
     np.collision = true;
+    np.contactStiffness = spec.contactStiffness;
 
     const int N = spec.numRays;
     w.treadNodes.reserve(static_cast<std::size_t>(2 * N));

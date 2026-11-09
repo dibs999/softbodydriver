@@ -326,16 +326,25 @@ CarBuild buildCar(const CarDefinition& def) {
         const std::string pre = std::string(cn.front ? "F" : "R") + (cn.right ? "R" : "L") + "_";
         std::vector<std::uint32_t>& sb = sys.suspensionBeams[static_cast<std::size_t>(c)];
 
+        const real toeDeg = sd.toe > -90.0 ? sd.toe : (cn.front ? 0.0 : 0.25);
+        const real toeRad = toeDeg * kPi / 180.0;
         auto node = [&](const std::string& n, Vec3 p, real m, const std::string& group) {
             NodeParams np;
             np.mass = m;
             np.friction = 0.6;
             np.group = group;
+            if (group.rfind("upright_", 0) == 0 && toeRad != 0.0) {
+                // Static toe: rotate the whole knuckle about the vertical axis through the wheel.
+                const real dx = p.x - xa, dz = p.z - tr;
+                p.x = xa + dx * std::cos(toeRad) + dz * std::sin(toeRad);
+                p.z = tr - dx * std::sin(toeRad) + dz * std::cos(toeRad);
+            }
             p.z *= s;
             return car.addNode(pre + n, p, np);
         };
         const std::string up = "upright_" + pre;
-        const real hubMass = 0.5 * (tire.rimMass + 9.0);
+        const real caliperMass = 3.0;
+        const real hubMass = 0.5 * (tire.rimMass + 9.0 - caliperMass);
         cn.hubIn = node("hub_in", {xa, R, tr - 0.085}, hubMass, up);
         cn.hubOut = node("hub_out", {xa, R, tr + 0.085}, hubMass, up);
         // Ball joints sit inside the rim: small scrub radius, ~9 deg kingpin inclination.
@@ -345,22 +354,46 @@ CarBuild buildCar(const CarDefinition& def) {
         // the short front steering arm gives lateral tyre forces too little
         // leverage and allows large rear steer without any structural damage.
         const real toeLever = cn.front ? 0.14 : std::min<real>(0.34, 0.85 * R);
-        cn.steerArm = node("steer_arm", {xa - toeLever, R - 0.03, tr - 0.12}, 5.0, up);
         const real pivZ = std::min<real>(0.36, tr - 0.40);
+        const real tieY = R - 0.03;
+        cn.steerArm = node("steer_arm", {xa - toeLever, tieY, tr - 0.12}, 5.0, up);
+        // Brake caliper mount ahead of the axle. Hubs and ball joints lie almost in one transverse
+        // plane, so without an off-plane point in front the hub axis could swivel in yaw on its
+        // knuckle (held fore-aft by the single steering-arm beam): a ~25 Hz wheel-yaw mode that
+        // showed up as toe flutter at the grip limit.
+        cn.caliper = node("caliper", {xa + 0.13, R + 0.06, tr - 0.10}, caliperMass, up);
         cn.lowerF = node("lower_f", {xa + 0.18, R - 0.12, pivZ}, 4.0, "subframe");
         cn.lowerR = node("lower_r", {xa - 0.18, R - 0.12, pivZ}, 4.0, "subframe");
         cn.upperF = node("upper_f", {xa + 0.13, R + 0.21, tr - 0.45}, 3.5, "subframe");
         cn.upperR = node("upper_r", {xa - 0.13, R + 0.21, tr - 0.45}, 3.5, "subframe");
-        cn.rackEnd = node("rack_end", {xa - toeLever, R - 0.03, pivZ}, 3.5, "subframe");
+        cn.rackEnd = node("rack_end", {xa - toeLever, tieY, pivZ}, 3.5, "subframe");
         // The coilover acts directly on the knuckle at the lower ball joint (motion ratio ~0.95),
         // which keeps the spring path rigid under bump-stop loads.
         cn.armMid = cn.lbj;
         cn.tower = node("tower", {xa, R + 0.43, tr - 0.29}, 10.0, "subframe");
-        unsprungMass[static_cast<std::size_t>(c)] = 2 * hubMass + 6 + 5 + 5 + tire.tireMass;
+        unsprungMass[static_cast<std::size_t>(c)] = 2 * hubMass + caliperMass + 6 + 5 + 5 + tire.massFor(cn.front);
 
         // Subframe nodes are bolted to the body.
         for (std::uint32_t n : {cn.lowerF, cn.lowerR, cn.upperF, cn.upperR, cn.rackEnd, cn.tower})
             attach(n, 4, mountBeam, &sb);
+        // Strut tower: the spring's top mount is a pressed box welded down to the chassis rail and
+        // the sill. Hung only from the nearest (fender/crumple-zone) shell nodes, the front of the
+        // body sank ~5 cm around the towers under its own weight and dragged the steering geometry
+        // into ~1.8 deg toe-out.
+        {
+            std::vector<std::pair<real, std::uint32_t>> lower;
+            for (std::size_t station = 0; station < rig.shell.size(); ++station)
+                for (int slot : {0, 1}) {
+                    const auto nIdx = rig.shell[station][static_cast<std::size_t>(slot)][cn.right ? 1 : 0];
+                    if (nIdx < 0) continue;
+                    const auto un = static_cast<std::uint32_t>(nIdx);
+                    lower.push_back({std::abs(car.positions()[un].x - xa), un});
+                }
+            std::sort(lower.begin(), lower.end());
+            const BeamParams towerBox = makeBeam(1.5e6, 150.0, 8.0e4, 2.0e5);
+            for (std::size_t k = 0; k < std::min<std::size_t>(4, lower.size()); ++k)
+                sb.push_back(car.addBeam(cn.tower, lower[k].second, towerBox));
+        }
         car.addBeam(cn.lowerF, cn.lowerR, mountBeam);
         car.addBeam(cn.upperF, cn.upperR, mountBeam);
         // Rear toe links need a triangulated subframe anchorage. Mounting the
@@ -373,7 +406,7 @@ CarBuild buildCar(const CarDefinition& def) {
 
         // Upright: rigid knuckle.
         const BeamParams knuckle = makeBeam(3.5e6, 220.0, 1.6e5, 4.0e5);
-        std::vector<std::uint32_t> upr = {cn.hubIn, cn.hubOut, cn.lbj, cn.ubj, cn.steerArm};
+        std::vector<std::uint32_t> upr = {cn.hubIn, cn.hubOut, cn.lbj, cn.ubj, cn.steerArm, cn.caliper};
         connectAll(car, upr, knuckle, &sb);
         // Wishbones.
         BeamParams arm = makeBeam(1.6e6, 140.0, 9.5e4, 2.4e5);
@@ -460,6 +493,19 @@ CarBuild buildCar(const CarDefinition& def) {
         tb.damp = tb.spring * 0.01;
         tb.strength = 3.0e4;
         if (sd.antiRollRate > 0.0) car.addTorsionbar(l.arbEnd, l.arbPivot, r.arbPivot, r.arbEnd, tb);
+
+        // Subframe: on a real car all wishbone pivots and the steering rack (front) or toe-link
+        // pivots (rear) sit on one rigid cross-member that is bolted to the body. Anchoring each
+        // pivot to the shell on its own let the body's own sag and twist move the pivots against
+        // the tie-rod joints: ~1.8 deg static front toe-out on the Concept and wheels that toed
+        // in and out by several degrees under drive torque.
+        {
+            const BeamParams frame = makeBeam(1.2e6, 120.0, 1.4e5, 3.0e5);
+            std::vector<std::uint32_t> sub;
+            for (CarCorner* cn : {&l, &r})
+                for (std::uint32_t n : {cn->lowerF, cn->lowerR, cn->upperF, cn->upperR, cn->rackEnd}) sub.push_back(n);
+            connectAll(car, sub, frame, nullptr);
+        }
     }
 
     // ------------------------------------------------------------------ engine, radiator, oil pan
@@ -800,7 +846,7 @@ CarBuild buildCar(const CarDefinition& def) {
         for (std::uint32_t n : rig.bodyNodes) isBody[n] = true;
         for (std::size_t i = 0; i < car.nodeCount(); ++i)
             if (!isBody[i]) fixedMass += car.masses()[i];
-        fixedMass += 4.0 * tire.tireMass;  // tyres are added below
+        fixedMass += tire.totalMass();  // tyres are added below
         const real bodyMass = std::max({300.0, 2.0 * static_cast<real>(rig.bodyNodes.size()), def.chassis.curbMass - fixedMass});
         const real targetX = prof.xRA + def.chassis.frontWeight * bd.wheelbase;
         auto comFor = [&](real tilt, std::vector<real>& masses) {
@@ -831,8 +877,8 @@ CarBuild buildCar(const CarDefinition& def) {
             for (std::size_t i = 0; i < car.nodeCount(); ++i)
                 if (!isBody[i]) { mx += car.masses()[i] * car.positions()[i].x; m += car.masses()[i]; }
             // Tyres sit at the axles.
-            mx += 2.0 * tire.tireMass * (prof.xFA + prof.xRA);
-            m += 4.0 * tire.tireMass;
+            mx += 2.0 * (tire.massFor(true) * prof.xFA + tire.massFor(false) * prof.xRA);
+            m += tire.totalMass();
             return mx / m;
         };
         std::vector<real> masses(rig.bodyNodes.size());
@@ -848,7 +894,7 @@ CarBuild buildCar(const CarDefinition& def) {
     // ------------------------------------------------------------------ spring preload for design ride height
     {
         const real g = 9.81;
-        real mTotal = car.totalMass() + 4.0 * tire.tireMass;
+        real mTotal = car.totalMass() + tire.totalMass();
         real unsprung = 0.0;
         for (real u : unsprungMass) unsprung += u;
         const real sprung = mTotal - unsprung;
@@ -890,15 +936,23 @@ CarBuild buildCar(const CarDefinition& def) {
         ws.hubRight = cn.right ? cn.hubOut : cn.hubIn;
         ws.hubLeft = cn.right ? cn.hubIn : cn.hubOut;
         ws.radius = tire.radius;
-        ws.width = tire.width;
+        ws.width = cn.front ? tire.width : tire.rearWidth();
         ws.numRays = tire.rays;
-        ws.tireMass = tire.tireMass;
+        ws.tireMass = tire.massFor(cn.front);
         ws.friction = tire.friction;
         ws.pressurePsi = tire.pressurePsi;
         const real rayScale = 12.0 / static_cast<real>(tire.rays);
         ws.spokeSpring = 1.05e5 * rayScale;
         ws.treadSpring = 1.3e5;
         ws.spokeDamp = 40.0 * rayScale;
+        // Compliant tread contact: the rubber stores the leading-edge impact of each tread node
+        // instead of a rigid projection destroying it: ~35 % less rolling loss at 100 km/h. Softer
+        // contact saves more but lets the tread chatter at the grip limit (rear toe flutter).
+        ws.contactStiffness = 4.5e5 * 16.0 / static_cast<real>(tire.rays);
+        // Inflated tread membrane at twice the bare p*w*R hoop tension: the factor stands in for the
+        // belt's bending stiffness, which the skip-two chord beams only partly provide. Removes the
+        // tread standing wave that peaked rolling loss around 145 km/h.
+        ws.membranePressure = 2.0;
         ws.steered = cn.front;
         ws.braked = true;
         ws.handbraked = !cn.front;
@@ -1093,8 +1147,43 @@ CarBuild buildCar(const CarDefinition& def) {
     build.layout.width = bd.width;
     build.layout.height = bd.height;
 
+    // ------------------------------------------------------------------ aerodynamic calibration
+    // Per-triangle pressure drag over a closed node-beam skin behaves like a box of flat
+    // plates and overestimates drag ~2.5x. Measure the skin head-on at unit speed (the same
+    // formula as World::accumulateAerodynamicForces) and scale it to the specified Cd * A.
+    {
+        real cd = bd.dragCoefficient;
+        if (cd <= 0.0) {
+            switch (bd.style) {
+                case BodyStyle::Sedan: cd = 0.29; break;
+                case BodyStyle::Coupe: cd = 0.31; break;
+                case BodyStyle::SUV: cd = 0.36; break;
+                default: cd = 0.32; break;
+            }
+        }
+        const real area = bd.frontalArea > 0.0 ? bd.frontalArea : 0.84 * bd.width * (bd.height - bd.groundClearance);
+        real fx = 0.0;
+        for (const ColTri& tri : car.triangles()) {
+            if (tri.dragCoef <= 0.0) continue;
+            const auto& p = car.positions();
+            const Vec3 cr = cross(p[tri.b] - p[tri.a], p[tri.c] - p[tri.a]);
+            const real dbl = length(cr);
+            if (dbl < 1e-8) continue;
+            const Vec3 n = cr / dbl;
+            const real triArea = 0.5 * dbl;
+            fx += -n.x * (0.5 * tri.dragCoef * triArea * n.x) - 0.015 * tri.dragCoef * triArea;
+        }
+        const real simDragArea = -2.0 * fx;
+        if (simDragArea > 1e-6) {
+            const real scale = cd * area / simDragArea;
+            for (ColTri& tri : car.triangles()) tri.dragCoef *= scale;
+        }
+        build.layout.dragArea = cd * area;
+    }
 
     buildCarVisual(build, prof, rig);
+    setRigidParts(build.visual, {build.layout.bonnetNodes, build.layout.frontDoors[0].nodes, build.layout.frontDoors[1].nodes,
+                                 build.layout.frontBumperNodes, build.layout.rearBumperNodes});
     build.restPositions = car.positions();
     return build;
 }

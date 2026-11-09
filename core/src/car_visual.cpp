@@ -509,17 +509,122 @@ void computeNodeFrames(const std::vector<Vec3>& pos, const CarVisual& vis, std::
     frames[10] = static_cast<float>(t.y);
     frames[11] = static_cast<float>(t.z);
     const bool haveRest = vis.restNodes.size() == n;
+    // Rigid part frames (bonnet, doors, bumpers): best-fit rotation of each part's nodes, extracted
+    // with the iterative method of Mueller et al. 2016 (warm-started from the previous frame), so a
+    // panel swinging on its hinges or lying loose on the road keeps its shape.
+    const std::size_t partBase = 12 + n * 3;
+    const std::size_t nParts = haveRest ? vis.parts.size() : 0;
+    std::vector<float> previous;
+    if (frames.size() == partBase + 16 * nParts) previous.assign(frames.begin() + static_cast<std::ptrdiff_t>(partBase), frames.end());
+    frames.resize(partBase + 16 * nParts);
+    for (std::size_t p = 0; p < nParts; ++p) {
+        const auto& nodes = vis.parts[p];
+        float* out = &frames[partBase + 16 * p];
+        Vec3 c0{}, c1{};
+        for (auto k : nodes) { c0 += vis.restNodes[k]; c1 += pos[k]; }
+        const real inv = nodes.empty() ? 0.0 : 1.0 / static_cast<real>(nodes.size());
+        c0 = c0 * inv;
+        c1 = c1 * inv;
+        real A[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};  // sum (now - c1) (rest - c0)^T
+        for (auto k : nodes) {
+            const Vec3 a = pos[k] - c1, b = vis.restNodes[k] - c0;
+            const real av[3] = {a.x, a.y, a.z}, bv[3] = {b.x, b.y, b.z};
+            for (int i = 0; i < 3; ++i)
+                for (int j = 0; j < 3; ++j) A[i][j] += av[i] * bv[j];
+        }
+        real q[4] = {1, 0, 0, 0};  // w, x, y, z
+        if (!previous.empty()) for (int i = 0; i < 4; ++i) q[i] = previous[16 * p + 12 + static_cast<std::size_t>(i)];
+        else {
+            // Start from the passenger cell so the first fit converges to the right branch.
+            const real tr = R[0][0] + R[1][1] + R[2][2];
+            q[0] = std::sqrt(std::max<real>(0.0, 1.0 + tr)) * 0.5;
+            const real s4 = q[0] > 1e-6 ? 0.25 / q[0] : 0.0;
+            q[1] = (R[2][1] - R[1][2]) * s4; q[2] = (R[0][2] - R[2][0]) * s4; q[3] = (R[1][0] - R[0][1]) * s4;
+        }
+        real Rp[3][3];
+        for (int it = 0; it < 12; ++it) {
+            const real w = q[0], x = q[1], y = q[2], z = q[3];
+            Rp[0][0] = 1 - 2 * (y * y + z * z); Rp[0][1] = 2 * (x * y - z * w); Rp[0][2] = 2 * (x * z + y * w);
+            Rp[1][0] = 2 * (x * y + z * w); Rp[1][1] = 1 - 2 * (x * x + z * z); Rp[1][2] = 2 * (y * z - x * w);
+            Rp[2][0] = 2 * (x * z - y * w); Rp[2][1] = 2 * (y * z + x * w); Rp[2][2] = 1 - 2 * (x * x + y * y);
+            Vec3 omega{}; real dotSum = 0;
+            for (int col = 0; col < 3; ++col) {
+                const Vec3 r{Rp[0][col], Rp[1][col], Rp[2][col]}, a{A[0][col], A[1][col], A[2][col]};
+                omega += cross(r, a);
+                dotSum += dot(r, a);
+            }
+            omega = omega * (1.0 / (std::abs(dotSum) + 1e-9));
+            const real angle = length(omega);
+            if (angle < 1e-9) break;
+            const Vec3 axis = omega / angle;
+            const real h = 0.5 * angle, sh = std::sin(h);
+            const real dq[4] = {std::cos(h), axis.x * sh, axis.y * sh, axis.z * sh};
+            const real nq[4] = {dq[0] * q[0] - dq[1] * q[1] - dq[2] * q[2] - dq[3] * q[3],
+                                dq[0] * q[1] + dq[1] * q[0] + dq[2] * q[3] - dq[3] * q[2],
+                                dq[0] * q[2] - dq[1] * q[3] + dq[2] * q[0] + dq[3] * q[1],
+                                dq[0] * q[3] + dq[1] * q[2] - dq[2] * q[1] + dq[3] * q[0]};
+            const real nl = std::sqrt(nq[0] * nq[0] + nq[1] * nq[1] + nq[2] * nq[2] + nq[3] * nq[3]);
+            for (int i = 0; i < 4; ++i) q[i] = nq[i] / nl;
+        }
+        {
+            const real w = q[0], x = q[1], y = q[2], z = q[3];
+            Rp[0][0] = 1 - 2 * (y * y + z * z); Rp[0][1] = 2 * (x * y - z * w); Rp[0][2] = 2 * (x * z + y * w);
+            Rp[1][0] = 2 * (x * y + z * w); Rp[1][1] = 1 - 2 * (x * x + z * z); Rp[1][2] = 2 * (y * z - x * w);
+            Rp[2][0] = 2 * (x * z - y * w); Rp[2][1] = 2 * (y * z + x * w); Rp[2][2] = 1 - 2 * (x * x + y * y);
+        }
+        const Vec3 tp = c1 - Vec3{Rp[0][0] * c0.x + Rp[0][1] * c0.y + Rp[0][2] * c0.z, Rp[1][0] * c0.x + Rp[1][1] * c0.y + Rp[1][2] * c0.z,
+                                  Rp[2][0] * c0.x + Rp[2][1] * c0.y + Rp[2][2] * c0.z};
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 3; ++j) out[i * 3 + j] = static_cast<float>(Rp[i][j]);
+        out[9] = static_cast<float>(tp.x); out[10] = static_cast<float>(tp.y); out[11] = static_cast<float>(tp.z);
+        for (int i = 0; i < 4; ++i) out[12 + i] = static_cast<float>(q[i]);
+    }
     for (std::size_t k = 0; k < n; ++k) {
         Vec3 d{0, 0, 0};
         if (haveRest) {
             const Vec3& q = vis.restNodes[k];
-            const Vec3 rigid{R[0][0] * q.x + R[0][1] * q.y + R[0][2] * q.z + t.x, R[1][0] * q.x + R[1][1] * q.y + R[1][2] * q.z + t.y,
-                             R[2][0] * q.x + R[2][1] * q.y + R[2][2] * q.z + t.z};
+            const std::int32_t part = k < vis.nodePart.size() ? vis.nodePart[k] : -1;
+            const float* F = part >= 0 && static_cast<std::size_t>(part) < nParts ? &frames[partBase + 16 * static_cast<std::size_t>(part)] : frames.data();
+            const Vec3 rigid{F[0] * q.x + F[1] * q.y + F[2] * q.z + F[9], F[3] * q.x + F[4] * q.y + F[5] * q.z + F[10],
+                             F[6] * q.x + F[7] * q.y + F[8] * q.z + F[11]};
             d = pos[k] - rigid;
         }
         frames[12 + k * 3] = static_cast<float>(d.x);
         frames[12 + k * 3 + 1] = static_cast<float>(d.y);
         frames[12 + k * 3 + 2] = static_cast<float>(d.z);
+    }
+}
+
+const float* skinFrame(const std::vector<float>& frames, std::size_t nodeCount, std::int32_t part) {
+    const std::size_t at = 12 + nodeCount * 3 + 16 * static_cast<std::size_t>(std::max(part, 0));
+    return part >= 0 && at + 12 <= frames.size() ? &frames[at] : frames.data();
+}
+
+void setRigidParts(CarVisual& vis, const std::vector<std::vector<std::uint32_t>>& parts) {
+    vis.parts.clear();
+    vis.nodePart.assign(vis.restNodes.size(), -1);
+    for (const auto& nodes : parts) {
+        if (nodes.size() < 4) continue;
+        const auto index = static_cast<std::int32_t>(vis.parts.size());
+        vis.parts.push_back(nodes);
+        for (auto k : nodes)
+            if (k < vis.nodePart.size()) vis.nodePart[k] = index;
+    }
+    for (auto& surf : vis.skinned) tagRigidPartVertices(vis, surf);
+}
+
+void tagRigidPartVertices(const CarVisual& vis, MeshSurface& surf) {
+    for (auto& sk : surf.skin) {
+        sk.part = -1;
+        if (sk.weight[0] < 0.0f || vis.nodePart.empty()) continue;
+        std::int32_t part = -2;
+        for (int k = 0; k < 4; ++k) {
+            if (sk.weight[k] <= 0.0f) continue;
+            const std::int32_t pk = sk.node[k] < vis.nodePart.size() ? vis.nodePart[sk.node[k]] : -1;
+            if (part == -2) part = pk;
+            else if (part != pk) { part = -1; break; }
+        }
+        sk.part = part >= 0 ? part : -1;
     }
 }
 
@@ -536,7 +641,7 @@ Vec3 evalSkin(const std::vector<Vec3>& pos, const std::vector<float>& frames, co
         const Vec3 e3 = cross(e1, e2);
         return pa + d * s.weight[1] + e1 * s.weight[2] + e2 * s.local[0][0] + e3 * s.local[0][1];
     }
-    const float* R = frames.data();
+    const float* R = skinFrame(frames, pos.size(), s.part);
     const float x = s.local[0][0], y = s.local[0][1], z = s.local[0][2];
     Vec3 out{R[0] * x + R[1] * y + R[2] * z + R[9], R[3] * x + R[4] * y + R[5] * z + R[10], R[6] * x + R[7] * y + R[8] * z + R[11]};
     for (int k = 0; k < 4; ++k) {
@@ -596,7 +701,6 @@ void deformSurfaceBlended(const std::vector<Vec3>& pos, const std::vector<float>
     outPositions.resize(nv * 3);
     std::vector<float> dent(nv, 0.0f);
     bool anyDent = false;
-    const float* R = frames.data();
     for (std::size_t i = 0; i < nv; ++i) {
         const VertexSkin& sk = surf.skin[i];
         const Vec3 p = evalSkin(pos, frames, sk);
@@ -629,6 +733,7 @@ void deformSurfaceBlended(const std::vector<Vec3>& pos, const std::vector<float>
     outNormals.resize(nv * 3);
     for (std::size_t i = 0; i < nv; ++i) {
         const float nx = surf.normals[i * 3], ny = surf.normals[i * 3 + 1], nz = surf.normals[i * 3 + 2];
+        const float* R = skinFrame(frames, pos.size(), surf.skin[i].part);
         float rx = R[0] * nx + R[1] * ny + R[2] * nz;
         float ry = R[3] * nx + R[4] * ny + R[5] * nz;
         float rz = R[6] * nx + R[7] * ny + R[8] * nz;
@@ -1438,7 +1543,13 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
 
     // ---- wheels
     vis.wheelFront = buildWheelMeshes(build.def.tires, bd.style);
-    vis.wheelRear = vis.wheelFront;
+    if (build.def.tires.widthRear > 0.0 && build.def.tires.widthRear != build.def.tires.width) {
+        TireDef rear = build.def.tires;
+        rear.width = rear.widthRear;
+        vis.wheelRear = buildWheelMeshes(rear, bd.style);
+    } else {
+        vis.wheelRear = vis.wheelFront;
+    }
 
     // ---- camera anchors
     {

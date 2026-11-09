@@ -225,6 +225,7 @@ func scan_cars() -> void:
 			"layout": data.get("engine", {}).get("layout", ""),
 			"mass": data.get("chassis", {}).get("curbMass", 0.0),
 			"paint": data.get("body", {}).get("paint", [0.5, 0.5, 0.5]),
+			"paint_metallic": data.get("body", {}).get("paintMetallic", 0.5),
 			"style": data.get("body", {}).get("style", ""),
 			"length": data.get("body", {}).get("length", 4.3),
 			"visual_model": data.get("visualModel", {}),
@@ -238,7 +239,11 @@ func scan_cars() -> void:
 		info["torque"] = peak_t
 		info["power"] = peak_p
 		cars.append(info)
-	cars.sort_custom(func(a, b): return a["name"] < b["name"])
+	# Detailed (imported) models first, then the procedural ones; alphabetical within each group.
+	cars.sort_custom(func(a, b):
+		var da: bool = not (a["visual_model"] as Dictionary).is_empty()
+		var db: bool = not (b["visual_model"] as Dictionary).is_empty()
+		return a["name"] < b["name"] if da == db else da)
 	print("SoftBodyDriver: %d vehicles found in %s" % [cars.size(), CARS_DIR])
 
 
@@ -292,7 +297,10 @@ func apply_visual_model(v: SBVehicle, info: Dictionary) -> void:
 	var u := _axis(cfg.get("up", "+y"))
 	var r := f.cross(u)
 	var rot := Basis(f, u, r).transposed()
-	var wheel_names: Array = cfg.get("wheels", {}).values()
+	var wheel_names: Array = []
+	for entry in cfg.get("wheels", {}).values():
+		if entry is Array: wheel_names.append_array(entry)
+		else: wheel_names.append(entry)
 	var hide: Array = cfg.get("hide", [])
 	var bounds := [Vector3.INF, -Vector3.INF]
 	var wheel_bounds := [Vector3.INF, -Vector3.INF]
@@ -309,10 +317,18 @@ func apply_visual_model(v: SBVehicle, info: Dictionary) -> void:
 	var lib := material_library()
 	for k in cfg.get("materialOverrides", {}).keys():
 		var target: String = cfg["materialOverrides"][k]
-		if lib.has(target):
+		if target == "paint" and lib.get("paint") is StandardMaterial3D:
+			# Each car keeps its own colour from body.paint (the library paint is only the template).
+			var own: StandardMaterial3D = (lib["paint"] as StandardMaterial3D).duplicate()
+			var rgb: Array = info.get("paint", [])
+			if rgb.size() >= 3:
+				own.albedo_color = Color(float(rgb[0]), float(rgb[1]), float(rgb[2]))
+			own.metallic = float(info.get("paint_metallic", own.metallic))
+			overrides[k] = own
+		elif lib.has(target):
 			overrides[k] = lib[target]
 	var options := {"wheels": cfg.get("wheels", {}), "hide": hide, "keep_procedural": cfg.get("keepProcedural", []),
-		"material_overrides": overrides, "ao_on_uv2": bool(cfg.get("aoOnUV2", false))}
+		"material_overrides": overrides, "ao_on_uv2": bool(cfg.get("aoOnUV2", false)), "parts": cfg.get("parts", {})}
 	var eye: Variant = _model_point(cfg.get("driverEye"))
 	if eye is Vector3:
 		options["driver_eye"] = xf * eye
@@ -408,6 +424,7 @@ func _setup_input() -> void:
 	_action("menu"); _key("menu", [KEY_ESCAPE]); _joy_button("menu", JOY_BUTTON_START)
 	_action("bonnet_release"); _key("bonnet_release", [KEY_O])
 	_action("headlights"); _key("headlights", [KEY_L]); _joy_button("headlights", JOY_BUTTON_DPAD_UP)
+	_action("wipers"); _key("wipers", [KEY_X])
 	_action("indicator_left"); _key("indicator_left", [KEY_COMMA])
 	_action("indicator_right"); _key("indicator_right", [KEY_PERIOD])
 	_action("hazards"); _key("hazards", [KEY_H])

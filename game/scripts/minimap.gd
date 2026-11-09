@@ -1,8 +1,8 @@
 extends Control
 ## North-up map. The overview fits the complete road network and lists marked places.
 
-const BACK := Color("#111a25")
-const ROAD := Color("#758a9e")
+const BACK := Color(0.0, 0.0, 0.0, 0.0)
+const ROAD := Color("#d9dee3")
 const PIN := Color("#ffc36c")
 const TEXT := Color("#edf3f7")
 const MUTED := Color("#a8bacc")
@@ -17,18 +17,23 @@ class MapDrawing extends Control:
 	var center := Vector2.ZERO
 	var span := 200.0
 	var path_color := ROAD
+	var rotation_rad := 0.0     # heading-up compact view rotates the world around the player
+
+	func world_xform() -> Transform2D:
+		var scale_factor := minf(size.x, size.y) / span
+		return Transform2D(rotation_rad, size * 0.5) * Transform2D(0.0, Vector2.ONE * scale_factor, 0.0, Vector2.ZERO) * Transform2D(0.0, -center)
 
 	func _draw() -> void:
 		if size.x < 24.0 or size.y < 24.0:
 			return
 		var scale_factor := minf(size.x, size.y) / span
-		var origin := size * 0.5 - center * scale_factor
-		draw_set_transform(origin, 0.0, Vector2.ONE * scale_factor)
+		var xf := world_xform()
+		draw_set_transform_matrix(xf)
 		if not streets.is_empty():
-			draw_multiline(streets, Color("#202e3d"), 6.0 / scale_factor, true)
+			draw_multiline(streets, Color(0, 0, 0, 0.45), 7.0 / scale_factor, true)
 		for path in paths:
 			if path.size() > 2:
-				draw_polyline(path, Color("#202e3d"), 6.0 / scale_factor, true)
+				draw_polyline(path, Color(0, 0, 0, 0.45), 7.0 / scale_factor, true)
 		if not streets.is_empty():
 			draw_multiline(streets, path_color, 2.1 / scale_factor, true)
 		for path in paths:
@@ -36,34 +41,34 @@ class MapDrawing extends Control:
 				draw_polyline(path, path_color, 2.1 / scale_factor, true)
 		draw_set_transform(Vector2.ZERO)
 		if destination.is_finite():
-			var target := destination * scale_factor + origin
+			var target := xf * destination
 			target = target.clamp(Vector2(12, 12), size - Vector2(12, 12))
-			draw_circle(target, 9, Color("71e0cb"), false, 3, true)
-			draw_line(target - Vector2(4, 0), target + Vector2(4, 0), Color("71e0cb"), 2, true)
+			draw_circle(target, 9, Color("ff8a2b"), false, 3, true)
+			draw_line(target - Vector2(4, 0), target + Vector2(4, 0), Color("ff8a2b"), 2, true)
 		for i in places.size():
-			var p: Vector2 = places[i]["point"] * scale_factor + origin
+			var p: Vector2 = xf * (places[i]["point"] as Vector2)
 			if not Rect2(Vector2(10, 10), size - Vector2(20, 20)).has_point(p):
 				continue
 			draw_circle(p, 7.0, PIN, true, -1.0, true)
 			var label := str(i + 1)
 			var font := ThemeDB.fallback_font
 			var width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 9).x
-			draw_string(font, p + Vector2(-width * 0.5, 3.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, BACK)
+			draw_string(font, p + Vector2(-width * 0.5, 3.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("#1a1a1a"))
 		for car in cars:
 			if not is_instance_valid(car) or car == player:
 				continue
 			var pos: Vector3 = car.get_position_ws()
-			draw_circle(Vector2(pos.x, pos.z) * scale_factor + origin, 2.5, Color("#99acbf"), true, -1.0, true)
+			draw_circle(xf * Vector2(pos.x, pos.z), 3.0, Color("#c9d3dc"), true, -1.0, true)
 		if is_instance_valid(player):
 			var pos := player.get_position_ws()
 			var facing := player.get_forward()
-			var tip := Vector2(facing.x, facing.z).normalized()
+			var tip := xf.basis_xform(Vector2(facing.x, facing.z)).normalized()
 			if tip.is_zero_approx():
 				tip = Vector2.UP
 			var side := tip.orthogonal()
-			var p := Vector2(pos.x, pos.z) * scale_factor + origin
-			draw_circle(p, 9.0, Color("#152233"), true, -1.0, true)
-			draw_colored_polygon(PackedVector2Array([p + tip * 8.0, p - tip * 5.0 + side * 4.5, p - tip * 2.5, p - tip * 5.0 - side * 4.5]), Color("#69d8ff"))
+			var p := xf * Vector2(pos.x, pos.z)
+			draw_circle(p, 9.0, Color(0, 0, 0, 0.55), true, -1.0, true)
+			draw_colored_polygon(PackedVector2Array([p + tip * 8.5, p - tip * 5.5 + side * 5.0, p - tip * 2.5, p - tip * 5.5 - side * 5.0]), Color("#ff8a2b"))
 
 var player: SBVehicle
 var activity: Node3D
@@ -78,14 +83,15 @@ var _elapsed := 0.0
 var overview_open := false
 var _compact_visible := true
 var _title := "Strecke"
+var _heading := 0.0
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_panel.bg_color = Color(0.045, 0.065, 0.093, 0.95)
-	_panel.border_color = Color(0.56, 0.69, 0.78, 0.36)
+	_panel.bg_color = Color(0.0, 0.0, 0.0, 0.52)
+	_panel.border_color = Color(1, 1, 1, 0.09)
 	_panel.set_border_width_all(1)
-	_panel.set_corner_radius_all(12)
+	_panel.set_corner_radius_all(6)
 	_clip.clip_contents = true
 	_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_clip)
@@ -146,25 +152,18 @@ func _layout() -> void:
 		position = (viewport - size) * 0.5
 		legend_width = minf(size.x * 0.32, 220.0)
 	else:
-		var width := clampf(viewport.x * 0.17, 155.0, 230.0)
-		var height := clampf(viewport.y * 0.28, 110.0, 211.0)
-		size = Vector2(width, height)
-		position = viewport - size - Vector2(16, 16)
-		if cockpit: position.y = _cockpit_top(viewport)
-	_clip.position = Vector2(9, 30)
-	_clip.size = size - Vector2(18 + legend_width, 54)
+		var side := clampf(minf(viewport.x * 0.16, viewport.y * 0.27), 150.0, 240.0)
+		size = Vector2(side, side)
+		position = Vector2(viewport.x - size.x - 16.0, 16.0)
+	if overview_open:
+		_clip.position = Vector2(9, 30)
+		_clip.size = size - Vector2(18 + legend_width, 54)
+	else:
+		_clip.position = Vector2(5, 5)
+		_clip.size = size - Vector2(10, 10)
 	_map.size = _clip.size
 	queue_redraw()
 	_update_view()
-
-
-func _cockpit_top(viewport: Vector2) -> float:
-	var scale_ui := minf(1.0, minf(viewport.x / 960.0, viewport.y / 600.0))
-	var top := 90.0
-	if activity and activity.mode > 0:
-		top = 210.0 if activity.active and activity.mode != 2 else 184.0
-		if not activity.active and not activity.last_result.is_empty(): top = 348.0
-	return top * scale_ui
 
 
 func _process(delta: float) -> void:
@@ -173,10 +172,7 @@ func _process(delta: float) -> void:
 	_elapsed += delta
 	if _elapsed >= 1.0 / 20.0:
 		_elapsed = 0.0
-		if cockpit and not overview_open and not is_equal_approx(position.y, _cockpit_top(get_viewport_rect().size)):
-			_layout()
-		else:
-			_update_view()
+		_update_view()
 
 
 func _update_view() -> void:
@@ -187,21 +183,35 @@ func _update_view() -> void:
 	if lesson and lesson.visible_in_hud() and lesson.stage == "service":
 		var bay: Vector3 = lesson.game.equipment.bay
 		_map.destination = Vector2(bay.x, bay.z)
+	_map.rotation_rad = 0.0
 	if overview_open:
 		_map.center = _bounds.get_center()
 		var fit := maxf(_bounds.size.x / maxf(1.0, _map.size.x), _bounds.size.y / maxf(1.0, _map.size.y))
 		_map.span = maxf(20.0, fit * minf(_map.size.x, _map.size.y) * 1.13)
 	elif is_instance_valid(player):
 		var p := player.get_position_ws()
+		var f := player.get_forward()
 		_map.center = Vector2(p.x, p.z)
 		_map.span = _local_span
+		if Vector2(f.x, f.z).length() > 0.1:
+			_heading = lerp_angle(_heading, -PI * 0.5 - Vector2(f.x, f.z).angle(), 0.35)
+		_map.rotation_rad = _heading
 	_map.queue_redraw()
 
 
 func _draw() -> void:
 	draw_style_box(_panel, Rect2(Vector2.ZERO, size))
-	draw_rect(Rect2(_clip.position, _clip.size), BACK)
+	draw_rect(Rect2(_clip.position, _clip.size), Color(0.03, 0.04, 0.05, 0.62))
 	var font := ThemeDB.fallback_font
+	if not overview_open:
+		# North marker on the rim of the heading-up map.
+		var north := _map.world_xform().basis_xform(Vector2(0, -1)).normalized()
+		var c := _clip.position + _clip.size * 0.5
+		var edge := c + north * (minf(_clip.size.x, _clip.size.y) * 0.5 - 11.0)
+		draw_circle(edge, 9.0, Color(0, 0, 0, 0.6), true, -1.0, true)
+		var w := font.get_string_size("N", HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
+		draw_string(font, edge + Vector2(-w * 0.5, 4), "N", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("ff8a2b"))
+		return
 	var caption := _title + "  /  Übersicht" if overview_open else _title
 	draw_string(font, Vector2(12, 21), caption, HORIZONTAL_ALIGNMENT_LEFT, size.x - 48.0, 15, TEXT)
 	draw_string(font, Vector2(_clip.position.x + _clip.size.x - 15, 21), "↑ N", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, MUTED)

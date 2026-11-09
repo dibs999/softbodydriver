@@ -20,7 +20,8 @@ Game="*res://scripts/game_state.gd"
 
 window/size/viewport_width=1600
 window/size/viewport_height=900
-window/stretch/mode="disabled"
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
 window/vsync/vsync_mode=1
 
 [editor_plugins]
@@ -42,3 +43,14 @@ lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
 environment/defaults/default_clear_color=Color(0.45, 0.6, 0.8, 1)
 textures/canvas_textures/default_texture_filter=1
 textures/vram_compression/import_etc2_astc=true
+
+[shader_globals]
+
+road_wetness={
+"type": "float",
+"value": 0.0
+}
+city_night={
+"type": "float",
+"value": 0.0
+}

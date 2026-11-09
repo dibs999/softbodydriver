@@ -104,7 +104,12 @@ private:
         uint32_t vertexStride = 12, normalOffset = 0, normalStride = 4;
         PackedByteArray buffer;
         PackedFloat32Array restTangents; // imported tangent frames in build coordinates
+        Array arrays;                    // source arrays, to rebuild the index buffer when the mesh tears
+        Ref<Material> material;
+        std::vector<uint8_t> torn;       // per triangle: removed because its edges overstretched
+        int tornCount = 0;
     };
+    void tearOverstretched(SurfaceGpu& g, const sb::MeshSurface& s, bool reset);
     Ref<Material> materialFor(const std::string& name, const Dictionary& lib) const;
     void buildMeshes(const Dictionary& materials);
     void applyTransform(const Transform3D& xform);  // locked
@@ -173,6 +178,7 @@ private:
         std::vector<std::pair<double, double>> spinWeights;
         std::vector<double> treadRadii;
         bool right = false;
+        double width = 0.0;                    // physics tyre width of this axle
         double visualRimRadius = 0.0;
         std::vector<WheelSurf> surfs;
         sb::Vec3 restX{1, 0, 0};               // rest frame (build coordinates) for imported meshes
@@ -185,6 +191,9 @@ private:
     std::vector<sb::MeshSurface> importedSurf_;
     std::vector<SurfaceGpu> importedGpu_;
     bool hasImportedModel_ = false;
+    unsigned tearCheckCounter_ = 0;
+    bool importedDoors_ = false;   ///< imported door panels follow the physical door cages
+    bool importedBonnet_ = false;  ///< imported bonnet follows the physical bonnet
     bool dashboardAvailable_ = true;
     std::vector<WheelGpu> wheels_;
     bool debugView_ = false;
