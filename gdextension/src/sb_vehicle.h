@@ -173,6 +173,7 @@ private:
         std::vector<std::pair<double, double>> spinWeights;
         std::vector<double> treadRadii;
         bool right = false;
+        double width = 0.0;                    // physics tyre width of this axle
         double visualRimRadius = 0.0;
         std::vector<WheelSurf> surfs;
         sb::Vec3 restX{1, 0, 0};               // rest frame (build coordinates) for imported meshes

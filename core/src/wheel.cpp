@@ -222,6 +222,34 @@ void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, rea
         force[idx] += f;
         sumForce += f;
     }
+    // Inflated tread membrane: the air pushes every tread segment outward (p * width * length along
+    // its outward normal) and the belt carries the matching hoop tension T = p * width * R. On a
+    // round ring both cancel exactly; on a deflected ring they give the geometric stiffness that
+    // sets the tread's wave speed (a real tyre's standing-wave speed is ~250-300 km/h). Internal
+    // forces only: the pressure on a closed polygon and the tension both sum to zero.
+    if (spec.membranePressure > 0.0 && pressurePa > 0.0) {
+        const int N = spec.numRays;
+        const real lineLoad = spec.membranePressure * pressurePa * spec.width * 0.5;  // per ring, N/m
+        const real tension = lineLoad * spec.radius;
+        for (int ring = 0; ring < 2; ++ring)
+            for (int i = 0; i < N; ++i) {
+                const std::uint32_t na = treadNodes[static_cast<std::size_t>(ring * N + i)];
+                const std::uint32_t nb = treadNodes[static_cast<std::size_t>(ring * N + (i + 1) % N)];
+                const Vec3 e = pos[nb] - pos[na];
+                const real len = length(e);
+                if (len < 1e-6) continue;
+                const Vec3 tRaw = e / len;
+                // In-plane only: the tension sets the radial wave speed; an axial component would
+                // make the tread band a taut lateral string and reverse the self-aligning torque.
+                const Vec3 t = tRaw - a * dot(tRaw, a);
+                Vec3 nOut = cross(tRaw, a);
+                const Vec3 mid = (pos[na] + pos[nb]) * 0.5 - c;
+                if (dot(nOut, mid) < 0.0) nOut = nOut * -1.0;
+                const Vec3 fp = nOut * (0.5 * lineLoad * len);
+                force[na] += t * tension + fp;
+                force[nb] += t * -tension + fp;
+            }
+    }
     // Equal and opposite reaction on the spindle nodes -> exact linear momentum conservation.
     force[spec.hubLeft] -= sumForce * 0.5;
     force[spec.hubRight] -= sumForce * 0.5;

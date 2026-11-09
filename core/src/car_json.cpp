@@ -108,6 +108,7 @@ CarDefinition parseCarDefinition(const std::string& text, const std::string& sou
                     const json& vv = v2;
                     if (kk == "radius") { d.tires.radius = vv.get<real>(); return true; }
                     if (kk == "width") { d.tires.width = vv.get<real>(); return true; }
+                    if (kk == "widthRear") { d.tires.widthRear = vv.get<real>(); return true; }
                     if (kk == "rimRadius") { d.tires.rimRadius = vv.get<real>(); return true; }
                     if (kk == "pressurePsi") { d.tires.pressurePsi = vv.get<real>(); return true; }
                     if (kk == "friction") { d.tires.friction = vv.get<real>(); return true; }

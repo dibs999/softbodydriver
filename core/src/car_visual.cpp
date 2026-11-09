@@ -1438,7 +1438,13 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
 
     // ---- wheels
     vis.wheelFront = buildWheelMeshes(build.def.tires, bd.style);
-    vis.wheelRear = vis.wheelFront;
+    if (build.def.tires.widthRear > 0.0 && build.def.tires.widthRear != build.def.tires.width) {
+        TireDef rear = build.def.tires;
+        rear.width = rear.widthRear;
+        vis.wheelRear = buildWheelMeshes(rear, bd.style);
+    } else {
+        vis.wheelRear = vis.wheelFront;
+    }
 
     // ---- camera anchors
     {

@@ -225,6 +225,7 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
         const sb::Vec3 com = body.centerOfMass();
         const sb::Vec3 rgt = toS(get_right());
         wg.right = sb::dot(c - com, rgt) > 0.0;
+        wg.width = pw.spec.width;
         wg.node = memnew(Node3D);
         wg.node->set_name(String(pw.spec.name.c_str()));
         add_child(wg.node);
@@ -334,7 +335,7 @@ void SBVehicle::updateWheelMeshes(WheelGpu& w, const sb::Vec3& c, const sb::Vec3
     const bool ring0Outside = z0 > 0.0;
     const double sgn = w.right ? -1.0 : 1.0;
     const bool deformed = worst > 0.006 || flat > 0.01;
-    const double halfW = 0.5 * def_.tires.width;
+    const double halfW = 0.5 * w.width;
     for (WheelSurf& ws : w.surfs) {
         if (ws.restPos.empty()) continue;  // rims and brake discs are rigid
         if (!deformed && !ws.deformed) continue;
@@ -646,7 +647,7 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
         }
         const double radialScale = maxRadius > 1e-4 ? def_.tires.radius / maxRadius : 1.0;
         const double width = hi.z - lo.z;
-        const double widthScale = width > 1e-4 ? def_.tires.width / width : 1.0;
+        const double widthScale = width > 1e-4 ? wg.width / width : 1.0;
         const Vector3 scale(radialScale, radialScale, widthScale);
         if (!acc.rubberPts.empty()) {
             wg.visualRimRadius = std::clamp(minRadius * radialScale, 0.50 * def_.tires.radius, 0.88 * def_.tires.radius);

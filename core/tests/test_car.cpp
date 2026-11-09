@@ -641,9 +641,9 @@ TEST_CASE("collision skin aerodynamics reproduce the specified drag area") {
 }
 
 TEST_CASE("coast-down resistance of the reference hatch stays in a realistic range") {
-    // Rolling + aerodynamic resistance at 100 km/h. A real compact hatch needs ~400 N; the
-    // node-beam tyre still loses more, but rigid contact and flat-plate aero needed ~1900 N,
-    // which capped the 110 kW car at 113 km/h.
+    // Rolling + aerodynamic resistance at 100 km/h. A real compact hatch needs ~400 N; rigid
+    // contact, flat-plate aero and an untensioned tread ring needed ~1900 N, which capped the
+    // 110 kW car at 113 km/h (now ~560 N and ~197 km/h).
     CarBuild cb = buildCar(loadCarDefinition(carPath("kestrel_hatch")));
     World w = flatWorld();
     w.addBody(std::move(cb.body));
@@ -666,7 +666,7 @@ TEST_CASE("coast-down resistance of the reference hatch stays in a realistic ran
     const real v1 = car.centerOfMassVelocity().x;
     const real resistance = car.totalMass() * (v0 - v1) / 2.0;
     CHECK(resistance > 250.0);
-    CHECK(resistance < 1150.0);
+    CHECK(resistance < 750.0);
     CHECK(car.stats().deformedBeams == 0);
 }
 
@@ -723,4 +723,83 @@ TEST_CASE("cars settle onto their tyres without body sag, toe-out or brake chatt
         CHECK(energy < 100.0);
         CHECK(car.stats().deformedBeams == 0);
     }
+}
+
+TEST_CASE("tyre tread has no standing-wave resonance below autobahn top speeds") {
+    // Without the inflated-membrane hoop tension the tread ring's wave speed was ~40 m/s and the
+    // rolling loss peaked near 145 km/h (~1800 N without air).
+    CarBuild cb = buildCar(loadCarDefinition(carPath("kestrel_hatch")));
+    WorldSettings settings;
+    settings.airDensity = 0.0;
+    World w(settings);
+    w.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}, 1.0));
+    w.addBody(std::move(cb.body));
+    auto& car = w.body(0);
+    VehicleControls controls;
+    controls.gear = 0;
+    car.setControls(controls);
+    w.simulate(2.0);
+    const real v = 145.0 / 3.6;
+    car.setVelocity({v, 0, 0});
+    for (const auto& wheel : car.wheels()) {
+        const auto center = wheel.center(car), axis = wheel.axis(car);
+        for (auto node : wheel.treadNodes)
+            car.velocities()[node] += cross(axis, car.positions()[node] - center) * (v / wheel.spec.radius);
+    }
+    real tow = 0.0;
+    int samples = 0;
+    for (int s = 0; s < 8000; ++s) {
+        const real dv = v - car.centerOfMassVelocity().x;
+        car.addVelocity({dv, 0, 0});
+        if (s >= 3000) { tow += dv; ++samples; }
+        w.step();
+    }
+    const real force = car.totalMass() * tow / (samples * settings.dt);
+    CHECK(force > 100.0);
+    CHECK(force < 800.0);
+    CHECK(w.stats().finite);
+}
+
+TEST_CASE("tail-heavy Concept GT on staggered tyres settles into steady cornering at 150 km/h") {
+    CarBuild cb = buildCar(loadCarDefinition(carPath("concept_gt")));
+    CHECK(cb.def.tires.rearWidth() > cb.def.tires.width);
+    const auto layout = cb.layout;
+    World w = flatWorld();
+    w.addBody(std::move(cb.body));
+    auto& car = w.body(0);
+    VehicleControls controls;
+    controls.gear = 0;
+    car.setControls(controls);
+    w.simulate(2.0);
+    const real v = 150.0 / 3.6;
+    car.setVelocity({v, 0, 0});
+    for (const auto& wheel : car.wheels()) {
+        const auto center = wheel.center(car), axis = wheel.axis(car);
+        for (auto node : wheel.treadNodes)
+            car.velocities()[node] += cross(axis, car.positions()[node] - center) * (v / wheel.spec.radius);
+    }
+    controls.steer = 0.012;
+    car.setControls(controls);
+    auto heading = [&] {
+        const auto& p = car.positions();
+        const Vec3 f = normalize(p[layout.refFL] + p[layout.refFR] - p[layout.refRL] - p[layout.refRR]);
+        return std::atan2(f.z, f.x);
+    };
+    auto yawRateOver = [&](real seconds) {
+        const real h0 = heading();
+        for (int s = 0; s < static_cast<int>(seconds * 2000.0); ++s) {
+            const Vec3 vc = car.centerOfMassVelocity();
+            const real speed = std::sqrt(vc.x * vc.x + vc.z * vc.z);
+            car.addVelocity(vc * ((v - speed) / std::max<real>(speed, 1.0)));
+            w.step();
+        }
+        return (heading() - h0) / seconds;
+    };
+    yawRateOver(2.0);
+    const real early = std::abs(yawRateOver(0.5));
+    yawRateOver(0.5);
+    const real late = std::abs(yawRateOver(0.5));
+    CHECK(early > 0.02);
+    CHECK(late < early * 1.15);  // converging, not an oversteer divergence
+    CHECK(late * v < 0.6 * 9.81);
 }

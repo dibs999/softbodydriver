@@ -57,6 +57,7 @@ Koordinaten im Generator: `x` zeigt nach vorne (hintere Stoßstange bei 0), `y` 
   },
 
   "tires": { "radius": 0.317, "width": 0.225, "rimRadius": 0.216, "pressurePsi": 34,
+             // optional "widthRear": 0.35 für Mischbereifung (breitere Hinterreifen, z. B. Mittelmotor)
              "friction": 1.15, "tireMass": 9.5, "rimMass": 9.0, "rays": 16 },
 
   "engine": {
@@ -103,7 +104,7 @@ Die Physik-Struktur entsteht weiterhin aus `body` und den übrigen Abschnitten. 
 
 - **Karosserie**: Ring-Stationen entlang der Fahrzeuglänge mit den Knoten Schweller-Träger, Schweller, Flanke, Gürtellinie und Dach bzw. Haube. Zwischen benachbarten Stationen liegen Längsträger und Schubdiagonalen. Die Fahrgastzelle ist steifer und fester, die Knautschzonen vorne und hinten sind weicher. Die Diagonalen über den Seitenfenstern verhalten sich wie Glas: schwach und spröde.
 - **Fahrwerk**: Doppelquerlenker mit Radträger aus 6 starr verbundenen Nodes (Naben, Kugelgelenke, Spurstangenhebel, Bremssattelpunkt vor der Achse) und Achsträger-Punkten, die mit einem "Käfig" aus Beams in alle Raumrichtungen verankert sind. Querlenkerlager beider Seiten und Spurstangenlager bilden einen gemeinsamen starren Achsträger; der obere Federteller ist über einen Federbeindom bis zu Längsträger und Schweller abgestützt. Die Feder ist vorgespannt, sodass das Auto auf Konstruktionshöhe steht. Dazu kommen Dämpfer mit Druck- und Zugstufe (`shock`), Anschlagpuffer (`support`), Fangband (`anisotropic`) und ein Stabilisator als 4-Node-Torsionsstab mit senkrechter Koppelstange.
-- **Reifen und Luft**: Laufflächen-Nodes haben einen nachgiebigen Bodenkontakt (Gummi speichert den Einlaufstoß), die Bremse hält das Rad relativ zum Radträger. Der Druckwiderstand der Kollisionshaut wird auf `dragCoefficient · frontalArea` kalibriert. Messwerte: [DRIVING_RESISTANCE.md](DRIVING_RESISTANCE.md).
+- **Reifen und Luft**: Laufflächen-Nodes haben einen nachgiebigen Bodenkontakt (Gummi speichert den Einlaufstoß). Der Luftdruck wirkt als Membran auf jedes Laufflächensegment, mit passender Gürtelspannung in der Radebene; das hebt die Wellengeschwindigkeit des Laufflächenrings über die Höchstgeschwindigkeit. Die Bremse hält das Rad relativ zum Radträger. Der Druckwiderstand der Kollisionshaut wird auf `dragCoefficient · frontalArea` kalibriert. Messwerte: [DRIVING_RESISTANCE.md](DRIVING_RESISTANCE.md).
 - **Antrieb**: Das Reaktionsmoment des Antriebs wirkt auf Motorblock bzw. Differenzial, das Reaktionsmoment der Bremse auf den Radträger. Damit bleibt der Drehimpuls erhalten, Anfahren lässt das Heck einfedern und Bremsen die Front eintauchen.
 - **Systeme**: Die Beam-Indizes von Kühler, Motorblock, Ölwanne, Tank, Motorlagern, Kardanwelle, Fahrwerk und Schadenszonen gehen an `CarSystems`.
 - **Visual**: Querschnitte werden über Catmull-Rom-Kurven verfeinert, mit Radausschnitten, Front- und Heckabschluss, Materialzonen (Lack, Glas, Leuchten, Fugen, Griffe, Kunststoff) und Innenraum. Jeder Vertex ist an die 4 nächsten Nodes gebunden. Die Position setzt sich zusammen aus der starren Bewegung der Fahrgastzelle plus den interpolierten Verschiebungen der Nodes.

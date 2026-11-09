@@ -78,7 +78,8 @@ func run() -> void:
    if part is MeshInstance3D and part.mesh.surface_get_material(0).resource_name.begins_with("Tire"):
     bounds = part.mesh.get_aabb() if first else bounds.merge(part.mesh.get_aabb())
     first = false
-  check(not first and absf(bounds.size.z - 0.30) < 0.002 and absf(bounds.size.x - 0.82) < 0.01 and absf(bounds.size.y - 0.82) < 0.01,
+  var axle_width := 0.27 if name.begins_with("F") else 0.35  # staggered Concept GT tyres
+  check(not first and absf(bounds.size.z - axle_width) < 0.002 and absf(bounds.size.x - 0.82) < 0.01 and absf(bounds.size.y - 0.82) < 0.01,
     "Imported wheel %s fits physics radius, width and axle" % name)
  var max_delta := 0.0
  for step in 100:

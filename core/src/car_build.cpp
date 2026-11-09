@@ -936,7 +936,7 @@ CarBuild buildCar(const CarDefinition& def) {
         ws.hubRight = cn.right ? cn.hubOut : cn.hubIn;
         ws.hubLeft = cn.right ? cn.hubIn : cn.hubOut;
         ws.radius = tire.radius;
-        ws.width = tire.width;
+        ws.width = cn.front ? tire.width : tire.rearWidth();
         ws.numRays = tire.rays;
         ws.tireMass = tire.tireMass;
         ws.friction = tire.friction;
@@ -949,6 +949,10 @@ CarBuild buildCar(const CarDefinition& def) {
         // instead of a rigid projection destroying it: ~35 % less rolling loss at 100 km/h. Softer
         // contact saves more but lets the tread chatter at the grip limit (rear toe flutter).
         ws.contactStiffness = 4.5e5 * 16.0 / static_cast<real>(tire.rays);
+        // Inflated tread membrane at twice the bare p*w*R hoop tension: the factor stands in for the
+        // belt's bending stiffness, which the skip-two chord beams only partly provide. Removes the
+        // tread standing wave that peaked rolling loss around 145 km/h.
+        ws.membranePressure = 2.0;
         ws.steered = cn.front;
         ws.braked = true;
         ws.handbraked = !cn.front;

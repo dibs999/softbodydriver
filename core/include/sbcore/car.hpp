@@ -81,6 +81,8 @@ struct AxleSuspensionDef {
 struct TireDef {
     real radius = 0.316;          ///< 205/55 R16
     real width = 0.205;
+    real widthRear = 0.0;         ///< Staggered rear tyres (0 = same as width).
+    real rearWidth() const { return widthRear > 0.0 ? widthRear : width; }
     real rimRadius = 0.203;
     real pressurePsi = 33.0;
     real friction = 1.15;
