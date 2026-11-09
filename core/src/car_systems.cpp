@@ -174,7 +174,8 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
     s.coolantLevel = std::max<real>(0.0, s.coolantLevel - coolantLoss * dt);
 
     // ------------------------------------------------------------------ lubrication
-    if (s.oilPanDamage > 0.05) s.oilLevel = std::max<real>(0.0, s.oilLevel - (0.01 + 0.12 * s.oilPanDamage) * dt);
+    // A dented sump does not leak; a crack loses oil over minutes, a torn-off sump in about a minute.
+    if (s.oilPanDamage > 0.15) s.oilLevel = std::max<real>(0.0, s.oilLevel - (0.002 + 0.06 * s.oilPanDamage * s.oilPanDamage) * dt);
     const real oilFactor = clamp01((s.oilLevel - 0.12) / 0.3);
     s.oilPressureBar = (rpm > 200.0) ? (0.8 + 4.2 * std::min<real>(rpm, 5500.0) / 5500.0) * oilFactor : 0.0;
     const real load = clamp01(throttle);
@@ -217,7 +218,7 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
         else if (s.running && s.oilPressureBar < 0.6) s.status = "LOW OIL PRESSURE";
         else if (s.coolantLevel < 0.35) s.status = "LOW COOLANT";
         else if (s.radiatorDamage > 0.04 && s.coolantLevel > 0.0) s.status = "COOLANT LEAK";
-        else if (s.oilPanDamage > 0.05 && s.oilLevel > 0.0) s.status = "OIL LEAK";
+        else if (s.oilPanDamage > 0.15 && s.oilLevel > 0.0) s.status = "OIL LEAK";
         else if (s.fuelTankDamage > 0.05 && s.fuelL > 0.0) s.status = "FUEL LEAK";
         else if (!s.running) s.status = "ENGINE OFF";
         else s.status.clear();

@@ -57,6 +57,10 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	for i in range(5, rock_path.size() - 5):
 		rock_path[i].y += 0.38 * sin(i * 0.85) * sin(PI * i / (rock_path.size() - 1))
 	C.carve_path(heights, COUNT, COUNT, ORIGIN, ORIGIN, CELL, rock_path, 2.4, 4.5, 0.0, false)
+	# Side trails are carved after the main loop and used to leave kinks where they cross it (a
+	# sharp crest near the ridge junction bottomed out even the 4x4 and cracked its sump).
+	# Re-carving the loop last keeps its smoothed profile; the side trails blend into it.
+	C.carve_path(heights, COUNT, COUNT, ORIGIN, ORIGIN, CELL, loop, 3.8, 9.0, 0.0)
 	var paths: Array[PackedVector3Array] = [C.closed_route(loop), forest, ridge_path, access, rock_path]
 	var ground := func(x: float, z: float) -> float:
 		return C.sample(heights, COUNT, COUNT, ORIGIN, ORIGIN, CELL, x, z)
@@ -91,7 +95,17 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var timber := forest[forest.size()/3] + Vector3(-14,0,9)
 	timber.y = ground.call(timber.x,timber.z)
 	_logs(parent, world, timber)
-	var summit := ridge_path[ridge_path.size()/2] + Vector3(12,0,7)
+	# Lookout beside the ridge trail. A fixed offset from the trail's midpoint put the fence posts
+	# across the main loop, where every car drove into them; keep it clear of all trails.
+	var mid := ridge_path.size() / 2
+	var ridge_dir := (ridge_path[mid + 1] - ridge_path[mid - 1]).normalized()
+	var ridge_side := Vector3(-ridge_dir.z, 0, ridge_dir.x)
+	var summit := ridge_path[mid] + ridge_side * 14.0
+	for candidate: Vector3 in [ridge_path[mid] + ridge_side * 14.0, ridge_path[mid] - ridge_side * 14.0,
+			ridge_path[mid] + ridge_side * 22.0, ridge_path[mid] - ridge_side * 22.0]:
+		if not _near_paths(Vector2(candidate.x, candidate.z), paths, 11.0):
+			summit = candidate
+			break
 	summit.y = ground.call(summit.x,summit.z)
 	var wood := C.mat(Color("675039"))
 	for i in 4:

@@ -572,7 +572,10 @@ CarBuild buildCar(const CarDefinition& def) {
         const real py = bd.groundClearance + 0.035;
         rig.oilPan.push_back(car.addNode("oilpan0", {ex0 + 0.12, py, 0.0}, pan));
         rig.oilPan.push_back(car.addNode("oilpan1", {ex1 - 0.12, py, 0.0}, pan));
-        BeamParams panB = makeBeam(4.0e5, 90.0, 4.0e3, 2.6e4);
+        // Cast sump: scraping over a rough trail dents it, only a real impact cracks it. At 4 kN
+        // plastic onset a sedan's sump was "damaged" by ordinary gravel-trail bumps and the
+        // engine seized within a minute.
+        BeamParams panB = makeBeam(4.0e5, 90.0, 1.2e4, 4.5e4);
         for (std::uint32_t p : rig.oilPan)
             for (int ix = 0; ix < 2; ++ix)
                 for (int iz = 0; iz < 2; ++iz)
