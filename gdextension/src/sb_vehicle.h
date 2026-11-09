@@ -61,6 +61,9 @@ public:
     bool set_door_open(int index, bool open); ///< 0 driver/left, 1 passenger/right; stationary operation.
     bool toggle_door(int index);
     Array get_door_states() const; ///< Actual latch/attachment/angle state under the physics lock.
+    /// Lamp corners (head/tail x left/right): crush of the body structure around each lamp.
+    /// [{name, front, side, damage, broken}]; a broken lamp stays dark until repaired.
+    Array get_lamp_states() const;
     bool release_bonnet(); ///< Releases latch once; hinges may subsequently break under impact.
     void repair_in_place();                   ///< Repair, keep position and heading, set upright.
 
@@ -195,6 +198,8 @@ private:
     bool importedDoors_ = false;   ///< imported door panels follow the physical door cages
     bool importedBonnet_ = false;  ///< imported bonnet follows the physical bonnet
     bool dashboardAvailable_ = true;
+    /// Beams around each lamp corner (head left/right, tail left/right), collected on first use.
+    mutable std::vector<std::vector<std::uint32_t>> lampBeams_;
     std::vector<WheelGpu> wheels_;
     bool debugView_ = false;
     MeshInstance3D* debugInstance_ = nullptr;

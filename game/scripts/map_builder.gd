@@ -355,6 +355,8 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 		for sign: float in [-1.0, 1.0]:
 			var p := road[i] + side * sign * rng.randf_range(6.4, 11.5)
 			p.y = ground_height.call(p.x, p.z)
+			if p.distance_to(road[0]) < 20.0:
+				continue   # keep the start and the service bay beside it clear
 			hedges.append(p)
 	V.plant(parent, "bush", hedges, 33, 0.8, 2.0, false)
 	V.roadside_grass(parent, road, true, half_w + 0.7, half_w + 16.0, 6.0, 34, ground_height)

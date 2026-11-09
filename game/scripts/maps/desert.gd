@@ -52,6 +52,21 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		for i in n_track:
 			e2[i] = (elev[(i - 1 + n_track) % n_track] + elev[i] * 2.0 + elev[(i + 1) % n_track]) * 0.25
 		elev = e2
+	# Graded stage: where the loop crosses the mesa plateau edge the averaged terrain still had
+	# +18 % / -28 % grades and a cliff-like crest that flipped cars. Limit the grade to 10 % (a road
+	# cut / fill through the edge), forwards and backwards, then smooth the transitions.
+	const MAX_GRADE := 0.10
+	for _pass in 6:
+		for direction: int in [1, -1]:
+			for k in n_track:
+				var i := k if direction == 1 else n_track - 1 - k
+				var prev := (i - direction + n_track) % n_track
+				var ds := Vector2(track[i].x - track[prev].x, track[i].z - track[prev].z).length()
+				elev[i] = clampf(elev[i], elev[prev] - MAX_GRADE * ds, elev[prev] + MAX_GRADE * ds)
+		var e3 := elev.duplicate()
+		for i in n_track:
+			e3[i] = (elev[(i - 1 + n_track) % n_track] + elev[i] * 2.0 + elev[(i + 1) % n_track]) * 0.25
+		elev = e3
 	# Two jump ramps on the track (bumps in the elevation profile).
 	var jumps := [112, 463]
 	for j: int in jumps:

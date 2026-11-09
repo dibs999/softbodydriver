@@ -106,7 +106,7 @@ func _emitter(count: int, duration: float, spark: bool) -> CPUParticles3D:
 
 func _quality() -> void:
 	for p: CPUParticles3D in get_children():
-		p.amount = maxi(6, int(p.get_meta("budget")) / (2 if Game._graphics_preset == Game.GraphicsPreset.PERFORMANCE else 1))
+		p.amount = maxi(6, int(p.get_meta("budget")) / (2 if int(Game.graphics.get("effects", 1)) == 0 else 1))
 
 
 func _process(delta: float) -> void:

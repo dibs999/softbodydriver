@@ -354,7 +354,7 @@ TEST_CASE("sbeam JSON round trip preserves topology and parameters") {
         CHECK(b2.beams()[i].spring == doctest::Approx(b.beams()[i].spring));
         CHECK(b2.beams()[i].deformThreshold == doctest::Approx(b.beams()[i].deformThreshold));
         CHECK(b2.beams()[i].type == b.beams()[i].type);
-        CHECK(b2.beams()[i].params.breakGroup == b.beams()[i].params.breakGroup);
+        CHECK(b2.beamParams()[i].breakGroup == b.beamParams()[i].breakGroup);
     }
     CHECK(b2.isFixed(2));
 }

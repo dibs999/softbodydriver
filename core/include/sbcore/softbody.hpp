@@ -117,7 +117,9 @@ struct Beam {
     }
 
     real lastForce = 0;       ///< Signed axial force of the last step (+ tension), diagnostics.
-    BeamParams params;        ///< Original authoring parameters (for saving / tooling).
+    // Authoring parameters live in SoftBody::beamParams() so that this hot struct stays compact:
+    // with them inline (incl. a string) a beam took ~300 bytes and several cars no longer fit
+    // the CPU caches, making four cars cost ~7x one car.
 };
 
 struct ColTriParams {
@@ -316,6 +318,9 @@ public:
     const NodeParams& nodeParams(std::uint32_t i) const { return nodeParams_[i]; }
     std::vector<Beam>& beams() { return beams_; }
     const std::vector<Beam>& beams() const { return beams_; }
+    /// Original authoring parameters per beam (same index as beams()), for saving and tooling.
+    std::vector<BeamParams>& beamParams() { return beamParams_; }
+    const std::vector<BeamParams>& beamParams() const { return beamParams_; }
     std::vector<ColTri>& triangles() { return triangles_; }
     const std::vector<ColTri>& triangles() const { return triangles_; }
     const std::vector<std::string>& breakGroupNames() const { return breakGroupNames_; }
@@ -356,6 +361,7 @@ private:
     void updateDoors(real dt);
     std::vector<DoorMechanism> doors_;
     std::vector<Beam> beams_;
+    std::vector<BeamParams> beamParams_;
     std::vector<ColTri> triangles_;
     std::vector<SelfCollisionPanel> selfCollisionPanels_;
     std::vector<Torsionbar> torsionbars_;

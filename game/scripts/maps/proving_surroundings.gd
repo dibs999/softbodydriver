@@ -92,6 +92,7 @@ static func _trees(parent: Node3D, world: SBWorld, points: Array[Vector3]) -> vo
 	var conifers: Array[Vector3] = []
 	for p: Vector3 in points:
 		var conifer := random.randf() < 0.3
+		if not V.keep(p): continue
 		(conifers if conifer else broadleaf).append(p)
 		var h := 1.8 if conifer else 2.2
 		world.add_box(p + Vector3.UP * h, Vector3(0.22, h, 0.22), Vector3.ZERO, 0.7)

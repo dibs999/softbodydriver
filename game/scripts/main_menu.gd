@@ -1,29 +1,24 @@
 extends Node3D
-## Main menu: vehicle + map selection with a live soft-body preview of the selected car.
+## Main menu: vehicle tiles with rendered thumbnails, live soft-body preview of the selected car,
+## vehicle card with the start actions, map tiles and a settings overlay.
+const UITheme := preload("res://scripts/ui_theme.gd")
 
 var world: SBWorld
 var preview_car: SBVehicle
 var cam: Camera3D
 var cam_angle := 1.12
-var car_list: ItemList
 var car_name: Label
 var car_info: Label
 var car_stats: Array[Label] = []
-var map_option: OptionButton
-var progress_info: Label
 var map_info: Label
-var _settings_panel: PanelContainer
-var _stage: VBoxContainer
+var progress_info: Label
+var car_buttons: Array[Button] = []
+var map_buttons: Array[Button] = []
+var start_button: Button
 var _preview_area: Control
+var _settings: Control
 var _env: Environment
 var _sun: DirectionalLight3D
-
-const INK := Color("0b1820")
-const PANEL := Color("132a33")
-const BORDER := Color("29434b")
-const TEXT := Color("eef2f6")
-const MUTED := Color("a6b6c7")
-const ACCENT := Color("71e0cb")
 
 
 func _ready() -> void:
@@ -36,75 +31,72 @@ func _ready() -> void:
 		if Game.cars[i]["path"] == Game.selected_car:
 			idx = i
 	if Game.cars.size() > 0:
-		car_list.select(idx)
-		car_list.ensure_current_is_visible()
+		car_buttons[idx].button_pressed = true
 		_on_car_selected(idx)
+	for i in Game.MAPS.size():
+		if Game.MAPS[i]["id"] == Game.selected_map:
+			map_buttons[i].button_pressed = true
+			_on_map_selected(i)
+	if start_button and not start_button.disabled:
+		start_button.grab_focus()
 
 
+# ------------------------------------------------------------------------------- 3D studio
 func _build_scene() -> void:
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
-	var sky := Sky.new()
-	var sm := ProceduralSkyMaterial.new()
-	sm.sky_top_color = Color("24364a")
-	sm.sky_horizon_color = Color("53657b")
-	sm.ground_bottom_color = Color("111823")
-	sm.ground_horizon_color = Color("3b4d63")
-	sky.sky_material = sm
-	e.background_mode = Environment.BG_SKY
-	e.sky = sky
-	e.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	e.background_mode = Environment.BG_COLOR
+	e.background_color = Color("141619")
+	# The floor shader fades into this colour, so no horizon edge is visible.
+	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	e.ambient_light_color = Color("9aa3ad")
+	e.ambient_light_energy = 0.55
+	e.reflected_light_source = Environment.REFLECTION_SOURCE_BG
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	# The floor fades into the backdrop instead of ending at a visible horizon.
 	env.environment = e
 	add_child(env)
 	_env = e
-
 	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-50, 35, 0)
-	sun.light_energy = 1.5
+	sun.rotation_degrees = Vector3(-46, -38, 0)
+	sun.light_energy = 1.55
+	sun.shadow_enabled = true
 	add_child(sun)
 	_sun = sun
-	var fill := OmniLight3D.new()
-	fill.position = Vector3(-4, 3, -4)
-	fill.omni_range = 14
-	fill.light_energy = 0.85
-	fill.light_color = Color("b4d4ff")
-	add_child(fill)
-
+	var rim := DirectionalLight3D.new()
+	rim.rotation_degrees = Vector3(-18, 150, 0)
+	rim.light_energy = 0.7
+	rim.light_color = Color("ffd9b0")
+	add_child(rim)
 	var floor_mesh := MeshInstance3D.new()
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 7.0
-	cyl.bottom_radius = 7.0
-	cyl.height = 0.1
-	floor_mesh.mesh = cyl
-	floor_mesh.position = Vector3(0, -0.05, 0)
-	var fm := StandardMaterial3D.new()
-	fm.albedo_color = Color("2d3946")
-	fm.roughness = 0.72
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(160, 160)
+	floor_mesh.mesh = plane
+	var fm := ShaderMaterial.new()
+	fm.shader = preload("res://materials/studio_floor.gdshader")
 	floor_mesh.material_override = fm
 	add_child(floor_mesh)
-	var ring := TorusMesh.new()
-	ring.inner_radius = 2.95
-	ring.outer_radius = 2.98
-	ring.rings = 64
-	ring.ring_segments = 8
-	var ring_mesh := MeshInstance3D.new()
-	ring_mesh.mesh = ring
-	ring_mesh.position.y = 0.014
-	ring_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var ring_material := StandardMaterial3D.new()
-	ring_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	ring_material.albedo_color = Color("4c988d")
-	ring_mesh.material_override = ring_material
-	add_child(ring_mesh)
-
+	var ring := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 3.3
+	torus.outer_radius = 3.33
+	torus.rings = 96
+	torus.ring_segments = 6
+	ring.mesh = torus
+	ring.position.y = 0.01
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var rm := StandardMaterial3D.new()
+	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rm.albedo_color = Color(UITheme.ACCENT, 0.55)
+	rm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ring.material_override = rm
+	add_child(ring)
 	world = SBWorld.new()
 	world.material_library = Game.make_material_library()
 	add_child(world)
 	world.add_ground_plane(1.0)
-
 	cam = Camera3D.new()
-	cam.fov = 45
+	cam.fov = 38
 	add_child(cam)
 
 
@@ -112,289 +104,325 @@ func _apply_graphics() -> void:
 	Game.apply_environment_graphics(_env, _sun)
 
 
+# ------------------------------------------------------------------------------- layout
+func _panel(alpha := 0.62) -> PanelContainer:
+	var p := PanelContainer.new()
+	p.add_theme_stylebox_override("panel", UITheme.box(Color(0, 0, 0, alpha), 4, 16))
+	return p
+
+
 func _build_ui() -> void:
 	var ui := CanvasLayer.new()
 	add_child(ui)
-	var root := MarginContainer.new()
-	ui.add_child(root)
+	var root := Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.theme = _menu_theme()
-	root.add_theme_constant_override("margin_left", 24)
-	root.add_theme_constant_override("margin_right", 24)
-	root.add_theme_constant_override("margin_top", 20)
-	root.add_theme_constant_override("margin_bottom", 16)
-	var layout := VBoxContainer.new()
-	layout.add_theme_constant_override("separation", 14)
-	root.add_child(layout)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.theme = UITheme.make()
+	ui.add_child(root)
 
-	var header := PanelContainer.new()
-	header.add_theme_stylebox_override("panel", _box(INK, BORDER, 14, 15))
-	layout.add_child(header)
-	var title_row := HBoxContainer.new()
-	title_row.add_theme_constant_override("separation", 16)
-	header.add_child(title_row)
+	# Top bar.
+	var bar := PanelContainer.new()
+	bar.add_theme_stylebox_override("panel", UITheme.box(Color(0, 0, 0, 0.7), 0, 14))
+	bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	root.add_child(bar)
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 10)
+	bar.add_child(top)
 	var mark := ColorRect.new()
-	mark.color = ACCENT
-	mark.custom_minimum_size.x = 4
-	title_row.add_child(mark)
-	var titles := VBoxContainer.new()
-	titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	titles.add_theme_constant_override("separation", 0)
-	title_row.add_child(titles)
-	titles.add_child(_label("DRIVE / EXPLORE / BREAK", 11, ACCENT))
-	titles.add_child(_label("Softbody Driver", 32, TEXT, true))
-	var exit := Button.new()
-	exit.text = "Beenden"
-	exit.custom_minimum_size = Vector2(92, 34)
-	exit.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	exit.pressed.connect(func(): get_tree().quit())
-	title_row.add_child(exit)
+	mark.color = UITheme.ACCENT
+	mark.custom_minimum_size = Vector2(4, 30)
+	top.add_child(mark)
+	top.add_child(UITheme.label("SOFTBODY DRIVER", 24, UITheme.TEXT, true))
+	var tagline := UITheme.label("Soft-Body-Fahrsimulation", 14, UITheme.MUTED)
+	tagline.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tagline.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	top.add_child(tagline)
+	for entry in [["Einstellungen", _toggle_settings], ["Quellen & Lizenzen", _show_credits], ["Beenden", func(): get_tree().quit()]]:
+		var b := Button.new()
+		b.text = entry[0]
+		b.pressed.connect(entry[1])
+		top.add_child(b)
 
-	var body := HBoxContainer.new()
-	body.add_theme_constant_override("separation", 18)
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	layout.add_child(body)
-	_settings_panel = PanelContainer.new()
-	_settings_panel.add_theme_stylebox_override("panel", _box(INK, BORDER, 14, 14))
-	body.add_child(_settings_panel)
-	var setup := VBoxContainer.new()
-	setup.add_theme_constant_override("separation", 12)
-	_settings_panel.add_child(setup)
+	# Vehicle tiles on the left.
+	var garage := _panel()
+	garage.anchor_bottom = 1.0
+	garage.offset_left = 20
+	garage.offset_top = 80
+	garage.offset_right = 20 + 478
+	garage.offset_bottom = -20
+	root.add_child(garage)
+	var gv := VBoxContainer.new()
+	gv.add_theme_constant_override("separation", 10)
+	garage.add_child(gv)
+	var head := HBoxContainer.new()
+	gv.add_child(head)
+	var title := UITheme.section("Fahrzeug")
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	head.add_child(UITheme.label("%d Fahrzeuge" % Game.cars.size(), 12, UITheme.MUTED))
 	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.follow_focus = true
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	setup.add_child(scroll)
-	var v := VBoxContainer.new()
-	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	v.add_theme_constant_override("separation", 8)
-	scroll.add_child(v)
-
-	v.add_child(_label("DEINE GARAGE", 13, ACCENT, true))
-	car_list = ItemList.new()
-	car_list.custom_minimum_size.y = 140
-	for c in Game.cars:
-		car_list.add_item(c["name"])
-	car_list.item_selected.connect(_on_car_selected)
-	v.add_child(car_list)
-
-	v.add_child(_label("DEIN ZIEL", 13, ACCENT, true))
-	map_option = OptionButton.new()
-	map_option.custom_minimum_size.y = 36
-	for m in Game.MAPS:
-		map_option.add_item(m["name"])
-	map_option.item_selected.connect(_on_map_selected)
-	v.add_child(map_option)
-	map_info = _label("", 13, MUTED)
-	map_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	map_info.custom_minimum_size.y = 40
-	v.add_child(map_info)
-	for i in Game.MAPS.size():
-		if Game.MAPS[i]["id"] == Game.selected_map:
-			map_option.select(i)
-			_on_map_selected(i)
-
-	var settings_toggle := Button.new()
-	settings_toggle.text = "Fahrhilfen & Darstellung  +"
-	v.add_child(settings_toggle)
-	var options := VBoxContainer.new()
-	options.visible = false
-	options.add_theme_constant_override("separation", 10)
-	v.add_child(options)
-	settings_toggle.pressed.connect(func():
-		options.visible = not options.visible
-		settings_toggle.text = "Fahrhilfen & Darstellung  −" if options.visible else "Fahrhilfen & Darstellung  +"
-	)
-	options.add_child(Game.make_audio_options())
-	options.add_child(Game.make_graphics_options())
-	options.add_child(Game.make_driving_help_option())
+	gv.add_child(scroll)
 	var grid := GridContainer.new()
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 10)
-	options.add_child(grid)
-	for key in [["tcs", "Traktionskontrolle"], ["abs", "ABS"], ["automatic", "Automatikgetriebe"],
-			["steering_assist", "Lenkhilfe"], ["traffic", "KI-Verkehr"]]:
-		var cb := Game.make_driving_option(key[0], key[1])
-		cb.add_theme_font_size_override("font_size", 13)
-		if key[0] == "steering_assist":
-			cb.tooltip_text = "Glättet Tastatureingaben und begrenzt Lenkeinschlag bei Tempo. Aus: direkte Lenkung für erfahrene Fahrer."
-		grid.add_child(cb)
+	grid.add_theme_constant_override("v_separation", 10)
+	scroll.add_child(grid)
+	var car_group := ButtonGroup.new()
+	for i in Game.cars.size():
+		var c: Dictionary = Game.cars[i]
+		var meta := "%s · %.0f kW" % [c["layout"], c["power"]]
+		if not (c.get("visual_model", {}) as Dictionary).is_empty():
+			meta += " · Detailmodell"
+		var tile := _tile(c["name"], meta, "res://ui/cars/%s.png" % c["id"], Vector2(212, 119), car_group)
+		tile.pressed.connect(_on_car_selected.bind(i))
+		grid.add_child(tile)
+		car_buttons.append(tile)
 
-	var start := Button.new()
-	start.text = "Losfahren  →"
-	start.custom_minimum_size.y = 48
-	start.theme_type_variation = &"DriveButton"
-	start.disabled = Game.cars.is_empty()
-	start.pressed.connect(_on_start)
-	setup.add_child(start)
+	# Vehicle card and actions on the right.
+	var card := _panel(0.66)
+	card.anchor_left = 1.0
+	card.anchor_right = 1.0
+	card.offset_left = -20 - 430
+	card.offset_right = -20
+	card.offset_top = 80
+	root.add_child(card)
+	var cv := VBoxContainer.new()
+	cv.add_theme_constant_override("separation", 8)
+	card.add_child(cv)
+	car_name = UITheme.label("Fahrzeug auswählen", 26, UITheme.TEXT, true)
+	car_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	cv.add_child(car_name)
+	car_info = UITheme.label("", 13, UITheme.MUTED)
+	car_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	car_info.custom_minimum_size.x = 396
+	cv.add_child(car_info)
+	var stats := HBoxContainer.new()
+	stats.add_theme_constant_override("separation", 8)
+	cv.add_child(stats)
+	for caption in ["LEISTUNG", "DREHMOMENT", "MASSE"]:
+		var chip := PanelContainer.new()
+		chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		chip.add_theme_stylebox_override("panel", UITheme.box(Color(1, 1, 1, 0.05), 4, 8))
+		stats.add_child(chip)
+		var content := VBoxContainer.new()
+		content.add_theme_constant_override("separation", 0)
+		chip.add_child(content)
+		content.add_child(UITheme.label(caption, 11, UITheme.MUTED))
+		var value := UITheme.label("–", 19, UITheme.TEXT, true)
+		content.add_child(value)
+		car_stats.append(value)
+	var sep := HSeparator.new()
+	sep.add_theme_constant_override("separation", 14)
+	cv.add_child(sep)
+	map_info = UITheme.label("", 13, UITheme.MUTED)
+	map_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	map_info.custom_minimum_size.x = 396
+	cv.add_child(map_info)
+	start_button = Button.new()
+	start_button.text = "Losfahren  →"
+	start_button.theme_type_variation = &"PrimaryButton"
+	start_button.custom_minimum_size.y = 54
+	start_button.disabled = Game.cars.is_empty()
+	start_button.pressed.connect(_on_start)
+	cv.add_child(start_button)
 	var lesson_button := Button.new()
 	lesson_button.text = "Fahreinführung wiederholen" if Game.progress.is_completed("first_drive_complete") else "Fahreinführung · Fahren, Bremsen & Service"
-	lesson_button.custom_minimum_size.y = 42
 	lesson_button.disabled = Game.cars.is_empty()
 	lesson_button.pressed.connect(func():
 		Game.start_lesson = true
 		Game.selected_map = "proving_grounds"
 		Game.progress.set_selection(Game.selected_car, Game.selected_map)
 		get_tree().change_scene_to_file("res://scenes/game.tscn"))
-	setup.add_child(lesson_button)
-	progress_info = Label.new()
+	cv.add_child(lesson_button)
+	progress_info = UITheme.label("", 12, UITheme.MUTED)
 	progress_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	progress_info.add_theme_font_size_override("font_size", 12)
-	setup.add_child(progress_info)
-	if not start.disabled:
-		start.grab_focus()
+	progress_info.custom_minimum_size.x = 396
+	cv.add_child(progress_info)
 
-	_stage = VBoxContainer.new()
-	_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_stage.add_theme_constant_override("separation", 9)
-	body.add_child(_stage)
-	var tag := PanelContainer.new()
-	tag.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	tag.add_theme_stylebox_override("panel", _box(INK, BORDER, 8, 9))
-	tag.add_child(_label("DEIN NÄCHSTES ABENTEUER", 12, ACCENT, true))
-	_stage.add_child(tag)
+	# Map tiles along the bottom, between garage and the right edge.
+	var maps := _panel()
+	maps.anchor_top = 1.0
+	maps.anchor_right = 1.0
+	maps.anchor_bottom = 1.0
+	maps.offset_left = 20 + 478 + 16
+	maps.offset_right = -20
+	maps.offset_top = -20 - 190
+	maps.offset_bottom = -20
+	root.add_child(maps)
+	var mv := VBoxContainer.new()
+	mv.add_theme_constant_override("separation", 10)
+	maps.add_child(mv)
+	mv.add_child(UITheme.section("Karte"))
+	var mscroll := ScrollContainer.new()
+	mscroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	mscroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	mscroll.follow_focus = true
+	mv.add_child(mscroll)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	mscroll.add_child(row)
+	var map_group := ButtonGroup.new()
+	for i in Game.MAPS.size():
+		var m: Dictionary = Game.MAPS[i]
+		var tile := _tile(m["name"].split(" · ")[0], "", "res://ui/maps/%s.png" % m["id"], Vector2(150, 84), map_group)
+		tile.pressed.connect(_on_map_selected.bind(i))
+		row.add_child(tile)
+		map_buttons.append(tile)
+
+	# Free space for the 3D preview: between garage and card, above the map strip.
 	_preview_area = Control.new()
-	_preview_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_preview_area.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_stage.add_child(_preview_area)
-	var spec_card := PanelContainer.new()
-	spec_card.add_theme_stylebox_override("panel", _box(INK, BORDER, 14, 15))
-	_stage.add_child(spec_card)
-	var specs := VBoxContainer.new()
-	specs.add_theme_constant_override("separation", 7)
-	spec_card.add_child(specs)
-	car_name = _label("Fahrzeug auswählen", 26, TEXT, true)
-	car_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	specs.add_child(car_name)
-	car_info = _label("", 13, MUTED)
-	car_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	specs.add_child(car_info)
-	var stats := HBoxContainer.new()
-	stats.add_theme_constant_override("separation", 8)
-	specs.add_child(stats)
-	for title in ["LEISTUNG", "DREHMOMENT", "MASSE"]:
-		var chip := PanelContainer.new()
-		chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		chip.add_theme_stylebox_override("panel", _box(PANEL, BORDER, 8, 8))
-		stats.add_child(chip)
-		var content := VBoxContainer.new()
-		content.add_theme_constant_override("separation", 0)
-		chip.add_child(content)
-		content.add_child(_label(title, 11, MUTED))
-		var value := _label("–", 18, TEXT, true)
-		content.add_child(value)
-		car_stats.append(value)
+	_preview_area.anchor_right = 1.0
+	_preview_area.anchor_bottom = 1.0
+	_preview_area.offset_left = 20 + 478
+	_preview_area.offset_right = -20 - 430
+	_preview_area.offset_top = 80
+	_preview_area.offset_bottom = -20 - 190
+	root.add_child(_preview_area)
+	root.move_child(_preview_area, 0)
 
-	var footer := HBoxContainer.new()
-	layout.add_child(footer)
-	var hint := _label("W/S  Gas & Bremse     A/D  Lenken     C  Kamera     F1  Hilfe     F3  Aktivitäten", 13, MUTED)
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	footer.add_child(hint)
-	var credits_button := Button.new()
-	credits_button.text = "Quellen & Lizenzen"
-	footer.add_child(credits_button)
-	credits_button.pressed.connect(func():
-		var dialog := AcceptDialog.new()
-		dialog.title = "Audio- und Bildquellen"
-		dialog.theme = _menu_theme()
-		dialog.theme.set_stylebox("embedded_border", &"Window", _box(INK, BORDER, 12, 12))
-		dialog.theme.set_color("title_color", &"Window", TEXT)
-		dialog.min_size = Vector2i(580, 380)
-		add_child(dialog)
-		var text := RichTextLabel.new()
-		text.bbcode_enabled = true
-		text.selection_enabled = true
-		text.custom_minimum_size = Vector2(560, 350)
-		text.text = FileAccess.get_file_as_string("res://ASSET_CREDITS.md")
-		var links := RegEx.new()
-		links.compile("\\[([^\\]]+)\\]\\((https://[^)]+)\\)")
-		text.text = links.sub(text.text, "[url=$2]$1[/url]", true)
-		links.compile("(?m)^#{1,3} (.+)$")
-		text.text = links.sub(text.text, "[b]$1[/b]", true)
-		text.meta_clicked.connect(func(url): OS.shell_open(str(url)))
-		dialog.add_child(text)
-		dialog.confirmed.connect(dialog.queue_free)
-		dialog.canceled.connect(dialog.queue_free)
-		dialog.popup_centered(Vector2i(600, 420)))
-	get_viewport().size_changed.connect(_layout_preview)
-	_layout_preview()
+	var footer := UITheme.label("W/S Gas & Bremse  ·  A/D Lenken  ·  C Kamera  ·  F1 Hilfe  ·  F3 Aktivitäten", 12, UITheme.MUTED)
+	footer.anchor_left = 1.0
+	footer.anchor_right = 1.0
+	footer.anchor_top = 1.0
+	footer.anchor_bottom = 1.0
+	footer.offset_left = -20 - 430
+	footer.offset_right = -20
+	footer.offset_top = -20 - 190 - 26
+	footer.offset_bottom = -20 - 190 - 6
+	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	root.add_child(footer)
+	_build_settings(root)
 
 
-func _layout_preview() -> void:
-	var window_size := get_viewport().get_visible_rect().size
-	_stage.visible = window_size.x >= 720.0 and window_size.y >= 470.0
-	_settings_panel.custom_minimum_size.x = clampf(window_size.x * 0.30, 290.0, 410.0)
-	_settings_panel.size_flags_horizontal = Control.SIZE_FILL if _stage.visible else Control.SIZE_EXPAND_FILL
-	car_list.custom_minimum_size.y = 130.0 if window_size.y < 590.0 else 204.0
+## Selectable tile: thumbnail, name and an optional detail line.
+func _tile(caption: String, detail: String, image: String, thumb: Vector2, group: ButtonGroup) -> Button:
+	var b := Button.new()
+	b.toggle_mode = true
+	b.button_group = group
+	b.custom_minimum_size = Vector2(thumb.x + 12, thumb.y + (58 if not detail.is_empty() else 40))
+	b.add_theme_stylebox_override("normal", UITheme.box(Color(1, 1, 1, 0.04), 4, 6))
+	b.add_theme_stylebox_override("hover", UITheme.box(Color(1, 1, 1, 0.10), 4, 6))
+	b.add_theme_stylebox_override("pressed", UITheme.box(Color(UITheme.ACCENT, 0.28), 4, 6, UITheme.ACCENT, 2))
+	b.add_theme_stylebox_override("hover_pressed", UITheme.box(Color(UITheme.ACCENT, 0.34), 4, 6, UITheme.ACCENT, 2))
+	b.tooltip_text = caption
+	var v := VBoxContainer.new()
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_theme_constant_override("separation", 3)
+	v.position = Vector2(6, 6)
+	v.size = Vector2(thumb.x, b.custom_minimum_size.y - 12)
+	b.add_child(v)
+	var tex := TextureRect.new()
+	tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tex.custom_minimum_size = thumb
+	tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	if ResourceLoader.exists(image):
+		tex.texture = load(image)
+	v.add_child(tex)
+	var name_label := UITheme.label(caption, 14, UITheme.TEXT, true)
+	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_label.custom_minimum_size.x = thumb.x
+	v.add_child(name_label)
+	if not detail.is_empty():
+		var d := UITheme.label(detail, 11, UITheme.MUTED)
+		d.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		d.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		d.custom_minimum_size.x = thumb.x
+		v.add_child(d)
+	return b
 
 
-func _label(value: String, font_size: int, color: Color, bold := false) -> Label:
-	var label := Label.new()
-	label.text = value
-	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", color)
-	if bold:
-		var font := FontVariation.new()
-		font.base_font = ThemeDB.fallback_font
-		font.variation_embolden = 0.65
-		label.add_theme_font_override("font", font)
-	return label
+# ------------------------------------------------------------------------------- settings
+func _build_settings(root: Control) -> void:
+	_settings = Control.new()
+	_settings.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_settings.visible = false
+	root.add_child(_settings)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_settings.add_child(dim)
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", UITheme.box(Color(0.05, 0.05, 0.06, 0.97), 4, 18, UITheme.BORDER, 1))
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.custom_minimum_size = Vector2(820, 700)
+	panel.position = Vector2(-410, -350)
+	_settings.add_child(panel)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 10)
+	panel.add_child(v)
+	var head := HBoxContainer.new()
+	v.add_child(head)
+	var t := UITheme.label("EINSTELLUNGEN", 22, UITheme.TEXT, true)
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(t)
+	var close := Button.new()
+	close.text = "Schließen"
+	close.pressed.connect(_toggle_settings)
+	head.add_child(close)
+	var tabs := TabContainer.new()
+	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	v.add_child(tabs)
+	var page := func(title: String) -> VBoxContainer:
+		var scroll := ScrollContainer.new()
+		scroll.name = title
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		tabs.add_child(scroll)
+		var box := VBoxContainer.new()
+		box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		box.add_theme_constant_override("separation", 8)
+		scroll.add_child(box)
+		return box
+	var graphics: VBoxContainer = page.call("Grafik")
+	graphics.add_child(Game.make_graphics_options())
+	var driving: VBoxContainer = page.call("Fahrhilfen")
+	for key in [["tcs", "Traktionskontrolle"], ["abs", "ABS"], ["automatic", "Automatikgetriebe"],
+			["steering_assist", "Lenkhilfe (glättet Tastatur und begrenzt Lenkeinschlag bei Tempo)"], ["traffic", "KI-Verkehr"]]:
+		driving.add_child(Game.make_driving_option(key[0], key[1]))
+	driving.add_child(Game.make_driving_help_option())
+	var audio: VBoxContainer = page.call("Audio")
+	audio.add_child(Game.make_audio_options())
 
 
-func _box(color: Color, border: Color, radius: int, padding: int) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = color
-	style.border_color = border
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(radius)
-	for side in [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]:
-		style.set_content_margin(side, padding)
-	return style
+func _toggle_settings() -> void:
+	_settings.visible = not _settings.visible
 
 
-func _menu_theme() -> Theme:
-	var theme := Theme.new()
-	theme.default_font_size = 14
-	var focus := _box(Color.TRANSPARENT, ACCENT, 7, 6)
-	focus.draw_center = false
-	for kind in [&"Button", &"OptionButton"]:
-		theme.set_stylebox("normal", kind, _box(PANEL, BORDER, 8, 8))
-		theme.set_stylebox("hover", kind, _box(Color("233141"), Color("4a6279"), 8, 8))
-		theme.set_stylebox("pressed", kind, _box(Color("293b4d"), ACCENT, 8, 8))
-		theme.set_stylebox("focus", kind, focus)
-		theme.set_color("font_color", kind, TEXT)
-	var check := _box(PANEL, BORDER, 6, 4)
-	var check_hover := _box(Color("233141"), Color("4a6279"), 6, 4)
-	theme.set_stylebox("normal", &"CheckBox", check)
-	theme.set_stylebox("pressed", &"CheckBox", check)
-	theme.set_stylebox("hover", &"CheckBox", check_hover)
-	theme.set_stylebox("hover_pressed", &"CheckBox", check_hover)
-	theme.set_stylebox("focus", &"CheckBox", focus)
-	theme.set_stylebox("panel", &"ItemList", _box(PANEL, BORDER, 8, 6))
-	theme.set_stylebox("selected", &"ItemList", _box(Color("344253"), ACCENT, 5, 2))
-	theme.set_stylebox("selected_focus", &"ItemList", _box(Color("344253"), ACCENT, 5, 2))
-	theme.set_stylebox("hovered", &"ItemList", _box(Color("233141"), BORDER, 5, 2))
-	theme.set_stylebox("focus", &"ItemList", focus)
-	theme.set_color("font_color", &"ItemList", MUTED)
-	theme.set_color("font_selected_color", &"ItemList", TEXT)
-	theme.set_constant("v_separation", &"ItemList", 5)
-	theme.set_stylebox("panel", &"PopupMenu", _box(INK, BORDER, 8, 6))
-	theme.set_stylebox("hover", &"PopupMenu", _box(Color("293b4d"), BORDER, 5, 2))
-	theme.set_type_variation(&"DriveButton", &"Button")
-	theme.set_stylebox("normal", &"DriveButton", _box(ACCENT, ACCENT, 8, 8))
-	theme.set_stylebox("hover", &"DriveButton", _box(Color("a4f4df"), ACCENT, 8, 8))
-	theme.set_stylebox("pressed", &"DriveButton", _box(Color("50bba8"), ACCENT, 8, 8))
-	var drive_focus := _box(Color.TRANSPARENT, Color("fff0da"), 8, 6)
-	drive_focus.draw_center = false
-	theme.set_stylebox("focus", &"DriveButton", drive_focus)
-	for state in [&"font_color", &"font_hover_color", &"font_pressed_color", &"font_focus_color"]:
-		theme.set_color(state, &"DriveButton", INK)
-	theme.set_font_size("font_size", &"DriveButton", 19)
-	return theme
+func _unhandled_input(event: InputEvent) -> void:
+	if _settings and _settings.visible and event.is_action_pressed("menu"):
+		_settings.visible = false
+		get_viewport().set_input_as_handled()
 
 
+func _show_credits() -> void:
+	var dialog := AcceptDialog.new()
+	dialog.title = "Audio- und Bildquellen"
+	dialog.theme = UITheme.make()
+	dialog.min_size = Vector2i(640, 440)
+	add_child(dialog)
+	var text := RichTextLabel.new()
+	text.bbcode_enabled = true
+	text.selection_enabled = true
+	text.custom_minimum_size = Vector2(620, 400)
+	text.text = FileAccess.get_file_as_string("res://ASSET_CREDITS.md")
+	var links := RegEx.new()
+	links.compile("\\[([^\\]]+)\\]\\((https://[^)]+)\\)")
+	text.text = links.sub(text.text, "[url=$2]$1[/url]", true)
+	links.compile("(?m)^#{1,3} (.+)$")
+	text.text = links.sub(text.text, "[b]$1[/b]", true)
+	text.meta_clicked.connect(func(url): OS.shell_open(str(url)))
+	dialog.add_child(text)
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.canceled.connect(dialog.queue_free)
+	dialog.popup_centered(Vector2i(660, 480))
+
+
+# ------------------------------------------------------------------------------- selection
 func _on_car_selected(i: int) -> void:
 	var c: Dictionary = Game.cars[i]
 	Game.selected_car = c["path"]
@@ -423,7 +451,7 @@ func _on_car_selected(i: int) -> void:
 
 func _on_map_selected(i: int) -> void:
 	Game.selected_map = Game.MAPS[i]["id"]
-	map_info.text = Game.MAPS[i]["description"]
+	map_info.text = "KARTE: %s\n%s" % [Game.MAPS[i]["name"], Game.MAPS[i]["description"]]
 
 
 func _on_start() -> void:
@@ -434,18 +462,21 @@ func _on_start() -> void:
 
 func _process(delta: float) -> void:
 	cam_angle += delta * 0.15
-	var target := Vector3(0, 0.7, 0)
+	var target := Vector3(0, 0.6, 0)
 	if preview_car:
-		target = preview_car.get_chase_target()
+		target = preview_car.get_position_ws()
+		target.y = 0.62
 	var viewport_size := get_viewport().get_visible_rect().size
-	var preview_rect := _preview_area.get_global_rect()
-	var distance := 6.8
-	if _stage.visible and preview_rect.size.x > 0.0 and preview_rect.size.y > 0.0:
-		var available := minf(preview_rect.size.x, preview_rect.size.y * 1.8)
-		distance *= maxf(1.0, 0.84 * viewport_size.y / available)
-	cam.position = target + Vector3(cos(cam_angle) * distance, distance * 0.22, sin(cam_angle) * distance)
-	cam.look_at(target - Vector3.UP * 0.22, Vector3.UP)
-	var shift := preview_rect.get_center() - viewport_size * 0.5 if _stage.visible else Vector2.ZERO
+	var preview_rect := _preview_area.get_global_rect() if _preview_area else Rect2(Vector2.ZERO, viewport_size)
+	var length := float(preview_car.get_info().get("length", 4.4)) if preview_car else 4.4
+	var distance := length * 1.8
+	if preview_rect.size.x > 0.0 and preview_rect.size.y > 0.0:
+		# Keep the car inside the free area: fit by the narrower of width and height.
+		var available := minf(preview_rect.size.x / 1.7, preview_rect.size.y)
+		distance *= clampf(viewport_size.y * 0.62 / available, 1.0, 2.6)
+	cam.position = target + Vector3(cos(cam_angle) * distance, distance * 0.24, sin(cam_angle) * distance)
+	cam.look_at(target, Vector3.UP)
+	var shift := preview_rect.get_center() - viewport_size * 0.5
 	var world_per_pixel := 2.0 * distance * tan(deg_to_rad(cam.fov * 0.5)) / maxf(1.0, viewport_size.y)
 	cam.h_offset = -shift.x * world_per_pixel
 	cam.v_offset = shift.y * world_per_pixel

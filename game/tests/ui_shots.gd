@@ -30,7 +30,7 @@ func _process(_d: float) -> bool:
 		40: _shot("menu")
 		41:
 			for b in current_scene.find_children("*", "Button", true, false):
-				if (b as Button).text.begins_with("Fahrhilfen"):
+				if (b as Button).text == "Einstellungen":
 					(b as Button).pressed.emit()
 		50: _shot("menu_options")
 		52:

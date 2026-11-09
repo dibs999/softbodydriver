@@ -224,7 +224,7 @@ func _build_rain() -> void:
 	_rain.name = "Rain"
 	_rain.amount = 700
 	var game := get_node_or_null("/root/Game")
-	if game and int(game.get("_graphics_preset")) == 0:
+	if game and int(game.get("graphics").get("effects", 1)) == 0:
 		_rain.amount = 280
 	_rain.lifetime = 0.8
 	_rain.local_coords = false

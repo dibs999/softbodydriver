@@ -12,6 +12,31 @@ static var _textures: Dictionary = {}
 static var _bark: Material
 
 
+## Graphics settings from the "Game" autoload (absent in isolated tools: full quality).
+static func _game() -> Node:
+	var tree := Engine.get_main_loop() as SceneTree
+	return tree.root.get_node_or_null("Game") if tree else null
+
+
+static func density() -> float:
+	var game := _game()
+	return game.vegetation_density() if game and game.has_method("vegetation_density") else 1.0
+
+
+## Deterministic thinning for the "Bäume und Büsche" setting. Maps that add trunk colliders must
+## ask before adding them, so that no invisible tree is left in the road.
+static func keep(p: Vector3) -> bool:
+	var d := density()
+	if d >= 0.999:
+		return true
+	var h := fposmod(sin(p.x * 12.9898 + p.z * 78.233) * 43758.5453, 1.0)
+	return h < d
+
+
+## Distance at which trees switch to their low-detail mesh, and the far limit (view distance).
+const LOD_DISTANCE := 130.0
+
+
 ## Places one species at ground points (base of the trunk). Colliders stay the caller's job.
 static func plant(parent: Node3D, kind: String, ground: Array[Vector3], seed := 1,
 		min_scale := 0.8, max_scale := 1.25, shadow := true) -> void:
@@ -28,9 +53,47 @@ static func plant(parent: Node3D, kind: String, ground: Array[Vector3], seed := 
 		var lean := Basis(Vector3(rng.randf_range(-1, 1), 0, rng.randf_range(-1, 1)).normalized(), rng.randf_range(0.0, 0.05))
 		var b := lean * Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.9, 1.1), s))
 		var bucket: Array[Transform3D] = buckets[rng.randi() % VARIANTS]
-		bucket.append(Transform3D(b, p - Vector3.UP * 0.15 * s))
+		if keep(p):
+			bucket.append(Transform3D(b, p - Vector3.UP * 0.15 * s))
+	var game := _game()
+	var far := float(game.view_distance()) if game and game.has_method("view_distance") else 4000.0
+	var small := kind == "bush" or kind == "dry_shrub"
 	for v in VARIANTS:
-		C.scatter_multimesh(parent, mesh(kind, v), null, buckets[v], shadow)
+		var list: Array[Transform3D] = buckets[v]
+		if list.is_empty():
+			continue
+		# Spatial chunks with a detailed mesh near the camera and a few large cards beyond.
+		var chunks: Dictionary = {}
+		for xf in list:
+			var key := Vector2i(floori(xf.origin.x / 160.0), floori(xf.origin.z / 160.0))
+			if not chunks.has(key):
+				var arr: Array[Transform3D] = []
+				chunks[key] = arr
+			chunks[key].append(xf)
+		for arr: Array[Transform3D] in chunks.values():
+			if small:
+				_chunk(parent, mesh(kind, v), arr, shadow, 0.0, minf(far, 260.0))
+			else:
+				_chunk(parent, mesh(kind, v), arr, shadow, 0.0, LOD_DISTANCE)
+				_chunk(parent, mesh(kind + "_far", v), arr, false, LOD_DISTANCE, far * 0.8)
+
+
+static func _chunk(parent: Node3D, m: Mesh, xforms: Array[Transform3D], shadow: bool, begin: float, end: float) -> void:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = m
+	mm.instance_count = xforms.size()
+	for i in xforms.size():
+		mm.set_instance_transform(i, xforms[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.visibility_range_begin = begin
+	mmi.visibility_range_begin_margin = 10.0 if begin > 0.0 else 0.0
+	mmi.visibility_range_end = end
+	mmi.visibility_range_end_margin = 10.0
+	if not shadow:
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mmi)
 
 
 static func mesh(kind: String, variant: int) -> ArrayMesh:
@@ -38,12 +101,16 @@ static func mesh(kind: String, variant: int) -> ArrayMesh:
 	if not _meshes.has(key):
 		var rng := RandomNumberGenerator.new()
 		rng.seed = hash(key)
+		var detail := 1.0
+		if kind.ends_with("_far"):
+			kind = kind.trim_suffix("_far")
+			detail = 0.22
 		match kind:
-			"conifer": _meshes[key] = _conifer(rng)
+			"conifer": _meshes[key] = _conifer(rng, detail)
 			"bush": _meshes[key] = _bush(rng, "broadleaf", Color(0.86, 0.95, 0.78), Color(0.7, 0.82, 0.55))
 			"dry_shrub": _meshes[key] = _bush(rng, "dry", Color(0.95, 0.9, 0.8), Color(0.8, 0.72, 0.55))
-			"poplar": _meshes[key] = _broadleaf(rng, 0.42, 1.6)
-			_: _meshes[key] = _broadleaf(rng, 1.0, 1.0)
+			"poplar": _meshes[key] = _broadleaf(rng, 0.42, 1.6, detail)
+			_: _meshes[key] = _broadleaf(rng, 1.0, 1.0, detail)
 	return _meshes[key]
 
 
@@ -92,7 +159,7 @@ static func _finish(trunk: SurfaceTool, leaves: SurfaceTool, leaf_material: Mate
 	return m
 
 
-static func _broadleaf(rng: RandomNumberGenerator, width: float, tall: float) -> ArrayMesh:
+static func _broadleaf(rng: RandomNumberGenerator, width: float, tall: float, detail := 1.0) -> ArrayMesh:
 	var trunk := SurfaceTool.new()
 	trunk.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var leaves := SurfaceTool.new()
@@ -101,7 +168,7 @@ static func _broadleaf(rng: RandomNumberGenerator, width: float, tall: float) ->
 	var fork := height * rng.randf_range(0.36, 0.46)
 	var crown_c := Vector3(0, height * 0.64, 0)
 	var crown_r := Vector3(3.3 * width, height * 0.34, 3.3 * width)
-	_limb(trunk, Vector3.ZERO, Vector3(0, fork, 0), 0.30 * width + 0.06, 0.2 * width + 0.04, 8)
+	_limb(trunk, Vector3.ZERO, Vector3(0, fork, 0), 0.30 * width + 0.06, 0.2 * width + 0.04, 8 if detail >= 1.0 else 4)
 	# Main limbs towards crown lobes, a few secondary branches and the cards around them.
 	var lobes := rng.randi_range(4, 6)
 	var lobe_centers: Array[Vector3] = []
@@ -114,9 +181,11 @@ static func _broadleaf(rng: RandomNumberGenerator, width: float, tall: float) ->
 	for c in lobe_centers:
 		var start := Vector3(0, fork * rng.randf_range(0.92, 1.0), 0)
 		var mid := start.lerp(c, 0.55) + Vector3(0, 0.4, 0)
-		_limb(trunk, start, mid, 0.17 * width + 0.03, 0.10 * width + 0.02, 5)
-		_limb(trunk, mid, c, 0.10 * width + 0.02, 0.04, 4)
-	var cards := int(150 * (0.55 + 0.45 * width))
+		if detail >= 1.0:
+			_limb(trunk, start, mid, 0.17 * width + 0.03, 0.10 * width + 0.02, 5)
+			_limb(trunk, mid, c, 0.10 * width + 0.02, 0.04, 4)
+	var cards := maxi(14, int(150 * (0.55 + 0.45 * width) * detail))
+	var grow := 1.0 / sqrt(maxf(detail, 0.05)) * (0.75 if detail < 1.0 else 1.0)
 	for i in cards:
 		var c: Vector3 = lobe_centers[rng.randi() % lobe_centers.size()]
 		var lobe_r := crown_r * rng.randf_range(0.55, 0.72)
@@ -126,25 +195,25 @@ static func _broadleaf(rng: RandomNumberGenerator, width: float, tall: float) ->
 		var outward := (rel + Vector3(0, 0.35, 0)).normalized()
 		var facing := (outward + Vector3(rng.randfn(), rng.randfn(), rng.randfn()) * 0.7).normalized()
 		var ao := clampf(0.35 + 0.55 * rel.length() + 0.25 * rel.y, 0.3, 1.0)
-		var sz := rng.randf_range(1.8, 2.5) * (0.75 + 0.25 * width)
+		var sz := rng.randf_range(1.8, 2.5) * (0.75 + 0.25 * width) * grow
 		_card(leaves, p, facing, Vector3(rng.randfn(), 1.0, rng.randfn()).normalized(), Vector2(sz, sz), outward, ao, rng.randf())
 	return _finish(trunk, leaves, _leaf_material("broadleaf", Color(0.95, 1.0, 0.9), Color(0.78, 0.9, 0.62)))
 
 
-static func _conifer(rng: RandomNumberGenerator) -> ArrayMesh:
+static func _conifer(rng: RandomNumberGenerator, detail := 1.0) -> ArrayMesh:
 	var trunk := SurfaceTool.new()
 	trunk.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var leaves := SurfaceTool.new()
 	leaves.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var height := rng.randf_range(12.0, 16.0)
 	var base_r := rng.randf_range(2.4, 3.1)
-	_limb(trunk, Vector3.ZERO, Vector3(0, height, 0), 0.27, 0.03, 7)
+	_limb(trunk, Vector3.ZERO, Vector3(0, height, 0), 0.27, 0.03, 7 if detail >= 1.0 else 4)
 	var y := rng.randf_range(1.4, 2.2)
 	var whorl := 0
 	while y < height - 0.6:
 		var f := (height - y) / height
 		var length := base_r * pow(f, 0.9) + 0.35
-		var count := 6 if f > 0.3 else 4
+		var count := (6 if f > 0.3 else 4) if detail >= 1.0 else 3
 		var phase := rng.randf() * TAU
 		for i in count:
 			var a := phase + TAU * i / count + rng.randf_range(-0.25, 0.25)
@@ -158,10 +227,12 @@ static func _conifer(rng: RandomNumberGenerator) -> ArrayMesh:
 			# Flat branch spray plus a slightly tilted crossing card for thickness.
 			var face_up := side.cross(axis).normalized()
 			if face_up.y < 0: face_up = -face_up
-			_card(leaves, center, face_up, axis, Vector2(length * 0.62, length * 1.08), lit, ao, rng.randf())
-			var tilted := (face_up + side * 0.9).normalized()
-			_card(leaves, center - Vector3(0, 0.12, 0), tilted, axis, Vector2(length * 0.42, length), lit, ao * 0.9, rng.randf())
-		y += rng.randf_range(0.55, 0.8) * (0.7 + 0.3 * (1.0 - float(whorl) / 30.0))
+			var spray := 1.0 if detail >= 1.0 else 1.7
+			_card(leaves, center, face_up, axis, Vector2(length * 0.62 * spray, length * 1.08 * spray), lit, ao, rng.randf())
+			if detail >= 1.0:
+				var tilted := (face_up + side * 0.9).normalized()
+				_card(leaves, center - Vector3(0, 0.12, 0), tilted, axis, Vector2(length * 0.42, length), lit, ao * 0.9, rng.randf())
+		y += rng.randf_range(0.55, 0.8) * (0.7 + 0.3 * (1.0 - float(whorl) / 30.0)) * (1.0 if detail >= 1.0 else 2.6)
 		whorl += 1
 	# Leader shoot.
 	_card(leaves, Vector3(0, height - 0.2, 0), Vector3(1, 0, 0), Vector3.UP, Vector2(0.7, 1.4), Vector3.UP, 1.0, 0.5)
@@ -327,7 +398,9 @@ static func _leaf(img: Image, center: Vector2, angle: float, length: float, widt
 
 ## Ground cover: grass tufts (crossed blade cards), only drawn near the camera.
 static func grass(parent: Node3D, ground: Array[Vector3], seed := 1, dry := false, min_scale := 0.7, max_scale := 1.3) -> void:
-	if ground.is_empty():
+	var game := _game()
+	var reach := float(game.grass_distance()) if game and game.has_method("grass_distance") else 85.0
+	if ground.is_empty() or reach <= 0.0:
 		return
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
@@ -353,7 +426,7 @@ static func grass(parent: Node3D, ground: Array[Vector3], seed := 1, dry := fals
 		var mmi := MultiMeshInstance3D.new()
 		mmi.multimesh = mm
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mmi.visibility_range_end = 85.0
+		mmi.visibility_range_end = reach
 		mmi.visibility_range_end_margin = 15.0
 		parent.add_child(mmi)
 

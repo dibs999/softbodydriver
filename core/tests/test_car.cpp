@@ -668,7 +668,7 @@ TEST_CASE("coast-down resistance of the reference hatch stays in a realistic ran
     const real v1 = car.centerOfMassVelocity().x;
     const real resistance = car.totalMass() * (v0 - v1) / 2.0;
     CHECK(resistance > 250.0);
-    CHECK(resistance < 750.0);
+    CHECK(resistance < 560.0);
     CHECK(car.stats().deformedBeams == 0);
 }
 
@@ -695,6 +695,75 @@ TEST_CASE("full throttle runs straight to autobahn top-speed range without steer
     CHECK(worstYaw < 4.0);
     CHECK(car.stats().brokenBeams == 0);
     CHECK(w.stats().finite);
+}
+
+// Largest and RMS distance of the body nodes from their best rigid fit to a reference pose.
+// The rotation is the polar factor of the covariance, found by Newton iteration.
+std::pair<real, real> bodyDeviation(const SoftBody& car, const std::vector<std::uint32_t>& nodes, const std::vector<Vec3>& ref) {
+    Vec3 cc{0, 0, 0}, rc{0, 0, 0};
+    for (std::size_t k = 0; k < nodes.size(); ++k) { cc += car.positions()[nodes[k]]; rc += ref[k]; }
+    cc = cc * (1.0 / nodes.size());
+    rc = rc * (1.0 / nodes.size());
+    real X[3][3] = {};
+    for (std::size_t k = 0; k < nodes.size(); ++k) {
+        const Vec3 q = car.positions()[nodes[k]] - cc, p = ref[k] - rc;
+        const real qv[3] = {q.x, q.y, q.z}, pv[3] = {p.x, p.y, p.z};
+        for (int i = 0; i < 3; ++i) for (int j = 0; j < 3; ++j) X[i][j] += qv[i] * pv[j];
+    }
+    for (int it = 0; it < 40; ++it) {
+        const real d = X[0][0] * (X[1][1] * X[2][2] - X[1][2] * X[2][1]) - X[0][1] * (X[1][0] * X[2][2] - X[1][2] * X[2][0]) +
+                       X[0][2] * (X[1][0] * X[2][1] - X[1][1] * X[2][0]);
+        real cof[3][3];
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 3; ++j)
+                cof[i][j] = X[(i + 1) % 3][(j + 1) % 3] * X[(i + 2) % 3][(j + 2) % 3] - X[(i + 1) % 3][(j + 2) % 3] * X[(i + 2) % 3][(j + 1) % 3];
+        for (int i = 0; i < 3; ++i) for (int j = 0; j < 3; ++j) X[i][j] = 0.5 * (X[i][j] + cof[i][j] / d);  // (R + R^-T) / 2
+    }
+    real worst = 0, sum = 0;
+    for (std::size_t k = 0; k < nodes.size(); ++k) {
+        const Vec3 p = ref[k] - rc;
+        const Vec3 fit{X[0][0] * p.x + X[0][1] * p.y + X[0][2] * p.z, X[1][0] * p.x + X[1][1] * p.y + X[1][2] * p.z,
+                       X[2][0] * p.x + X[2][1] * p.y + X[2][2] * p.z};
+        const real e = length(car.positions()[nodes[k]] - cc - fit);
+        worst = std::max(worst, e);
+        sum += e * e;
+    }
+    return {worst, std::sqrt(sum / nodes.size())};
+}
+
+TEST_CASE("body shell stays rigid while driving instead of wobbling like jelly") {
+    // Unbraced cabin rings let the belt rail swing sideways: up to 92 mm on the Kestrel in a
+    // 100 km/h steering step, visible as wobbling body sides and windows.
+    for (const char* id : {"kestrel_hatch", "meridian_sedan"}) {
+        CAPTURE(id);
+        CarBuild cb = buildCar(loadCarDefinition(carPath(id)));
+        const auto layout = cb.layout;
+        World w = flatWorld();
+        w.addBody(std::move(cb.body));
+        auto& car = w.body(0);
+        VehicleControls controls;
+        controls.gear = -99;
+        car.setControls(controls);
+        w.simulate(2.0);
+        std::vector<Vec3> ref;
+        for (auto n : layout.bodyNodes) ref.push_back(car.positions()[n]);
+        controls.throttle = 0.6;
+        car.setControls(controls);
+        while (car.telemetry().speedKmh < 100.0 && w.stats().time < 30.0) w.simulate(0.1);
+        controls.throttle = 0.25;
+        real worst = 0, rms = 0;
+        for (int i = 0; i < 400; ++i) {
+            controls.steer = i < 150 ? 0.04 : 0.05 * std::sin(i * 0.01 * 2.0 * 3.14159265358979 * 0.6);
+            car.setControls(controls);
+            w.simulate(0.01);
+            const auto [maxDev, rmsDev] = bodyDeviation(car, layout.bodyNodes, ref);
+            worst = std::max(worst, maxDev);
+            rms = std::max(rms, rmsDev);
+        }
+        CHECK(worst < 0.030);
+        CHECK(rms < 0.006);
+        CHECK(car.stats().brokenBeams == 0);
+    }
 }
 
 TEST_CASE("staggered tyres keep grip at top speed and the Concept GT runs straight beyond 320 km/h") {

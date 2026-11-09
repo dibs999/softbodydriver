@@ -1,5 +1,6 @@
 extends Node3D
 ## Gameplay scene: map, vehicles (player + AI traffic), cameras, HUD, audio, input and pause menu.
+const UITheme := preload("res://scripts/ui_theme.gd")
 
 const MapBuilder := preload("res://scripts/map_builder.gd")
 const AIDriver := preload("res://scripts/ai_driver.gd")
@@ -14,6 +15,7 @@ const DriverPrompts := preload("res://scripts/driver_prompts.gd")
 var equipment: Node3D
 var weather: Node
 var wipers: Node3D
+var cabin_closure: Node3D
 var lesson: Node
 var activity: DrivingActivity
 var surfaces := RoadSurface.new()
@@ -30,6 +32,7 @@ var minimap: Minimap
 var _paused_before_map := false
 var _paused_before_menu := false
 var audio: Node
+var _pause_first_button: Button
 var pause_menu: Control
 var _loading_overlay: CanvasLayer
 var _reverse_hold := 0.0
@@ -94,9 +97,12 @@ func _ready() -> void:
 			if v:
 				vehicles.append(v)
 				ai[v] = AIDriver.new(v, routes[i]["waypoints"], routes[i]["speeds"], 0.9)
+				ai[v].others = vehicles
+				ai[v].signals = map_data.get("traffic_signals")
 
 	cam = CameraRig.new()
 	cam.current = true
+	cam.far = Game.view_distance()
 	add_child(cam)
 	cam.target = player
 	weather = preload("res://scripts/world_weather.gd").new()
@@ -106,6 +112,9 @@ func _ready() -> void:
 	wipers = preload("res://scripts/vehicle_wipers.gd").new()
 	wipers.name = "Wipers"
 	add_child(wipers)
+	cabin_closure = preload("res://scripts/cabin_closure.gd").new()
+	cabin_closure.name = "CabinClosure"
+	add_child(cabin_closure)
 	equipment = preload("res://scripts/vehicle_equipment.gd").new()
 	add_child(equipment)
 	equipment.configure(self, map_data["spawns"][0])
@@ -275,6 +284,8 @@ func _build_environment() -> void:
 
 func _apply_graphics() -> void:
 	Game.apply_environment_graphics(_env, _sun)
+	if cam:
+		cam.far = Game.view_distance()
 
 
 func _apply_settings(v: SBVehicle) -> void:
@@ -298,7 +309,9 @@ func _set_player(v: SBVehicle) -> void:
 			var body: Dictionary = definition.get("body", {}) if definition is Dictionary else {}
 			weather.set_vehicle_shelter(v, body)
 			# Imported models bring their own wiper geometry; procedural bodies get arms.
-			wipers.attach(v, body, not (definition is Dictionary and definition.has("visualModel")))
+			var imported: bool = definition is Dictionary and definition.has("visualModel")
+			wipers.attach(v, body, not imported)
+			cabin_closure.attach(v if imported else null, body)
 			break
 	hud.vehicle = v
 	minimap.player = v
@@ -500,40 +513,41 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _build_pause_menu(ui: CanvasLayer) -> void:
-	pause_menu = PanelContainer.new()
-	# Share the garage palette and button states with the in-game menu.
-	var palette := preload("res://scripts/main_menu.gd").new()
-	pause_menu.theme = palette._menu_theme()
-	pause_menu.add_theme_stylebox_override("panel", palette._box(Color("0b1820"), Color("29434b"), 18, 24))
-	palette.free()
-	pause_menu.set_anchors_preset(Control.PRESET_CENTER)
-	pause_menu.custom_minimum_size = Vector2(460, 540)
-	pause_menu.position = Vector2(-230, -270)
+	# Full-screen pause: dimmed game, action sidebar on the left, tabbed options on the right.
+	pause_menu = Control.new()
+	pause_menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	pause_menu.theme = UITheme.make()
 	pause_menu.visible = false
 	ui.add_child(pause_menu)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 12)
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(412, 490)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	pause_menu.add_child(scroll)
-	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(v)
-	var title := Label.new()
-	title.text = "Pause"
-	title.add_theme_font_size_override("font_size", 28)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(title)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.42)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	pause_menu.add_child(dim)
+
+	var row := HBoxContainer.new()
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	row.add_theme_constant_override("separation", 40)
+	pause_menu.add_child(row)
+	var sidebar := PanelContainer.new()
+	sidebar.add_theme_stylebox_override("panel", UITheme.box(Color(0, 0, 0, 0.74), 0, 28))
+	sidebar.custom_minimum_size.x = 400
+	row.add_child(sidebar)
+	var side := VBoxContainer.new()
+	side.add_theme_constant_override("separation", 4)
+	sidebar.add_child(side)
+	side.add_child(UITheme.label("PAUSE", 32, UITheme.TEXT, true))
+	var where := ""
+	for m in Game.MAPS:
+		if m["id"] == Game.selected_map: where = m["name"]
+	var subtitle := UITheme.label(where, 14, UITheme.MUTED)
+	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	side.add_child(subtitle)
+	var gap := Control.new()
+	gap.custom_minimum_size.y = 22
+	side.add_child(gap)
+	_pause_first_button = null
 	for entry in [["Weiterfahren", _toggle_pause],
-			["Fahrertür öffnen / schließen", func():
-				equipment.toggle_door(0)
-				_toggle_pause()],
-			["Beifahrertür öffnen / schließen", func():
-				equipment.toggle_door(1)
-				_toggle_pause()],
-			["Scheibenwischer umschalten", func():
-				hud.toast(wipers.cycle_mode())
-				_toggle_pause()],
+			["Neu starten", func(): get_tree().reload_current_scene()],
 			["Zum Service bergen · Schäden bleiben", func():
 				lesson.notify_interruption("Bergung zum Service")
 				activity.cancel("Lauf abgebrochen: Bergung")
@@ -551,15 +565,61 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 				lesson.start()
 				_toggle_pause()],
 			["Einführung ausblenden", func(): lesson.skip(); _toggle_pause()],
-			["Neu starten", func(): get_tree().reload_current_scene()],
 			["Hauptmenü", func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn")],
 			["Beenden", func(): get_tree().quit()]]:
 		var b := Button.new()
 		b.text = entry[0]
-		b.add_theme_font_size_override("font_size", 20)
+		b.theme_type_variation = &"SideButton"
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.pressed.connect(entry[1])
-		v.add_child(b)
-	_pause_activity = _pause_choices(v, "Fahraktivität", DrivingActivity.MODES.slice(0, 4 if Game.selected_map == "city" else 3))
+		side.add_child(b)
+		if _pause_first_button == null: _pause_first_button = b
+	var filler := Control.new()
+	filler.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	side.add_child(filler)
+	side.add_child(UITheme.label("%s  Zurück zur Fahrt" % DriverPrompts.hint("menu"), 13, UITheme.MUTED))
+
+	var margin := MarginContainer.new()
+	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for side_name in ["margin_top", "margin_bottom", "margin_right"]:
+		margin.add_theme_constant_override(side_name, 48)
+	row.add_child(margin)
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", UITheme.box(Color(0.04, 0.04, 0.045, 0.88), 4, 6, UITheme.BORDER, 1))
+	margin.add_child(panel)
+	var tabs := TabContainer.new()
+	panel.add_child(tabs)
+	var page := func(title: String) -> VBoxContainer:
+		var scroll := ScrollContainer.new()
+		scroll.name = title
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		tabs.add_child(scroll)
+		var v := VBoxContainer.new()
+		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		v.add_theme_constant_override("separation", 10)
+		scroll.add_child(v)
+		return v
+
+	var vehicle_page: VBoxContainer = page.call("Fahrzeug")
+	vehicle_page.add_child(UITheme.section("Türen und Ausstattung"))
+	for entry in [["Fahrertür öffnen / schließen", func():
+				equipment.toggle_door(0)
+				_toggle_pause()],
+			["Beifahrertür öffnen / schließen", func():
+				equipment.toggle_door(1)
+				_toggle_pause()],
+			["Scheibenwischer umschalten", func():
+				hud.toast(wipers.cycle_mode())
+				_toggle_pause()]]:
+		var b := Button.new()
+		b.text = entry[0]
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.pressed.connect(entry[1])
+		vehicle_page.add_child(b)
+
+	var drive_page: VBoxContainer = page.call("Fahrt & Umgebung")
+	drive_page.add_child(UITheme.section("Aktivität"))
+	_pause_activity = _pause_choices(drive_page, "Fahraktivität", DrivingActivity.MODES.slice(0, 4 if Game.selected_map == "city" else 3))
 	_pause_activity.item_selected.connect(func(index: int):
 		activity.cancel("")
 		activity.mode = index
@@ -569,16 +629,16 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 		minimap._layout())
 	var activity_button := Button.new()
 	activity_button.text = "Auswahl starten / laufenden Versuch abbrechen"
-	activity_button.add_theme_font_size_override("font_size", 14)
 	activity_button.pressed.connect(func():
 		if activity.mode > 0:
 			activity.start()
 			cam.snap()
 		_toggle_pause())
-	v.add_child(activity_button)
-	_pause_weather = _pause_choices(v, "Wetter", weather.WEATHER_NAMES)
+	drive_page.add_child(activity_button)
+	drive_page.add_child(UITheme.section("Umgebung"))
+	_pause_weather = _pause_choices(drive_page, "Wetter", weather.WEATHER_NAMES)
 	_pause_weather.item_selected.connect(func(index: int): weather.weather_index = index; weather._apply_lighting())
-	_pause_time = _pause_choices(v, "Tageszeit", weather.TIME_NAMES)
+	_pause_time = _pause_choices(drive_page, "Tageszeit", weather.TIME_NAMES)
 	_pause_time.item_selected.connect(func(index: int):
 		weather.time_index = index
 		weather.hour = weather.TIME_HOURS[index]
@@ -586,24 +646,26 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 	_pause_clock = CheckBox.new()
 	_pause_clock.text = "Tag und Nacht automatisch wechseln"
 	_pause_clock.toggled.connect(func(enabled: bool): weather.automatic_time = enabled)
-	v.add_child(_pause_clock)
-	_control_hint = Label.new()
-	_control_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_control_hint.custom_minimum_size.x = 390
-	_control_hint.add_theme_font_size_override("font_size", 13)
-	_control_hint.text = DriverPrompts.control_summary()
-	v.add_child(_control_hint)
-	Game.get_node("DriverPrompts").device_changed.connect(func(): _control_hint.text = DriverPrompts.control_summary())
-	v.add_child(Game.make_driving_option("steering_assist", "Lenkhilfe · Tastatur / Gamepad"))
-	var steering_hint := Label.new()
-	steering_hint.text = "An: sanfte Eingaben und weniger Lenkeinschlag bei Tempo.\nAus: direkte Lenkung für erfahrene Fahrer."
-	steering_hint.add_theme_font_size_override("font_size", 12)
+	drive_page.add_child(_pause_clock)
+
+	var settings_page: VBoxContainer = page.call("Einstellungen")
+	settings_page.add_child(UITheme.section("Fahrhilfen"))
+	settings_page.add_child(Game.make_driving_option("steering_assist", "Lenkhilfe · Tastatur / Gamepad"))
+	var steering_hint := UITheme.label("An: sanfte Eingaben und weniger Lenkeinschlag bei Tempo.\nAus: direkte Lenkung für erfahrene Fahrer.", 13, UITheme.MUTED)
 	steering_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	steering_hint.custom_minimum_size.x = 390
-	v.add_child(steering_hint)
-	v.add_child(Game.make_graphics_options())
-	v.add_child(Game.make_driving_help_option())
-	v.add_child(Game.make_audio_options())
+	settings_page.add_child(steering_hint)
+	settings_page.add_child(Game.make_driving_help_option())
+	settings_page.add_child(UITheme.section("Grafik"))
+	settings_page.add_child(Game.make_graphics_options())
+	settings_page.add_child(UITheme.section("Audio"))
+	settings_page.add_child(Game.make_audio_options())
+
+	var controls_page: VBoxContainer = page.call("Steuerung")
+	_control_hint = UITheme.label(DriverPrompts.control_summary(), 15)
+	_control_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	controls_page.add_child(_control_hint)
+	controls_page.add_child(UITheme.label("F1 im Fahrbetrieb zeigt alle Tasten.", 13, UITheme.MUTED))
+	Game.get_node("DriverPrompts").device_changed.connect(func(): _control_hint.text = DriverPrompts.control_summary())
 
 func _pause_choices(parent: VBoxContainer, caption: String, choices: Array) -> OptionButton:
 	var row := HBoxContainer.new()
@@ -640,4 +702,4 @@ func _toggle_pause() -> void:
 		_pause_time.select(weather.time_index)
 		_pause_clock.set_pressed_no_signal(weather.automatic_time)
 		player.set_input(0, 0, 0, 0)
-		(pause_menu.get_child(0).get_child(0).get_child(1) as Button).grab_focus()
+		_pause_first_button.grab_focus()

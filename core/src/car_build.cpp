@@ -174,6 +174,16 @@ CarBuild buildCar(const CarDefinition& def) {
         car.addBeam(ua, uc, p);
     };
 
+    auto addRingBrace = [&](std::int64_t a, std::int64_t c) {
+        if (a < 0 || c < 0 || a == c) return;
+        const auto ua = static_cast<std::uint32_t>(a), uc = static_cast<std::uint32_t>(c);
+        BeamParams p = regionBeam(car.positions()[ua], car.positions()[uc]);
+        p.spring *= 0.8;
+        p.deform *= 0.35;
+        p.strength *= 0.4;
+        p.breakGroup.clear();
+        car.addBeam(ua, uc, p);
+    };
     for (std::size_t i = 0; i < NS; ++i) {
         const auto& R = rig.shell[i];
         // Ring perimeter (each side) + cross members.
@@ -205,6 +215,18 @@ CarBuild buildCar(const CarDefinition& def) {
                 addShellBeam(R[2][1], R[4][0]);
             }
         }
+        // Cross-car bracing of every ring. Mid, belt and roof-rail nodes on a side wall lie almost
+        // in one vertical line; without a cross-car triangle the belt rail had no lateral stiffness
+        // and the body sides swung by up to 9 cm while driving ("jelly"). These stand in for the
+        // roof bows, seat cross-members and door-ring stiffness of a monocoque. They yield before
+        // the outer shell, so crash deformation stays close to the shell's own behaviour.
+        if (!bulkhead) {
+            addRingBrace(R[2][0], R[3][1]);
+            addRingBrace(R[2][1], R[3][0]);
+        }
+        addRingBrace(R[3][0], R[4][1]);
+        addRingBrace(R[3][1], R[4][0]);
+        addRingBrace(R[3][0], R[3][1]);
     }
     for (std::size_t i = 0; i + 1 < NS; ++i) {
         const auto& A = rig.shell[i];
@@ -550,7 +572,10 @@ CarBuild buildCar(const CarDefinition& def) {
         const real py = bd.groundClearance + 0.035;
         rig.oilPan.push_back(car.addNode("oilpan0", {ex0 + 0.12, py, 0.0}, pan));
         rig.oilPan.push_back(car.addNode("oilpan1", {ex1 - 0.12, py, 0.0}, pan));
-        BeamParams panB = makeBeam(4.0e5, 90.0, 4.0e3, 2.6e4);
+        // Cast sump: scraping over a rough trail dents it, only a real impact cracks it. At 4 kN
+        // plastic onset a sedan's sump was "damaged" by ordinary gravel-trail bumps and the
+        // engine seized within a minute.
+        BeamParams panB = makeBeam(4.0e5, 90.0, 1.2e4, 4.5e4);
         for (std::uint32_t p : rig.oilPan)
             for (int ix = 0; ix < 2; ++ix)
                 for (int iz = 0; iz < 2; ++iz)
@@ -913,7 +938,8 @@ CarBuild buildCar(const CarDefinition& def) {
             const real axleLoad = sprung * g * (cn.front ? frontFrac : 1.0 - frontFrac);
             const real wheelLoad = 0.5 * axleLoad;
             // Find the spring beam (first Normal beam between armMid and tower).
-            for (Beam& bm : car.beams()) {
+            for (std::size_t bi = 0; bi < car.beams().size(); ++bi) {
+                Beam& bm = car.beams()[bi];
                 const bool match = (bm.a == cn.armMid && bm.b == cn.tower);
                 if (!match || bm.type != BeamType::Normal || bm.damp != 0.0) continue;
                 const Vec3 pm = car.positions()[cn.armMid], pt = car.positions()[cn.tower];
@@ -922,7 +948,7 @@ CarBuild buildCar(const CarDefinition& def) {
                 const real force = wheelLoad / mr;
                 bm.baseRestLength = len + force / bm.spring;
                 bm.restLength = bm.baseRestLength;
-                bm.params.precompression = bm.baseRestLength / len;
+                car.beamParams()[bi].precompression = bm.baseRestLength / len;
                 break;
             }
         }
@@ -944,7 +970,10 @@ CarBuild buildCar(const CarDefinition& def) {
         const real rayScale = 12.0 / static_cast<real>(tire.rays);
         ws.spokeSpring = 1.05e5 * rayScale;
         ws.treadSpring = 1.3e5;
-        ws.spokeDamp = 40.0 * rayScale;
+        // Sidewall and belt damping are the main source of rolling loss. Halved from 40 / 45 N*s/m:
+        // rolling resistance at 100 km/h ~280 -> ~200 N (Kestrel), closer to real tyres (~130 N).
+        ws.spokeDamp = 20.0 * rayScale;
+        ws.treadDamp = 22.5;
         // Compliant tread contact: the rubber stores the leading-edge impact of each tread node
         // instead of a rigid projection destroying it: ~35 % less rolling loss at 100 km/h. Softer
         // contact saves more but lets the tread chatter at the grip limit (rear toe flutter).

@@ -168,6 +168,8 @@ struct MeshSurface {
     std::vector<VertexSkin> skin;  ///< Empty for wheel meshes.
     bool doubleSided = false;
     bool steeringWheel = false;
+    /// Lamp surfaces are split per side so a lamp can break on its own: -1 = left (-z), +1 = right.
+    std::int8_t side = 0;
 };
 
 struct CarVisual {

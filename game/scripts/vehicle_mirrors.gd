@@ -76,11 +76,11 @@ static func aperture_in_view(view: Camera3D, center: Vector3, normal: Vector3, u
 func update_views(delta: float, view: Camera3D, vehicle: SBVehicle, enabled: bool) -> void:
 	if _vehicle != vehicle or (is_instance_valid(vehicle) and _mirrors.is_empty()):
 		_configure(view, vehicle)
-	_set_active(enabled and is_instance_valid(vehicle))
+	var game := get_node_or_null("/root/Game")
+	var preset := int(game.get("graphics").get("mirrors", 1)) - 1 if game else 1
+	_set_active(enabled and is_instance_valid(vehicle) and preset >= 0)
 	if not _active: return
 	_elapsed += delta
-	var game := get_node_or_null("/root/Game")
-	var preset := int(game.get("_graphics_preset")) if game else 1
 	var interval := 1.0 / (12.0 if preset == 0 else 20.0)
 	var capture_due := _elapsed >= interval
 	if capture_due: _elapsed = 0.0
@@ -108,7 +108,7 @@ func update_views(delta: float, view: Camera3D, vehicle: SBVehicle, enabled: boo
 			mirror.material.set_shader_parameter("reflection_valid", visible)
 			if not visible: break
 			var viewport: SubViewport = mirror.viewport
-			var resolution := Vector2i(256, 128) if preset == 0 else Vector2i(384, 192)
+			var resolution := Vector2i(256, 128) if preset <= 0 else Vector2i(384, 192)
 			var resized := viewport.size != resolution
 			if resized: viewport.size = resolution
 			var camera: Camera3D = mirror.camera

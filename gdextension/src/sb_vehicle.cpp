@@ -14,6 +14,8 @@
 namespace godot {
 
 namespace {
+// Plastic strain of a beam around a lamp at which the lamp counts as smashed (3 % crush).
+constexpr double kLampBreakStrain = 0.03;
 
 inline Vector3 toG(const sb::Vec3& v) { return Vector3(static_cast<real_t>(v.x), static_cast<real_t>(v.y), static_cast<real_t>(v.z)); }
 inline sb::Vec3 toS(const Vector3& v) { return {v.x, v.y, v.z}; }
@@ -59,6 +61,7 @@ void SBVehicle::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_door_open", "index", "open"), &SBVehicle::set_door_open);
     ClassDB::bind_method(D_METHOD("toggle_door", "index"), &SBVehicle::toggle_door);
     ClassDB::bind_method(D_METHOD("get_door_states"), &SBVehicle::get_door_states);
+    ClassDB::bind_method(D_METHOD("get_lamp_states"), &SBVehicle::get_lamp_states);
     ClassDB::bind_method(D_METHOD("repair_in_place"), &SBVehicle::repair_in_place);
     ClassDB::bind_method(D_METHOD("set_debug_view", "on"), &SBVehicle::set_debug_view);
     ClassDB::bind_method(D_METHOD("get_debug_view"), &SBVehicle::get_debug_view);
@@ -205,7 +208,7 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
         g.buffer.resize(static_cast<int64_t>(g.normalOffset) + static_cast<int64_t>(nv) * g.normalStride);
         g.instance = memnew(MeshInstance3D);
         g.instance->set_mesh(g.mesh);
-        g.instance->set_name(String(s.material.c_str()));
+        g.instance->set_name(String(s.material.c_str()) + (s.side < 0 ? "_left" : s.side > 0 ? "_right" : ""));
         if (s.material == "glass" || s.material.ends_with("_glass"))
             g.instance->set_cast_shadows_setting(GeometryInstance3D::SHADOW_CASTING_SETTING_OFF);
         add_child(g.instance);
@@ -1225,6 +1228,60 @@ Array SBVehicle::get_door_states() const {
         state["damaged"] = damaged;
         state["angle_degrees"] = angle;
         state["open"] = !door.latched || angle > 3.0 || !attached;
+        result.push_back(state);
+    }
+    return result;
+}
+
+Array SBVehicle::get_lamp_states() const {
+    Array result;
+    if (!world_ || bodyIndex_ < 0 || restPositions_.empty()) return result;
+    std::lock_guard<std::mutex> lock(world_->mutex());
+    const auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+    const auto& beams = body.beams();
+    if (lampBeams_.empty()) {
+        // The outer 0.4 m at each end of the body shell, left and right of the centre: the panels and
+        // structure the lamp is mounted on. Bumpers are separate parts; a bumper torn off by the
+        // impact at the other end must not count as a smashed lamp.
+        const std::vector<std::uint32_t>& nodes = layout_.bodyNodes;
+        double xMin = 1e9, xMax = -1e9;
+        for (auto n : nodes) {
+            xMin = std::min(xMin, restPositions_[n].x);
+            xMax = std::max(xMax, restPositions_[n].x);
+        }
+        std::vector<int> corner(restPositions_.size(), -1);
+        for (auto n : nodes) {
+            const sb::Vec3& r = restPositions_[n];
+            const int end = r.x > xMax - 0.40 ? 0 : r.x < xMin + 0.40 ? 1 : -1;
+            if (end < 0 || std::abs(r.z) < 0.15) continue;
+            corner[n] = end * 2 + (r.z > 0.0 ? 1 : 0);
+        }
+        lampBeams_.assign(4, {});
+        for (std::size_t i = 0; i < beams.size(); ++i) {
+            const int ca = corner[beams[i].a], cb = corner[beams[i].b];
+            if (ca >= 0 && ca == cb) lampBeams_[static_cast<std::size_t>(ca)].push_back(static_cast<std::uint32_t>(i));
+        }
+    }
+    static const char* names[4] = {"head_left", "head_right", "tail_left", "tail_right"};
+    for (int c = 0; c < 4; ++c) {
+        double damage = 0.0, strain = 0.0;
+        int torn = 0;
+        for (auto bi : lampBeams_[static_cast<std::size_t>(c)]) {
+            if (bi >= beams.size()) continue;
+            const auto& beam = beams[bi];
+            if (beam.broken) ++torn;
+            else strain = std::max(strain, beam.plasticStrain());
+            damage = std::max(damage, beam.broken ? 1.0 : std::min(1.0, beam.plasticStrain() / kLampBreakStrain));
+        }
+        Dictionary state;
+        state["name"] = names[c];
+        state["front"] = c < 2;
+        state["side"] = c % 2 == 0 ? -1 : 1;
+        state["damage"] = damage;
+        state["strain"] = strain;
+        state["torn_beams"] = torn;
+        state["beams"] = static_cast<int>(lampBeams_[static_cast<std::size_t>(c)].size());
+        state["broken"] = damage >= 1.0;
         result.push_back(state);
     }
     return result;

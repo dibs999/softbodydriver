@@ -156,12 +156,13 @@ void SoftBody::repair(const std::vector<Vec3>& restPositions) {
     clearContacts();
     if (restPositions.size() == pos_.size()) pos_ = restPositions;
     for (auto& v : vel_) v = {};
-    for (Beam& b : beams_) {
+    for (std::size_t i = 0; i < beams_.size(); ++i) {
+        Beam& b = beams_[i];
         b.broken = false;
         b.disabled = false;
         b.hydroOffset = 0;
         b.restLength = b.baseRestLength;
-        b.deformThreshold = b.params.deform;
+        b.deformThreshold = beamParams_[i].deform;
         b.lastForce = 0;
     }
     for (ColTri& t : triangles_) t.broken = false;
@@ -222,7 +223,7 @@ std::uint32_t SoftBody::addBeam(std::uint32_t a, std::uint32_t b, const BeamPara
     bm.maxRest = std::isinf(p.deformLimitExpansion) ? kInf : bm.baseRestLength * (1.0 + p.deformLimitExpansion);
     bm.hydroInput = p.type == BeamType::Hydro ? p.hydroInput : -1;
     bm.hydroRatio = p.hydroRatio;
-    bm.params = p;
+    beamParams_.push_back(p);
 
     const auto idx = static_cast<std::uint32_t>(beams_.size());
     if (!p.breakGroup.empty()) {

@@ -14,6 +14,7 @@ uniform float window_width = 0.52;  // share of a bay
 uniform float window_height = 0.56; // share of a storey
 uniform float recess = 0.2;
 global uniform float city_night;
+global uniform float facade_detail;   // 0 = flat tinted glass, 1 = rooms behind the glass
 uniform int debug = 0;
 
 varying vec3 world_pos;
@@ -115,18 +116,23 @@ void fragment() {
 		vec3 o = vec3(clamp(glass, room_min.xy + 0.01, room_max.xy - 0.01), 0.0);
 		vec3 dir = -vt;
 		dir = vec3(dir.x == 0.0 ? 1e-4 : dir.x, dir.y == 0.0 ? 1e-4 : dir.y, dir.z);
-		vec3 tx = (mix(room_min, room_max, step(0.0, dir)) - o) / dir;
-		float hit = min(min(tx.x, tx.y), tx.z);
-		vec3 p = o + dir * hit;
 		vec3 interior;
 		float lit = step(0.62, room_rand);
 		vec3 wall_in = mix(vec3(0.75, 0.72, 0.65), vec3(0.62, 0.66, 0.7), fract(room_rand * 5.3));
-		if (hit == tx.z) {
-			interior = wall_in * 0.9 * mix(0.45, 1.0, step(0.9, p.y));   // furniture along the back wall
-		} else if (hit == tx.y) {
-			interior = dir.y < 0.0 ? vec3(0.32, 0.26, 0.2) * mix(0.7, 1.1, room_rand) : vec3(0.85, 0.85, 0.82);
+		vec3 p = vec3(0.0, 0.0, -2.0);
+		if (facade_detail > 0.5) {
+			vec3 tx = (mix(room_min, room_max, step(0.0, dir)) - o) / dir;
+			float hit = min(min(tx.x, tx.y), tx.z);
+			p = o + dir * hit;
+			if (hit == tx.z) {
+				interior = wall_in * 0.9 * mix(0.45, 1.0, step(0.9, p.y));   // furniture along the back wall
+			} else if (hit == tx.y) {
+				interior = dir.y < 0.0 ? vec3(0.32, 0.26, 0.2) * mix(0.7, 1.1, room_rand) : vec3(0.85, 0.85, 0.82);
+			} else {
+				interior = wall_in * 0.75;
+			}
 		} else {
-			interior = wall_in * 0.75;
+			interior = wall_in * 0.6;   // flat room colour, no ray
 		}
 		interior *= 1.0 - clamp(-p.z / 8.0, 0.0, 0.4);   // deeper is darker
 		// Blinds lowered to different heights.
