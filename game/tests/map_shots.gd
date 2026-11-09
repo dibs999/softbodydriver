@@ -1,5 +1,5 @@
 extends SceneTree
-## Map renders without driving: godot -s res://tests/map_shots.gd -- <map_id> <out_prefix> [car]
+## Map renders without driving: godot -s res://tests/map_shots.gd -- <map_id> <out_prefix> [car] [night]
 ## Places the camera at five points along the map's route (eye height, looking ahead) plus one overview.
 
 var frame := 0
@@ -26,6 +26,10 @@ func _setup() -> void:
 	scene.world.time_scale = 0.0
 	scene.world.step_blocking(1.0)
 	scene.world.sync_visuals()
+	if args.size() > 3 and args[3] == "night":
+		scene.weather.automatic_time = false
+		scene.weather.hour = 22.0
+		scene.weather._apply_lighting()
 	if scene.get("hud"):
 		scene.hud.visible = false
 	var data: Dictionary = scene.map_data

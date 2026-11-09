@@ -244,6 +244,8 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	lamp_pole.rings = 0
 	var lamps: Array[Transform3D] = []
 	var lamp_heads: Array[Transform3D] = []
+	var lamp_lights := PackedVector3Array()
+	var lenses: Array[Transform3D] = []
 	for i in BLOCKS:
 		for j in BLOCKS:
 			var x0 := origin + STREET + i * PITCH
@@ -254,12 +256,26 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 				lamps.append(Transform3D(Basis(), Vector3(x0 + 0.8, 3.5, z0 + t)))
 				lamp_heads.append(Transform3D(Basis.from_scale(Vector3(0.23, 0.14, 1.45)), Vector3(x0 + t, 7, z0 + 0.23)))
 				lamp_heads.append(Transform3D(Basis.from_scale(Vector3(1.45, 0.14, 0.23)), Vector3(x0 + 0.23, 7, z0 + t)))
+				lamp_lights.append(Vector3(x0 + t, 6.85, z0 - 0.35))
+				lamp_lights.append(Vector3(x0 - 0.35, 6.85, z0 + t))
+				lenses.append(Transform3D(Basis.from_scale(Vector3(0.16, 0.02, 0.5)), Vector3(x0 + t, 6.92, z0 - 0.3)))
+				lenses.append(Transform3D(Basis.from_scale(Vector3(0.5, 0.02, 0.16)), Vector3(x0 - 0.3, 6.92, z0 + t)))
 	C.scatter_multimesh(parent, lamp_pole, metal, lamps, false)
 	V.plant(parent, "broadleaf", street_trees, 4242, 0.55, 0.72)
 	var grate := PlaneMesh.new()
 	grate.size = Vector2.ONE
 	C.scatter_multimesh(parent, grate, C.noise_mat(Color(0.16, 0.13, 0.1), 0.4, 0.8), grates, false)
 	C.scatter_multimesh(parent, box_mesh, metal, lamp_heads, false)
+	var lens_material := StandardMaterial3D.new()
+	lens_material.albedo_color = Color(0.9, 0.88, 0.8)
+	lens_material.emission_enabled = true
+	lens_material.emission = Color(1.0, 0.85, 0.62)
+	lens_material.emission_energy_multiplier = 0.0
+	C.scatter_multimesh(parent, box_mesh, lens_material, lenses, false)
+	var street_lighting := preload("res://scripts/maps/street_lighting.gd").new()
+	street_lighting.name = "StreetLighting"
+	parent.add_child(street_lighting)
+	street_lighting.setup(lamp_lights, lens_material)
 
 	# AI loop: rectangle around the inner blocks, right-hand lane.
 	var lo := origin + STREET * 0.5 + 1 * PITCH
