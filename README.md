@@ -320,6 +320,7 @@ godot --headless --path game -s res://tests/mirror_test.gd       # Optische Flä
 godot --headless --path game -s res://tests/bonnet_test.gd       # Entriegelung und Reparatur der Haube
 godot --headless --path game -s res://tests/steering_assist_test.gd # Fahrsteuerung einschließlich Bremsung
 godot --headless --path game -s res://tests/imported_vehicle_test.gd # Modellimport, Räder, Normalen/Tangenten
+godot --headless --path game -s res://tests/rubble_vehicles_test.gd # Fünf importierte Detailmodelle: Räder, Lack, Fahrbarkeit
 godot --headless --path game -s res://tests/settings_test.gd     # Gespeicherte Fahreinstellungen
 godot --headless --path game -s res://tests/first_drive_flow_test.gd # Einführung bis Service und Profil-Neuladen
 godot --headless --path game -s res://tests/native_service_test.gd # Beschädigtes Fahrzeug bergen/reparieren

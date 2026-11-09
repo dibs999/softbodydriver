@@ -225,6 +225,7 @@ func scan_cars() -> void:
 			"layout": data.get("engine", {}).get("layout", ""),
 			"mass": data.get("chassis", {}).get("curbMass", 0.0),
 			"paint": data.get("body", {}).get("paint", [0.5, 0.5, 0.5]),
+			"paint_metallic": data.get("body", {}).get("paintMetallic", 0.5),
 			"style": data.get("body", {}).get("style", ""),
 			"length": data.get("body", {}).get("length", 4.3),
 			"visual_model": data.get("visualModel", {}),
@@ -292,7 +293,10 @@ func apply_visual_model(v: SBVehicle, info: Dictionary) -> void:
 	var u := _axis(cfg.get("up", "+y"))
 	var r := f.cross(u)
 	var rot := Basis(f, u, r).transposed()
-	var wheel_names: Array = cfg.get("wheels", {}).values()
+	var wheel_names: Array = []
+	for entry in cfg.get("wheels", {}).values():
+		if entry is Array: wheel_names.append_array(entry)
+		else: wheel_names.append(entry)
 	var hide: Array = cfg.get("hide", [])
 	var bounds := [Vector3.INF, -Vector3.INF]
 	var wheel_bounds := [Vector3.INF, -Vector3.INF]
@@ -309,7 +313,15 @@ func apply_visual_model(v: SBVehicle, info: Dictionary) -> void:
 	var lib := material_library()
 	for k in cfg.get("materialOverrides", {}).keys():
 		var target: String = cfg["materialOverrides"][k]
-		if lib.has(target):
+		if target == "paint" and lib.get("paint") is StandardMaterial3D:
+			# Each car keeps its own colour from body.paint (the library paint is only the template).
+			var own: StandardMaterial3D = (lib["paint"] as StandardMaterial3D).duplicate()
+			var rgb: Array = info.get("paint", [])
+			if rgb.size() >= 3:
+				own.albedo_color = Color(float(rgb[0]), float(rgb[1]), float(rgb[2]))
+			own.metallic = float(info.get("paint_metallic", own.metallic))
+			overrides[k] = own
+		elif lib.has(target):
 			overrides[k] = lib[target]
 	var options := {"wheels": cfg.get("wheels", {}), "hide": hide, "keep_procedural": cfg.get("keepProcedural", []),
 		"material_overrides": overrides, "ao_on_uv2": bool(cfg.get("aoOnUV2", false))}

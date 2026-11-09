@@ -406,11 +406,21 @@ void collectParts(Node* n, const Transform3D& parent, const Dictionary& wheels, 
     const String name = n->get_name();
     if (!isRoot && nameMatches(name, hide)) return;
     const Array keys = wheels.keys();
-    for (int k = 0; k < keys.size(); ++k)
-        if (name == String(wheels[keys[k]])) {
+    for (int k = 0; k < keys.size(); ++k) {
+        // A wheel is one node name, or a list of names (rim, tyre and disc as separate nodes).
+        const Variant entry = wheels[keys[k]];
+        bool match = false;
+        if (entry.get_type() == Variant::ARRAY) {
+            const Array names = entry;
+            for (int a = 0; a < names.size() && !match; ++a) match = name == String(names[a]);
+        } else {
+            match = name == String(entry);
+        }
+        if (match) {
             const String key = keys[k];
             wheel = key == "FL" ? 0 : (key == "FR" ? 1 : (key == "RL" ? 2 : 3));
         }
+    }
     if (MeshInstance3D* mi = Object::cast_to<MeshInstance3D>(n)) {
         if (mi->get_mesh().is_valid()) out.push_back({mi, xf, wheel});
     }

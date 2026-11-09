@@ -1,0 +1,190 @@
+{
+  "id": "fastback_69",
+  "name": "Fastback 69 7.0 V8",
+  "brand": "Detroit Classics",
+  "description": "Klassisches Fastback-Coupé von 1969: 7,0-l-V8 mit 250 kW und 590 Nm, Heckantrieb, schmale Reifen, weiches Fahrwerk, schwache Bremsen. Viel Drehmoment, wenig Grip.",
+  "credits": "Body, interior and wheels: \"mach1_1969\" from Rubble (https://github.com/Glavin001/rubble, engine/scenes/vehicles/mach1_1969) by the Rubble authors, CC-BY 4.0. Used unmodified as the visual flexbody.",
+  "visualModel": {
+    "path": "res://models/rubble/mach1_1969.glb",
+    "forward": "+z",
+    "up": "+y",
+    "scale": 1.0,
+    "driverEye": [
+      0.37,
+      1.05,
+      -0.57
+    ],
+    "dashboard": [
+      0.0,
+      0.895,
+      0.397
+    ],
+    "steeringWheel": {
+      "pivot": [
+        0.37,
+        0.8,
+        0.135
+      ],
+      "axis": [
+        0.0,
+        0.407,
+        -0.914
+      ],
+      "parts": [
+        "steering_wheel"
+      ]
+    },
+    "wheels": {
+      "FL": [
+        "rim_FL",
+        "tyre_FL",
+        "brake_disc_FL"
+      ],
+      "FR": [
+        "rim_FR",
+        "tyre_FR",
+        "brake_disc_FR"
+      ],
+      "RL": [
+        "rim_RL",
+        "tyre_RL",
+        "brake_disc_RL"
+      ],
+      "RR": [
+        "rim_RR",
+        "tyre_RR",
+        "brake_disc_RR"
+      ]
+    },
+    "hide": [
+      "seat_H_point",
+      "wheel_center_"
+    ],
+    "keepProcedural": [
+      "spring"
+    ],
+    "materialOverrides": {
+      "glass": "glass",
+      "paint": "paint"
+    }
+  },
+  "body": {
+    "style": "coupe",
+    "doors": 2,
+    "length": 4.722,
+    "width": 1.87,
+    "height": 1.3,
+    "wheelbase": 2.743,
+    "frontOverhang": 0.898,
+    "trackFront": 1.486,
+    "trackRear": 1.486,
+    "groundClearance": 0.15,
+    "noseHeight": 0.76,
+    "hoodHeight": 0.914,
+    "beltHeight": 0.911,
+    "tailHeight": 1.03,
+    "hoodLength": 1.8,
+    "windshieldRun": 0.39,
+    "roofLength": 0.96,
+    "rearWindowRun": 0.89,
+    "roofWidthRatio": 0.68,
+    "cornerRadiusFront": 0.18,
+    "cornerRadiusRear": 0.2,
+    "archClearance": 0.05,
+    "paint": [
+      0.03,
+      0.14,
+      0.62
+    ],
+    "paintMetallic": 0.35,
+    "dragCoefficient": 0.42
+  },
+  "chassis": {
+    "curbMass": 1590,
+    "frontWeight": 0.56,
+    "bodyStiffness": 0.85,
+    "bodyStrength": 0.95
+  },
+  "suspension": {
+    "front": {
+      "wheelRate": 24000,
+      "bumpDamping": 1700,
+      "reboundDamping": 3400,
+      "antiRollRate": 9000,
+      "bumpTravel": 0.09,
+      "droopTravel": 0.11
+    },
+    "rear": {
+      "wheelRate": 22000,
+      "bumpDamping": 1800,
+      "reboundDamping": 3600,
+      "antiRollRate": 0,
+      "bumpTravel": 0.09,
+      "droopTravel": 0.11
+    }
+  },
+  "tires": {
+    "radius": 0.331,
+    "width": 0.215,
+    "rimRadius": 0.207,
+    "pressurePsi": 30,
+    "friction": 1.02,
+    "tireMass": 11.0,
+    "rimMass": 9.5,
+    "rays": 16
+  },
+  "engine": {
+    "name": "7.0 V8",
+    "layout": "RWD",
+    "cylinders": 8,
+    "torqueCurve": [
+      [
+        600,
+        380
+      ],
+      [
+        1500,
+        520
+      ],
+      [
+        3400,
+        590
+      ],
+      [
+        4800,
+        520
+      ],
+      [
+        5800,
+        400
+      ],
+      [
+        6200,
+        0
+      ]
+    ],
+    "idleRpm": 650,
+    "redlineRpm": 6000,
+    "inertia": 0.32,
+    "friction": 32,
+    "engineBraking": 0.05,
+    "mass": 290,
+    "gears": [
+      2.52,
+      1.52,
+      1.0
+    ],
+    "reverse": -2.2,
+    "finalDrive": 3.5,
+    "automatic": true,
+    "shiftUpRpm": 5600,
+    "shiftDownRpm": 1500,
+    "maxBrakeTorque": 2900,
+    "frontBrakeBias": 0.62,
+    "handbrakeTorque": 1500,
+    "lsd": 40,
+    "fuelCapacity": 76,
+    "bsfc": 290,
+    "radiatorUA": 3800
+  }
+}

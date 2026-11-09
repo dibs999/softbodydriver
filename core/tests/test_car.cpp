@@ -154,13 +154,15 @@ TEST_CASE("torsion bar resists relative rotation and is linear for small angles"
 }
 
 TEST_CASE("all shipped car definitions build, are stable and settle on their suspension") {
-    for (const char* id : {"kestrel_hatch", "aurora_sedan", "vortex_gt", "basalt_suv"}) {
+    for (const char* id : {"kestrel_hatch", "aurora_sedan", "vortex_gt", "basalt_suv", "meridian_sedan", "meridian_wagon",
+                           "meridian_interceptor", "trailhead_4x4", "fastback_69"}) {
         CAPTURE(id);
         const CarDefinition def = loadCarDefinition(carPath(id));
         CarBuild cb = buildCar(def);
         CHECK(cb.body.nodeCount() > 250);
         CHECK(cb.body.wheels().size() == 4);
-        CHECK(cb.body.torsionbars().size() == 2);
+        const std::size_t bars = (def.front.antiRollRate > 0.0 ? 1u : 0u) + (def.rear.antiRollRate > 0.0 ? 1u : 0u);
+        CHECK(cb.body.torsionbars().size() == bars);
         CHECK(cb.body.stabilityRatio(1.0 / 2000.0) < 1.0);
         CHECK(cb.visual.skinned.size() > 8);
         CHECK(std::abs(cb.body.totalMass() - def.chassis.curbMass) < 0.06 * def.chassis.curbMass);

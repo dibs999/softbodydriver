@@ -91,10 +91,11 @@ Koordinaten im Generator: `x` zeigt nach vorne (hintere Stoßstange bei 0), `y` 
   "steeringWheel": { "pivot": [0.0, 0.654, 0.934], "axis": [0.0, 0.38, -0.925],
     "parts": ["InteriorSteeringWheel", "InteriorSteeringEmblem"] }, // Namenspräfixe beweglicher Teile
   "wheels": { "FL": "WheelFrontL", "FR": "WheelFrontR", "RL": "WheelRearL", "RR": "WheelRearR" },
+  // oder je Rad eine Liste einzelner Knoten: "FL": ["rim_FL", "tyre_FL", "brake_disc_FL"]
   "hide": ["BrakePad", "Axles"],                  // Teile (Namens-Teilstrings), die entfallen
   "keepProcedural": ["chassis", "spring", "caliper"],  // eigene Teile, die sichtbar bleiben
   "aoOnUV2": true,  // nur für Modelle mit AO-Atlas auf der zweiten UV-Koordinate (glTF texCoord=1)
-  "materialOverrides": { "Glass": "glass", "Paint 1": "paint" }  // Modell-Material -> Spiel-Material
+  "materialOverrides": { "Glass": "glass", "Paint 1": "paint" }  // Modell-Material -> Spiel-Material ("paint" übernimmt body.paint)
 }
 ```
 
