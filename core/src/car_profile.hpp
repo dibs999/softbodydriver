@@ -187,7 +187,7 @@ struct Profile {
 
 /// Node indices of the generated rig (shared with the visual generator).
 struct CarCorner {
-    std::uint32_t hubIn = 0, hubOut = 0, lbj = 0, ubj = 0, steerArm = 0;
+    std::uint32_t hubIn = 0, hubOut = 0, lbj = 0, ubj = 0, steerArm = 0, caliper = 0;
     std::uint32_t lowerF = 0, lowerR = 0, upperF = 0, upperR = 0, rackEnd = 0;
     std::uint32_t armMid = 0, tower = 0;  ///< armMid = lower coilover mount (on the knuckle at the LBJ)
     real motionRatio = 1.0;

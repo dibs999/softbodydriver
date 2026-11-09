@@ -44,6 +44,9 @@ struct NodeParams {
     real friction = 1.0;    ///< Coulomb friction coefficient (multiplied with the surface's).
     bool fixed = false;     ///< Pinned in space (infinite mass).
     bool collision = true;  ///< Collides with static world geometry.
+    /// Ground contact compliance in N/m (0 = rigid projection contact). Tyre tread nodes use a
+    /// stiff spring-damper contact so the tread rubber stores and returns the leading-edge impact.
+    real contactStiffness = 0.0;
     std::string group;      ///< Part / flexbody group (e.g. "body", "bumper_f", "engine"). Empty = "default".
 };
 
@@ -308,6 +311,7 @@ public:
     void clearContacts() { std::fill(contactImpulse_.begin(), contactImpulse_.end(), Vec3{}); }
     void addContact(std::size_t i, const Vec3& impulse) { contactImpulse_[i] += impulse; }
     const std::vector<std::uint8_t>& collisionFlags() const { return collision_; }
+    const std::vector<real>& contactStiffnesses() const { return contactStiffness_; }
     const std::vector<std::string>& nodeIds() const { return nodeIds_; }
     const NodeParams& nodeParams(std::uint32_t i) const { return nodeParams_[i]; }
     std::vector<Beam>& beams() { return beams_; }
@@ -340,7 +344,7 @@ private:
     std::string name_;
     // Node data, structure-of-arrays for cache / SIMD friendliness.
     std::vector<Vec3> pos_, vel_, force_;
-    std::vector<real> mass_, invMass_, friction_;
+    std::vector<real> mass_, invMass_, friction_, contactStiffness_;
     std::vector<Vec3> contactImpulse_; // Static-surface normal impulse from the previous solver step.
     std::vector<std::uint8_t> collision_;
     std::vector<std::string> nodeIds_;

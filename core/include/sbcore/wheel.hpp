@@ -44,6 +44,8 @@ struct PressureWheelSpec {
     real wearRate = 1.0;         ///< Multiplier on tread wear (1 = realistic, >1 = faster for gameplay).
     real burstTempC = 175.0;     ///< Carcass temperature at which the tyre bursts.
     real ambientTempC = 22.0;
+    /// Tread rubber contact stiffness per tread node in N/m (0 = rigid contact).
+    real contactStiffness = 0.0;
 };
 
 struct PressureWheel {

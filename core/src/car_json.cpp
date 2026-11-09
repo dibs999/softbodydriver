@@ -52,6 +52,7 @@ void parseBody(CarBodyDef& b, const json& j) {
         SB_REAL("cornerRadiusFront", b.cornerRadiusFront) SB_REAL("cornerRadiusRear", b.cornerRadiusRear)
         SB_REAL("archClearance", b.archClearance) SB_INT("doors", b.doors)
         SB_REAL("paintMetallic", b.paintMetallic)
+        SB_REAL("dragCoefficient", b.dragCoefficient) SB_REAL("frontalArea", b.frontalArea)
         SB_BOOL("detachableBumpers", b.detachableBumpers)
         SB_BOOL("detachableDoors", b.detachableDoors)
         return false;
@@ -62,7 +63,7 @@ void parseAxle(AxleSuspensionDef& a, const json& j, const std::string& ctx) {
     forEach(j, ctx, [&](const std::string& k, const json& v) {
         SB_REAL("wheelRate", a.wheelRate) SB_REAL("bumpDamping", a.bumpDamping)
         SB_REAL("reboundDamping", a.reboundDamping) SB_REAL("antiRollRate", a.antiRollRate)
-        SB_REAL("bumpTravel", a.bumpTravel) SB_REAL("droopTravel", a.droopTravel) SB_REAL("camber", a.camber)
+        SB_REAL("bumpTravel", a.bumpTravel) SB_REAL("droopTravel", a.droopTravel) SB_REAL("camber", a.camber) SB_REAL("toe", a.toe)
         return false;
     });
 }

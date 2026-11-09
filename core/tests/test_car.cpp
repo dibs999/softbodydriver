@@ -322,7 +322,10 @@ TEST_CASE("Concept GT holds rear toe through highway lane changes in both direct
             VehicleControls controls;
             controls.gear = 0;
             controls.ignition = false;
-            controls.steer = direction * (initialKmh == 100.0 ? 0.07 : 0.017);
+            // 0.008 at 200 km/h is a real lane change (~0.5 g). The former 0.017 kinematically
+            // demands ~1.2 g and only stayed below the grip limit while excessive rolling and air
+            // drag bled the coasting car from 200 to 145 km/h within the 4 s window.
+            controls.steer = direction * (initialKmh == 100.0 ? 0.07 : 0.008);
             car.setControls(controls);
             real peakToe = 0.0;
             for (int sample = 0; sample < 400; ++sample) {
@@ -614,4 +617,80 @@ TEST_CASE("road surface grip changes tyre friction independently of camera dista
     CHECK(car.wheels()[0].grip < asphaltGrip * 0.7);
     CHECK(car.wheels()[1].grip > asphaltGrip * 0.95);
     CHECK(car.frictions()[car.wheels()[0].treadNodes[0]] < car.frictions()[car.wheels()[1].treadNodes[0]] * 0.7);
+}
+
+TEST_CASE("collision skin aerodynamics reproduce the specified drag area") {
+    for (const char* id : {"kestrel_hatch", "basalt_suv", "concept_gt"}) {
+        CAPTURE(id);
+        CarBuild cb = buildCar(loadCarDefinition(carPath(id)));
+        const real dragArea = cb.layout.dragArea;
+        REQUIRE(dragArea > 0.4);
+        REQUIRE(dragArea < 1.2);
+        WorldSettings settings;
+        settings.gravity = {0, 0, 0};
+        World w(settings);
+        w.addBody(std::move(cb.body));
+        auto& car = w.body(0);
+        const real v = 30.0;
+        car.setVelocity({v, 0, 0});
+        w.simulate(0.02);
+        const real force = car.totalMass() * (v - car.centerOfMassVelocity().x) / 0.02;
+        const real expected = 0.5 * settings.airDensity * dragArea * v * v;
+        CHECK(force == doctest::Approx(expected).epsilon(0.05));
+    }
+}
+
+TEST_CASE("coast-down resistance of the reference hatch stays in a realistic range") {
+    // Rolling + aerodynamic resistance at 100 km/h. A real compact hatch needs ~400 N; the
+    // node-beam tyre still loses more, but rigid contact and flat-plate aero needed ~1900 N,
+    // which capped the 110 kW car at 113 km/h.
+    CarBuild cb = buildCar(loadCarDefinition(carPath("kestrel_hatch")));
+    World w = flatWorld();
+    w.addBody(std::move(cb.body));
+    auto& car = w.body(0);
+    VehicleControls controls;
+    controls.gear = 0;
+    controls.ignition = false;
+    car.setControls(controls);
+    w.simulate(3.0);
+    const real v = 100.0 / 3.6;
+    car.setVelocity({v, 0, 0});
+    for (const auto& wheel : car.wheels()) {
+        const auto center = wheel.center(car), axis = wheel.axis(car);
+        for (auto node : wheel.treadNodes)
+            car.velocities()[node] += cross(axis, car.positions()[node] - center) * (v / wheel.spec.radius);
+    }
+    w.simulate(1.0);
+    const real v0 = car.centerOfMassVelocity().x;
+    w.simulate(2.0);
+    const real v1 = car.centerOfMassVelocity().x;
+    const real resistance = car.totalMass() * (v0 - v1) / 2.0;
+    CHECK(resistance > 250.0);
+    CHECK(resistance < 1150.0);
+    CHECK(car.stats().deformedBeams == 0);
+}
+
+TEST_CASE("full throttle runs straight to autobahn top-speed range without steering input") {
+    CarBuild cb = buildCar(loadCarDefinition(carPath("vortex_gt")));
+    const auto layout = cb.layout;
+    World w = flatWorld();
+    w.addBody(std::move(cb.body));
+    auto& car = w.body(0);
+    VehicleControls controls;
+    controls.gear = -99;
+    car.setControls(controls);
+    w.simulate(2.0);
+    controls.throttle = 1.0;
+    car.setControls(controls);
+    real worstYaw = 0.0;
+    for (int i = 0; i < 36; ++i) {
+        w.simulate(1.0);
+        const auto& p = car.positions();
+        const Vec3 forward = normalize(p[layout.refFL] + p[layout.refFR] - p[layout.refRL] - p[layout.refRR]);
+        worstYaw = std::max(worstYaw, std::abs(std::atan2(forward.z, forward.x)) * 180.0 / 3.14159265358979);
+    }
+    CHECK(car.telemetry().speedKmh > 210.0);
+    CHECK(worstYaw < 4.0);
+    CHECK(car.stats().brokenBeams == 0);
+    CHECK(w.stats().finite);
 }

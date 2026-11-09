@@ -51,6 +51,11 @@ struct CarBodyDef {
     real paintMetallic = 0.55;
     bool detachableDoors = false; ///< Opt-in physical front doors with reversible latches.
     bool detachableBumpers = false; ///< Opt-in independent front/rear lower fascia assemblies.
+    /// Aerodynamics. The collision skin's per-triangle drag is calibrated so that the whole
+    /// body produces exactly Cd * A head-on. 0 = typical value for the body style /
+    /// 0.84 * width * (height - groundClearance).
+    real dragCoefficient = 0.0;
+    real frontalArea = 0.0;
 };
 
 struct CarChassisDef {
@@ -68,6 +73,9 @@ struct AxleSuspensionDef {
     real bumpTravel = 0.085;      ///< m until the bump stop engages
     real droopTravel = 0.11;      ///< m until the droop strap limits extension
     real camber = -0.8;           ///< deg static camber (informational / visual)
+    /// deg static toe per wheel, + = toe-in. < -90 = default (front 0, rear 0.25: rear toe-in
+    /// keeps the rear axle stable at the grip limit and at autobahn speed).
+    real toe = -999.0;
 };
 
 struct TireDef {
@@ -174,6 +182,7 @@ struct CarLayout {
     /// Floor nodes at the front / rear axle (left, right): forward = front - rear, right = R - L.
     std::uint32_t refFL = 0, refFR = 0, refRL = 0, refRR = 0;
     std::vector<std::uint32_t> engineNodes, radiatorNodes;
+    real dragArea = 0.0;          ///< Calibrated Cd * A of the collision skin (m^2).
     // Independent eight-node bonnet: rear-left/right, front-left/right, lower then upper skin.
     std::vector<std::uint32_t> bonnetNodes;
     std::vector<std::uint32_t> bonnetStrutBeams; ///< Channel-1 lift supports; share the hinge breakgroup.

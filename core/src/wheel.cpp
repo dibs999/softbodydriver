@@ -249,6 +249,7 @@ PressureWheel addPressureWheel(SoftBody& body, const PressureWheelSpec& spec) {
     np.mass = spec.tireMass / static_cast<real>(2 * spec.numRays);
     np.friction = spec.friction;
     np.collision = true;
+    np.contactStiffness = spec.contactStiffness;
 
     const int N = spec.numRays;
     w.treadNodes.reserve(static_cast<std::size_t>(2 * N));
