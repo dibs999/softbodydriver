@@ -358,6 +358,8 @@ static func barrier(parent: Node3D, world: SBWorld, points: PackedVector3Array, 
 		xfs.append(Transform3D(Basis(Vector3.UP, yaw) * Basis.from_scale(half * 2.0), mid))
 		start = b
 		acc = 0.0
+	if material == null:
+		return   # colliders only; the caller draws the barrier
 	mm.instance_count = xfs.size()
 	for i in xfs.size():
 		mm.set_instance_transform(i, xfs[i])
