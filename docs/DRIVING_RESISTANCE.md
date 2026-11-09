@@ -174,8 +174,31 @@ scheiterten, tritt nicht auf:
 
 Die Prüfgrenze für den Ausrollwiderstand ist auf 560 N verschärft.
 
+## Fünfte Iteration: geschwindigkeitsabhängige Dämpfung (verworfen)
+
+**Idee:** Gummi verliert je Lastwechsel ungefähr gleich viel Energie, ein viskoser Dämpfer umso mehr,
+je schneller er arbeitet. Getestet wurde deshalb eine Reifendämpfung, die oberhalb von 36 km/h mit
+1/v abnimmt, mit Untergrenze 35 % bzw. 60 %. Sie wurde im gedrosselten 100-Hz-Block von
+`PressureWheel::step` gesetzt.
+
+| Messung | Bisher | 35 % | 60 % |
+|---|---:|---:|---:|
+| Kestrel Ausrollwiderstand 100 km/h | 498 N | 432 N | 451 N |
+| Kestrel Vollgas-Spitze / Gierabweichung (90 s) | 199 km/h / 2,8° | 197 km/h / 5,4° | 198 km/h / 3,1° |
+| Vortex GT | 280 km/h / 2,8° | 278 km/h / 6,3° | 278 km/h / **42°** |
+| Concept GT | 336 km/h / 1,7° | 336 km/h / 1,1° | 335 km/h / 1,3° |
+
+**Ergebnis:**
+
+* Bei 100 km/h sinkt der Rollwiderstand auf ~150 N.
+* Bei hohem Tempo gewinnt die Änderung nichts. Die Höchstgeschwindigkeiten sinken sogar leicht,
+  weil ungedämpfte Laufflächenschwingungen selbst Energie verbrauchen.
+* Der Geradeauslauf wird schlechter, beim Vortex mit 60 % instabil.
+* Kernprüfungen und `cartest --quick` bestanden zwar, die Änderung wurde trotzdem zurückgenommen.
+
 ## Offen
 
-* Rollwiderstand noch ~60 % über real (213 statt ~130 N). Für den Rest bräuchte es eine
-  hysteretische statt einer viskosen Dämpfung, ohne die Laufflächenstabilität zu verlieren.
+* Rollwiderstand noch ~60 % über real (213 statt ~130 N). Eine pauschal abgesenkte oder mit dem
+  Tempo fallende Beam-Dämpfung destabilisiert die Lauffläche (fünfte Iteration). Ein besserer Ansatz
+  wäre eine Verlustkraft am Latsch, die den Dämpfungsanteil ersetzt, statt ihn nur zu verringern.
 * Spieler mit Tastatur/Gamepad und die Fahrhilfe korrigieren kleinere Abweichungen.

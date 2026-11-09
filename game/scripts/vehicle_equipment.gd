@@ -92,6 +92,7 @@ func state_for(v: SBVehicle) -> Dictionary:
 	var authored_signals: Array[ShaderMaterial] = []
 	var lamp_materials: Array = []
 	var tail_materials: Array = []
+	var lamp_entries: Array = []
 	for child in v.get_children():
 		var lamp_name := String(child.name).to_lower()
 		if child is MeshInstance3D and "turnsignalsrear" in lamp_name:
@@ -99,7 +100,8 @@ func state_for(v: SBVehicle) -> Dictionary:
 			child.material_override = signal_material
 			authored_signals.append(signal_material)
 		var is_head := "headlight" in lamp_name
-		var is_tail := lamp_name == "taillight" or lamp_name.ends_with("taillights")
+		var is_tail := lamp_name.ends_with("taillight") or lamp_name.ends_with("taillights") \
+			or lamp_name.ends_with("taillight_left") or lamp_name.ends_with("taillight_right")
 		if child is MeshInstance3D and (is_head or is_tail):
 			var original: Material = child.get_active_material(0)
 			if original is StandardMaterial3D:
@@ -109,6 +111,9 @@ func state_for(v: SBVehicle) -> Dictionary:
 				own.emission_energy_multiplier = 1.2
 				if is_head: lamp_materials.append(own)
 				else: tail_materials.append(own)
+				# Generated lamps are split per side; an imported lamp mesh may cover both sides (0).
+				var lamp_side := -1 if lamp_name.ends_with("_left") else (1 if lamp_name.ends_with("_right") else 0)
+				lamp_entries.append({"material": own, "front": is_head, "side": lamp_side, "albedo": own.albedo_color})
 	var headlights: Array = []
 	var left: Array = []
 	var right: Array = []
@@ -137,10 +142,11 @@ func state_for(v: SBVehicle) -> Dictionary:
 			lamp.position = Vector3(lamp_x - 0.015 if end > 0 else rear_x,
 				maxf(0.18, lamp_y - 0.035) if end > 0 else maxf(0.22, rear_y), side * width * 0.40)
 			lamp.material_override = material(Color(1.0, 0.42, 0.04), true)
+			lamp.set_meta("corner", ("head_" if end > 0 else "tail_") + ("left" if side < 0 else "right"))
 			rig.add_child(lamp)
 			if side < 0: left.append(lamp)
 			else: right.append(lamp)
-	var s := {"rig": rig, "lamp_materials": lamp_materials, "tail_materials": tail_materials, "authored_signals": authored_signals, "headlights": headlights, "left": left, "right": right, "lights": false, "light_mode": 0, "signal": 0, "hazards": false}
+	var s := {"rig": rig, "lamp_materials": lamp_materials, "tail_materials": tail_materials, "lamp_entries": lamp_entries, "broken": {}, "lamp_check": 0.0, "authored_signals": authored_signals, "headlights": headlights, "left": left, "right": right, "lights": false, "light_mode": 0, "signal": 0, "hazards": false}
 	states[v] = s
 	return s
 
@@ -282,20 +288,26 @@ func _process(delta: float) -> void:
 		var right: Vector3 = forward.cross(up).normalized()
 		up = right.cross(forward).normalized()
 		s["rig"].global_transform = Transform3D(Basis(forward, up, right), v.get_position_ws())
-		for mat in s["lamp_materials"]: mat.emission_enabled = s["lights"]
+		_update_lamp_damage(v, s, delta)
+		var broken: Dictionary = s["broken"]
 		var braking := float(v.get_telemetry().get("brake", 0.0)) > 0.05
-		for mat in s["tail_materials"]:
-			mat.emission_enabled = s["lights"] or braking
-			mat.emission_energy_multiplier = 3.5 if braking else 0.8
-		for light in s["headlights"]:
-			light.visible = s["lights"]
+		for entry in s["lamp_entries"]:
+			var mat: StandardMaterial3D = entry["material"]
+			var dead := _lamp_dead(broken, bool(entry["front"]), int(entry["side"]))
+			mat.emission_enabled = not dead and (s["lights"] or (braking and not entry["front"]))
+			if not entry["front"]: mat.emission_energy_multiplier = 3.5 if braking else 0.8
+			# A smashed lens shows the dark reflector behind it.
+			mat.albedo_color = (entry["albedo"] as Color).darkened(0.75) if dead else entry["albedo"]
+		for i in s["headlights"].size():
+			var light: SpotLight3D = s["headlights"][i]
+			light.visible = s["lights"] and not broken.get("head_left" if i == 0 else "head_right", false)
 			var high: bool = s["light_mode"] == 2
 			light.spot_range = 140.0 if high else 70.0
 			light.spot_angle = 32.0 if high else 44.0
 			light.light_energy = 30.0 if high else 16.0
 			light.rotation_degrees.x = -0.5 if high else -2.0
-		for lamp in s["left"]: lamp.visible = blink and (s["hazards"] or s["signal"] == -1)
-		for lamp in s["right"]: lamp.visible = blink and (s["hazards"] or s["signal"] == 1)
+		for lamp in s["left"]: lamp.visible = blink and (s["hazards"] or s["signal"] == -1) and not broken.get(lamp.get_meta("corner"), false)
+		for lamp in s["right"]: lamp.visible = blink and (s["hazards"] or s["signal"] == 1) and not broken.get(lamp.get_meta("corner"), false)
 		for signal_material in s["authored_signals"]:
 			signal_material.set_shader_parameter("vehicle_origin", v.get_position_ws())
 			signal_material.set_shader_parameter("vehicle_right", right)
@@ -305,6 +317,29 @@ func _process(delta: float) -> void:
 	var elapsed := maxf(0.0, sim_time - _last_sim_time) if _last_sim_time >= 0.0 else 0.0
 	_last_sim_time = sim_time
 	update_service(elapsed, Input.is_action_pressed("service_repair"), Input.is_action_pressed("refuel"))
+
+const LAMP_CAPTIONS := {"head_left": "Scheinwerfer links", "head_right": "Scheinwerfer rechts",
+	"tail_left": "Rückleuchte links", "tail_right": "Rückleuchte rechts"}
+
+## Lamps break with the body structure around them and stay dark until the car is repaired.
+func _update_lamp_damage(v: SBVehicle, s: Dictionary, delta: float) -> void:
+	s["lamp_check"] = float(s["lamp_check"]) - delta
+	if float(s["lamp_check"]) > 0.0 or not v.has_method("get_lamp_states"): return
+	s["lamp_check"] = 0.2
+	var broken: Dictionary = s["broken"]
+	for lamp in v.get_lamp_states():
+		var corner: String = lamp["name"]
+		var now := bool(lamp["broken"])
+		if now and not broken.get(corner, false) and v == game.player and game.get("hud"):
+			game.hud.toast("%s zerstört" % LAMP_CAPTIONS.get(corner, corner))
+		broken[corner] = now
+
+## A lamp mesh covering both sides (imported models) goes dark only once both corners are smashed.
+static func _lamp_dead(broken: Dictionary, front: bool, side: int) -> bool:
+	var prefix := "head_" if front else "tail_"
+	if side < 0: return broken.get(prefix + "left", false)
+	if side > 0: return broken.get(prefix + "right", false)
+	return broken.get(prefix + "left", false) and broken.get(prefix + "right", false)
 
 ## Called once per frame with elapsed PHYSICS time, so slow-motion and overloaded
 ## frames cannot accelerate work. Releasing a key loses repair progress.

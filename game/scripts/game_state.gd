@@ -446,6 +446,13 @@ func apply_visual_model(v: SBVehicle, info: Dictionary) -> void:
 			if rgb.size() >= 3:
 				own.albedo_color = Color(float(rgb[0]), float(rgb[1]), float(rgb[2]))
 			own.metallic = float(info.get("paint_metallic", own.metallic))
+			# Low-poly shells are single-sided: from the seat, pillars and roof rails were culled and
+			# looked hollow. Back faces are drawn as dark, matte trim instead.
+			var inner := StandardMaterial3D.new()
+			inner.cull_mode = BaseMaterial3D.CULL_FRONT
+			inner.albedo_color = Color(0.085, 0.085, 0.09)
+			inner.roughness = 0.92
+			own.next_pass = inner
 			overrides[k] = own
 		elif lib.has(target):
 			overrides[k] = lib[target]

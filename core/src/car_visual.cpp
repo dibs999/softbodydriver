@@ -242,26 +242,39 @@ public:
     }
 
     // Closed round component between arbitrary points. Skinning to the actual owning
-    // assembly keeps accessories with the engine when its mounts break.
+    // assembly keeps accessories with the engine when its mounts break. With innerMat set, the
+    // faces whose outward normal points along innerDir (towards the cabin) use that material:
+    // pillars are painted outside and trimmed inside.
     void tube(const std::string& mat, const Vec3& a, const Vec3& b, real radius,
-              const std::vector<std::uint32_t>& cand, int segments = 12) {
+              const std::vector<std::uint32_t>& cand, int segments = 12,
+              const std::string& innerMat = {}, const Vec3& innerDir = {}) {
         const Vec3 axis = normalize(b - a);
         const Vec3 u = normalize(cross(axis, std::abs(axis.y) < 0.9 ? Vec3{0, 1, 0} : Vec3{1, 0, 0}));
         const Vec3 v = cross(axis, u);
-        MeshSurface& m = surf(partMaterial(mat, cand));
-        std::vector<std::uint32_t> ringA, ringB;
-        for (int i = 0; i <= segments; ++i) {
-            const real angle = 2.0 * kPi * i / segments;
-            const Vec3 offset = (u * std::cos(angle) + v * std::sin(angle)) * radius;
-            ringA.push_back(vertex(m, a + offset, skinNearest(a + offset, cand)));
-            ringB.push_back(vertex(m, b + offset, skinNearest(b + offset, cand)));
-        }
+        MeshSurface* surfaces[2] = {&surf(partMaterial(mat, cand)), nullptr};
+        if (!innerMat.empty()) surfaces[1] = &surf(partMaterial(innerMat, cand));
+        constexpr std::uint32_t kNone = 0xffffffffu;
+        std::vector<std::uint32_t> ring[2][2];
+        for (auto& r : ring) for (auto& side : r) side.assign(static_cast<std::size_t>(segments) + 1, kNone);
+        auto ringVertex = [&](int s, int end, int i) {
+            auto& slot = ring[s][end][static_cast<std::size_t>(i)];
+            if (slot == kNone) {
+                const real angle = 2.0 * kPi * i / segments;
+                const Vec3 p = (end == 0 ? a : b) + (u * std::cos(angle) + v * std::sin(angle)) * radius;
+                slot = vertex(*surfaces[s], p, skinNearest(p, cand));
+            }
+            return slot;
+        };
         for (int i = 0; i < segments; ++i) {
-            const auto j = static_cast<std::size_t>(i);
-            tri(m, ringA[j], ringA[j + 1], ringB[j + 1]);
-            tri(m, ringA[j], ringB[j + 1], ringB[j]);
+            const real mid = 2.0 * kPi * (i + 0.5) / segments;
+            const Vec3 normal = u * std::cos(mid) + v * std::sin(mid);
+            const int s = surfaces[1] && dot(normal, innerDir) > 0.0 ? 1 : 0;
+            MeshSurface& m = *surfaces[s];
+            tri(m, ringVertex(s, 0, i), ringVertex(s, 0, i + 1), ringVertex(s, 1, i + 1));
+            tri(m, ringVertex(s, 0, i), ringVertex(s, 1, i + 1), ringVertex(s, 1, i));
         }
         // Separate cap vertices retain hard edges at the machined ends.
+        MeshSurface& m = *surfaces[0];
         const auto ca = vertex(m, a, skinNearest(a, cand));
         const auto cb = vertex(m, b, skinNearest(b, cand));
         for (int i = 0; i < segments; ++i) {
@@ -1012,8 +1025,10 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         };
         for (std::size_t i = 0; i < perimeter.size(); ++i) {
             const Vec3 a = perimeter[i], b = perimeter[(i + 1) % perimeter.size()];
-            strip("paint", a, b, 0.0, thickness, door.nodes);
-            strip("paint", a, b, thickness + 0.003, thickness + 0.055, bodyNodes);
+            // Above the belt line the frame faces the occupants and is trimmed like the pillars.
+            const std::string frame = (a.y + b.y) * 0.5 > bd.beltHeight + 0.02 ? "interior" : "paint";
+            strip(frame, a, b, 0.0, thickness, door.nodes);
+            strip(frame, a, b, thickness + 0.003, thickness + 0.055, bodyNodes);
             vb.tube("trim", a + Vec3{0, 0, -side * (thickness + 0.008)}, b + Vec3{0, 0, -side * (thickness + 0.008)}, 0.007, bodyNodes, 6);
         }
         // Window frame upright and a formed exterior pull handle travel with the door.
@@ -1234,7 +1249,8 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             const real x1 = prof.xWsTop + (prof.xCowl - prof.xWsTop) * (i + 1) / 12;
             const Section a = prof.section(x0), b = prof.section(x1);
             vb.tube("paint", {x0, a.y[8] + 0.004, side * a.z[8]},
-                    {x1, b.y[8] + 0.004, side * b.z[8]}, 0.022, bodyNodes, 10);
+                    {x1, b.y[8] + 0.004, side * b.z[8]}, 0.022, bodyNodes, 10,
+                    "interior", normalize(Vec3{-0.2, -0.45, -side}));
         }
     }
 
@@ -1536,6 +1552,46 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             const CarCorner& cn = rig.corners[static_cast<std::size_t>(c)];
             vb.strut("chassis", rig.engine[cn.right ? 5 : 4], cn.hubIn, cn.lbj, 0.018, 6);
         }
+    }
+
+    // ---- lamps per side (each corner's lamp breaks and goes dark on its own)
+    {
+        std::vector<MeshSurface> split;
+        for (MeshSurface& m : vis.skinned) {
+            const std::string& mat = m.material;
+            const bool lamp = mat.size() >= 9 && (mat.compare(mat.size() - 9, 9, "headlight") == 0 ||
+                                                  mat.compare(mat.size() - 9, 9, "taillight") == 0);
+            if (!lamp || m.side != 0) continue;
+            MeshSurface halves[2];
+            std::vector<std::uint32_t> remap[2];
+            for (int h = 0; h < 2; ++h) {
+                halves[h].material = m.material;
+                halves[h].doubleSided = m.doubleSided;
+                halves[h].side = h == 0 ? -1 : 1;
+                remap[h].assign(m.skin.size(), 0xffffffffu);
+            }
+            for (std::size_t t = 0; t + 2 < m.indices.size(); t += 3) {
+                const real z = (m.positions[m.indices[t] * 3 + 2] + m.positions[m.indices[t + 1] * 3 + 2] +
+                                m.positions[m.indices[t + 2] * 3 + 2]) / 3.0;
+                const int h = z < 0.0 ? 0 : 1;
+                for (int k = 0; k < 3; ++k) {
+                    const std::uint32_t v = m.indices[t + static_cast<std::size_t>(k)];
+                    if (remap[h][v] == 0xffffffffu) {
+                        remap[h][v] = static_cast<std::uint32_t>(halves[h].skin.size());
+                        for (int c = 0; c < 3; ++c) halves[h].positions.push_back(m.positions[v * 3 + static_cast<std::uint32_t>(c)]);
+                        halves[h].skin.push_back(m.skin[v]);
+                    }
+                    halves[h].indices.push_back(remap[h][v]);
+                }
+            }
+            m.material.clear();  // replaced by the halves below
+            for (MeshSurface& half : halves)
+                if (!half.indices.empty()) split.push_back(std::move(half));
+        }
+        vis.skinned.erase(std::remove_if(vis.skinned.begin(), vis.skinned.end(),
+                                         [](const MeshSurface& m) { return m.material.empty(); }),
+                          vis.skinned.end());
+        for (MeshSurface& m : split) vis.skinned.push_back(std::move(m));
     }
 
     // ---- rest normals
