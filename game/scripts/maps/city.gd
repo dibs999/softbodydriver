@@ -11,47 +11,35 @@ const PITCH := BLOCK + STREET
 const KERB := 0.14
 
 
-static func _facade_material(base: Color, seed: int) -> StandardMaterial3D:
-	var img := Image.create(512, 512, false, Image.FORMAT_RGB8)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = seed
-	img.fill(base)
-	for fy in 4:
-		for fx in 4:
-			var x := fx * 128
-			var y := fy * 128
-			var stone := base.lerp(base.darkened(0.18), rng.randf())
-			img.fill_rect(Rect2i(x, y, 128, 128), stone)
-			# Fine masonry joints and staggered blocks remain crisp at street level.
-			for course in 8:
-				img.fill_rect(Rect2i(x, y + course * 16, 128, 1), stone.darkened(0.11))
-				for joint in 3:
-					img.fill_rect(Rect2i(x + joint * 44 + (course % 2) * 20, y + course * 16, 1, 16), stone.darkened(0.12))
-			img.fill_rect(Rect2i(x, y + 122, 128, 6), stone.darkened(0.22))
-			img.fill_rect(Rect2i(x + 126, y, 2, 122), stone.darkened(0.16))
-			var lit := rng.randf() < 0.14
-			var glass := Color(0.76, 0.64, 0.37) if lit else Color(0.13, 0.19, 0.26).lerp(Color(0.35, 0.46, 0.56), rng.randf() * 0.5)
-			img.fill_rect(Rect2i(x + 20, y + 22, 90, 84), stone.darkened(0.58))
-			for row in 72:
-				var reflection := glass.lerp(Color(0.55, 0.63, 0.68), (1.0 - row / 72.0) * 0.42)
-				img.fill_rect(Rect2i(x + 28, y + 28 + row, 74, 1), reflection)
-			# Different blind heights and window dividers break the repeated grid.
-			var blind := rng.randi_range(0, 26) if not lit else 0
-			if blind > 3: img.fill_rect(Rect2i(x + 28, y + 28, 74, blind), stone.darkened(0.30))
-			img.fill_rect(Rect2i(x + 62, y + 28, 4, 72), stone.lightened(0.2))
-			if (fx + fy + seed) % 3 == 0:
-				img.fill_rect(Rect2i(x + 28, y + 70, 74, 2), stone.lightened(0.12))
-			img.fill_rect(Rect2i(x + 16, y + 102, 98, 6), stone.lightened(0.32))
-	img.generate_mipmaps()
-	var m := StandardMaterial3D.new()
-	m.albedo_texture = ImageTexture.create_from_image(img)
-	m.uv1_triplanar = true
-	m.uv1_world_triplanar = true
-	m.uv1_scale = Vector3(0.065, 0.075, 0.065)
-	m.roughness = 0.55
-	m.metallic = 0.1
-	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+const FACADE_SHADER := preload("res://materials/facade.gdshader")
+
+
+## Facade palettes: wall colour, window frame colour, style (0 plaster, 1 brick, 2 glass office).
+static func _facade_material(base: Color, frame: Color, style: int) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = FACADE_SHADER
+	m.set_shader_parameter("wall_color", base)
+	m.set_shader_parameter("frame_color", frame)
+	m.set_shader_parameter("style", style)
+	m.set_shader_parameter("grain", load(C.SURFACE_PATH + "pavement.jpg"))
+	if style == 2:
+		m.set_shader_parameter("floor_height", 3.8)
+		m.set_shader_parameter("bay_width", 1.6)
+		m.set_shader_parameter("recess", 0.05)
+	elif style == 1:
+		m.set_shader_parameter("window_width", 0.46)
+		m.set_shader_parameter("window_height", 0.6)
 	return m
+
+
+## Facade shader reads the building size from the instance scale, so use a unit box.
+static func _facade_box(parent: Node3D, world: SBWorld, center: Vector3, half: Vector3, material: Material) -> void:
+	var mi := MeshInstance3D.new()
+	mi.mesh = BoxMesh.new()
+	mi.material_override = material
+	mi.transform = Transform3D(Basis.from_scale(half * 2.0), center)
+	parent.add_child(mi)
+	world.add_box(center, half, Vector3.ZERO, 0.8)
 
 
 static func build(world: SBWorld, parent: Node3D) -> Dictionary:
@@ -65,14 +53,20 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var origin := -size * 0.5
 	C.quad(parent, Vector3(0, -0.01, 0), Vector2(size + 600, size + 600), asphalt)
 
-	var facades: Array[StandardMaterial3D] = []
-	var bases := [Color(0.55, 0.53, 0.5), Color(0.42, 0.44, 0.47), Color(0.62, 0.58, 0.52), Color(0.32, 0.34, 0.36), Color(0.5, 0.42, 0.36)]
-	for i in bases.size():
-		facades.append(_facade_material(bases[i], 100 + i))
+	var facades: Array[Material] = [
+		_facade_material(Color(0.62, 0.58, 0.51), Color(0.9, 0.89, 0.85), 0),
+		_facade_material(Color(0.47, 0.49, 0.5), Color(0.2, 0.21, 0.22), 2),
+		_facade_material(Color(0.7, 0.64, 0.54), Color(0.32, 0.25, 0.2), 0),
+		_facade_material(Color(0.52, 0.53, 0.55), Color(0.75, 0.76, 0.77), 2),
+		_facade_material(Color(0.55, 0.33, 0.24), Color(0.92, 0.92, 0.9), 1),
+		_facade_material(Color(0.78, 0.74, 0.66), Color(0.25, 0.27, 0.3), 0),
+	]
 	var roof_mat := C.mat(Color(0.25, 0.25, 0.26), 0.8)
 	var shopfronts: Array[Transform3D] = []
 	var awnings: Array[Transform3D] = []
 	var pavements: Array[Transform3D] = []
+	var street_trees: Array[Vector3] = []
+	var grates: Array[Transform3D] = []
 	var roofs: Array[Transform3D] = []
 	var rooftop_units: Array[Transform3D] = []
 	var buildings: Array[Array] = []
@@ -140,6 +134,13 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 				_plaza(parent, world, c, bx == 5, pavement, metal)
 				places.append({"name": "U-Bahn Nordplatz" if bx == 5 else "Skulpturenplatz", "position": c})
 				continue
+			# Street trees in grates on the two kerbs without lamps; trunks collide.
+			for k in 3:
+				var t := 14.0 + k * 22.0
+				for p: Vector3 in [Vector3(x0 + t, KERB, z0 + BLOCK - 1.7), Vector3(x0 + BLOCK - 1.7, KERB, z0 + t)]:
+					street_trees.append(p)
+					world.add_box(p + Vector3.UP * 1.5, Vector3(0.16, 1.5, 0.16), Vector3.ZERO, 0.7)
+					grates.append(Transform3D(Basis.from_scale(Vector3(1.5, 1.0, 1.5)), p + Vector3.UP * 0.005))
 			# 1..4 buildings per block.
 			var split := rng.randi_range(1, 2)
 			var margin := 3.0
@@ -254,6 +255,10 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 				lamp_heads.append(Transform3D(Basis.from_scale(Vector3(0.23, 0.14, 1.45)), Vector3(x0 + t, 7, z0 + 0.23)))
 				lamp_heads.append(Transform3D(Basis.from_scale(Vector3(1.45, 0.14, 0.23)), Vector3(x0 + 0.23, 7, z0 + t)))
 	C.scatter_multimesh(parent, lamp_pole, metal, lamps, false)
+	V.plant(parent, "broadleaf", street_trees, 4242, 0.55, 0.72)
+	var grate := PlaneMesh.new()
+	grate.size = Vector2.ONE
+	C.scatter_multimesh(parent, grate, C.noise_mat(Color(0.16, 0.13, 0.1), 0.4, 0.8), grates, false)
 	C.scatter_multimesh(parent, box_mesh, metal, lamp_heads, false)
 
 	# AI loop: rectangle around the inner blocks, right-hand lane.
@@ -316,7 +321,7 @@ static func _district(parent: Node3D, world: SBWorld, c: Vector3, block: Vector2
 			for i in 4:
 				var h := p + Vector3(-25.5 + i * 17, 0, side * 22)
 				var height := 9.0 + (i % 3) * 2.2
-				C.box(parent, world, h + Vector3.UP * height * 0.5, Vector3(7.2, height * 0.5, 10), Vector3.ZERO, _facade_material(colors[i], 520 + i))
+				_facade_box(parent, world, h + Vector3.UP * height * 0.5, Vector3(7.2, height * 0.5, 10), _facade_material(colors[i], Color(0.93, 0.92, 0.88), 0))
 				C.box(parent, world, h + Vector3.UP * (height + 0.15), Vector3(7.5, 0.15, 10.3), Vector3.ZERO, brick, 0.8, false)
 				C.box(parent, world, h + Vector3(0, 2.1, -side * 10.05), Vector3(5.3, 1.45, 0.1), Vector3.ZERO, dark, 0.8, false)
 				C.box(parent, world, h + Vector3(0, 3.9, -side * 11.0), Vector3(5.7, 0.12, 1.4), Vector3.ZERO, C.mat(colors[(i+1)%4]), 0.8, false)

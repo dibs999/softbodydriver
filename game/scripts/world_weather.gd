@@ -194,6 +194,7 @@ func _apply_lighting() -> void:
 		return
 	var elevation := sin((hour - 6.0) * TAU / 24.0)
 	var daylight := smoothstep(-0.12, 0.35, elevation)
+	RenderingServer.global_shader_parameter_set("city_night", 1.0 - smoothstep(-0.05, 0.2, elevation))
 	var dusk := (1.0 - smoothstep(0.0, 0.4, absf(elevation))) * daylight
 	var cloud := float(weather_index) / 2.0
 	_sun.rotation_degrees.x = -maxf(8.0, elevation * 75.0) if elevation > 0 else -35.0

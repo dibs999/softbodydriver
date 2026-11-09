@@ -73,8 +73,25 @@ Alle Karten verwenden die neuen Pflanzen:
 
 Die Vorschau `tests/vegetation_shots.gd` rendert alle Arten nebeneinander.
 
+## Stadtfassaden
+
+`materials/facade.gdshader` ersetzt die gemalten Fassadentexturen:
+
+* Fensterachsen und Geschosse werden je Gebäude aus der Instanzskalierung abgeleitet (symmetrische
+  Ränder, Attika, dunklerer Sockel).
+* Fenster sind 20 cm zurückgesetzt. Die Laibung wird per Parallaxe sichtbar und mit eigener Normalen
+  beleuchtet.
+* Hinter dem Glas liegen per Interior Mapping Räume mit 4 m Tiefe: Rückwand mit Möbelzone, Boden,
+  Decke und Seitenwände. Dazu kommen Jalousien auf zufälliger Höhe.
+* Nachts leuchten einzelne Räume (globaler Parameter `city_night` aus dem Tageszeitmodell).
+* Drei Stile: Putz/Stein mit Geschossbändern, Klinker mit Mauerverband, Bürohaus mit beschichtetem,
+  spiegelndem Glas.
+* Alle Kanten werden über ableitungsbasierte Abdeckungsmasken geglättet. Instanzkonstanten sind
+  `flat`-Varyings: Interpolierte Werte erzeugten im Hash Pixelrauschen.
+
+Vorschau: `tests/facade_shots.gd -- <png> <stil> [debug]`.
+
 ## Offen
 
-* Stadtfassaden sind weiterhin texturierte Quader ohne Tiefe (Fenster, Gesimse).
 * Felsen und Klippen der Wüste haben nur Vertexfarben.
 * Grasbüschel und Bodenbewuchs in Fahrbahnnähe fehlen noch.
