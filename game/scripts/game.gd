@@ -15,6 +15,7 @@ const DriverPrompts := preload("res://scripts/driver_prompts.gd")
 var equipment: Node3D
 var weather: Node
 var wipers: Node3D
+var cabin_closure: Node3D
 var lesson: Node
 var activity: DrivingActivity
 var surfaces := RoadSurface.new()
@@ -110,6 +111,9 @@ func _ready() -> void:
 	wipers = preload("res://scripts/vehicle_wipers.gd").new()
 	wipers.name = "Wipers"
 	add_child(wipers)
+	cabin_closure = preload("res://scripts/cabin_closure.gd").new()
+	cabin_closure.name = "CabinClosure"
+	add_child(cabin_closure)
 	equipment = preload("res://scripts/vehicle_equipment.gd").new()
 	add_child(equipment)
 	equipment.configure(self, map_data["spawns"][0])
@@ -304,7 +308,9 @@ func _set_player(v: SBVehicle) -> void:
 			var body: Dictionary = definition.get("body", {}) if definition is Dictionary else {}
 			weather.set_vehicle_shelter(v, body)
 			# Imported models bring their own wiper geometry; procedural bodies get arms.
-			wipers.attach(v, body, not (definition is Dictionary and definition.has("visualModel")))
+			var imported: bool = definition is Dictionary and definition.has("visualModel")
+			wipers.attach(v, body, not imported)
+			cabin_closure.attach(v if imported else null, body)
 			break
 	hud.vehicle = v
 	minimap.player = v
