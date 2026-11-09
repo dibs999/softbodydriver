@@ -25,6 +25,12 @@ Soft-Body-Fahrzeugsimulation als **native Desktop-App für Windows, macOS und Li
 
 ## Fahrzeuge
 
+Die reproduzierbaren Chassis-Messungen und ihre Grenzen stehen in
+[CHASSIS_STABILITY_MEASUREMENTS.md](docs/CHASSIS_STABILITY_MEASUREMENTS.md).
+Der Prüfstand unterscheidet hochfrequente Schwingungen, langsames Ausbrechen
+und ungültige Geschwindigkeitsfenster. Eine kleine RMS-Zahl allein bestätigt
+keine stabile Hochgeschwindigkeitsfahrt.
+
 ### Fahrgefühl, Aktivitäten und Darstellung
 
 - Reifenlast und Schlupf werden an den tatsächlichen Bodenkontakten gemessen. Ein
@@ -42,6 +48,11 @@ Soft-Body-Fahrzeugsimulation als **native Desktop-App für Windows, macOS und Li
   Bestleistungen werden je Karte, Auto und Modus lokal gespeichert. Zurücksetzen,
   Reparatur und Fahrzeugwechsel beenden einen laufenden Versuch. Pausen stoppen
   die Uhr; Zeitlupe verwendet die tatsächliche Simulationszeit.
+- Zeitfahren zeigt Entfernung und nächste Kurve an. Nach der Ziellinie bleiben
+  Rundenzeit, Vergleich zur bisherigen Bestzeit und Speicherstatus sichtbar;
+  `F4` startet einen neuen Versuch. Der erste Abschluss erscheint nach einem
+  Neustart auch im Hauptmenü. Bei einem Schreibfehler bleibt das Ergebnis für
+  diese Sitzung sichtbar und wird ausdrücklich als nicht gespeichert bezeichnet.
 - Die Stadt enthält befahrbare Werkstatthöfe, eine Altstadtgasse und eine Hochstraße
   mit Unterführung, zusätzlich zu Parkdeck, Markt und Frachtterminal. Auf dem
   Testgelände gibt es eine markierte 100-m-Bremsbahn und eine milde Bodenwellenreihe.
@@ -317,6 +328,8 @@ godot --headless --path game -s res://tests/gamepad_controls_test.gd # Gamepad b
 godot --headless --path game -s res://tests/driver_input_test.gd # Rückwärtsfahrt und manueller/automatischer Antrieb
 godot --headless --path game -s res://tests/cockpit_instruments_test.gd # Echte Zustände im Cockpit
 godot --headless --path game -s res://tests/session_controls_test.gd # Pausenmenü, Wetter, Aktivitäten und Bergung
+godot --headless --path game -s res://tests/time_trial_flow_test.gd # Echte vollständige Runde, Ergebnis und Profil-Neuladen
+godot --headless --path game -s res://tests/time_trial_flow_test.gd -- --record-save-failure # Echte Runde bei nicht schreibbarer Rekorddatei
 godot --headless --path game -s res://tests/proving_ground_test.gd # Anfahrt, Service, Gelände und Kollisionen
 godot --headless --path game -s res://tests/wet_braking_test.gd # Gemessene Trocken-/Nassbremsung
 godot --headless --path game -s res://tests/session_soak_test.gd # 30 simulierte Minuten wiederholter Fahr-/Crash-/Serviceabläufe

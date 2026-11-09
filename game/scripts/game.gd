@@ -137,6 +137,7 @@ func _ready() -> void:
 	activity.world = world
 	add_child(activity)
 	activity.configure(Game.selected_map, map_data)
+	activity.completed.connect(_on_activity_completed)
 	hud.activity = activity
 	minimap.activity = activity
 	for v in vehicles:
@@ -163,6 +164,14 @@ func _ready() -> void:
 		_loading_overlay = null
 	audio.set_process(true)
 	world.paused = false
+
+
+func _on_activity_completed(result: Dictionary) -> void:
+	if int(result.get("mode", 0)) == 1:
+		if not Game.progress.complete_milestone("time_trial_complete"):
+			hud.toast("Zeitfahren beendet · Fortschritt konnte nicht gespeichert werden")
+	if not bool(result.get("record_saved", true)):
+		hud.toast("Ergebnis bleibt für diese Sitzung sichtbar · Rekord konnte nicht gespeichert werden")
 
 
 func _show_loading_screen() -> void:

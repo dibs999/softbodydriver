@@ -401,6 +401,8 @@ func _on_car_selected(i: int) -> void:
 	if progress_info:
 		var record: Dictionary = Game.progress.get_best_braking(str(c["id"]))
 		progress_info.text = "Einführung abgeschlossen" if Game.progress.is_completed("first_drive_complete") else "Einführung optional · Fortschritt wird gespeichert"
+		if Game.progress.is_completed("time_trial_complete"):
+			progress_info.text += " · Zeitfahren abgeschlossen"
 		if not record.is_empty():
 			progress_info.text += "\nBremsrekord: %.1f m aus %.0f km/h" % [record["distance_m"], record["start_speed_kmh"]]
 		if Game.progress.read_only:

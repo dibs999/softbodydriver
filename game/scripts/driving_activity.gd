@@ -1,7 +1,11 @@
 extends Node3D
 ## Small driving challenges using simulation time, ordered gates and persistent records.
+signal completed(result: Dictionary)
+
 const C := preload("res://scripts/maps/common.gd")
 const MODES := ["Freie Fahrt", "Zeitfahren", "Drift-Challenge", "Lieferfahrt"]
+var records_path := "user://driving_records.cfg"
+var last_result: Dictionary = {}
 var world: SBWorld
 var vehicle: SBVehicle
 var map_id := ""
@@ -30,6 +34,7 @@ var _spawn_position := Vector3.ZERO
 var _reset_wait := 0.0
 
 func configure(id: String, data: Dictionary) -> void:
+	_race_route.clear()
 	map_id = id
 	_start = data["spawns"][0]
 	var path: PackedVector3Array = data.get("activity_route", data.get("waypoints", PackedVector3Array()))
@@ -42,7 +47,7 @@ func configure(id: String, data: Dictionary) -> void:
 			distance = 0.0
 	if _race_route.size() > 2:
 		_race_route.append(_race_route[0])
-	_records.load("user://driving_records.cfg")
+	_records.load(records_path)
 	_marker = Node3D.new()
 	add_child(_marker)
 	var material := C.mat(Color("71e0cb"))
@@ -53,6 +58,7 @@ func configure(id: String, data: Dictionary) -> void:
 	_marker.hide()
 
 func choose() -> void:
+	last_result = {}
 	cancel("")
 	mode = (mode + 1) % (4 if map_id == "city" else 3)
 	message = "F3 Wechseln · F4 am Start aufstellen" if mode else "F3 Aktivität wählen"
@@ -67,6 +73,7 @@ func start() -> void:
 		cancel("Lauf abgebrochen · F4 erneut starten")
 		return
 	if mode == 0 or not is_instance_valid(vehicle): return
+	last_result = {}
 	_read_best()
 	route = _race_route.duplicate()
 	var spawn := _start
@@ -195,14 +202,42 @@ func _process(_delta: float) -> void:
 		else: _update_marker()
 	_previous = position
 
+func navigation_hint() -> String:
+	if not active or mode == 2 or gate >= route.size() or not is_instance_valid(vehicle): return ""
+	var distance := Vector2(vehicle.get_position_ws().x - route[gate].x, vehicle.get_position_ws().z - route[gate].z).length()
+	var instruction := "Ziel" if gate == route.size() - 1 else "Geradeaus"
+	if gate + 1 < route.size():
+		var incoming := route[gate] - route[gate - 1]
+		var outgoing := route[gate + 1] - route[gate]
+		var angle := atan2(incoming.x * outgoing.z - incoming.z * outgoing.x, incoming.dot(outgoing))
+		if absf(angle) > deg_to_rad(12):
+			instruction = "Rechtskurve" if angle > 0 else "Linkskurve"
+	return "%s in %.0f m" % [instruction, distance]
+
 func _finish() -> void:
-	var result := score if mode == 2 else elapsed
-	var improved := best == 0 or (result > best if mode == 2 else result < best)
+	if not active: return
+	var value := score if mode == 2 else elapsed
+	var previous_best := best
+	var improved := best == 0 or (value > best if mode == 2 else value < best)
+	var save_error := OK
 	if improved:
-		best = result
-		_records.set_value(map_id + ":" + _car_id, str(mode), best)
-		_records.save("user://driving_records.cfg")
-	cancel(("Neue Bestleistung! " if improved else "Ziel! ") + ("%d Punkte" % score if mode == 2 else "%.2f s" % elapsed))
+		_records.set_value(map_id + ":" + _car_id, str(mode), value)
+		save_error = _records.save(records_path)
+		if save_error == OK:
+			best = value
+		else:
+			# Failed writes must not masquerade as a persistent personal best.
+			_records.set_value(map_id + ":" + _car_id, str(mode), previous_best)
+	last_result = {
+		"mode": mode, "map_id": map_id, "car_id": _car_id, "result": value,
+		"elapsed": elapsed, "score": score, "checkpoints": maxi(0, gate - 1),
+		"previous_best": previous_best, "improved": improved,
+		"record_saved": save_error == OK, "record_save_error": save_error,
+	}
+	var summary := ("Neue Bestleistung! " if improved else "Ziel! ") + ("%d Punkte" % score if mode == 2 else "%.2f s" % elapsed)
+	if save_error != OK: summary += " · Speichern fehlgeschlagen"
+	cancel(summary)
+	completed.emit(last_result.duplicate(true))
 
 func _update_marker() -> void:
 	var next := target()

@@ -8,7 +8,7 @@ konkrete Teilergebnisse und erklärt das Gesamtprodukt noch nicht für fertig.
 |---|---|---|
 | Fahrzeugdarstellung | Abgerundetes Cockpit, Instrumente mit realer Telemetrie, sichtbarer Motorraum unter gestützter Haube; Tages-/Nachtbilder in 1920×1080 geprüft; echte Cockpit-Außenspiegel mit korrigierter Kestrel-Blickrichtung | Handmodellierte Detailqualität, vollständige Referenzbildserie |
 | Teile und Schaden | Kestrel-Stoßfänger vorn/hinten besitzen eigene Käfige/Masse, brechbare Halter und unabhängige Darstellung; Haube stößt gegen eigene Dach-/Motorflächen; Kestrel-Vordertüren öffnen/schließen mit getrennten Schlössern und Scharnieren und können abreißen | Hintertüren, Heckklappe, Leuchten und kompatible Segmentierung des importierten Concept; allgemeiner Kantenkontakt |
-| Fahrphysik | Alle sieben nativen Prüfstände bestehen Einfedern, Beschleunigen, Bremsen und Kurvenfahrt. Concept-Ansteuerung und Importvergleich erneut geprüft | Vollständige RMS-Messreihe bei allen Zielgeschwindigkeiten und Renderfrequenzen; Langzeitfahrt mit mehreren beschädigten Fahrzeugen |
+| Fahrphysik | Alle sieben nativen Prüfstände bestehen Einfedern, Beschleunigen, Bremsen und Kurvenfahrt. Concept-Ansteuerung und Importvergleich erneut geprüft | Konstante 200 km/h im normalen Antrieb nicht erreicht; Renderfrequenz-Vergleich und Langzeitfahrt mit mehreren beschädigten Fahrzeugen |
 | Testgelände | Freie Bremsgerade als Start, Wegweiser, Servicezufahrt, Nachtlampen, kollidierende Dächer, bepflanzte Innenflächen, Geländebermen und Randbegrenzung | Flächendeckende Streckenabnahme und dieselbe Qualität auf weiteren Karten |
 | Spielablauf | Einführung → gemessene Bremsung → Bergung → Reparatur → Tanken → gespeicherten Abschluss neu laden; Aktivitäten und Wetter auch über Pausenmenü bedienbar | Eine komplette manuelle Referenzsitzung einschließlich beendeter Zeitfahrrunde und realem Gamepad |
 | Wetter | Innenraum-/Dachvolumen halten sichtbaren Regen fern; Tageszeit, Pause, Zeitlupe und Nässe geprüft; Abblend-/Fernlicht visuell geprüft; Stereo-Regen mit Innenraum-/Dachdämpfung und tatsächlicher AudioServer-Aufnahme geprüft | Verformungsgenaue Regenabdichtung, bewegliche Scheibenwischer, subjektive Hörabnahme der neuen Regenakustik |
@@ -43,6 +43,13 @@ konkrete Teilergebnisse und erklärt das Gesamtprodukt noch nicht für fertig.
 * Godot-Prüfungen umfassen Fahrsteuerung, Aktivitäten, importiertes Modell,
   Fahrerassistenz, Gamepad-Ereignisse, Cockpit, Service, Wetter, Kartenzugang,
   Einführung und gespeicherte Profile. Befehle stehen in der README.
+* Zeitfahren: Zwei native Prüfrunden bestehen jeweils **12 Prüfungen** inklusive
+  Pause, gültigem Abschluss, Profil-/Rekord-Neuladen sowie Reparatur-/Versetzungs-
+  abbruch. Beide fahren die unveränderte Ovalstrecke über **26 Kontrollpunkte**
+  in **102,75 Sekunden**, über **1.162 m**, ausschließlich über native Lenk-/Gas-/
+  Bremseingaben eines Prüfautopiloten. Die zweite Runde verwendet einen nicht
+  schreibbaren Rekordpfad und meldet den Fehler korrekt. Das ist keine manuelle
+  Fahrabnahme mit einem neuen Spieler.
 * Gemessene Kestrel-Bremsung über den tatsächlichen Untergrund-/Reifengriffpfad:
   trocken **16,89 m aus 60,194 km/h**, nass **19,45 m aus 60,000 km/h**;
   beide Läufe ohne gebrochene Beams. Das ist ein Regressionsvergleich, keine
@@ -59,6 +66,11 @@ und Reparatur. Scheibe, Innenverkleidung und Spiegel bleiben am Türkäfig; die
 Cockpit echte Spiegelbilder bewegter und umgefärbter Weltobjekte. Der Kestrel
 zeigt nach Korrektur der Glasneigung die Straße und Böschung hinter dem Auto;
 beim Concept nimmt die eigene Karosserie noch einen großen Teil des Spiegels ein.
+Die neue Zeitfahrserie zeigt die tatsächlich gefahrene Runde mit Zielführung,
+Ergebnisanzeige und nach Profil-Neuladen sichtbarem Abschluss im Hauptmenü.
+Cockpitaufnahmen in 1920×1080 und 960×600 prüfen die Abstände zwischen Ergebnis,
+Serviceanzeige und Minikarte. Die Aufnahmen pausieren echte Simulationszustände;
+Kontrollpunkte und Ziellinie wurden im Prüflauf tatsächlich durchfahren.
 Ein mit tatsächlichen Gas-/Bremseingaben erstelltes Video fährt
 von 0 auf 75,8 km/h und wieder bis zum Stillstand, ohne neue gebrochene Beams.
 Seine wenigen Software-Renderbilder belegen
@@ -76,3 +88,21 @@ Die Tür-/Spiegelbilder liegen unter
 `/workspace/.softbody-tools/audio/`. Bei geöffneter oder fehlender Vordertür wird
 aktuell der gesamte vereinfachte Innenraum-Regenausschluss aufgehoben. Das ist
 keine verformungsgenaue Simulation von eindringendem Wasser an der Türöffnung.
+
+## Neue Messreihe zum Chassis
+
+Der [reproduzierbare Chassis-Prüfstand](CHASSIS_STABILITY_MEASUREMENTS.md)
+zeichnet Kestrel und Concept bei Sollwerten von 50/100/160/200 km/h mit 2.000 Hz
+auf. Schleppprüfstand, freies Ausrollen und normaler Antrieb werden getrennt
+ausgewertet. Die Hochfrequenzgrenzen werden in den aufgezeichneten Fenstern
+eingehalten. Der synthetische Concept-Schlepplauf bei 200 km/h ist wegen
+Ausbrechens und überschrittenem Geschwindigkeitsband ungültig. Im normalen
+Vollgasversuch erreichen Kestrel und Concept in 60 Sekunden nur etwa 113,70 bzw.
+174,66 km/h. Das belegt eine noch offene Leistungs-/Verlustkalibrierung; es
+bescheinigt weder stabile konstante 200 km/h noch eine bestandene Renderprüfung.
+
+Die neue Zeitfahr-Bildserie liegt unter
+`/workspace/.softbody-tools/visual/time-trial/`. Der aktualisierte Linux-Build
+wurde auch nach separatem Entpacken mit einer vollständigen nativen Runde
+und anschließendem Profil-/Rekord-Neuladen geprüft; Paketnachweise stehen in
+[RELEASE_LINUX.md](RELEASE_LINUX.md).
