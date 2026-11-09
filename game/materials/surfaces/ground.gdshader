@@ -15,6 +15,13 @@ uniform float macro_scale = 38.0;         // metres per patch
 uniform vec4 macro_tint : source_color = vec4(1.0);  // colour of the "other" patches
 uniform float macro_tint_amount = 0.0;
 uniform float wet_response = 1.0;         // 1 = sealed surface (dark, glossy when wet)
+// Terrain only: bare earth and stone showing through on steep ground (embankments, hillsides).
+uniform sampler2D slope_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform bool has_slope = false;
+uniform float slope_tile = 3.0;
+uniform vec4 slope_tint : source_color = vec4(1.0);
+uniform float slope_start = 0.90;         // normal.y at which earth starts to show
+uniform float slope_full = 0.72;          // normal.y of fully bare ground
 global uniform float road_wetness;
 
 varying vec3 world_pos;
@@ -84,6 +91,14 @@ void fragment() {
 	col *= tint.rgb;
 	if (use_vertex_color) {
 		col *= COLOR.rgb;
+	}
+	if (has_slope) {
+		float steep = 1.0 - smoothstep(slope_full, slope_start, n.y);
+		float breakup = fbm(world_pos.xz * 0.19 + vec2(5.0, 9.0));
+		steep = clamp(steep * 1.35 - (breakup - 0.5) * 1.3, 0.0, 1.0);
+		vec3 ps = world_pos / slope_tile;
+		vec3 earth = texture(slope_tex, ps.zy).rgb * w.x + texture(slope_tex, ps.xz).rgb * w.y + texture(slope_tex, ps.xy).rgb * w.z;
+		col = mix(col, earth * slope_tint.rgb, steep);
 	}
 	// Large patches in world space: lighter/darker batches, dry or lush areas.
 	vec2 mp = world_pos.xz / macro_scale;

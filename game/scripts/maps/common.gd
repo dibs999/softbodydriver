@@ -65,6 +65,11 @@ static func terrain_material(kind: String, tile_metres: float, tint := Color.WHI
 		tint = Color(0.6, 0.78, 0.52)   # the photo is late-summer grass; maps are greener
 	var m := surface_material(kind, tile_metres, tint)
 	m.set_shader_parameter("use_vertex_color", true)
+	# Earth and stone on embankments and steep hillsides instead of grass or sand everywhere.
+	m.set_shader_parameter("has_slope", true)
+	m.set_shader_parameter("slope_tex", load(SURFACE_PATH + "gravel.jpg"))
+	m.set_shader_parameter("slope_tile", 2.6)
+	m.set_shader_parameter("slope_tint", Color(0.80, 0.66, 0.50) if kind != "sand" else Color(0.86, 0.58, 0.42))
 	return m
 
 
