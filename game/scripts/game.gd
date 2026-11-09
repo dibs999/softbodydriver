@@ -211,7 +211,7 @@ func _warm_up_rendering() -> void:
 
 
 var _env: Environment
-var _sky_mat: ProceduralSkyMaterial
+var _sky_mat: GameSky
 var _sun: DirectionalLight3D
 
 
@@ -239,12 +239,10 @@ func _build_environment() -> void:
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
 	var sky := Sky.new()
-	var sm := ProceduralSkyMaterial.new()
-	sm.sky_top_color = Color(0.25, 0.45, 0.78)
-	sm.sky_horizon_color = Color(0.66, 0.74, 0.84)
-	sm.ground_horizon_color = Color(0.6, 0.65, 0.7)
-	sm.sun_angle_max = 20.0
+	var sm := GameSky.new()
 	sky.sky_material = sm
+	sky.radiance_size = Sky.RADIANCE_SIZE_128
+	sky.process_mode = Sky.PROCESS_MODE_INCREMENTAL
 	_sky_mat = sm
 	_env = e
 	e.background_mode = Environment.BG_SKY
@@ -258,6 +256,9 @@ func _build_environment() -> void:
 	e.fog_enabled = true
 	e.fog_light_color = Color(0.7, 0.76, 0.85)
 	e.fog_density = 0.00035
+	# Fog only hazes the sky slightly near the horizon; at sky_affect = 1 the infinitely distant
+	# sky turned completely into flat fog colour.
+	e.fog_sky_affect = 0.12
 	env.environment = e
 	add_child(env)
 	var sun := DirectionalLight3D.new()

@@ -1,4 +1,5 @@
 extends RefCounted
+const V := preload("res://scripts/maps/vegetation.gd")
 ## A bounded engineering site: planted infields, accessible earth berms and perimeter rails.
 ## Terrain render meshes and physics use the same sampled heights. Tree trunks and rails collide.
 const C := preload("res://scripts/maps/common.gd")
@@ -8,7 +9,7 @@ static func build(world: SBWorld, parent: Node3D) -> Array:
 	var root := Node3D.new()
 	root.name = "ProvingSurroundings"
 	parent.add_child(root)
-	var grass := C.surface_material("grass", 3.1, Color(0.22, 0.33, 0.16))
+	var grass := C.surface_material("grass", 3.1, Color(0.50, 0.66, 0.50))
 	var gravel := C.surface_material("gravel", 2.5, Color(0.74, 0.71, 0.64))
 	var regions: Array = []
 	var tree_points: Array[Vector3] = []
@@ -80,30 +81,12 @@ static func rail(parent: Node3D, world: SBWorld, a: Vector3, b: Vector3, metal: 
 static func _trees(parent: Node3D, world: SBWorld, points: Array[Vector3]) -> void:
 	var random := RandomNumberGenerator.new()
 	random.seed = 5027
-	var trunk := CylinderMesh.new()
-	trunk.top_radius = 0.11
-	trunk.bottom_radius = 0.23
-	trunk.height = 5.0
-	trunk.radial_segments = 9
-	var foliage := SphereMesh.new()
-	foliage.radius = 1.0
-	foliage.height = 2.0
-	foliage.radial_segments = 14
-	foliage.rings = 7
-	var trunks: Array[Transform3D] = []
-	var crowns_a: Array[Transform3D] = []
-	var crowns_b: Array[Transform3D] = []
+	var broadleaf: Array[Vector3] = []
+	var conifers: Array[Vector3] = []
 	for p: Vector3 in points:
-		var scale := random.randf_range(0.9, 1.5)
-		var yaw := random.randf() * TAU
-		trunks.append(Transform3D(Basis.from_scale(Vector3.ONE * scale), p + Vector3.UP * 2.5 * scale))
-		world.add_box(p + Vector3.UP * 2.5 * scale, Vector3(0.2, 2.5, 0.2) * scale, Vector3.ZERO, 0.7)
-		for i in 5:
-			var angle := yaw + i * TAU / 5
-			var offset := Vector3(cos(angle) * 1.4, 5.1 + random.randf_range(-0.3, 1.4), sin(angle) * 1.4) * scale
-			var xf := Transform3D(Basis(Vector3.UP, angle).scaled_local(Vector3(2.2, 2.7, 1.8) * scale), p + offset)
-			if i % 2 == 0: crowns_a.append(xf)
-			else: crowns_b.append(xf)
-	C.scatter_multimesh(parent, trunk, C.noise_mat(Color(0.25, 0.18, 0.11), 0.3, 0.25), trunks)
-	C.scatter_multimesh(parent, foliage, C.noise_mat(Color(0.065, 0.12, 0.035), 0.3, 0.30), crowns_a)
-	C.scatter_multimesh(parent, foliage, C.noise_mat(Color(0.10, 0.17, 0.05), 0.3, 0.30), crowns_b)
+		var conifer := random.randf() < 0.3
+		(conifers if conifer else broadleaf).append(p)
+		var h := 1.8 if conifer else 2.2
+		world.add_box(p + Vector3.UP * h, Vector3(0.22, h, 0.22), Vector3.ZERO, 0.7)
+	V.plant(parent, "broadleaf", broadleaf, 5027, 0.85, 1.3)
+	V.plant(parent, "conifer", conifers, 5028, 0.8, 1.15)

@@ -11,7 +11,7 @@ func _process(_d: float) -> bool:
 		var env := WorldEnvironment.new()
 		var e := Environment.new()
 		var sky := Sky.new()
-		sky.sky_material = ProceduralSkyMaterial.new()
+		sky.sky_material = GameSky.new()
 		e.background_mode = Environment.BG_SKY
 		e.sky = sky
 		e.ambient_light_source = Environment.AMBIENT_SOURCE_SKY

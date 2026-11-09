@@ -2,6 +2,7 @@ extends RefCounted
 ## An 8.5 km motorway loop with service access, overpasses and opposing traffic.
 
 const C := preload("res://scripts/maps/common.gd")
+const V := preload("res://scripts/maps/vegetation.gd")
 const STRAIGHT := 2600.0
 const RADIUS := 520.0
 const CARRIAGE_OFFSET := 7.6   # centre of a carriageway from the median
@@ -136,13 +137,8 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var fixture := BoxMesh.new()
 	fixture.size = Vector3(0.42, 0.18, 2.6)
 	C.scatter_multimesh(parent, fixture, C.mat(Color(0.83, 0.83, 0.75)), fixtures, false)
-	var tree := CylinderMesh.new()
-	tree.top_radius = 0.0
-	tree.bottom_radius = 2.2
-	tree.height = 9.0
-	tree.radial_segments = 9
-	tree.rings = 0
-	var trees: Array[Transform3D] = []
+	var trees: Array[Vector3] = []
+	var conifers: Array[Vector3] = []
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 9
 	for i in 2100:
@@ -155,9 +151,9 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			dist = absf(Vector2(q.x, p.z).length() - RADIUS)
 		if dist < 45.0 or (p.x > SERVICE_START and p.x < SERVICE_END and p.z < -RADIUS + 87.0):
 			continue
-		var s := rng.randf_range(0.7, 1.5)
-		trees.append(Transform3D(Basis().scaled(Vector3(s, s, s)), p + Vector3(0, 4.5 * s, 0)))
-	C.scatter_multimesh(parent, tree, C.mat(Color(0.12, 0.27, 0.12), 0.9), trees, false)
+		(conifers if rng.randf() < 0.35 else trees).append(p)
+	V.plant(parent, "broadleaf", trees, 91, 0.8, 1.3, false)
+	V.plant(parent, "conifer", conifers, 92, 0.7, 1.05, false)
 	_landmarks(parent, world, metal)
 
 	# Traffic: right-hand traffic, carriageway A follows the loop, B goes the other way.

@@ -24,7 +24,7 @@ func run() -> void:
 	world.sync_visuals()
 	var environment := Environment.new()
 	environment.sky = Sky.new()
-	environment.sky.sky_material = ProceduralSkyMaterial.new()
+	environment.sky.sky_material = GameSky.new()
 	var camera := Camera3D.new()
 	host.add_child(camera)
 	var sun := DirectionalLight3D.new()

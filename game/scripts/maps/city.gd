@@ -3,6 +3,7 @@ extends RefCounted
 ## a park and an AI traffic loop around the blocks.
 
 const C := preload("res://scripts/maps/common.gd")
+const V := preload("res://scripts/maps/vegetation.gd")
 const BLOCKS := 10
 const BLOCK := 72.0         # block size (kerb to kerb)
 const STREET := 16.0        # street width (2 lanes each way)
@@ -125,27 +126,13 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 				C.quad(parent, path_center + Vector3.UP * 0.002, Vector2(BLOCK - 3.0, 3.2), pavement)
 				C.box(parent, world, c + Vector3(0, 0.5, 0), Vector3(5, 0.45, 5), Vector3.ZERO, pavement, 0.8)
 				C.quad(parent, c + Vector3(0, 0.954, 0), Vector2(8.8, 8.8), C.mat(Color(0.16, 0.47, 0.6), 0.28))
-				var tree := SphereMesh.new()
-				tree.radius = 3.0
-				tree.height = 5.0
-				tree.radial_segments = 12
-				tree.rings = 6
-				var trees: Array[Transform3D] = []
-				var trunks: Array[Transform3D] = []
+				var trees: Array[Vector3] = []
 				for i in 18:
-					var p := c + Vector3(rng.randf_range(-28, 28), 4.5, rng.randf_range(-28, 28))
+					var p := c + Vector3(rng.randf_range(-28, 28), KERB, rng.randf_range(-28, 28))
 					if Vector2(p.x - c.x, p.z - c.z).length() < 9.0:
 						continue
-					trees.append(Transform3D(Basis(), p))
-					trunks.append(Transform3D(Basis(), Vector3(p.x, KERB + 1.3, p.z)))
-				C.scatter_multimesh(parent, tree, C.mat(Color(0.16, 0.33, 0.14), 0.9), trees)
-				var trunk := CylinderMesh.new()
-				trunk.top_radius = 0.22
-				trunk.bottom_radius = 0.34
-				trunk.height = 2.6
-				trunk.radial_segments = 8
-				trunk.rings = 0
-				C.scatter_multimesh(parent, trunk, C.mat(Color(0.25, 0.17, 0.11)), trunks, false)
+					trees.append(p)
+				V.plant(parent, "broadleaf", trees, block.x * 31 + block.y, 0.75, 1.1)
 				if block == Vector2i(4, 5):
 					places.append({"name": "Stadtpark", "position": c})
 				continue
@@ -418,12 +405,8 @@ static func _market(parent: Node3D, world: SBWorld, center: Vector3, pavement: M
 				C.box(parent, world, stall + Vector3(end * 3.23, 1.77, 0), Vector3(0.09, 1.77, 0.09), Vector3.ZERO, metal, 0.75, false)
 			C.box(parent, world, stall + Vector3.UP * 3.6, Vector3(3.72, 0.12, 2.1), Vector3.ZERO, canvas[i % canvas.size()], 0.8, false)
 	C.box(parent, world, p + Vector3(0, 0.45, 0), Vector3(4.5, 0.45, 4.5), Vector3.ZERO, pavement)
-	var leaves := SphereMesh.new()
-	leaves.radial_segments = 10
-	leaves.rings = 5
-	C.scatter_multimesh(parent, leaves, C.mat(Color(0.22, 0.37, 0.19)),
-		[Transform3D(Basis.from_scale(Vector3(4.0, 5.0, 4.0)), p + Vector3.UP * 4.0)], false)
-	C.box(parent, world, p + Vector3.UP * 1.85, Vector3(0.22, 1.40, 0.22), Vector3.ZERO, timber, 0.7, false)
+	var market_tree: Array[Vector3] = [p + Vector3.UP * 0.9]
+	V.plant(parent, "broadleaf", market_tree, 77, 0.95, 1.0)
 
 
 static func _townhouses(parent: Node3D, world: SBWorld, center: Vector3, grass: Material) -> void:

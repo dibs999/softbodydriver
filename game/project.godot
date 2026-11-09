@@ -42,3 +42,10 @@ lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
 environment/defaults/default_clear_color=Color(0.45, 0.6, 0.8, 1)
 textures/canvas_textures/default_texture_filter=1
 textures/vram_compression/import_etc2_astc=true
+
+[shader_globals]
+
+road_wetness={
+"type": "float",
+"value": 0.0
+}

@@ -19,7 +19,7 @@ func _setup() -> void:
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
 	var sky := Sky.new()
-	var sm := ProceduralSkyMaterial.new()
+	var sm := GameSky.new()
 	sm.sky_top_color = Color(0.32, 0.47, 0.72)
 	sm.sky_horizon_color = Color(0.72, 0.78, 0.86)
 	sm.ground_bottom_color = Color(0.22, 0.21, 0.2)

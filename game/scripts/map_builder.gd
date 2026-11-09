@@ -4,6 +4,7 @@ extends RefCounted
 
 const FACE_POS_X := 0.0           # yaw that makes a car (local +X forward) face world +X
 const C := preload("res://scripts/maps/common.gd")
+const V := preload("res://scripts/maps/vegetation.gd")
 
 
 static func car_xform(pos: Vector3, heading: Vector3) -> Transform3D:
@@ -70,7 +71,7 @@ static func _cone(parent: Node3D, pos: Vector3) -> void:
 # =========================================================================== proving grounds
 static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 	world.add_ground_plane(1.0)
-	var grass := C.surface_material("grass", 3.1, Color(0.22, 0.33, 0.16))
+	var grass := C.surface_material("grass", 3.1, Color(0.50, 0.66, 0.50))
 	var asphalt := C.surface_material("asphalt", 2.0, Color.WHITE, 0.30)
 	var concrete := C.surface_material("pavement", 2.1, Color(0.86, 0.86, 0.85), 0.25)
 	var line := _mat(Color(0.92, 0.92, 0.88), 0.6)
@@ -327,14 +328,8 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	# Trees (visual) away from the road.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 3
-	var tree := CylinderMesh.new()
-	tree.top_radius = 0.0
-	tree.bottom_radius = 1.6
-	tree.height = 5.5
-	tree.radial_segments = 9
-	tree.rings = 0
-	var xforms: Array[Transform3D] = []
-	var crowns: Array[Transform3D] = []
+	var broadleaf: Array[Vector3] = []
+	var conifers: Array[Vector3] = []
 	for i in 1950:
 		var p := Vector2(rng.randf_range(-636, 636), rng.randf_range(-636, 636))
 		if noise.get_noise_2d(p.x * 2.0, p.y * 2.0) < -0.18:
@@ -349,24 +344,19 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 		if near:
 			continue
 		var y := C.sample(heights, nx, nz, ox, oz, cell, p.x, p.y)
-		var s := rng.randf_range(0.7, 1.4)
-		xforms.append(Transform3D(Basis.from_scale(Vector3.ONE * s), Vector3(p.x, y + 2.75 * s, p.y)))
-		crowns.append(Transform3D(Basis.from_scale(Vector3(0.72, 0.74, 0.72) * s), Vector3(p.x, y + 4.8 * s, p.y)))
-	C.scatter_multimesh(parent, tree, _mat(Color(0.1, 0.24, 0.1)), xforms, false)
-	C.scatter_multimesh(parent, tree, _mat(Color(0.15, 0.31, 0.13)), crowns, false)
-	var hedge := SphereMesh.new()
-	hedge.radial_segments = 7
-	hedge.rings = 3
-	var hedges: Array[Transform3D] = []
+		# Conifers cluster on the higher, shadier ground; broadleaf trees in the valleys.
+		(conifers if noise.get_noise_2d(p.x * 0.7 + 400.0, p.y * 0.7) > 0.05 else broadleaf).append(Vector3(p.x, y, p.y))
+	V.plant(parent, "broadleaf", broadleaf, 31, 0.75, 1.25, false)
+	V.plant(parent, "conifer", conifers, 32, 0.6, 1.0, false)
+	var hedges: Array[Vector3] = []
 	for i in range(0, n_road, 3):
 		var tangent := road[(i + 1) % n_road] - road[(i - 1 + n_road) % n_road]
 		var side := Vector3(-tangent.z, 0, tangent.x).normalized()
 		for sign: float in [-1.0, 1.0]:
 			var p := road[i] + side * sign * rng.randf_range(6.4, 11.5)
-			var s := rng.randf_range(0.8, 2.4)
-			p.y = ground_height.call(p.x, p.z) + 0.25 * s
-			hedges.append(Transform3D(Basis.from_scale(Vector3(1.5, 0.75, 0.93) * s), p))
-	C.scatter_multimesh(parent, hedge, _mat(Color(0.28, 0.41, 0.15)), hedges, false)
+			p.y = ground_height.call(p.x, p.z)
+			hedges.append(p)
+	V.plant(parent, "bush", hedges, 33, 0.8, 2.0, false)
 	_hill_landmarks(world, parent, road, ground_height)
 	var lookout := _hill_lookout(world, parent, road, ground_height)
 
@@ -465,7 +455,6 @@ static func _service_campus(world: SBWorld, parent: Node3D) -> void:
 	var trim := _mat(Color(0.12, 0.17, 0.20), 0.4, 0.55)
 	var glass := _mat(Color(0.10, 0.20, 0.25), 0.18, 0.65)
 	var soil := _mat(Color(0.17, 0.12, 0.08))
-	var green := _mat(Color(0.16, 0.27, 0.10))
 	var timber := _mat(Color(0.38, 0.23, 0.12))
 	_box(campus, world, Vector3(158, 0.09, -89), Vector3(12, 0.09, 23), Vector3.ZERO, pavement)
 	_box(campus, world, Vector3(151, 2.7, -89), Vector3(6, 2.7, 12), Vector3.ZERO, wall)
@@ -482,17 +471,8 @@ static func _service_campus(world: SBWorld, parent: Node3D) -> void:
 	for z: float in [-107, -71]:
 		_box(campus, world, Vector3(164, 0.27, z), Vector3(3.5, 0.27, 1.6), Vector3.ZERO, pavement)
 		_box(campus, world, Vector3(164, 0.55, z), Vector3(3.3, 0.025, 1.4), Vector3.ZERO, soil, 1, false)
-		for x: float in [161.5, 164, 166.5]:
-			var shrub := MeshInstance3D.new()
-			var foliage := SphereMesh.new()
-			foliage.radius = 0.75
-			foliage.height = 1.3
-			foliage.radial_segments = 10
-			foliage.rings = 5
-			shrub.mesh = foliage
-			shrub.material_override = green
-			shrub.position = Vector3(x, 1.05, z)
-			campus.add_child(shrub)
+		var shrubs: Array[Vector3] = [Vector3(161.5, 0.55, z), Vector3(164, 0.55, z), Vector3(166.5, 0.55, z)]
+		V.plant(campus, "bush", shrubs, int(z), 0.55, 0.7)
 	# Timber benches, bollards and short approach markings make the frontage legible.
 	for z: float in [-99, -79]:
 		_box(campus, world, Vector3(163, 0.60, z), Vector3(0.42, 0.10, 1.5), Vector3.ZERO, timber)

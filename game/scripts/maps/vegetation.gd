@@ -1,0 +1,309 @@
+extends RefCounted
+## Procedural vegetation shared by all maps: broadleaf trees, conifers, bushes and dry desert
+## shrubs. Each species has a few seeded variants built from tapered limbs and alpha-tested
+## leaf cards with volumetric normals; textures are painted once at load time.
+
+const C := preload("res://scripts/maps/common.gd")
+const FOLIAGE_SHADER := preload("res://materials/foliage.gdshader")
+const VARIANTS := 3
+
+static var _meshes: Dictionary = {}
+static var _textures: Dictionary = {}
+static var _bark: Material
+
+
+## Places one species at ground points (base of the trunk). Colliders stay the caller's job.
+static func plant(parent: Node3D, kind: String, ground: Array[Vector3], seed := 1,
+		min_scale := 0.8, max_scale := 1.25, shadow := true) -> void:
+	if ground.is_empty():
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var buckets: Array = []
+	for v in VARIANTS:
+		var list: Array[Transform3D] = []
+		buckets.append(list)
+	for p in ground:
+		var s := rng.randf_range(min_scale, max_scale)
+		var lean := Basis(Vector3(rng.randf_range(-1, 1), 0, rng.randf_range(-1, 1)).normalized(), rng.randf_range(0.0, 0.05))
+		var b := lean * Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.9, 1.1), s))
+		var bucket: Array[Transform3D] = buckets[rng.randi() % VARIANTS]
+		bucket.append(Transform3D(b, p - Vector3.UP * 0.15 * s))
+	for v in VARIANTS:
+		C.scatter_multimesh(parent, mesh(kind, v), null, buckets[v], shadow)
+
+
+static func mesh(kind: String, variant: int) -> ArrayMesh:
+	var key := "%s_%d" % [kind, variant]
+	if not _meshes.has(key):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash(key)
+		match kind:
+			"conifer": _meshes[key] = _conifer(rng)
+			"bush": _meshes[key] = _bush(rng, "broadleaf", Color(0.86, 0.95, 0.78), Color(0.7, 0.82, 0.55))
+			"dry_shrub": _meshes[key] = _bush(rng, "dry", Color(0.95, 0.9, 0.8), Color(0.8, 0.72, 0.55))
+			"poplar": _meshes[key] = _broadleaf(rng, 0.42, 1.6)
+			_: _meshes[key] = _broadleaf(rng, 1.0, 1.0)
+	return _meshes[key]
+
+
+# ------------------------------------------------------------------------------- geometry
+static func _limb(st: SurfaceTool, a: Vector3, b: Vector3, ra: float, rb: float, sides: int) -> void:
+	var axis := (b - a).normalized()
+	var ref := Vector3.UP if absf(axis.y) < 0.95 else Vector3.RIGHT
+	var u := axis.cross(ref).normalized()
+	var w := axis.cross(u)
+	var length := a.distance_to(b)
+	for i in sides:
+		var a0 := TAU * i / sides
+		var a1 := TAU * (i + 1) / sides
+		var d0 := u * cos(a0) + w * sin(a0)
+		var d1 := u * cos(a1) + w * sin(a1)
+		var quad := [[a + d0 * ra, d0, Vector2(float(i) / sides, 0)], [b + d1 * rb, d1, Vector2(float(i + 1) / sides, length)],
+			[a + d1 * ra, d1, Vector2(float(i + 1) / sides, 0)], [a + d0 * ra, d0, Vector2(float(i) / sides, 0)],
+			[b + d0 * rb, d0, Vector2(float(i) / sides, length)], [b + d1 * rb, d1, Vector2(float(i + 1) / sides, length)]]
+		for q in quad:
+			st.set_normal(q[1])
+			st.set_uv(q[2])
+			st.add_vertex(q[0])
+
+
+## One leaf card: centre, facing normal, up direction in the card plane, size; `normal` is the
+## lighting normal (crown-shaped), `ao` darkens inner cards.
+static func _card(st: SurfaceTool, center: Vector3, facing: Vector3, up: Vector3, size: Vector2,
+		normal: Vector3, ao: float, rnd: float) -> void:
+	var right := up.cross(facing).normalized() * size.x * 0.5
+	var top := facing.cross(right).normalized() * size.y * 0.5
+	var corners := [center - right - top, center + right - top, center + right + top, center - right + top]
+	var uvs := [Vector2(0, 1), Vector2(1, 1), Vector2(1, 0), Vector2(0, 0)]
+	st.set_color(Color(ao, rnd, 0))
+	st.set_normal(normal)
+	for i: int in [0, 2, 1, 0, 3, 2]:
+		st.set_uv(uvs[i])
+		st.add_vertex(corners[i])
+
+
+static func _finish(trunk: SurfaceTool, leaves: SurfaceTool, leaf_material: Material) -> ArrayMesh:
+	var m := ArrayMesh.new()
+	trunk.commit(m)
+	m.surface_set_material(0, _bark_material())
+	leaves.commit(m)
+	m.surface_set_material(1, leaf_material)
+	return m
+
+
+static func _broadleaf(rng: RandomNumberGenerator, width: float, tall: float) -> ArrayMesh:
+	var trunk := SurfaceTool.new()
+	trunk.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var leaves := SurfaceTool.new()
+	leaves.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var height := rng.randf_range(8.0, 10.5) * tall
+	var fork := height * rng.randf_range(0.36, 0.46)
+	var crown_c := Vector3(0, height * 0.64, 0)
+	var crown_r := Vector3(3.3 * width, height * 0.34, 3.3 * width)
+	_limb(trunk, Vector3.ZERO, Vector3(0, fork, 0), 0.30 * width + 0.06, 0.2 * width + 0.04, 8)
+	# Main limbs towards crown lobes, a few secondary branches and the cards around them.
+	var lobes := rng.randi_range(4, 6)
+	var lobe_centers: Array[Vector3] = []
+	for i in lobes:
+		var a := TAU * i / lobes + rng.randf_range(-0.4, 0.4)
+		var r := rng.randf_range(0.35, 0.62)
+		var y := rng.randf_range(-0.35, 0.55)
+		lobe_centers.append(crown_c + Vector3(cos(a) * crown_r.x * r, y * crown_r.y, sin(a) * crown_r.z * r))
+	lobe_centers.append(crown_c + Vector3(0, crown_r.y * 0.55, 0))
+	for c in lobe_centers:
+		var start := Vector3(0, fork * rng.randf_range(0.92, 1.0), 0)
+		var mid := start.lerp(c, 0.55) + Vector3(0, 0.4, 0)
+		_limb(trunk, start, mid, 0.17 * width + 0.03, 0.10 * width + 0.02, 5)
+		_limb(trunk, mid, c, 0.10 * width + 0.02, 0.04, 4)
+	var cards := int(150 * (0.55 + 0.45 * width))
+	for i in cards:
+		var c: Vector3 = lobe_centers[rng.randi() % lobe_centers.size()]
+		var lobe_r := crown_r * rng.randf_range(0.55, 0.72)
+		var dir := Vector3(rng.randfn(), rng.randfn() * 0.8 + 0.15, rng.randfn()).normalized()
+		var p := c + dir * lobe_r * pow(rng.randf_range(0.2, 1.0), 0.4)
+		var rel := (p - crown_c) / crown_r
+		var outward := (rel + Vector3(0, 0.35, 0)).normalized()
+		var facing := (outward + Vector3(rng.randfn(), rng.randfn(), rng.randfn()) * 0.7).normalized()
+		var ao := clampf(0.35 + 0.55 * rel.length() + 0.25 * rel.y, 0.3, 1.0)
+		var sz := rng.randf_range(1.8, 2.5) * (0.75 + 0.25 * width)
+		_card(leaves, p, facing, Vector3(rng.randfn(), 1.0, rng.randfn()).normalized(), Vector2(sz, sz), outward, ao, rng.randf())
+	return _finish(trunk, leaves, _leaf_material("broadleaf", Color(0.95, 1.0, 0.9), Color(0.78, 0.9, 0.62)))
+
+
+static func _conifer(rng: RandomNumberGenerator) -> ArrayMesh:
+	var trunk := SurfaceTool.new()
+	trunk.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var leaves := SurfaceTool.new()
+	leaves.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var height := rng.randf_range(12.0, 16.0)
+	var base_r := rng.randf_range(2.4, 3.1)
+	_limb(trunk, Vector3.ZERO, Vector3(0, height, 0), 0.27, 0.03, 7)
+	var y := rng.randf_range(1.4, 2.2)
+	var whorl := 0
+	while y < height - 0.6:
+		var f := (height - y) / height
+		var length := base_r * pow(f, 0.9) + 0.35
+		var count := 6 if f > 0.3 else 4
+		var phase := rng.randf() * TAU
+		for i in count:
+			var a := phase + TAU * i / count + rng.randf_range(-0.25, 0.25)
+			var out := Vector3(cos(a), 0, sin(a))
+			var droop := rng.randf_range(-0.42, -0.18) * (0.5 + f)
+			var axis := (out + Vector3(0, droop, 0)).normalized()
+			var center := Vector3(0, y, 0) + axis * length * 0.52
+			var lit := (out + Vector3(0, 0.55, 0)).normalized()
+			var ao := clampf(0.45 + 0.45 * (1.0 - f) + 0.25 * (length / base_r), 0.35, 1.0)
+			var side := axis.cross(Vector3.UP).normalized()
+			# Flat branch spray plus a slightly tilted crossing card for thickness.
+			var face_up := side.cross(axis).normalized()
+			if face_up.y < 0: face_up = -face_up
+			_card(leaves, center, face_up, axis, Vector2(length * 0.62, length * 1.08), lit, ao, rng.randf())
+			var tilted := (face_up + side * 0.9).normalized()
+			_card(leaves, center - Vector3(0, 0.12, 0), tilted, axis, Vector2(length * 0.42, length), lit, ao * 0.9, rng.randf())
+		y += rng.randf_range(0.55, 0.8) * (0.7 + 0.3 * (1.0 - float(whorl) / 30.0))
+		whorl += 1
+	# Leader shoot.
+	_card(leaves, Vector3(0, height - 0.2, 0), Vector3(1, 0, 0), Vector3.UP, Vector2(0.7, 1.4), Vector3.UP, 1.0, 0.5)
+	_card(leaves, Vector3(0, height - 0.2, 0), Vector3(0, 0, 1), Vector3.UP, Vector2(0.7, 1.4), Vector3.UP, 1.0, 0.5)
+	return _finish(trunk, leaves, _leaf_material("needle", Color(0.92, 0.98, 0.95), Color(0.75, 0.86, 0.74)))
+
+
+static func _bush(rng: RandomNumberGenerator, texture: String, a: Color, b: Color) -> ArrayMesh:
+	var trunk := SurfaceTool.new()
+	trunk.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var leaves := SurfaceTool.new()
+	leaves.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var r := rng.randf_range(0.9, 1.3)
+	var h := r * rng.randf_range(0.75, 1.0)
+	for i in 4:
+		var tip := Vector3(rng.randfn() * r * 0.4, h * rng.randf_range(0.6, 0.9), rng.randfn() * r * 0.4)
+		_limb(trunk, Vector3.ZERO, tip, 0.045, 0.015, 4)
+	for i in 40:
+		var dir := Vector3(rng.randfn(), absf(rng.randfn()) * 0.8 + 0.2, rng.randfn()).normalized()
+		var p := Vector3(0, h * 0.45, 0) + Vector3(dir.x * r, dir.y * h * 0.62, dir.z * r) * rng.randf_range(0.4, 0.9)
+		var outward := (dir + Vector3(0, 0.3, 0)).normalized()
+		var facing := (outward + Vector3(rng.randfn(), rng.randfn(), rng.randfn()) * 0.8).normalized()
+		var ao := clampf(0.4 + 0.6 * p.y / (h * 1.1), 0.35, 1.0)
+		var sz := rng.randf_range(0.9, 1.3) * r
+		_card(leaves, p, facing, Vector3(rng.randfn() * 0.4, 1.0, rng.randfn() * 0.4).normalized(), Vector2(sz, sz), outward, ao, rng.randf())
+	return _finish(trunk, leaves, _leaf_material(texture, a, b))
+
+
+# ------------------------------------------------------------------------------- materials
+static func _bark_material() -> Material:
+	if _bark == null:
+		_bark = C.noise_mat(Color(0.25, 0.2, 0.15), 0.35, 0.9, 0.95)
+	return _bark
+
+
+static func _leaf_material(texture: String, a: Color, b: Color) -> ShaderMaterial:
+	var key := [texture, a, b]
+	if not _textures.has(key):
+		var m := ShaderMaterial.new()
+		m.shader = FOLIAGE_SHADER
+		m.set_shader_parameter("leaf_tex", _leaf_texture(texture))
+		m.set_shader_parameter("tint_a", a)
+		m.set_shader_parameter("tint_b", b)
+		if texture == "needle":
+			m.set_shader_parameter("autumn_amount", 0.0)
+			m.set_shader_parameter("wind_strength", 0.6)
+		elif texture == "dry":
+			m.set_shader_parameter("autumn_amount", 0.0)
+			m.set_shader_parameter("translucency", 0.25)
+		_textures[key] = m
+	return _textures[key]
+
+
+static func _leaf_texture(kind: String) -> ImageTexture:
+	var cache_key := "tex_" + kind
+	if _textures.has(cache_key):
+		return _textures[cache_key]
+	const SIZE := 256
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(kind)
+	var img := Image.create(SIZE, SIZE, false, Image.FORMAT_RGBA8)
+	var bg := Color(0.17, 0.27, 0.08, 0.0)
+	if kind == "needle":
+		bg = Color(0.1, 0.19, 0.11, 0.0)
+	elif kind == "dry":
+		bg = Color(0.34, 0.31, 0.2, 0.0)
+	# Transparent texels carry the leaf colour so mip levels do not darken the fringes.
+	img.fill(bg)
+	if kind == "needle":
+		# Spruce spray: stem from bottom to top with side shoots, all covered in needles.
+		var shoots: Array = [[Vector2(128, 250), Vector2(128, 8), 3.0]]
+		for i in 9:
+			var y := 220.0 - i * 23.0
+			var spread := 100.0 * (1.0 - i / 11.0)
+			for s: float in [-1.0, 1.0]:
+				shoots.append([Vector2(128, y), Vector2(128 + s * spread, y - 46.0), 1.6])
+		for shoot: Array in shoots:
+			var a: Vector2 = shoot[0]
+			var b: Vector2 = shoot[1]
+			var steps := int(a.distance_to(b) / 2.0)
+			var dir := (b - a).normalized()
+			var nrm := Vector2(-dir.y, dir.x)
+			for k in steps:
+				var p := a.lerp(b, float(k) / steps)
+				var len := 15.0 * (1.0 - 0.5 * float(k) / steps)
+				for s: float in [-1.0, 1.0]:
+					var tip := p + (nrm * s + dir * 0.55).normalized() * len * rng.randf_range(0.7, 1.1)
+					var shade := rng.randf_range(0.7, 1.15)
+					_line(img, p, tip, 1.3, Color(0.12, 0.25, 0.13) * shade)
+			_line(img, a, b, float(shoot[2]), Color(0.24, 0.18, 0.11))
+	else:
+		var dry := kind == "dry"
+		# Twigs fanning out from the bottom, leaves along them.
+		for t in 9:
+			var a := Vector2(128 + rng.randf_range(-20, 20), 250)
+			var b := Vector2(rng.randf_range(20, 236), rng.randf_range(10, 120))
+			_line(img, a, b, 2.2, Color(0.25, 0.2, 0.13))
+			var n := 30 if not dry else 34
+			for k in n:
+				var p := a.lerp(b, rng.randf_range(0.2, 1.0)) + Vector2(rng.randfn(), rng.randfn()) * 14.0
+				var ang := (b - a).angle() + rng.randf_range(-1.3, 1.3)
+				var length := rng.randf_range(22, 36) if not dry else rng.randf_range(9, 15)
+				var width := length * rng.randf_range(0.34, 0.46)
+				var base := Color(0.2, 0.33, 0.09) if not dry else Color(0.42, 0.4, 0.26)
+				base = base.lerp(Color(0.26, 0.36, 0.1), rng.randf() * 0.5) * rng.randf_range(0.75, 1.2)
+				_leaf(img, p, ang, length, width, base)
+	img.generate_mipmaps()
+	var tex := ImageTexture.create_from_image(img)
+	_textures[cache_key] = tex
+	return tex
+
+
+static func _line(img: Image, a: Vector2, b: Vector2, width: float, color: Color) -> void:
+	var steps := int(a.distance_to(b)) + 1
+	for k in steps + 1:
+		var p := a.lerp(b, float(k) / steps)
+		var r := int(ceil(width * 0.5))
+		for dx in range(-r, r + 1):
+			for dy in range(-r, r + 1):
+				var x := int(p.x) + dx
+				var y := int(p.y) + dy
+				if x >= 0 and y >= 0 and x < img.get_width() and y < img.get_height() and dx * dx + dy * dy <= r * r:
+					img.set_pixel(x, y, Color(color, 1.0))
+
+
+static func _leaf(img: Image, center: Vector2, angle: float, length: float, width: float, color: Color) -> void:
+	var dir := Vector2(cos(angle), sin(angle))
+	var nrm := Vector2(-dir.y, dir.x)
+	var r := int(length * 0.5) + 1
+	for dx in range(-r, r + 1):
+		for dy in range(-r, r + 1):
+			var x := int(center.x) + dx
+			var y := int(center.y) + dy
+			if x < 0 or y < 0 or x >= img.get_width() or y >= img.get_height():
+				continue
+			var d := Vector2(dx, dy)
+			var u := d.dot(dir) / (length * 0.5)       # -1..1 along the leaf
+			var v := d.dot(nrm) / (width * 0.5)
+			var edge := sqrt(maxf(0.0, 1.0 - u * u)) * (1.0 - 0.25 * u)  # pointed tip
+			if absf(v) > edge:
+				continue
+			var shade := 0.82 + 0.3 * (v * 0.5 + 0.5)                       # light from one side
+			if absf(v) < 0.08 and u > -0.9:
+				shade *= 1.18                                              # midrib
+			img.set_pixel(x, y, Color(color.r * shade, color.g * shade, color.b * shade, 1.0))

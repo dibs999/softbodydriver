@@ -239,7 +239,11 @@ func scan_cars() -> void:
 		info["torque"] = peak_t
 		info["power"] = peak_p
 		cars.append(info)
-	cars.sort_custom(func(a, b): return a["name"] < b["name"])
+	# Detailed (imported) models first, then the procedural ones; alphabetical within each group.
+	cars.sort_custom(func(a, b):
+		var da: bool = not (a["visual_model"] as Dictionary).is_empty()
+		var db: bool = not (b["visual_model"] as Dictionary).is_empty()
+		return a["name"] < b["name"] if da == db else da)
 	print("SoftBodyDriver: %d vehicles found in %s" % [cars.size(), CARS_DIR])
 
 

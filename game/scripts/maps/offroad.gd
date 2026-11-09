@@ -1,6 +1,7 @@
 extends RefCounted
 ## A continuous rural heightfield: every driving route is an unpaved track.
 const C := preload("res://scripts/maps/common.gd")
+const V := preload("res://scripts/maps/vegetation.gd")
 const TRACK_SHADER := preload("res://materials/surfaces/field_track.gdshader")
 const COUNT := 513
 const CELL := 3.0
@@ -160,10 +161,9 @@ static func _field(p: Vector2) -> int:
 static func _vegetation(parent: Node3D, world: SBWorld, paths: Array[PackedVector3Array], ground: Callable, farm: Vector3) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 19182
-	var trunks: Array[Transform3D] = []
-	var crowns: Array[Transform3D] = []
-	var broadleaf: Array[Transform3D] = []
-	var bushes: Array[Transform3D] = []
+	var pines: Array[Vector3] = []
+	var leafy: Array[Vector3] = []
+	var bushes: Array[Vector3] = []
 	var rocks: Array[Transform3D] = []
 	for i in 2400:
 		var p := Vector2(rng.randf_range(-690,690),rng.randf_range(-690,690))
@@ -171,17 +171,13 @@ static func _vegetation(parent: Node3D, world: SBWorld, paths: Array[PackedVecto
 		var y: float = ground.call(p.x,p.y)
 		var forest := _field(p) < 0 and (p.y < 160 or p.x < -470 or p.x > 400)
 		if forest and i % 3 != 0:
-			var h := rng.randf_range(7,13)
-			trunks.append(Transform3D(Basis.from_scale(Vector3(0.28,h*0.82,0.28)),Vector3(p.x,y+h*0.41,p.y)))
 			if i % 4 != 0:
-				for tier in 3:
-					crowns.append(Transform3D(Basis.from_scale(Vector3(2.8-tier*0.65, h*0.39, 2.8-tier*0.65)),Vector3(p.x,y+h*(0.45+tier*0.18),p.y)))
+				pines.append(Vector3(p.x,y,p.y))
 			else:
-				broadleaf.append(Transform3D(Basis.from_scale(Vector3(h*0.31,h*0.26,h*0.30)),Vector3(p.x,y+h*0.79,p.y)))
+				leafy.append(Vector3(p.x,y,p.y))
 			world.add_box(Vector3(p.x,y+1.8,p.y),Vector3(0.24,1.8,0.24),Vector3.ZERO,0.75)
 		elif i % 2 == 0 and _field(p) < 0:
-			var scale := rng.randf_range(0.7,1.6)
-			bushes.append(Transform3D(Basis.from_scale(Vector3(scale,scale*0.6,scale)),Vector3(p.x,y+0.3,p.y)))
+			bushes.append(Vector3(p.x,y,p.y))
 		elif i % 7 == 0 and _field(p) < 0:
 			var scale := rng.randf_range(0.6,2.4)
 			rocks.append(Transform3D(Basis(Vector3.UP,rng.randf()*TAU).scaled_local(Vector3(scale,scale*0.7,scale)),Vector3(p.x,y+scale*0.3,p.y)))
@@ -197,32 +193,16 @@ static func _vegetation(parent: Node3D, world: SBWorld, paths: Array[PackedVecto
 				if _field(Vector2(p.x,p.z)) >= 0 or _near_paths(Vector2(p.x,p.z),paths,6.5): continue
 				if p.distance_to(woodland[woodland.size()/3]) < 22: continue
 				p.y = ground.call(p.x,p.z)
-				var h := rng.randf_range(8,14)
-				trunks.append(Transform3D(Basis.from_scale(Vector3(0.26,h*0.82,0.26)),p+Vector3.UP*h*0.41))
-				for tier in 3:
-					crowns.append(Transform3D(Basis.from_scale(Vector3(3.2-tier*0.7,h*0.39,3.2-tier*0.7)),p+Vector3.UP*h*(0.45+tier*0.18)))
+				pines.append(p)
 				world.add_box(p+Vector3.UP*1.8,Vector3(0.23,1.8,0.23),Vector3.ZERO,0.75)
-	var trunk := CylinderMesh.new()
-	trunk.top_radius = 0.75
-	trunk.bottom_radius = 1.0
-	trunk.height = 1.0
-	trunk.radial_segments = 6
-	trunk.rings = 0
-	var pine := CylinderMesh.new()
-	pine.top_radius = 0
-	pine.bottom_radius = 1
-	pine.height = 1
-	pine.radial_segments = 8
-	pine.rings = 0
+	V.plant(parent,"conifer",pines,19183,0.55,0.95)
+	V.plant(parent,"broadleaf",leafy,19184,0.75,1.2)
+	V.plant(parent,"bush",bushes,19185,0.7,1.5,false)
 	var sphere := SphereMesh.new()
 	sphere.radius = 1
 	sphere.height = 2
 	sphere.radial_segments = 9
 	sphere.rings = 4
-	C.scatter_multimesh(parent,trunk,C.mat(Color("5b4936")),trunks,false)
-	C.scatter_multimesh(parent,pine,C.mat(Color("2f5037")),crowns,false)
-	C.scatter_multimesh(parent,sphere,C.mat(Color("526d39")),broadleaf,false)
-	C.scatter_multimesh(parent,sphere,C.mat(Color("53603a")),bushes,false)
 	C.scatter_multimesh(parent,sphere,C.surface_material("gravel",1.8,Color(0.65,0.65,0.60)),rocks,false)
 	# Hay bales make the cultivated meadows readable without thousands of grass nodes.
 	var bale := CylinderMesh.new()

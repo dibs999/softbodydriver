@@ -12,7 +12,7 @@ func run() -> void:
 	root.add_child(host)
 	var environment := Environment.new()
 	environment.sky = Sky.new()
-	environment.sky.sky_material = ProceduralSkyMaterial.new()
+	environment.sky.sky_material = GameSky.new()
 	var sun := DirectionalLight3D.new()
 	host.add_child(sun)
 	var camera := Camera3D.new()
