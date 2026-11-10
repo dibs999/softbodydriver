@@ -45,7 +45,10 @@ keine stabile Hochgeschwindigkeitsfahrt.
   Türdetails und zusätzliches Live-Display für Kühlmittel, Kraftstoff und Verbrauch.
   Die Minikarte rückt im Cockpit nach oben, damit die Instrumente frei bleiben.
 - `F3` wählt freie Fahrt, Zeitfahren oder eine 60-Sekunden-Drift-Challenge; in der
-  Stadt gibt es zusätzlich Lieferfahrten. `F4` stellt das Auto am Start auf bzw.
+  Stadt gibt es zusätzlich Lieferfahrten. Im **Rennen** stehen zwei KI-Gegner eine
+  Reihe vor dem Spieler, warten den Countdown ab, fahren dieselbe Runde (mit Überholen)
+  und verlassen die Karte nach dem Ziel; das HUD zeigt die Position, das Ergebnis den
+  Platz. Verkehr am Start wird vorher weggesetzt. `F4` stellt das Auto am Start auf bzw.
   bricht den Lauf ab. Checkpoints und Ziele erscheinen in Welt und Minikarte.
   Bestleistungen werden je Karte, Auto und Modus lokal gespeichert. Zurücksetzen,
   Reparatur und Fahrzeugwechsel beenden einen laufenden Versuch. Pausen stoppen
