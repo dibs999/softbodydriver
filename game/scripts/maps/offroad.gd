@@ -338,6 +338,16 @@ static func _farm(parent: Node3D, world: SBWorld, p: Vector3, ground: Callable) 
 	C.scatter_multimesh(parent,strip,C.mat(Color("503e2c")),battens,false)
 	for z: float in [-5,5]:
 		C.box(parent,world,h+Vector3(2,0.55,z),Vector3(3.3,0.55,1.1),Vector3.ZERO,timber)
+	# Farmhouse behind the machine shed, cut into the ground at its lowest corner.
+	var village := preload("res://scripts/maps/village.gd").new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4711
+	var hc := p + Vector3(-4, 0, -25)
+	var low := INF
+	for corner: Vector2 in [Vector2(-6.5, -4.0), Vector2(6.5, -4.0), Vector2(-6.5, 4.0), Vector2(6.5, 4.0)]:
+		low = minf(low, ground.call(hc.x + corner.x, hc.z + corner.y))
+	village.house(world, Vector3(hc.x, low - 0.1, hc.z), 0.0, 13.0, 8.0, 2, rng)
+	village.build(parent)
 	_sign(parent,world,p+Vector3(-14,0,-16),"WALD & WEIDE  /  START",ground)
 	_logs(parent,world,p+Vector3(9,0,18))
 

@@ -772,6 +772,31 @@ static func _hill_village(world: SBWorld, parent: Node3D, road: PackedVector3Arr
 	V.plant(parent, "broadleaf", trees, 3002, 0.7, 1.0, false)
 	for t in trees:
 		if V.keep(t): world.add_box(t + Vector3.UP * 1.8, Vector3(0.22, 1.8, 0.22), Vector3.ZERO, 0.7)
+	# Street lamps along the village road (pooled spot lights at night, see street_lighting.gd).
+	var lens := StandardMaterial3D.new()
+	lens.albedo_color = Color(0.9, 0.88, 0.8)
+	lens.emission_enabled = true
+	lens.emission = Color(1.0, 0.85, 0.62)
+	lens.emission_energy_multiplier = 0.0
+	var lamp_post := C.mat(Color(0.25, 0.27, 0.28), 0.5, 0.6)
+	var lights := PackedVector3Array()
+	for k in 5:
+		var i := VILLAGE_AT - 16 + k * 8
+		var fl: Array = frame.call(i)
+		var d: Vector3 = fl[0]
+		var side: Vector3 = fl[1]
+		var sgn := 1.0 if k % 2 == 0 else -1.0
+		var foot := road[i] + side * sgn * (half_w + 1.2)
+		foot.y = height.call(foot.x, foot.z)
+		C.box(parent, world, foot + Vector3.UP * 2.75, Vector3(0.07, 2.75, 0.07), Vector3.ZERO, lamp_post, 0.6)
+		var head := foot + Vector3.UP * 5.45 - side * sgn * 0.9
+		C.box(parent, null, foot + Vector3.UP * 5.5 - side * sgn * 0.45, Vector3(0.04, 0.04, 0.5), Vector3(0, atan2(-side.z, side.x) + PI * 0.5, 0), lamp_post, 0.6, false)
+		C.box(parent, null, head, Vector3(0.22, 0.06, 0.12), Vector3(0, atan2(-d.z, d.x), 0), lens, 0.6, false)
+		lights.append(head - Vector3.UP * 0.1)
+	var lighting := preload("res://scripts/maps/street_lighting.gd").new()
+	lighting.name = "VillageLighting"
+	parent.add_child(lighting)
+	lighting.setup(lights, lens)
 	# Yellow town signs at both ends.
 	var sign_mat := C.mat(Color(0.95, 0.78, 0.10), 0.5)
 	var post_mat := C.mat(Color(0.62, 0.63, 0.65), 0.4, 0.7)

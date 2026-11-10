@@ -15,6 +15,8 @@ var _gables: Array = []       # per wall colour: Array[Transform3D] (prisms)
 var _roofs: Array = []        # per roof colour
 var _shutters: Array = []     # per shutter colour
 var _glass: Array[Transform3D] = []
+var _glass_lit: Array[Transform3D] = []   # lit from inside at night
+var _lit_rng := RandomNumberGenerator.new()
 var _trim: Array[Transform3D] = []
 var _doors: Array[Transform3D] = []
 var _stone: Array[Transform3D] = []
@@ -91,7 +93,7 @@ func house(world: SBWorld, ground: Vector3, yaw: float, length: float, width: fl
 func _window(basis: Basis, centre: Vector3, outward_local: Vector3, shutter: int) -> void:
 	var out := basis * outward_local
 	var across := basis * Vector3(1, 0, 0)
-	_glass.append(Transform3D(basis.scaled_local(Vector3(1.0, 1.25, 0.06)), centre + out * 0.01))
+	(_glass_lit if _lit_rng.randf() < 0.35 else _glass).append(Transform3D(basis.scaled_local(Vector3(1.0, 1.25, 0.06)), centre + out * 0.01))
 	_trim.append(Transform3D(basis.scaled_local(Vector3(1.24, 0.08, 0.24)), centre + out * 0.07 - Vector3.UP * 0.68))
 	for fy: float in [-0.62, 0.62]:
 		_trim.append(Transform3D(basis.scaled_local(Vector3(1.12, 0.07, 0.06)), centre + out * 0.05 + Vector3.UP * fy))
@@ -115,6 +117,9 @@ func build(parent: Node3D) -> void:
 	for i in SHUTTERS.size():
 		C.scatter_multimesh(parent, unit, C.mat(SHUTTERS[i], 0.7), _shutters[i], false)
 	C.scatter_multimesh(parent, unit, C.mat(Color(0.10, 0.14, 0.17), 0.08, 0.4), _glass, false)
+	var lit := ShaderMaterial.new()
+	lit.shader = preload("res://materials/village_window.gdshader")
+	C.scatter_multimesh(parent, unit, lit, _glass_lit, false)
 	C.scatter_multimesh(parent, unit, C.mat(Color(0.90, 0.89, 0.85), 0.7), _trim, false)
 	C.scatter_multimesh(parent, unit, C.noise_mat(Color(0.33, 0.20, 0.12), 0.1, 6.0, 0.7), _doors, false)
 	C.scatter_multimesh(parent, unit, C.noise_mat(Color(0.52, 0.50, 0.47), 0.1, 2.0), _stone)
