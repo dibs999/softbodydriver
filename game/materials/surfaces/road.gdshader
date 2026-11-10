@@ -8,6 +8,7 @@ uniform int lanes = 2;
 uniform bool dirt = false;
 uniform vec4 dirt_tint : source_color = vec4(0.83, 0.68, 0.49, 1.0);
 uniform vec4 divider_color : source_color = vec4(0.86, 0.85, 0.77, 1.0);
+uniform float v_metres = 12.0;     // metres per UV.y unit along the road (road_mesh v_scale)
 uniform float wear = 1.0;          // 0 = fresh surface, 1 = typical public road
 global uniform float road_wetness;  // set by the weather (darker, glossier)
 
@@ -66,12 +67,41 @@ void fragment() {
 	// Large-scale tone variation (different batches, sun bleaching) in world space.
 	float macro = fbm(world_pos.xz * 0.035);
 	float fine = fbm(world_pos.xz * 0.6);
+	float puddle = 0.0;
 	if (dirt) {
 		float rut_distance = min(abs(UV.x - 0.31), abs(UV.x - 0.69));
 		float shoulder = smoothstep(0.34, 0.50, abs(UV.x - 0.5));
 		base *= dirt_tint.rgb;
-		base *= mix(0.73, 1.0, smoothstep(0.018, 0.082, rut_distance)) * mix(1.0, 0.84, shoulder);
+		base *= mix(0.73, 1.0, smoothstep(0.018, 0.082, rut_distance)) * mix(1.0, 1.1, shoulder);
 		base *= mix(0.86, 1.12, macro);
+		float along = UV.y * v_metres;
+		float across = (UV.x - 0.5) * road_width;   // metres from the centre line
+		// Loose gravel thrown out of the wheel tracks: a windrow in the middle and at the shoulders.
+		float windrow = (1.0 - smoothstep(0.2, 0.85, abs(across))) * 0.8
+			+ smoothstep(road_width * 0.5 - 1.5, road_width * 0.5 - 0.4, abs(across));
+		windrow *= 0.55 + 0.45 * vnoise(vec2(along * 0.15, across * 0.7));
+		base = mix(base, base * vec3(1.20, 1.14, 1.05), windrow * 0.7);
+		// Scattered stones, more of them in the loose gravel.
+		vec2 sp = vec2(across, along) * 3.0;
+		vec2 sc = floor(sp);
+		vec2 sf = fract(sp) - vec2(hash(sc), hash(sc + 5.0)) * 0.6 - 0.2;
+		float stone = (1.0 - smoothstep(0.08, 0.15, length(sf))) * step(0.78 - windrow * 0.3, hash(sc + 11.0));
+		base = mix(base, base * (0.55 + 0.8 * hash(sc + 3.0)), stone);
+		// Washboard corrugations in patches, deepest in the wheel tracks.
+		float wb_zone = smoothstep(0.5, 0.72, vnoise(vec2(along * 0.025, 2.0))) * mix(1.0, 0.4, smoothstep(0.03, 0.1, rut_distance));
+		float ripple = sin(along * 8.4 + vnoise(vec2(along * 0.2, across * 0.3)) * 2.0);
+		base *= 1.0 - wb_zone * 0.12 * (ripple * 0.5 + 0.5);
+		// Potholes with a lighter broken rim; they hold water in the rain.
+		vec2 pp = vec2(across, along) / 2.5;
+		vec2 pc = floor(pp);
+		vec2 pf = fract(pp) - 0.5;
+		float hole_r = 0.17 + 0.12 * hash(pc + 1.0);
+		float hd = length(pf * vec2(1.0, 1.3)) + (vnoise(pp * 9.0) - 0.5) * 0.06;
+		float has_hole = step(0.93, hash(pc + 7.0)) * (1.0 - shoulder);
+		puddle = (1.0 - smoothstep(hole_r * 0.7, hole_r, hd)) * has_hole;
+		float rim = smoothstep(hole_r * 0.8, hole_r, hd) * (1.0 - smoothstep(hole_r, hole_r * 1.3, hd)) * has_hole;
+		base = mix(base, base * 0.55, puddle);
+		base = mix(base, base * 1.15, rim * 0.5);
 	} else {
 		float u = UV.x;
 		base *= mix(0.84, 1.10, macro) * mix(0.95, 1.04, fine);
@@ -131,7 +161,15 @@ void fragment() {
 	float wetness = clamp(road_wetness * (dirt ? 0.7 : 1.0), 0.0, 1.0);
 	base *= mix(1.0, 0.62, wetness);
 	rough = mix(rough, 0.12 + 0.25 * fine, wetness);
+	// Standing water in potholes once it has rained a while.
+	float standing = puddle * smoothstep(0.3, 0.7, road_wetness);
+	base = mix(base, base * 0.5, standing);
+	rough = mix(rough, 0.04, standing);
 	ALBEDO = base;
+	// Dirt roads fray into the surrounding ground instead of ending on a straight line.
+	float edge_m = (0.5 - abs(UV.x - 0.5)) * road_width;
+	ALPHA = dirt ? edge_m / 1.1 - (fbm(world_pos.xz * 0.9) - 0.3) : 1.0;
+	ALPHA_SCISSOR_THRESHOLD = 0.5;
 	ROUGHNESS = rough;
 	SPECULAR = mix(0.5, 0.65, wetness);
 }

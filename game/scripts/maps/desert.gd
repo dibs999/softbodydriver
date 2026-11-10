@@ -2,6 +2,7 @@ extends RefCounted
 ## Dunes, a sandstone plateau and a rally loop with a field station at the start.
 
 const C := preload("res://scripts/maps/common.gd")
+const ROCKS := preload("res://scripts/maps/rocks.gd")
 const V := preload("res://scripts/maps/vegetation.gd")
 
 
@@ -126,7 +127,10 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			dust = dust.lerp(Color(1.0, 0.70, 0.52), smoothstep(0.20, 0.5, -pn) * 0.55)       # red soil
 			dust = dust.lerp(Color(1.08, 1.0, 0.86), (1.0 - smoothstep(0.0, 0.06, wash_noise.get_noise_2d(wx, wz) + 0.5)) * 0.6)  # washes
 			colors[i] = dust.lerp(cliff, smoothstep(0.17, 0.73, slope)).darkened(clampf(heights[i] / 330.0, 0.0, 0.22))
-	C.terrain_tiles(parent, ox, oz, cell, nx, nz, heights, C.terrain_material("gravel", 5.0, Color(0.80, 0.72, 0.62)), colors)
+	var terrain_mat := C.terrain_material("gravel", 5.0, Color(0.80, 0.72, 0.62))
+	terrain_mat.set_shader_parameter("has_strata", true)
+	terrain_mat.set_shader_parameter("slope_tint", Color(1.0, 1.0, 1.0))
+	C.terrain_tiles(parent, ox, oz, cell, nx, nz, heights, terrain_mat, colors)
 	var ground_height := func(x: float, z: float) -> float:
 		return C.sample(heights, nx, nz, ox, oz, cell, x, z)
 	parent.add_child(C.road_mesh(track, half_w, C.road_material(2, half_w * 2.0, 12.0, "desert"), true, 0.052, 12.0, ground_height))
@@ -136,10 +140,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	# Boulders (colliding) and cacti / shrubs (visual).
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 77
-	var rock_mat := C.noise_mat(Color(0.63, 0.40, 0.29), 0.2, 0.4, 0.95, 0.2)
-	var boulder := SphereMesh.new()
-	boulder.radial_segments = 7
-	boulder.rings = 3
+	var rock_mat := ROCKS.material()
 	var boulders: Array[Transform3D] = []
 	for i in 340:
 		var p := Vector2(rng.randf_range(-855, 855), rng.randf_range(-855, 855))
@@ -167,7 +168,14 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			boulders.append(Transform3D(Basis(Vector3.UP, yaw).scaled_local(Vector3(1.0, 0.76, 0.82) * size), p))
 			if size > 3.8:
 				world.add_box(p, Vector3(0.35, 0.28, 0.28) * size, Vector3(0, yaw, 0), 0.7)
-	C.scatter_multimesh(parent, boulder, rock_mat, boulders, false)
+	# Four rock shapes; the large ones cast shadows.
+	var by_variant: Array = [[], [], [], []]
+	for k in boulders.size():
+		by_variant[k % 4].append(boulders[k])
+	for v in 4:
+		var batch: Array[Transform3D] = []
+		batch.assign(by_variant[v])
+		C.scatter_multimesh(parent, ROCKS.mesh(v), rock_mat, batch, true)
 	var cactus := _saguaro_mesh()
 	var xfs: Array[Transform3D] = []
 	var arms: Array[Transform3D] = []

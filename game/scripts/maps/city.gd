@@ -137,6 +137,8 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 					if Vector2(p.x - c.x, p.z - c.z).length() < 9.0:
 						continue
 					trees.append(p)
+				for t in trees:
+					if V.keep(t): world.add_box(t + Vector3.UP * 1.5, Vector3(0.2, 1.5, 0.2), Vector3.ZERO, 0.7)
 				V.plant(parent, "broadleaf", trees, block.x * 31 + block.y, 0.75, 1.1)
 				if block == Vector2i(4, 5):
 					places.append({"name": "Stadtpark", "position": c})
@@ -600,6 +602,8 @@ static func _townhouses(parent: Node3D, world: SBWorld, center: Vector3, grass: 
 	C.scatter_multimesh(parent, unit, C.noise_mat(Color(0.16, 0.30, 0.11), 0.25, 1.5), hedges)
 	C.scatter_multimesh(parent, unit, C.noise_mat(Color(0.44, 0.33, 0.22), 0.12, 5.0), fences, false)
 	C.scatter_multimesh(parent, unit, C.noise_mat(Color(0.36, 0.30, 0.22), 0.12, 5.0), sheds)
+	for t in trees:
+		if V.keep(t): world.add_box(t + Vector3.UP * 1.5, Vector3(0.18, 1.5, 0.18), Vector3.ZERO, 0.7)
 	V.plant(parent, "broadleaf", trees, 913, 0.55, 0.8)
 
 

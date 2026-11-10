@@ -260,6 +260,7 @@ static func road_material(lanes: int, width: float, texture_length: float, style
 	m.set_shader_parameter("road_width", width)
 	m.set_shader_parameter("lanes", lanes)
 	m.set_shader_parameter("dirt", dirt)
+	m.set_shader_parameter("v_metres", texture_length)
 	if style == "rural":
 		m.set_shader_parameter("divider_color", Color(0.93, 0.82, 0.44))
 	elif style == "desert":

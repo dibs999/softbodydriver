@@ -472,10 +472,11 @@ static func boulders(parent: Node3D, world: SBWorld, xforms: Array[Transform3D])
 		var s := xf.basis.get_scale()
 		if s.x > 0.9:
 			world.add_box(xf.origin + Vector3.UP * s.y * 0.2, Vector3(s.x * 0.42, s.y * 0.32, s.z * 0.42), Vector3.ZERO, 0.8)
+	var rock: Material = preload("res://scripts/maps/rocks.gd").grey_material()
 	for v in 3:
 		var list: Array[Transform3D] = []
 		list.assign(groups[v])
-		C.scatter_multimesh(parent, meshes[v], _mat("rock"), list)
+		C.scatter_multimesh(parent, meshes[v], rock, list)
 
 
 ## Round hay bales lying on their side.

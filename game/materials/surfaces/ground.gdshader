@@ -22,6 +22,11 @@ uniform float slope_tile = 3.0;
 uniform vec4 slope_tint : source_color = vec4(1.0);
 uniform float slope_start = 0.90;         // normal.y at which earth starts to show
 uniform float slope_full = 0.72;          // normal.y of fully bare ground
+// Desert: sedimentary layers on steep faces (mesa walls, road cuts) instead of plain earth.
+uniform bool has_strata = false;
+uniform float strata_spacing = 1.4;
+uniform vec4 strata_light : source_color = vec4(0.92, 0.70, 0.52, 1.0);
+uniform vec4 strata_dark : source_color = vec4(0.52, 0.30, 0.21, 1.0);
 global uniform float road_wetness;
 
 varying vec3 world_pos;
@@ -98,6 +103,19 @@ void fragment() {
 		steep = clamp(steep * 1.35 - (breakup - 0.5) * 1.3, 0.0, 1.0);
 		vec3 ps = world_pos / slope_tile;
 		vec3 earth = texture(slope_tex, ps.zy).rgb * w.x + texture(slope_tex, ps.xz).rgb * w.y + texture(slope_tex, ps.xy).rgb * w.z;
+		if (has_strata) {
+			float warp = fbm(world_pos.xz * 0.02) * 4.0 + vnoise(world_pos.xz * 0.15) * 0.6;
+			float y = world_pos.y / strata_spacing + warp;
+			float layer = floor(y);
+			float f = fract(y);
+			float tone = hash(vec2(layer, 1.3));
+			float seam = 1.0 - smoothstep(0.0, 0.08, f) * smoothstep(1.0, 0.9, f);
+			vec3 layer_col = mix(strata_dark.rgb, strata_light.rgb, tone * 0.8 + 0.2) * (1.0 - seam * 0.3);
+			// Vertical erosion streaks (desert varnish) running down the faces.
+			float streak = vnoise(vec2((world_pos.x + world_pos.z) * 0.9, world_pos.y * 0.04));
+			layer_col *= 0.86 + 0.24 * streak;
+			earth = mix(earth, vec3(dot(earth, vec3(0.33))), 0.6) * 1.6 * layer_col;
+		}
 		col = mix(col, earth * slope_tint.rgb, steep);
 	}
 	// Large patches in world space: lighter/darker batches, dry or lush areas.

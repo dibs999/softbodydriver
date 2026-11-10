@@ -446,6 +446,24 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 				var blend := smoothstep(0.0, 6.0, edge) * (0.92 + 0.08 * sin(across * 1.9))   # furrows
 				var crop: Color = [Color(1.45, 1.12, 0.52), Color(0.82, 0.62, 0.44), Color(1.25, 1.18, 0.62)][(strip + index) % 3]
 				colors[ix * nz + iz] = colors[ix * nz + iz].lerp(crop, blend)
+	# Woods: patches on the hillsides and closed forest on the ridges around the valley, kept off
+	# the farms, the lookout and the start. A dark forest floor is painted under them.
+	var woods_noise := FastNoiseLite.new()
+	woods_noise.seed = 91
+	woods_noise.frequency = 0.006
+	var clearings := [[road[12], 175.0], [road[194], 175.0], [road[410], 175.0], [road[100], 75.0], [road[0], 60.0]]
+	var woods := func(x: float, z: float) -> float:
+		for c: Array in clearings:
+			var cp: Vector3 = c[0]
+			if Vector2(x - cp.x, z - cp.z).length() < c[1]:
+				return 0.0
+		var patch := smoothstep(0.08, 0.26, woods_noise.get_noise_2d(x, z))
+		return maxf(patch, smoothstep(515.0, 575.0, Vector2(x, z).length()) * smoothstep(-0.45, -0.2, woods_noise.get_noise_2d(x, z)))
+	for ix in nx:
+		for iz in nz:
+			var wm: float = woods.call(ox + ix * cell, oz + iz * cell)
+			if wm > 0.0:
+				colors[ix * nz + iz] = colors[ix * nz + iz].lerp(Color(0.36, 0.42, 0.25), wm * 0.85)
 	C.terrain_tiles(parent, ox, oz, cell, nx, nz, heights, grass, colors)
 	var ground_height := func(x: float, z: float) -> float:
 		return C.sample(heights, nx, nz, ox, oz, cell, x, z)
@@ -542,11 +560,46 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 				p.y = ground_height.call(p.x, p.z)
 				var conifer := noise.get_noise_2d(p.x * 0.7 + 400.0, p.z * 0.7) > -0.1
 				(conifers if conifer else broadleaf).append(p)
-				if V.keep(p) and wood_rng.randf() < 0.5:
-					world.add_box(p + Vector3.UP * 1.8, Vector3(0.22, 1.8, 0.22), Vector3.ZERO, 0.7)
+				wood_rng.randf()   # (kept for the layout; all trunks get colliders below)
 			var b := road[i] + side * sign * wood_rng.randf_range(7.0, 12.0)
 			b.y = ground_height.call(b.x, b.z)
 			under.append(b)
+	# Road proximity through a coarse cell lookup, then an exact check against every road point.
+	var road_cells := {}
+	for j in n_road:
+		var rc := Vector2i(floori(road[j].x / 16.0), floori(road[j].z / 16.0))
+		for dx in range(-1, 2):
+			for dz in range(-1, 2):
+				road_cells[rc + Vector2i(dx, dz)] = true
+	var near_road := func(p: Vector2, d: float) -> bool:
+		if not road_cells.has(Vector2i(floori(p.x / 16.0), floori(p.y / 16.0))):
+			return false
+		for j in n_road:
+			if p.distance_squared_to(Vector2(road[j].x, road[j].z)) < d * d:
+				return true
+		return false
+	# Trees were only visual: their trunks now collide (except the few right at the verge, which
+	# the old sparse road check let through).
+	for list: Array[Vector3] in [broadleaf, conifers]:
+		for p in list:
+			if V.keep(p) and Vector2(p.x, p.z).length() < 600.0 and not near_road.call(Vector2(p.x, p.z), 9.0):
+				world.add_box(p + Vector3.UP * 1.8, Vector3(0.22, 1.8, 0.22), Vector3.ZERO, 0.7)
+	# Closed woods on a jittered 10 m grid.
+	var grid_rng := RandomNumberGenerator.new()
+	grid_rng.seed = 92
+	for gx in range(-660, 661, 10):
+		for gz in range(-660, 661, 10):
+			var p := Vector2(gx + grid_rng.randf_range(-3.5, 3.5), gz + grid_rng.randf_range(-3.5, 3.5))
+			if woods.call(p.x, p.y) < 0.5 or grid_rng.randf() < 0.3:
+				continue
+			if near_road.call(p, 13.0):
+				continue
+			var q := Vector3(p.x, ground_height.call(p.x, p.y), p.y)
+			if not V.keep(q):
+				continue
+			(conifers if noise.get_noise_2d(p.x * 0.7 + 400.0, p.y * 0.7) > -0.15 else broadleaf).append(q)
+			if Vector2(p.x, p.y).length() < 600.0:
+				world.add_box(q + Vector3.UP * 1.8, Vector3(0.22, 1.8, 0.22), Vector3.ZERO, 0.7)
 	V.plant(parent, "broadleaf", broadleaf, 31, 0.75, 1.25, false)
 	V.plant(parent, "conifer", conifers, 32, 0.6, 1.0, false)
 	V.plant(parent, "bush", under, 35, 0.7, 1.6, false)
