@@ -28,6 +28,9 @@ func step(car: SBVehicle, throttle: float, brake := 0.0) -> void:
 	world.step_blocking(0.05)
 	world.sync_visuals()
 func run() -> void:
+	# The trunk checks below need every tree: a lower vegetation setting saved in the player's
+	# profile thins them out (and their colliders with them).
+	root.get_node("Game").graphics["vegetation"] = 1.0
 	host = SceneFixture.new()
 	host.weather = ClockFixture.new()
 	host.add_child(host.weather)

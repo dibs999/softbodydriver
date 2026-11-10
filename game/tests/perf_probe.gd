@@ -21,6 +21,8 @@ func _next() -> void:
 	current = maps.pop_front()
 	var game := root.get_node("Game")
 	if OS.has_environment("PRESET"):
+		# Measure with the preset without saving it into the player's profile.
+		game.settings_config_path = "user://perf_probe_%d.cfg" % OS.get_process_id()
 		game._set_graphics_preset(int(OS.get_environment("PRESET")))
 	game.selected_map = current
 	game.selected_car = "res://cars/meridian_sedan.car.json"
