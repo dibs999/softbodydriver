@@ -433,6 +433,9 @@ func _on_car_selected(i: int) -> void:
 			progress_info.text += " · Zeitfahren abgeschlossen"
 		if not record.is_empty():
 			progress_info.text += "\nBremsrekord: %.1f m aus %.0f km/h" % [record["distance_m"], record["start_speed_kmh"]]
+		var tally: Array[int] = preload("res://scripts/driving_activity.gd").medal_tally()
+		if tally[0] + tally[1] + tally[2] > 0:
+			progress_info.text += "\nMedaillen: %d Gold · %d Silber · %d Bronze" % [tally[2], tally[1], tally[0]]
 		if Game.progress.read_only:
 			progress_info.text = "Fortschritt kann nicht gespeichert werden. Das vorhandene Profil bleibt erhalten."
 	car_name.text = c["name"]
