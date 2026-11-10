@@ -1,3 +1,4 @@
+#include <array>
 // Physical (node-beam) part of the realistic car generator. See car.hpp.
 #include <algorithm>
 #include <cmath>
@@ -1129,6 +1130,33 @@ CarBuild buildCar(const CarDefinition& def) {
             }
         }
         car.addWheel(ws);
+        // Tread surface for other bodies: without it a loose object's corner slipped between
+        // two tread nodes (12 cm apart) into the tyre and jammed there, so a car could not roll
+        // over a 4 cm block, it shoved it along and lost 30 km/h in 3 s.
+        {
+            const PressureWheel& wheel = car.wheels().back();
+            const auto N = static_cast<std::size_t>(wheel.spec.numRays);
+            const Vec3 hub = (car.positions()[ws.hubLeft] + car.positions()[ws.hubRight]) * 0.5;
+            ColTriParams tread;
+            tread.friction = tire.friction;
+            tread.dragCoef = 0.0;   // the spinning tread is no aero surface
+            tread.selfContact = false;
+            for (std::size_t i = 0; i < N; ++i) {
+                const std::uint32_t a0 = wheel.treadNodes[i], a1 = wheel.treadNodes[(i + 1) % N];
+                const std::uint32_t b0 = wheel.treadNodes[N + i], b1 = wheel.treadNodes[N + (i + 1) % N];
+                for (const auto& t : {std::array<std::uint32_t, 3>{a0, a1, b1}, std::array<std::uint32_t, 3>{a0, b1, b0}}) {
+                    const Vec3 pa = car.positions()[t[0]], pb = car.positions()[t[1]], pc = car.positions()[t[2]];
+                    const Vec3 ctr = (pa + pb + pc) / 3.0;
+                    // Outward radially, measured perpendicular to the axle.
+                    Vec3 axle = car.positions()[ws.hubLeft] - car.positions()[ws.hubRight];
+                    axle = axle / std::max<real>(1e-9, length(axle));
+                    Vec3 radial = ctr - hub;
+                    radial = radial - axle * dot(radial, axle);
+                    if (dot(cross(pb - pa, pc - pa), radial) < 0) car.addTriangle(t[0], t[2], t[1], tread);
+                    else car.addTriangle(t[0], t[1], t[2], tread);
+                }
+            }
+        }
     }
 
     // ------------------------------------------------------------------ powertrain

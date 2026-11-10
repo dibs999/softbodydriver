@@ -80,6 +80,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var gates: Array[Transform3D] = []
 	var dumpsters: Array[Transform3D] = []
 	var dumpster_lids: Array[Transform3D] = []
+	var bins: Array = []   # loose wheelie bins (soft-body props)
 	var buildings: Array[Array] = []
 	for i in facades.size():
 		var batch: Array[Transform3D] = []
@@ -155,6 +156,13 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 					street_trees.append(p)
 					world.add_box(p + Vector3.UP * 1.5, Vector3(0.16, 1.5, 0.16), Vector3.ZERO, 0.7)
 					grates.append(Transform3D(Basis.from_scale(Vector3(1.5, 1.0, 1.5)), p + Vector3.UP * 0.005))
+			# Collection day on some streets: pairs of wheelie bins at the kerb between the trees,
+			# handles and wheels towards the road.
+			if (bx * 3 + bz) % 7 == 0:
+				for t: float in [25.0]:
+					for k in 2:
+						bins.append({"kind": "bin", "position": Vector3(x0 + t + k * 0.68, KERB, z0 + BLOCK - 1.0), "yaw": PI * 0.5})
+						bins.append({"kind": "bin", "position": Vector3(x0 + BLOCK - 1.0, KERB, z0 + t + k * 0.68), "yaw": PI})
 			# 1..4 buildings per block.
 			var split := rng.randi_range(1, 2)
 			var margin := 3.0
@@ -172,6 +180,10 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 					var dp := Vector3(mid.x + along, KERB, mid.y) if rng.randf() < 0.5 else Vector3(mid.x, KERB, mid.y + along)
 					var yaw := Basis(Vector3.UP, 0.0 if absf(dp.z - mid.y) < 0.1 else PI * 0.5)
 					dumpsters.append(Transform3D(yaw.scaled_local(Vector3(1.8, 1.2, 1.1)), dp + Vector3.UP * 0.62))
+					var along_alley := yaw.x * (1.0 if along > 0.0 else -1.0)
+					for n in (2 if k == 0 and (bx + 2 * bz) % 3 == 0 else 0):
+						# Side by side beyond the dumpster's end, lids towards the alley wall.
+						bins.append({"kind": "bin", "position": dp + along_alley * (1.4 + n * 0.68), "yaw": atan2(-yaw.x.z, yaw.x.x) + PI * 0.5})
 					dumpster_lids.append(Transform3D(yaw.scaled_local(Vector3(1.86, 0.08, 1.16)), dp + Vector3.UP * 1.26))
 			for sx in split:
 				for sz in split:
@@ -407,6 +419,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			break
 		if done:
 			break
+	props.append_array(bins)
 	_street_life(parent, world, origin, metal)
 	var speeds := C.speeds_from_curvature(route, 13.5, 6.0, 25.0)
 	var spawn_p := Vector3(origin + STREET * 0.5 + 5 * PITCH - 4.0, 0, origin + STREET * 0.5 + 5 * PITCH + 20.0)

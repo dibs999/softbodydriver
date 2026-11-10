@@ -266,7 +266,10 @@ den Baustellen und an der Raststätte Coyote Flats in der Wüste, und rot-weiße
 wassergefüllte Absperrungen (300 kg, lassen sich wegschieben und eindrücken) an den
 Baustellen von Autobahn und Stadt. Im Gelände liegen gefällte Baumstämme (3 m,
 380 kg) am Holzlager, am Waldweg und quer über dem 4x4-Pfad: Sie lassen sich schieben,
-rollen und überklettern. Autos stoßen die Requisiten um, schleifen
+rollen und überklettern. In der Stadt stehen 240-Liter-Mülltonnen (15 kg, verbeulen) am
+Abholtag paarweise an der Bordsteinkante und in den Hinterhöfen neben den Containern.
+Ruhende Requisiten schlafen und kosten keine Rechenzeit, bis sich etwas Bewegtes nähert.
+Autos stoßen die Requisiten um, schleifen
 Pylonen unter dem Stoßfänger mit oder schleudern Fässer weg; das Pausenmenü stellt
 alle wieder auf („Pylonen und Fässer zurückstellen“).
 

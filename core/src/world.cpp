@@ -316,20 +316,38 @@ std::size_t World::collideBodies() {
     if (nb < 2) return 0;
 
     const real margin = std::max(settings_.colTriSkin, settings_.colTriThickness);
-    std::vector<Vec3> lo(nb), hi(nb);
+    aabbLo_.resize(nb);
+    aabbHi_.resize(nb);
+    awake_.clear();
     for (std::size_t i = 0; i < nb; ++i) {
-        bodies_[i].aabb(lo[i], hi[i]);
-        lo[i] -= Vec3{margin, margin, margin};
-        hi[i] += Vec3{margin, margin, margin};
+        // A sleeping body does not move: its box from the step it fell asleep stays valid.
+        if (bodies_[i].asleep() && sleptBox_.size() == nb && sleptBox_[i]) continue;
+        bodies_[i].aabb(aabbLo_[i], aabbHi_[i]);
+        aabbLo_[i] -= Vec3{margin, margin, margin};
+        aabbHi_[i] += Vec3{margin, margin, margin};
+        if (!bodies_[i].asleep()) awake_.push_back(i);
     }
+    sleptBox_.assign(nb, 0);
+    for (std::size_t i = 0; i < nb; ++i) sleptBox_[i] = bodies_[i].asleep() ? 1 : 0;
 
+    // Pairs with at least one awake body only: dozens of resting props cost nothing.
     std::size_t contacts = 0;
-    for (std::size_t i = 0; i < nb; ++i) {
-        for (std::size_t j = i + 1; j < nb; ++j) {
-            if (hi[i].x < lo[j].x || lo[i].x > hi[j].x ||
-                hi[i].y < lo[j].y || lo[i].y > hi[j].y ||
-                hi[i].z < lo[j].z || lo[i].z > hi[j].z) {
+    for (const std::size_t i : awake_) {
+        for (std::size_t j = 0; j < nb; ++j) {
+            if (j == i || (!bodies_[j].asleep() && j < i)) continue;   // awake pairs once
+            // A resting body sleeps through contact with another resting one; only something
+            // actually moving wakes it.
+            const bool jSleep = bodies_[j].asleep();
+            if (jSleep && bodies_[i].maxNodeSpeed() < 0.05) continue;
+            if (aabbHi_[i].x < aabbLo_[j].x || aabbLo_[i].x > aabbHi_[j].x ||
+                aabbHi_[i].y < aabbLo_[j].y || aabbLo_[i].y > aabbHi_[j].y ||
+                aabbHi_[i].z < aabbLo_[j].z || aabbLo_[i].z > aabbHi_[j].z) {
                 continue;
+            }
+            // Something moving reached a resting body: it takes part again from this contact on.
+            if (jSleep) {
+                bodies_[j].wake();
+                sleptBox_[j] = 0;
             }
             contacts += collideNodeVsTriangles(bodies_[i], bodies_[j]);
             contacts += collideNodeVsTriangles(bodies_[j], bodies_[i]);
@@ -343,6 +361,7 @@ void World::step() {
     std::size_t contacts = 0;
     lastSelfContacts_ = lastSelfContactCandidates_ = 0;
     for (SoftBody& b : bodies_) {
+        if (b.asleep()) continue;
         auto& force = b.forces();
         const auto& mass = b.masses();
         const auto& invMass = b.invMasses();
@@ -357,7 +376,9 @@ void World::step() {
     }
     lastBodyContacts_ = collideBodies();
     for (SoftBody& b : bodies_) {
+        if (b.asleep()) continue;
         contacts += collideBody(b);
+        b.updateSleep(settings_.dt);
     }
     lastContacts_ = contacts;
     ++steps_;

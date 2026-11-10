@@ -151,7 +151,33 @@ void SoftBody::setSystems(const CarSystemsSpec& spec) {
     systems_.emplace(spec);
 }
 
+void SoftBody::updateSleep(real dt, real speed, real restAfter) {
+    if (asleep_) return;
+    // Measured from the actual position change: the stored velocity of a tread node resting on
+    // the ground carries this step's contact-spring impulse (~3 m/s on a parked car).
+    maxSpeedSq_ = 0.0;
+    if (prevPos_.size() == pos_.size() && dt > 0.0) {
+        for (std::size_t i = 0; i < pos_.size(); ++i) maxSpeedSq_ = std::max(maxSpeedSq_, lengthSq(pos_[i] - prevPos_[i]));
+        maxSpeedSq_ /= dt * dt;
+    } else {
+        maxSpeedSq_ = 1e6;   // first step: unknown, treat as moving
+    }
+    prevPos_ = pos_;
+    if (!sleepEnabled_) return;
+    if (maxSpeedSq_ > speed * speed) {
+        restTime_ = 0.0;
+        return;
+    }
+    restTime_ += dt;
+    if (restTime_ >= restAfter) {
+        asleep_ = true;
+        maxSpeedSq_ = 0.0;
+        for (Vec3& v : vel_) v = {0, 0, 0};
+    }
+}
+
 void SoftBody::repair(const std::vector<Vec3>& restPositions) {
+    wake();
     for (auto* list : {&doors_, &lids_})
         for (auto& door : *list) { door.requestedOpen = false; door.latched = true; door.catching = false; door.travel = 0; }
     clearContacts();
@@ -521,6 +547,7 @@ void SoftBody::accumulateBeamForces(real dt) {
 }
 
 void SoftBody::translate(const Vec3& d) {
+    wake();
     for (auto& p : pos_) p += d;
 }
 

@@ -436,6 +436,59 @@ func spawn_prop(world: SBWorld, kind: String, xform: Transform3D) -> SBProp:
 		cap.height = 0.04
 		_prop_part(prop, cap, _prop_mat("barrier_cap", Color(0.15, 0.15, 0.16), 0.6), 0.81)
 		return prop
+	if kind == "bin":
+		# 240 l wheelie bin: anthracite tapered body, colour-coded lid (residual, paper, bio,
+		# packaging), handle bar and two wheels at the back (-x).
+		var lids := [Color(0.16, 0.17, 0.18), Color(0.13, 0.28, 0.62), Color(0.42, 0.27, 0.15), Color(0.88, 0.72, 0.10)]
+		var pick := absi(int(xform.origin.x * 5.0 + xform.origin.z * 11.0)) % lids.size()
+		var shell := _prop_mat("bin_body", Color(0.20, 0.21, 0.22), 0.6)
+		var lid_mat := _prop_mat("bin_lid%d" % pick, lids[pick], 0.5)
+		var holder := Node3D.new()
+		holder.scale = Vector3(0.73, 1.0, 0.58)
+		prop.add_child(holder)
+		var body := CylinderMesh.new()   # four segments turned 45 deg: a tapered box
+		body.top_radius = 0.7071
+		body.bottom_radius = 0.7071 * 0.84
+		body.height = 1.03
+		body.radial_segments = 4
+		body.rings = 1
+		var bm := MeshInstance3D.new()
+		bm.mesh = body
+		bm.material_override = shell
+		bm.position = Vector3(0, 0.535, 0)
+		bm.rotation = Vector3(0, PI * 0.25, 0)
+		holder.add_child(bm)
+		var lid := BoxMesh.new()
+		lid.size = Vector3(0.78, 0.05, 0.62)
+		var lm := MeshInstance3D.new()
+		lm.mesh = lid
+		lm.material_override = lid_mat
+		lm.position = Vector3(0.01, 1.075, 0)
+		prop.add_child(lm)
+		var handle := CylinderMesh.new()
+		handle.top_radius = 0.018
+		handle.bottom_radius = 0.018
+		handle.height = 0.46
+		var hm := MeshInstance3D.new()
+		hm.mesh = handle
+		hm.material_override = shell
+		hm.position = Vector3(-0.41, 1.0, 0)
+		hm.rotation = Vector3(PI * 0.5, 0, 0)
+		prop.add_child(hm)
+		var tyre := _prop_mat("bin_wheel", Color(0.05, 0.05, 0.05), 0.85)
+		for side: float in [-1.0, 1.0]:
+			var wheel := CylinderMesh.new()
+			wheel.top_radius = 0.10
+			wheel.bottom_radius = 0.10
+			wheel.height = 0.05
+			wheel.radial_segments = 12
+			var wm := MeshInstance3D.new()
+			wm.mesh = wheel
+			wm.material_override = tyre
+			wm.position = Vector3(-0.31, 0.10, side * 0.25)
+			wm.rotation = Vector3(PI * 0.5, 0, 0)
+			prop.add_child(wm)
+		return prop
 	if kind == "log":
 		# Felled trunk, 3 m x 0.4 m: dark furrowed bark, pale sawn end faces with a darker heart,
 		# and a stub of a lopped branch so a roll is visible.
