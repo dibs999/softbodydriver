@@ -112,6 +112,7 @@ Vorschau: `tests/facade_shots.gd -- <png> <stil> [debug]`.
 * **Stromleitung:** Holzmasten mit Querträger und Isolatoren, dazu durchhängende Leitungen.
 * **Höfe:** Weidezaun, Heuballen, Felsbrocken. Felder in Streifen aus Weizen und umgepflügter Erde hinter den Höfen.
 * **Waldkorridore:** dichter Nadel- und Laubwald mit Unterholz auf einzelnen Abschnitten.
+* **Wälder:** geschlossene Waldstücke an den Hängen und auf den Höhenzügen rund ums Tal (10-m-Raster), frei um Höfe, Aussichtspunkt und Start; dunkler Waldboden darunter. Alle Baumstämme in Reichweite der Straße kollidieren (vorher waren die verstreuten Bäume nur Optik).
 * **Hänge:** An steilen Hängen und Böschungen kommt auf allen Karten Erde und Gestein durch (Bodenshader).
 
 Bausteine in `scripts/maps/roadside.gd`; Ansichten bestimmter Stellen mit `AT=<Wegpunkte> tests/map_shots.gd`.
