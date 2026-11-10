@@ -24,6 +24,9 @@ var road_marks: RoadMarks
 var world: SBWorld
 var map_data: Dictionary
 var vehicles: Array[SBVehicle] = []
+var _tune_front: HSlider
+var _tune_rear: HSlider
+var _tune_bias: HSlider
 var ai: Dictionary = {}            # SBVehicle -> AIDriver
 var player: SBVehicle
 var cam: Camera3D
@@ -710,6 +713,22 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 		b.pressed.connect(entry[1])
 		vehicle_page.add_child(b)
 
+	vehicle_page.add_child(UITheme.section("Abstimmung"))
+	var retune := func(_v: float) -> void: _apply_tuning()
+	_tune_front = _pause_slider(vehicle_page, "Reifendruck vorn", 18.0, 50.0, 0.5, "%.1f psi", retune)
+	_tune_rear = _pause_slider(vehicle_page, "Reifendruck hinten", 18.0, 50.0, 0.5, "%.1f psi", retune)
+	_tune_bias = _pause_slider(vehicle_page, "Bremskraft vorn", 50.0, 80.0, 1.0, "%.0f %%", retune)
+	var reset_tuning := Button.new()
+	reset_tuning.text = "Abstimmung auf Werkswerte"
+	reset_tuning.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	reset_tuning.pressed.connect(func():
+		var t: Dictionary = player.get_tuning()
+		_tune_front.value = t["default_psi"]
+		_tune_rear.value = t["default_psi"]
+		_tune_bias.value = float(t["default_brake_bias"]) * 100.0
+		_apply_tuning())
+	vehicle_page.add_child(reset_tuning)
+
 	var drive_page: VBoxContainer = page.call("Fahrt & Umgebung")
 	drive_page.add_child(UITheme.section("Aktivität"))
 	var offered := activity.available_modes()
@@ -761,6 +780,51 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 	controls_page.add_child(UITheme.label("F1 im Fahrbetrieb zeigt alle Tasten.", 13, UITheme.MUTED))
 	Game.get_node("DriverPrompts").device_changed.connect(func(): _control_hint.text = DriverPrompts.control_summary())
 
+func _pause_slider(parent: VBoxContainer, caption: String, low: float, high: float, step: float, fmt: String,
+		changed: Callable) -> HSlider:
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = caption
+	label.custom_minimum_size.x = 120
+	row.add_child(label)
+	var slider := HSlider.new()
+	slider.min_value = low
+	slider.max_value = high
+	slider.step = step
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(slider)
+	var shown := Label.new()
+	shown.custom_minimum_size.x = 72
+	shown.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(shown)
+	slider.set_meta("label", shown)
+	slider.set_meta("format", fmt)
+	slider.value_changed.connect(func(v: float):
+		shown.text = fmt % v
+		changed.call(v))
+	parent.add_child(row)
+	return slider
+
+
+## Tuning from the pause menu: tyre pressures per axle and the front brake share.
+func _apply_tuning() -> void:
+	if not is_instance_valid(player) or _tune_front == null:
+		return
+	player.set_tire_pressure(_tune_front.value, _tune_rear.value)
+	player.set_brake_bias(_tune_bias.value / 100.0)
+
+
+func _sync_tuning() -> void:
+	if not is_instance_valid(player) or _tune_front == null:
+		return
+	var t: Dictionary = player.get_tuning()
+	for pair in [[_tune_front, t["front_psi"]], [_tune_rear, t["rear_psi"]], [_tune_bias, float(t["brake_bias"]) * 100.0]]:
+		var slider: HSlider = pair[0]
+		slider.set_value_no_signal(pair[1])
+		(slider.get_meta("label") as Label).text = String(slider.get_meta("format")) % slider.value
+
+
 func _pause_choices(parent: VBoxContainer, caption: String, choices: Array) -> OptionButton:
 	var row := HBoxContainer.new()
 	var label := Label.new()
@@ -792,6 +856,7 @@ func _toggle_pause() -> void:
 	minimap.visible = not pause_menu.visible and minimap._compact_visible
 	if pause_menu.visible:
 		_pause_activity.select(maxi(0, activity.available_modes().find(activity.mode)))
+		_sync_tuning()
 		_pause_weather.select(weather.weather_index)
 		_pause_time.select(weather.time_index)
 		_pause_clock.set_pressed_no_signal(weather.automatic_time)
