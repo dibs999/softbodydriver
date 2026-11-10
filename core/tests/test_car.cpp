@@ -1038,3 +1038,32 @@ TEST_CASE("an engine run without oil knocks first and then throws a rod") {
     CHECK(blown > firstKnock + 5.0);
     CHECK(blown < 90.0);
 }
+
+TEST_CASE("low oil and hard cornering starve the oil pump; a full sump does not") {
+    auto circle = [](real oilLevel) {
+        auto build = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+        World world;
+        world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+        world.addBody(std::move(build.body));
+        auto& car = world.body(0);
+        VehicleControls c;
+        c.throttle = 1.0;
+        car.setControls(c);
+        while (car.telemetry().speedKmh < 70.0 && world.time() < 30.0) world.simulate(0.1);
+        car.systems().state().oilLevel = oilLevel;
+        c.throttle = 0.45;
+        c.steer = 0.45;
+        car.setControls(c);
+        real starved = 0.0, peakG = 0.0;
+        for (int k = 0; k < 80; ++k) {
+            world.simulate(0.05);
+            peakG = std::max(peakG, car.systems().state().horizontalG);
+            if (car.systems().state().oilStarved) starved += 0.05;
+        }
+        MESSAGE("oil " << oilLevel << ": peak " << peakG << " g, starved " << starved << " s, pressure "
+                << car.systems().state().oilPressureBar << " bar");
+        return starved;
+    };
+    CHECK(circle(1.0) == doctest::Approx(0.0));
+    CHECK(circle(0.38) > 0.5);
+}

@@ -1772,6 +1772,7 @@ Dictionary SBVehicle::get_telemetry() const {
     d["valves_bent"] = sys_.valvesBent;
     d["rod_broken"] = sys_.rodBroken;
     d["engine_knock"] = sys_.knock;
+    d["oil_starved"] = sys_.oilStarved;
     d["rod_bearing_wear"] = sys_.rodBearingWear;
     d["piston_ring_damage"] = sys_.pistonRingDamage;
     d["over_rev"] = def_.engine.redlineRpm > 0 ? tel_.engineRpm / def_.engine.redlineRpm : 0.0;

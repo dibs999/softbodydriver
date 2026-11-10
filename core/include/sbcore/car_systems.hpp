@@ -99,6 +99,10 @@ struct CarSystemsState {
     /// Piston rings: scuffed by overheating and over-revving: lost compression, burns oil.
     real pistonRingDamage = 0.0; ///< 0..1
     real knock = 0.0;            ///< Output: audible bearing knock 0..1
+    Vec3 lastVelocity{};         ///< For the horizontal acceleration that sloshes the oil away from the pickup
+    real horizontalG = 0.0;      ///< Filtered horizontal acceleration (g)
+    real accelTimer = 0.0;
+    bool oilStarved = false;     ///< Oil pickup sucking air (low level + hard cornering / braking)
     bool seized = false;
     bool running = true;
     bool driveshaftBroken = false;

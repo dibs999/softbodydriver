@@ -176,7 +176,24 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
     // ------------------------------------------------------------------ lubrication
     // A dented sump does not leak; a crack loses oil over minutes, a torn-off sump in about a minute.
     if (s.oilPanDamage > 0.15) s.oilLevel = std::max<real>(0.0, s.oilLevel - (0.002 + 0.06 * s.oilPanDamage * s.oilPanDamage) * dt);
-    const real oilFactor = clamp01((s.oilLevel - 0.12) / 0.3);
+    real oilFactor = clamp01((s.oilLevel - 0.12) / 0.3);
+    // Oil starvation: with the level down, sustained cornering or braking sloshes the oil away
+    // from the pickup and the pump sucks air.
+    {
+        s.accelTimer += dt;
+        if (s.accelTimer >= 0.005) {   // sampled at 200 Hz: the mean node velocity is O(nodes)
+            const Vec3 v = body.centerOfMassVelocity();
+            Vec3 a = (v - s.lastVelocity) / s.accelTimer;
+            s.lastVelocity = v;
+            a.y = 0.0;
+            const real g = std::min<real>(3.0, length(a) / 9.81);
+            s.horizontalG += (g - s.horizontalG) * std::min<real>(1.0, s.accelTimer / 0.35);
+            s.accelTimer = 0.0;
+        }
+        const real threshold = 0.4 + 1.6 * std::max<real>(0.0, s.oilLevel - 0.3);
+        s.oilStarved = s.oilLevel < 0.65 && s.horizontalG > threshold;
+        if (s.oilStarved) oilFactor *= std::max<real>(0.1, 1.0 - (s.horizontalG - threshold) * 2.5);
+    }
     s.oilPressureBar = (rpm > 200.0) ? (0.8 + 4.2 * std::min<real>(rpm, 5500.0) / 5500.0) * oilFactor : 0.0;
     const real load = clamp01(throttle);
     const real oilTarget = s.coolantTempC + 8.0 + 18.0 * load * clamp01(rpm / 6000.0);
@@ -258,6 +275,7 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
         else if (s.headGasketBlown) s.status = "HEAD GASKET BLOWN";
         else if (s.valvesBent) s.status = "VALVES DAMAGED";
         else if (s.knock > 0.05) s.status = "ENGINE KNOCKING";
+        else if (s.oilStarved && s.running) s.status = "OIL STARVATION";
         else if (s.pistonRingDamage > 0.3) s.status = "BURNING OIL";
         else if (rpm > pt->spec().redlineRpm * 1.10) s.status = "OVER-REV";
         else if (s.coolantTempC > 115.0) s.status = "OVERHEATING";
