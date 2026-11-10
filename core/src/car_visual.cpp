@@ -1377,9 +1377,14 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             // Fuel filler flap in the right-hand rear quarter panel, above the wheel arch.
             const real xf = prof.xRA + 0.02;
             const real yf = prof.yBelt(xf) - 0.13;
-            const real zf = prof.halfW(xf) - 0.002;
-            vb.bevelBox("seam", {xf, yf, zf}, {0.062, 0.058, 0.004}, 0.012, bodyNodes);
-            vb.bevelBox("paint", {xf, yf, zf + 0.003}, {0.056, 0.052, 0.003}, 0.011, bodyNodes);
+            // The panel bulges a little past the profile's half width at this height: sit proud of it.
+            const real zf = prof.halfW(xf) + 0.004;
+            // Only its shut line shows: a thin dark gap round a body-coloured flap.
+            const real hx = 0.058, hy = 0.054, gap = 0.0018;
+            vb.box("seam", {xf, yf + hy, zf}, {hx + gap, gap, 0.002}, bodyNodes);
+            vb.box("seam", {xf, yf - hy, zf}, {hx + gap, gap, 0.002}, bodyNodes);
+            vb.box("seam", {xf + hx, yf, zf}, {gap, hy, 0.002}, bodyNodes);
+            vb.box("seam", {xf - hx, yf, zf}, {gap, hy, 0.002}, bodyNodes);
         }
         {
             // Shark-fin antenna at the back of the roof.

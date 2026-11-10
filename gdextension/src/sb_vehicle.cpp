@@ -1283,7 +1283,7 @@ bool SBVehicle::relocate_to(const Transform3D& xform) {
     for (int axis = 0; axis < 3; ++axis)
         if ((xform.basis.get_column(axis) - destination.get_column(axis)).length_squared() > 1e-6) return false;
     {
-        std::lock_guard<std::mutex> lock(world_->mutex());
+        std::lock_guard<WorldMutex> lock(world_->mutex());
         auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
         auto& p = body.positions();
         const sb::Vec3 center = (p[layout_.refFL] + p[layout_.refFR] + p[layout_.refRL] + p[layout_.refRR]) * 0.25;
@@ -1323,7 +1323,7 @@ bool SBVehicle::relocate_to(const Transform3D& xform) {
 bool SBVehicle::service_repair() {
     if (!world_ || bodyIndex_ < 0) return false;
     {
-        std::lock_guard<std::mutex> lock(world_->mutex());
+        std::lock_guard<WorldMutex> lock(world_->mutex());
         auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
         const auto& p = body.positions();
         if (p.empty()) return false;
@@ -1360,7 +1360,7 @@ bool SBVehicle::service_repair() {
 
 bool SBVehicle::set_door_open(int index, bool open) {
     if (!world_ || bodyIndex_ < 0 || index < 0 || (hasImportedModel_ && !importedDoors_)) return false;
-    std::lock_guard<std::mutex> lock(world_->mutex());
+    std::lock_guard<WorldMutex> lock(world_->mutex());
     auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     if (static_cast<std::size_t>(index) >= body.doors().size() || body.telemetry().speedKmh > 2.0) return false;
     return body.setDoorOpen(static_cast<std::size_t>(index), open);
@@ -1368,7 +1368,7 @@ bool SBVehicle::set_door_open(int index, bool open) {
 
 bool SBVehicle::toggle_door(int index) {
     if (!world_ || bodyIndex_ < 0 || index < 0 || (hasImportedModel_ && !importedDoors_)) return false;
-    std::lock_guard<std::mutex> lock(world_->mutex());
+    std::lock_guard<WorldMutex> lock(world_->mutex());
     auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     if (static_cast<std::size_t>(index) >= body.doors().size() || body.telemetry().speedKmh > 2.0) return false;
     return body.setDoorOpen(static_cast<std::size_t>(index), !body.doors()[static_cast<std::size_t>(index)].requestedOpen);
@@ -1377,7 +1377,7 @@ bool SBVehicle::toggle_door(int index) {
 Array SBVehicle::get_door_states() const {
     Array result;
     if (!world_ || bodyIndex_ < 0 || (hasImportedModel_ && !importedDoors_)) return result;
-    std::lock_guard<std::mutex> lock(world_->mutex());
+    std::lock_guard<WorldMutex> lock(world_->mutex());
     const auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     const auto& positions = body.positions();
     const Vector3 forward = toG(forwardOf(positions)).normalized();
@@ -1430,7 +1430,7 @@ Array SBVehicle::get_door_states() const {
 Array SBVehicle::get_lamp_states() const {
     Array result;
     if (!world_ || bodyIndex_ < 0 || restPositions_.empty()) return result;
-    std::lock_guard<std::mutex> lock(world_->mutex());
+    std::lock_guard<WorldMutex> lock(world_->mutex());
     const auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     const auto& beams = body.beams();
     if (lampBeams_.empty()) {
@@ -1492,7 +1492,7 @@ Array SBVehicle::get_lamp_states() const {
 Array SBVehicle::get_glass_states() const {
     Array result;
     if (!world_ || bodyIndex_ < 0 || hasImportedModel_) return result;
-    std::lock_guard<std::mutex> lock(world_->mutex());
+    std::lock_guard<WorldMutex> lock(world_->mutex());
     const auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     const auto& beams = body.beams();
     if (!glassPanesBuilt_) {
@@ -1560,7 +1560,7 @@ Array SBVehicle::get_glass_states() const {
 Array SBVehicle::get_bumper_states() const {
     Array result;
     if (!world_ || bodyIndex_ < 0) return result;
-    std::lock_guard<std::mutex> lock(world_->mutex());
+    std::lock_guard<WorldMutex> lock(world_->mutex());
     const auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     const auto& names = body.breakGroupNames();
     for (int end = 0; end < 2; ++end) {
@@ -1615,7 +1615,7 @@ bool SBVehicle::lidAvailable(int index) const {
 
 bool SBVehicle::setLid(int index, bool open) {
     if (!lidAvailable(index)) return false;
-    std::lock_guard<std::mutex> lock(world_->mutex());
+    std::lock_guard<WorldMutex> lock(world_->mutex());
     auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     if (static_cast<std::size_t>(index) >= body.lids().size()) return false;
     if (open && body.telemetry().speedKmh > 2.0) return false;
@@ -1626,7 +1626,7 @@ bool SBVehicle::setLid(int index, bool open) {
 
 int SBVehicle::break_group(const String& name) {
     if (!world_ || bodyIndex_ < 0) return 0;
-    std::lock_guard<std::mutex> lock(world_->mutex());
+    std::lock_guard<WorldMutex> lock(world_->mutex());
     auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     const std::string group = name.utf8().get_data();
     int count = 0;
@@ -1642,7 +1642,7 @@ int SBVehicle::break_group(const String& name) {
 
 void SBVehicle::ignite(int source) {
     if (!world_ || bodyIndex_ < 0) return;
-    std::lock_guard<std::mutex> lock(world_->mutex());
+    std::lock_guard<WorldMutex> lock(world_->mutex());
     auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     if (!body.hasSystems()) return;
     auto& s = body.systems().state();
@@ -1657,7 +1657,7 @@ bool SBVehicle::close_tailgate() { return setLid(1, false); }
 Array SBVehicle::get_lid_states() const {
     Array result;
     if (!world_ || bodyIndex_ < 0) return result;
-    std::lock_guard<std::mutex> lock(world_->mutex());
+    std::lock_guard<WorldMutex> lock(world_->mutex());
     const auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     for (std::size_t i = 0; i < body.lids().size(); ++i) {
         const auto& lid = body.lids()[i];
@@ -1678,7 +1678,7 @@ Array SBVehicle::get_lid_states() const {
 
 double SBVehicle::refuel(double litres) {
     if (!world_ || bodyIndex_ < 0 || !std::isfinite(litres) || litres <= 0 || get_velocity().length() > 0.25) return 0.0;
-    std::lock_guard<std::mutex> lock(world_->mutex());
+    std::lock_guard<WorldMutex> lock(world_->mutex());
     auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     if (!body.hasSystems() || body.systems().state().running) return 0.0;
     auto& systems = body.systems();
