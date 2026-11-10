@@ -254,7 +254,9 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
         arrays[Mesh::ARRAY_INDEX] = idx;
         g.mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, arrays, Array(), Dictionary(),
                                         Mesh::ARRAY_FLAG_USE_DYNAMIC_UPDATE);
-        g.mesh->surface_set_material(0, materialFor(s.material, materials));
+        // Rear and rear-quarter panes of the generated bodies are tinted privacy glass.
+        const bool privacy = s.material == "glass" && s.pane >= 2 && materials.has("glass_privacy");
+        g.mesh->surface_set_material(0, materialFor(privacy ? std::string("glass_privacy") : s.material, materials));
         g.format = static_cast<int64_t>(g.mesh->surface_get_format(0));
         const auto fmt = static_cast<BitField<RenderingServer::ArrayFormat>>(g.format);
         g.vertexStride = rs->mesh_surface_get_format_vertex_stride(fmt, static_cast<int>(nv));
