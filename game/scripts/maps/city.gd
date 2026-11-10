@@ -197,7 +197,9 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 						# Low houses at the edge of town: gabled tile roofs.
 						var ridge := Basis(Vector3.UP, PI * 0.5 if half.x > half.z else 0.0)
 						var span := minf(half.x, half.z)
-						gables.append(Transform3D(ridge.scaled_local(Vector3(span * 2.1, span * 0.9, maxf(half.x, half.z) * 2.05)), Vector3(bxc, KERB + hgt + span * 0.45, bzc)))
+						# Roof rise as on real town houses (~45 degrees on narrow ones, capped at 6 m).
+						var rise := minf(span * 0.9, 6.0)
+						gables.append(Transform3D(ridge.scaled_local(Vector3(span * 2.1, rise, maxf(half.x, half.z) * 2.05)), Vector3(bxc, KERB + hgt + rise * 0.5, bzc)))
 					else:
 						roofs.append(Transform3D(Basis.from_scale(Vector3(half.x * 2.02, 0.65, half.z * 2.02)), Vector3(bxc, KERB + hgt + 0.32, bzc)))
 						cornices.append(Transform3D(Basis.from_scale(Vector3(half.x * 2.0 + 0.5, 0.45, half.z * 2.0 + 0.5)), Vector3(bxc, KERB + hgt - 0.2, bzc)))
