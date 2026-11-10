@@ -81,12 +81,13 @@ TEST_CASE("props stand still on the ground and a car knocks them over without te
         return world.body(ic).telemetry().speedKmh;
     };
     const real alone = coast(false, PropKind::Cone, nullptr);
-    for (const PropKind kind : {PropKind::Cone, PropKind::Barrel}) {
-        const std::string name = kind == PropKind::Cone ? "cone" : "barrel";
+    for (const PropKind kind : {PropKind::Cone, PropKind::Barrel, PropKind::Bin}) {
+        const std::string name = kind == PropKind::Cone ? "cone" : kind == PropKind::Barrel ? "barrel" : "bin";
         CAPTURE(name);
         auto prop = buildProp(kind);
         CHECK(prop.body.stabilityRatio(1.0 / 2000.0) < 0.9);
-        CHECK(prop.body.totalMass() == doctest::Approx(kind == PropKind::Cone ? 4.5 : 20.0).epsilon(0.02));
+        const real mass = kind == PropKind::Cone ? 4.5 : kind == PropKind::Barrel ? 20.0 : 15.0;
+        CHECK(prop.body.totalMass() == doctest::Approx(mass).epsilon(0.02));
         real knocked = 0;
         const real speed = coast(true, kind, &knocked);
         MESSAGE(name << " knocked " << knocked << " m, car " << speed << " km/h (alone " << alone << ")");
@@ -182,4 +183,33 @@ TEST_CASE("a felled log is shoved or climbed, never flung faster than the car") 
     REQUIRE(world.stats().finite);
     MESSAGE("log faster than the car by at most " << worstExcess << " m/s");
     CHECK(worstExcess < 1.5);
+}
+
+TEST_CASE("resting props fall asleep, a car wakes them, and they settle back to sleep") {
+    auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+    auto cone = buildProp(PropKind::Cone);
+    auto drum = buildProp(PropKind::Barrel);
+    cone.body.translate({car.def.body.length + 6.0, 0.0, 0.3});
+    drum.body.translate({car.def.body.length + 6.0, 0.0, 6.0});   // off the car's path
+    World world;
+    world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+    const auto ic = world.addBody(std::move(car.body));
+    const auto ip = world.addBody(std::move(cone.body));
+    const auto id = world.addBody(std::move(drum.body));
+    VehicleControls c;
+    c.gear = 0;
+    world.body(ic).setControls(c);
+    world.simulate(3.0);
+    CHECK(world.body(ip).asleep());
+    CHECK(world.body(id).asleep());
+    CHECK_FALSE(world.body(ic).asleep());   // cars never sleep
+    const Vec3 rest = world.body(ip).centerOfMass();
+    for (auto& v : world.body(ic).velocities()) v = {30.0 / 3.6, 0, 0};
+    world.simulate(2.0);
+    CHECK(length(world.body(ip).centerOfMass() - rest) > 3.0);   // woken and knocked away
+    CHECK(world.body(id).asleep());                              // the far drum slept through it
+    world.body(ic).translate({0.0, 0.0, 40.0});   // the car leaves
+    world.simulate(6.0);
+    CHECK(world.body(ip).asleep());   // at rest again
+    REQUIRE(world.stats().finite);
 }

@@ -88,7 +88,10 @@ private:
         real w0 = 0, w1 = 0, w2 = 0, friction = 0;
         bool valid = false;
     };
-    std::vector<BodyContactCandidate> contactScratch_; ///< Best node-vs-triangle contact per node (inter-body).
+    std::vector<BodyContactCandidate> contactScratch_;
+    std::vector<Vec3> aabbLo_, aabbHi_;      ///< Inter-body broadphase boxes (kept for sleeping bodies).
+    std::vector<std::size_t> awake_;
+    std::vector<unsigned char> sleptBox_;   ///< 1 = box of a body already asleep last step (still valid). ///< Best node-vs-triangle contact per node (inter-body).
 };
 
 }  // namespace sb

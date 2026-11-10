@@ -252,11 +252,97 @@ PropBuild buildLog() {
     out.restPositions = b.positions();
     return out;
 }
+// 240 l wheelie bin, 0.73 x 0.58 x 1.07 m, ~15 kg with some rubbish in it (long side along x).
+// HDPE: springy, dents and stays dented after a proper hit. Built like the drum, rings of eight
+// nodes (corners and side centres) at three heights: an eight-node box let a car's nose pass
+// between its corners and end up inside it.
+PropBuild buildBin() {
+    PropBuild out;
+    out.kind = PropKind::Bin;
+    SoftBody& b = out.body;
+    b.setName("bin");
+    constexpr int N = 8;
+    NodeParams np;
+    np.mass = 15.0 / (3 * N + 2);
+    np.friction = 0.55;
+    np.group = "prop";
+    const real ys[3] = {0.02, 0.55, 1.07};
+    std::vector<std::vector<std::uint32_t>> rings(3);
+    for (int ring = 0; ring < 3; ++ring) {
+        // Tapered body: the top (lid) is wider than the base.
+        const real hx = 0.30 + 0.065 * ring * 0.5, hz = 0.25 + 0.04 * ring * 0.5;
+        const real px[N] = {hx, hx, 0, -hx, -hx, -hx, 0, hx};
+        const real pz[N] = {0, hz, hz, hz, 0, -hz, -hz, -hz};
+        for (int i = 0; i < N; ++i)
+            rings[static_cast<std::size_t>(ring)].push_back(b.addNode("r" + std::to_string(ring) + "_" + std::to_string(i),
+                {px[i], ys[ring], pz[i]}, np));
+    }
+    const auto bottom = b.addNode("bottom", {0, 0.02, 0}, np);
+    const auto top = b.addNode("top", {0, 1.07, 0}, np);
+    BeamParams wall;
+    wall.spring = 4.0e4;
+    wall.damp = 40.0;
+    wall.deform = 1.8e3;
+    wall.strength = 2.5e4;
+    wall.deformLimit = 0.4;
+    wall.deformLimitExpansion = 0.25;
+    BeamParams brace = wall;
+    brace.spring = 1.5e4;
+    brace.deform = 1.2e3;
+    for (int ring = 0; ring < 3; ++ring) {
+        const auto& R = rings[static_cast<std::size_t>(ring)];
+        for (int i = 0; i < N; ++i) {
+            b.addBeam(R[static_cast<std::size_t>(i)], R[static_cast<std::size_t>((i + 1) % N)], wall);
+            b.addBeam(R[static_cast<std::size_t>(i)], R[static_cast<std::size_t>((i + N / 2) % N)], brace);
+            b.addBeam(R[static_cast<std::size_t>(i)], R[static_cast<std::size_t>((i + 2) % N)], brace);
+        }
+    }
+    for (int ring = 0; ring < 2; ++ring) {
+        const auto& A = rings[static_cast<std::size_t>(ring)];
+        const auto& B = rings[static_cast<std::size_t>(ring + 1)];
+        for (int i = 0; i < N; ++i) {
+            b.addBeam(A[static_cast<std::size_t>(i)], B[static_cast<std::size_t>(i)], wall);
+            b.addBeam(A[static_cast<std::size_t>(i)], B[static_cast<std::size_t>((i + 1) % N)], wall);
+            b.addBeam(A[static_cast<std::size_t>((i + 1) % N)], B[static_cast<std::size_t>(i)], brace);
+        }
+    }
+    for (int i = 0; i < N; ++i) {
+        b.addBeam(bottom, rings[0][static_cast<std::size_t>(i)], wall);
+        b.addBeam(top, rings[2][static_cast<std::size_t>(i)], wall);
+        b.addBeam(bottom, rings[1][static_cast<std::size_t>(i)], brace);
+        b.addBeam(top, rings[1][static_cast<std::size_t>(i)], brace);
+    }
+    b.addBeam(bottom, top, brace);
+    ColTriParams skin;
+    skin.friction = 0.45;
+    skin.dragCoef = 0.9;
+    const Vec3 c{0, 0.55, 0};
+    for (int ring = 0; ring < 2; ++ring)
+        for (int i = 0; i < N; ++i) {
+            const auto& A = rings[static_cast<std::size_t>(ring)];
+            const auto& B = rings[static_cast<std::size_t>(ring + 1)];
+            const auto a0 = A[static_cast<std::size_t>(i)], a1 = A[static_cast<std::size_t>((i + 1) % N)];
+            const auto b0 = B[static_cast<std::size_t>(i)], b1 = B[static_cast<std::size_t>((i + 1) % N)];
+            outwardTri(b, a0, a1, b1, c, skin);
+            outwardTri(b, a0, b1, b0, c, skin);
+        }
+    for (int i = 0; i < N; ++i) {
+        outwardTri(b, bottom, rings[0][static_cast<std::size_t>(i)], rings[0][static_cast<std::size_t>((i + 1) % N)], c, skin);
+        outwardTri(b, top, rings[2][static_cast<std::size_t>(i)], rings[2][static_cast<std::size_t>((i + 1) % N)], c, skin);
+    }
+    out.frameOrigin = bottom;
+    out.frameX = rings[0][0];
+    out.frameY = top;
+    out.restPositions = b.positions();
+    return out;
+}
+
 }  // namespace
 
 PropBuild buildProp(PropKind kind) {
     PropBuild out = kind == PropKind::Log ? buildLog() : kind == PropKind::Barrier ? buildBarrier()
-                  : kind == PropKind::Barrel ? buildBarrel() : buildCone();
+                  : kind == PropKind::Barrel ? buildBarrel() : kind == PropKind::Bin ? buildBin() : buildCone();
+    out.body.setSleepEnabled(true);
     // Catch other bodies' nodes only within about half the prop's thinnest section: deeper, a
     // node is resolved against the far face and the stiff little body is squeezed out and flung
     // (a log under a tyre left faster than the car pushing it).
@@ -265,6 +351,7 @@ PropBuild buildProp(PropKind kind) {
         case PropKind::Barrel: out.body.setContactThickness(0.10); break;
         case PropKind::Barrier: out.body.setContactThickness(0.10); break;
         case PropKind::Log: out.body.setContactThickness(0.07); break;
+        case PropKind::Bin: out.body.setContactThickness(0.12); break;
     }
     return out;
 }
@@ -274,6 +361,7 @@ PropKind propKindFromString(const std::string& name) {
     if (name == "barrel") return PropKind::Barrel;
     if (name == "barrier") return PropKind::Barrier;
     if (name == "log") return PropKind::Log;
+    if (name == "bin") return PropKind::Bin;
     throw std::invalid_argument("unknown prop kind '" + name + "'");
 }
 

@@ -263,6 +263,17 @@ public:
     /// their half thickness, or a node pushed deep in is resolved against the wrong face.
     void setContactThickness(real t) { contactThickness_ = t; }
     real contactThickness() const { return contactThickness_; }
+    /// Sleep (props): a body that has come to rest is not simulated until a moving body comes
+    /// near it, it is repaired or moved. Dozens of resting cones, drums and bins then cost nothing.
+    void setSleepEnabled(bool on) { sleepEnabled_ = on; if (!on) wake(); }
+    bool sleepEnabled() const { return sleepEnabled_; }
+    bool asleep() const { return asleep_; }
+    void wake() { asleep_ = false; restTime_ = 0.0; prevPos_.clear(); }
+    /// Called by the world after each step: tracks the fastest node and lets a sleep-enabled
+    /// body fall asleep after `restAfter` s below `speed` m/s.
+    void updateSleep(real dt, real speed = 0.03, real restAfter = 1.0);
+    /// Fastest node speed (m/s) in the last step (0 while asleep).
+    real maxNodeSpeed() const { return std::sqrt(maxSpeedSq_); }
     void addDoor(const DoorMechanism& door);
     bool setDoorOpen(std::size_t side, bool open);
     const std::vector<DoorMechanism>& doors() const { return doors_; }
@@ -380,6 +391,9 @@ private:
     bool requestOpen(DoorMechanism& m, bool open);
     std::vector<DoorMechanism> doors_, lids_;
     real contactThickness_ = -1.0;
+    bool sleepEnabled_ = false, asleep_ = false;
+    real restTime_ = 0.0, maxSpeedSq_ = 0.0;
+    std::vector<Vec3> prevPos_;
     std::vector<Beam> beams_;
     std::vector<BeamParams> beamParams_;
     std::vector<ColTri> triangles_;
