@@ -476,6 +476,7 @@ static func _handling_course(world: SBWorld, parent: Node3D, paint: Material, si
 
 # =========================================================================== hill roads
 static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
+	props.clear()
 	var nx := 385
 	var nz := 385
 	var cell := 3.5
@@ -719,6 +720,18 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	V.roadside_grass(parent, road, true, half_w + 0.7, half_w + 16.0, 6.0, 34, ground_height)
 	_hill_landmarks(world, parent, road, ground_height)
 	_hill_village(world, parent, road, half_w, ground_height)
+	# Roadworks before Lindenau: a cone line along the right edge and two drums at its end.
+	for i in range(VILLAGE_AT - 46, VILLAGE_AT - 30, 2):
+		var d := road[(i + 1) % n_road] - road[i - 1]
+		d.y = 0.0
+		d = d.normalized()
+		var side := Vector3(-d.z, 0, d.x)
+		var c := road[i] + side * (half_w - 0.45)
+		props.append({"kind": "cone", "position": Vector3(c.x, float(ground_height.call(c.x, c.z)), c.z), "yaw": atan2(-d.z, d.x)})
+		if i == VILLAGE_AT - 32:
+			for k in 2:
+				var b := road[i] + side * (half_w + 1.3 + k * 0.7)
+				props.append({"kind": "barrel", "position": Vector3(b.x, float(ground_height.call(b.x, b.z)), b.z)})
 	var lookout := _hill_lookout(world, parent, road, ground_height)
 
 	var speeds := PackedFloat32Array()
@@ -731,7 +744,7 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 		speeds[i] = clampf(26.0 - ang * 60.0, 11.0, 26.0)
 	var s0 := road[0]
 	var s1 := road[1]
-	return {"spawns": [car_xform(s0, s1 - s0), car_xform(road[n_road - 6], road[n_road - 5] - road[n_road - 6])],
+	return {"props": props.duplicate(), "spawns": [car_xform(s0, s1 - s0), car_xform(road[n_road - 6], road[n_road - 5] - road[n_road - 6])],
 		"waypoints": road, "speeds": speeds,
 		"map_paths": [C.closed_route(road), lookout],
 		"map_places": [{"name": "Waldhof", "position": road[12]}, {"name": "Lindenau", "position": road[VILLAGE_AT]}, {"name": "Aussichtspunkt", "position": lookout[4]},

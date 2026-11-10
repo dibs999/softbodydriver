@@ -121,6 +121,7 @@ So kommt ein eigenes Auto ins Spiel:
 | Getriebe | Wiederholte Schaltvorgänge unter Last ohne Auskuppeln, extreme Rückschaltungen oder Richtungswechsel | Schleifgeräusch, längere Schaltunterbrechung, Leistungsverlust bis zum Ausfall; ein Gang, dessen Drehzahl weit über dem roten Bereich läge (z. B. bei 150 km/h in den 1.), kostet auf einen Schlag einen großen Teil des Getriebes; Automatik schützt vor destruktiven Gangwechseln |
 | Felgen und Reifen (Bordstein, Schlagloch) | Ein Bordstein- oder Schlaglochrand drückt einen einzelnen Laufflächenpunkt mit mehr als dem ~4,5-fachen der Radlast gegen die Felge | Felge verbogen (Wulst undicht, Reifen verliert langsam Luft, Diagnose „Felge verbogen“), bei sehr hartem Schlag Durchschlag mit schnellem Luftverlust; ein platter Reifen zieht das Auto zur Seite |
 | Spurstangen | Seitlicher Schlag aufs Rad | Spurstangen geben ab ~45 kN nach, Querlenker erst bei echten Unfällen: verstellte Spur, das Auto zieht |
+| Fahrzeugbrand | Öl auf heißem Motor (gerissene Ölwanne, Pleuel durch den Block), frisch zerdrückter laufender Motor nach einem Unfall (selten, ~9 %), leckender Tank nach schwerem Heckaufprall | Flammen und schwarzer Rauch aus Motorraum oder Tank, flackerndes Licht, Knistern; der Brand wächst über ~30 s, die Elektrik brennt durch (Motor aus, Anlasser tot), er verbrennt Kraftstoff und Öl und erlischt, wenn nichts mehr da ist; nur eine Reparatur behebt ihn |
 | Motor (Überdrehzahl) | Die Räder treiben den Motor über die rote Linie, meist durch zu tiefes Zurückschalten | Ab ~1,1 × Drehzahlgrenze Ventilflattern und Verschleiß, ab ~1,35 × verbogene Ventile (Leistungsverlust, unrunder Lauf), ab ~1,6 × reißt ein Pleuel: Knall, Ölverlust, Motor fest; die Kupplung nimmt beim schlagartigen Einkuppeln zusätzlich Schaden |
 | Tank | Beschädigung | Kraftstoffleck |
 | Bremsen | Scheibentemperatur | Fading ab ca. 450 °C |
@@ -254,9 +255,10 @@ keine separat bewegliche Haube. Grenzen der Kontaktauflösung und verbleibende
 Schadensbaugruppen stehen in [PHYSICS_ACCEPTANCE.md](docs/PHYSICS_ACCEPTANCE.md).
 
 Pylonen und Ölfässer sind eigene kleine Soft-Bodies: Leitkegel (4,5 kg, biegsames PVC,
-federn zurück) auf dem Slalom und Handling-Parcours des Testgeländes und als Baustelle
-auf dem Seitenstreifen der Autobahn, 200-Liter-Stahlfässer (20 kg, verbeulen) als
-Fasswand am Testgelände und auf dem Seitenstreifen. Autos stoßen sie um, schleifen
+federn zurück) auf dem Slalom und Handling-Parcours des Testgeländes, als Baustellen auf
+dem Autobahn-Seitenstreifen, vor Lindenau im Hügelland und in einer gesperrten
+Stadtspur, 200-Liter-Stahlfässer (20 kg, verbeulen) als Fasswand am Testgelände, an
+den Baustellen und an der Raststätte Coyote Flats in der Wüste. Autos stoßen sie um, schleifen
 Pylonen unter dem Stoßfänger mit oder schleudern Fässer weg; das Pausenmenü stellt
 alle wieder auf („Pylonen und Fässer zurückstellen“).
 

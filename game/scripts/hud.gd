@@ -55,6 +55,7 @@ const STATUS := {
 	"CLUTCH OVERHEATING": "Kupplung überhitzt · entlasten",
 	"ENGINE BLOWN": "Motorschaden · Pleuel durch den Block", "VALVES DAMAGED": "Ventile verbogen · Motor läuft unrund",
 	"OVER-REV": "Überdrehzahl · Motor nimmt Schaden",
+	"ENGINE FIRE": "Motorbrand · aussteigen!", "FUEL FIRE": "Tankbrand · aussteigen!",
 	"ENGINE KNOCKING": "Motor klopft · Pleuellager verschlissen", "OIL STARVATION": "Ölmangel · Pumpe saugt in Kurven Luft", "BURNING OIL": "Motor verbrennt Öl · Kolbenringe verschlissen",
 }
 

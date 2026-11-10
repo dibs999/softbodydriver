@@ -1067,3 +1067,36 @@ TEST_CASE("low oil and hard cornering starve the oil pump; a full sump does not"
     CHECK(circle(1.0) == doctest::Approx(0.0));
     CHECK(circle(0.38) > 0.5);
 }
+
+TEST_CASE("oil on a hot engine can catch fire; a healthy hot engine does not") {
+    auto run = [](bool leaking) {
+        auto build = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+        World world;
+        world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+        world.addBody(std::move(build.body));
+        auto& car = world.body(0);
+        VehicleControls c;
+        c.brake = 1.0;
+        car.setControls(c);
+        real ignited = -1.0;
+        // Hot but intact: 60 s (well before 150 degC oil wipes the rod bearings and throws a rod).
+        for (int k = 0; k < (leaking ? 2400 : 600) && ignited < 0.0; ++k) {
+            auto& s = car.systems().state();
+            s.oilTempC = 150.0;
+            if (leaking) { s.oilPanDamage = 0.5; s.oilLevel = 1.0; }
+            world.simulate(0.1);
+            if (car.systems().state().fire > 0.0) ignited = 0.1 * k;
+        }
+        if (ignited >= 0.0) world.simulate(20.0);
+        return std::make_pair(ignited, car.systems().state());
+    };
+    const auto [healthyAt, healthy] = run(false);
+    CHECK(healthyAt < 0.0);
+    CHECK(healthy.fire == 0.0);
+    const auto [leakAt, burning] = run(true);
+    MESSAGE("oil-soaked hot engine ignited after " << leakAt << " s; 20 s later fire " << burning.fire << ", running " << burning.running);
+    CHECK(leakAt >= 0.0);
+    CHECK(burning.fire > 0.5);
+    CHECK_FALSE(burning.running);
+    CHECK(burning.status == "ENGINE FIRE");
+}

@@ -20,6 +20,8 @@ var tires: Array[CPUParticles3D] = []
 var sparks: Array[CPUParticles3D] = []
 var engine_smoke: CPUParticles3D
 var exhaust: CPUParticles3D
+var flames: CPUParticles3D        # vehicle fire (engine bay or fuel tank)
+var fire_light: OmniLight3D
 var _previous_position := Vector3.INF
 var _levels := PackedFloat32Array([0, 0, 0, 0])
 static var _smoke_mesh: QuadMesh
@@ -34,6 +36,25 @@ func _ready() -> void:
 		sparks.append(_emitter(10, 0.35, true))
 	engine_smoke = _emitter(64, 3.8, false)
 	exhaust = _emitter(18, 0.8, false)
+	flames = _emitter(90, 0.5, false)
+	var fire_ramp := Gradient.new()
+	fire_ramp.offsets = PackedFloat32Array([0.0, 0.15, 0.45, 0.8, 1.0])
+	fire_ramp.colors = PackedColorArray([Color(1.0, 0.85, 0.45, 0.0), Color(1.0, 0.62, 0.12, 1.0), Color(0.95, 0.30, 0.04, 0.9),
+		Color(0.45, 0.08, 0.02, 0.5), Color(0.08, 0.06, 0.05, 0.0)])
+	flames.color_ramp = fire_ramp
+	flames.gravity = Vector3(0, 4.5, 0)
+	flames.initial_velocity_min = 0.9
+	flames.initial_velocity_max = 2.6
+	flames.spread = 28.0
+	flames.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	flames.emission_box_extents = Vector3(0.45, 0.05, 0.35)
+	flames.scale_amount_min = 0.25
+	fire_light = OmniLight3D.new()
+	fire_light.light_color = Color(1.0, 0.55, 0.2)
+	fire_light.omni_range = 7.0
+	fire_light.light_energy = 0.0
+	fire_light.shadow_enabled = false
+	add_child(fire_light)
 	Game.graphics_preset_changed.connect(_quality)
 	_quality()
 
@@ -110,7 +131,8 @@ func _emitter(count: int, duration: float, spark: bool) -> CPUParticles3D:
 
 
 func _quality() -> void:
-	for p: CPUParticles3D in get_children():
+	for p in get_children():
+		if not p is CPUParticles3D: continue
 		p.amount = maxi(6, int(p.get_meta("budget")) / (2 if int(Game.graphics.get("effects", 1)) == 0 else 1))
 
 
@@ -133,7 +155,8 @@ func _process(delta: float) -> void:
 				grip[i] = surfaces.effective_grip(wheel_surfaces[i])
 			vehicle.set_surface_grip(grip)
 			_update_grime(0.08)
-	for p: CPUParticles3D in get_children():
+	for p in get_children():
+		if not p is CPUParticles3D: continue
 		p.speed_scale = 0.0 if world.paused else world.time_scale
 		if teleported:
 			p.emitting = false
@@ -218,12 +241,28 @@ func update_effects(t: Dictionary, anchors: Dictionary, slip: PackedFloat32Array
 	var oil_smoke := float(t["engine_damage"]) * (0.4 if bool(t["running"]) else 0.18)
 	oil_smoke *= smoothstep(50.0, 100.0, float(t["oil_temp"]))
 	var clutch_smoke := smoothstep(210.0, 330.0, float(t.get("clutch_temp", 45.0)))
-	var level := maxf(steam, maxf(oil_smoke, clutch_smoke))
+	var fire := float(t.get("fire", 0.0))
+	var level := maxf(maxf(steam, maxf(oil_smoke, clutch_smoke)), fire)
 	engine_smoke.global_position = anchors["engine"]
 	engine_smoke.gravity = breeze + Vector3.UP * 0.32
 	engine_smoke.direction = (Vector3.UP - vehicle.get_velocity() * 0.035).normalized()
 	engine_smoke.emitting = level > 0.06
 	engine_smoke.color = Color(0.85, 0.89, 0.92, level) if steam > oil_smoke else Color(0.34, 0.37, 0.40, level)
+	if fire > 0.0:
+		# A burning car: flames from the engine bay or the tank, thick black smoke, flickering light.
+		var at: Vector3 = anchors["exhaust"] if int(t.get("fire_source", 0)) == 1 else anchors["engine"]
+		engine_smoke.global_position = at + Vector3.UP * 0.4
+		engine_smoke.color = Color(0.05, 0.05, 0.05, 1.0)
+		engine_smoke.scale_amount_max = 2.5 + 3.0 * fire
+		engine_smoke.initial_velocity_max = 1.6
+		engine_smoke.gravity = breeze + Vector3.UP * 1.1
+		flames.global_position = at + Vector3.UP * 0.15
+		flames.scale_amount_max = 0.45 + 0.7 * fire
+		fire_light.global_position = at + Vector3.UP * 0.8
+		fire_light.light_energy = (1.5 + 4.0 * fire) * randf_range(0.75, 1.15)
+	flames.emitting = fire > 0.02
+	if fire <= 0.0:
+		fire_light.light_energy = 0.0
 	engine_smoke.scale_amount_max = 1.5 + level
 	var rings := float(t.get("piston_ring_damage", 0.0))
 	var exhaust_level := 0.055 + (0.45 if bool(t["head_gasket"]) else 0.0) + oil_smoke + 0.5 * rings

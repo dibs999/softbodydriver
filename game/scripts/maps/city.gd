@@ -362,8 +362,6 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	parent.add_child(street_lighting)
 	street_lighting.setup(lamp_lights, lens_material)
 
-	_street_life(parent, world, origin, metal)
-
 	# AI loop: rectangle around the inner blocks, right-hand lane.
 	var lo := origin + STREET * 0.5 + 1 * PITCH
 	var hi := origin + STREET * 0.5 + (BLOCKS - 1) * PITCH
@@ -379,6 +377,35 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		var steps := int(a.distance_to(b) / 8.0)
 		for s in steps:
 			route.append(a.lerp(b, float(s) / steps) + right * lane)
+	# Roadworks: the kerb lane of an east-west street away from the traffic loop is closed by a
+	# cone line with a taper and a few drums.
+	var props: Array = []
+	_works = Vector3i(-1, -1, 0)
+	for k in range(BLOCKS - 2, 1, -1):
+		var zs := origin + k * PITCH + STREET * 0.5
+		var done := false
+		for j in range(2, BLOCKS - 2):
+			var x0 := origin + j * PITCH + STREET
+			var mid := Vector3(x0 + BLOCK * 0.5, 0.0, zs)
+			var clear := true
+			for r in route:
+				if Vector2(r.x - mid.x, r.z - mid.z).length() < 45.0:
+					clear = false
+					break
+			if not clear:
+				continue
+			for n in 14:
+				var x := x0 + 10.0 + n * 3.8
+				var z := zs + (4.1 + maxf(0.0, 3.0 - n) * 0.9)   # taper into the lane divider
+				props.append({"kind": "cone", "position": Vector3(x, 0.0, z)})
+			for d in 3:
+				props.append({"kind": "barrel", "position": Vector3(x0 + 32.0 + d * 0.7, 0.0, zs + 6.6)})
+			_works = Vector3i(k, j, 1)
+			done = true
+			break
+		if done:
+			break
+	_street_life(parent, world, origin, metal)
 	var speeds := C.speeds_from_curvature(route, 13.5, 6.0, 25.0)
 	var spawn_p := Vector3(origin + STREET * 0.5 + 5 * PITCH - 4.0, 0, origin + STREET * 0.5 + 5 * PITCH + 20.0)
 	var map_paths: Array[PackedVector3Array] = []
@@ -387,6 +414,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		map_paths.append(PackedVector3Array([Vector3(origin, 0, s), Vector3(-origin, 0, s)]))
 		map_paths.append(PackedVector3Array([Vector3(s, 0, origin), Vector3(s, 0, -origin)]))
 	return {
+		"props": props,
 		"spawns": [C.car_xform(spawn_p, Vector3(0, 0, 1)), C.car_xform(spawn_p + Vector3(0, 0, -12), Vector3(0, 0, 1))],
 		"waypoints": route, "speeds": speeds,
 		"map_paths": map_paths, "map_places": places,
@@ -631,6 +659,9 @@ static func _plaza(parent: Node3D, world: SBWorld, center: Vector3, station: boo
 			C.box(parent, world, p + Vector3.UP * (2.1 + i * 2.3), Vector3(1.4, 1.15, 1.35), Vector3(0, i * 0.42, 0.13), accent, 0.8, false)
 
 
+## Closed kerb lane (street line, block, side) of the roadworks: no parked cars there.
+static var _works := Vector3i(-1, -1, 0)
+
 const SPECIAL_BLOCKS := [Vector2i(1, 5), Vector2i(6, 3), Vector2i(7, 4), Vector2i(6, 5), Vector2i(8, 7), Vector2i(4, 6),
 	Vector2i(4, 5), Vector2i(7, 2), Vector2i(2, 7)]
 
@@ -663,7 +694,7 @@ static func _street_life(parent: Node3D, world: SBWorld, origin: float, metal: M
 					var blk := Vector2i(j, line - (1 if side < 0.0 else 0)) if axis == 0 else Vector2i(line - (1 if side > 0.0 else 0), j)
 					if blk in SPECIAL_BLOCKS:
 						continue
-					if parking_ok:
+					if parking_ok and not (axis == 0 and line == _works.x and j == _works.y and int(side) == _works.z):
 						var t := 9.0
 						while t < BLOCK - 9.0:
 							if rng.randf() < 0.30:

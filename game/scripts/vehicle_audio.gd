@@ -48,6 +48,8 @@ var _cabin_l := 0.0
 var _cabin_r := 0.0
 var _grind := 0.0
 var _knock := 0.0          # rod bearing knock level 0..1
+var _fire := 0.0
+var _crackle := 0.0
 var _knock_phase := 0.0
 var _crank_hz := 0.0
 var _flat := 0.0
@@ -172,6 +174,7 @@ func _process(delta: float) -> void:
 	var speed := absf(float(t["speed_kmh"]))
 	_grind = float(t.get("gear_grind", 0.0))
 	_knock = float(t.get("engine_knock", 0.0))
+	_fire = float(t.get("fire", 0.0))
 	_crank_hz = maxf(0.0, float(t["rpm"])) / 60.0
 	_flat = 0.0
 	for pressure: float in t["tire_pressure"]:
@@ -277,7 +280,13 @@ func _fill() -> void:
 			_horn_p1 = fmod(_horn_p1 + TAU * 405.0 / MIX_RATE, TAU)
 			_horn_p2 = fmod(_horn_p2 + TAU * 507.0 / MIX_RATE, TAU)
 			honk = (sin(_horn_p1) + 0.33 * sin(3.0 * _horn_p1) + sin(_horn_p2) + 0.3 * sin(3.0 * _horn_p2)) * 0.15 * _horn_level
-		var common := (air + tire + flap + grind) * road_volume + hit + honk + knock
+		# Fire: a low roar and crackling pops.
+		var burn := 0.0
+		if _fire > 0.0:
+			if absf(noise) < 0.0009 * _fire: _crackle = _rng.randf_range(-1.0, 1.0)
+			_crackle *= 0.985
+			burn = (_low_noise * 0.9 + _air_noise * 0.25) * _fire * 0.35 + _crackle * 0.5 * _fire
+		var common := (air + tire + flap + grind) * road_volume + hit + honk + knock + burn
 		var spread := (_air_noise - _low_noise) * _wind * 0.065 * road_volume
 		_cabin_l = lerpf(_cabin_l, common + spread, filter)
 		_cabin_r = lerpf(_cabin_r, common - spread, filter)
