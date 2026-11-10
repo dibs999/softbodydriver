@@ -81,11 +81,19 @@ func _run(scene: Node) -> void:
 	check(still, "Opponents wait on the grid during the countdown")
 	# Race: the player is driven by the same AI, slower than the opponents.
 	var player_ai := AIDriver.new(scene.player, scene.map_data["waypoints"], scene.map_data["speeds"], 0.8)
+	# Like a real driver, the scripted player keeps clear of the cars ahead instead of ramming them.
+	player_ai.racing = true
+	player_ai.others = scene.vehicles
 	t = 0.0
 	var moved := false
 	while activity.active and t < 400.0:
 		_step(scene, activity, player_ai)
 		t += STEP
+		if OS.has_environment("RACE_TRACE") and int(t / STEP) % 200 == 0:
+			var info := []
+			for v in [scene.player] + opponents:
+				info.append("%s %.0f km/h" % [v.get_position_ws().round(), v.get_speed_kmh()] if is_instance_valid(v) else "gone")
+			print("  t=%.0f %s | %s" % [t, activity.message, " | ".join(info)])
 		if not moved and t > 5.0:
 			moved = opponents.all(func(v): return v.get_position_ws().distance_to(grid[opponents.find(v)]) > 20.0)
 	check(moved, "Opponents drive off after the start")

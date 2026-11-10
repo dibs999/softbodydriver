@@ -950,8 +950,14 @@ void SBVehicle::sync_from_world() {
     if (d != lastDeformed_ || b != lastBroken_ || nodeDamage_.size() != pos_.size()) {
         // Worst plastic strain at each node (actuated beams excluded: steering is not damage).
         nodeDamage_.assign(pos_.size(), 0.0f);
+        // A released latch (bonnet opened from the cabin) breaks its beams on purpose: that is not
+        // crash damage, so it must not scratch the paint around the striker.
+        const auto& groupNames = body.breakGroupNames();
+        std::vector<bool> latch(groupNames.size(), false);
+        for (std::size_t g = 0; g < groupNames.size(); ++g) latch[g] = groupNames[g].ends_with("_latch");
         for (const sb::Beam& bm : body.beams()) {
             if (bm.hydroInput >= 0 || bm.a >= nodeDamage_.size() || bm.b >= nodeDamage_.size()) continue;
+            if (bm.broken && bm.breakGroup >= 0 && static_cast<std::size_t>(bm.breakGroup) < latch.size() && latch[static_cast<std::size_t>(bm.breakGroup)]) continue;
             const float strain = bm.broken ? 0.2f : static_cast<float>(bm.plasticStrain());
             nodeDamage_[bm.a] = std::max(nodeDamage_[bm.a], strain);
             nodeDamage_[bm.b] = std::max(nodeDamage_[bm.b], strain);
