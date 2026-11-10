@@ -240,9 +240,12 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
             if (base.rfind(prefix, 0) == 0) { base = base.substr(prefix.size()); break; }
         const bool paintSurface = base == "paint" || base == "bonnet";
         if (paintSurface) {
+            // r: damage mask (written later), g: height in the rest pose (0 sill .. 1 roof) for dirt.
             PackedColorArray colors;
             colors.resize(static_cast<int64_t>(nv));
-            colors.fill(Color(1, 1, 1, 1));
+            const double height = std::max(0.5, def_.body.height);
+            for (std::size_t i = 0; i < nv; ++i)
+                colors[static_cast<int64_t>(i)] = Color(1, static_cast<float>(std::clamp(s.positions[i * 3 + 1] / height, 0.0, 1.0)), 1, 1);
             arrays[Mesh::ARRAY_COLOR] = colors;
         }
         arrays[Mesh::ARRAY_INDEX] = idx;

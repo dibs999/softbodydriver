@@ -11,6 +11,9 @@ uniform float paint_metallic = 0.5;
 uniform float paint_roughness = 0.28;
 uniform float clearcoat_amount = 1.0;
 uniform float clearcoat_gloss = 0.08;
+// Dirt from driving on loose ground (set by vehicle_effects.gd): worst low down, splattered upwards.
+uniform float dirt_amount : hint_range(0.0, 1.0) = 0.0;
+uniform vec4 dirt_color : source_color = vec4(0.36, 0.28, 0.19, 1.0);
 
 float hash(vec2 p) {
 	p = fract(p * vec2(123.34, 456.21));
@@ -55,6 +58,17 @@ void fragment() {
 		coat *= 1.0 - smoothstep(0.1, 0.6, dmg);
 		base *= 1.0 - 0.25 * smoothstep(0.3, 1.0, dmg) * (0.5 + 0.5 * flake_n);
 		rough = mix(rough, 0.5, smoothstep(0.1, 0.6, dmg) * (1.0 - max(bare, scratch)));
+	}
+	if (dirt_amount > 0.001) {
+		float h = COLOR.g;   // 0 at the sill, 1 at the roof
+		float splat = fbm(UV * 7.0 + vec2(3.0, 1.0)) * 0.6 + vnoise(UV * 35.0) * 0.4;
+		float reach = dirt_amount * 0.9;   // how far up the body the dirt has climbed
+		float mask = smoothstep(reach * 0.75 + 0.05, reach * 0.75 - 0.25, h + (splat - 0.5) * 0.35);
+		mask = clamp(mask * smoothstep(0.0, 0.25, dirt_amount) + dirt_amount * 0.15 * splat, 0.0, 1.0);
+		base = mix(base, dirt_color.rgb * (0.8 + 0.4 * splat), mask * 0.9);
+		rough = mix(rough, 0.92, mask);
+		metal = mix(metal, 0.0, mask);
+		coat *= 1.0 - mask;
 	}
 	ALBEDO = base;
 	METALLIC = metal;
