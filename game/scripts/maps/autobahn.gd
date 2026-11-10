@@ -162,6 +162,20 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			continue
 		(conifers if rng.randf() < 0.35 else trees).append(p)
 	_countryside(parent, world, center, trees, rng)
+	# Solid trunks for the countryside trees (behind the fence, but a car can break through).
+	# Some field-edge trees landed on the motorway: drop those, and give the rest solid trunks
+	# well away from the carriageway (junctions and bridges stay clear).
+	for list: Array[Vector3] in [trees, conifers]:
+		var kept: Array[Vector3] = []
+		for p in list:
+			var qx := absf(p.x) - STRAIGHT / 2
+			var off := absf(absf(p.z) - RADIUS) if absf(p.x) <= STRAIGHT / 2 else absf(Vector2(qx, p.z).length() - RADIUS)
+			if off < 24.0:
+				continue
+			kept.append(p)
+			if off > 30.0 and V.keep(p):
+				world.add_box(p + Vector3.UP * 1.8, Vector3(0.22, 1.8, 0.22), Vector3.ZERO, 0.7)
+		list.assign(kept)
 	V.plant(parent, "broadleaf", trees, 91, 0.8, 1.3, false)
 	V.plant(parent, "conifer", conifers, 92, 0.7, 1.05, false)
 	_landmarks(parent, world, metal)
