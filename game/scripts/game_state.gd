@@ -566,6 +566,7 @@ func _setup_input() -> void:
 	_action("indicator_left"); _key("indicator_left", [KEY_COMMA])
 	_action("indicator_right"); _key("indicator_right", [KEY_PERIOD])
 	_action("hazards"); _key("hazards", [KEY_H])
+	_action("horn"); _key("horn", [KEY_ENTER, KEY_KP_ENTER]); _joy_button("horn", JOY_BUTTON_LEFT_STICK)
 	_action("refuel"); _key("refuel", [KEY_F]); _joy_button("refuel", JOY_BUTTON_DPAD_LEFT)
 	_action("service_repair"); _key("service_repair", [KEY_G]); _joy_button("service_repair", JOY_BUTTON_DPAD_RIGHT)
 	_action("driver_door"); _key("driver_door", [KEY_U])

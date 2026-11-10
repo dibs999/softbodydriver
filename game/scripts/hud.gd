@@ -474,7 +474,7 @@ func _help(canvas: Vector2) -> void:
 		[["F3", "F4"], "Aktivität wählen  ·  Start / Abbruch"],
 		[["J", "P", "Tab", "B"], "Zeitlupe  ·  Physikpause  ·  Fahrzeug  ·  Node-Beam-Ansicht"],
 		[["L", ",", ".", "H"], "Licht  ·  Blinker links / rechts  ·  Warnblinker"],
-		[["X", "O"], "Scheibenwischer  ·  Haube entriegeln"],
+		[["X", "O", "⏎"], "Scheibenwischer  ·  Haube entriegeln  ·  Hupe"],
 		[["F", "G"], "Tanken / Service halten (Motor aus)"],
 		[["U", "⇧U"], "Fahrer- / Beifahrertür im Stand"],
 		[["F7", "F8"], "Wetter  ·  Tageszeit (Umschalt+F8 Zeitlauf)"],
