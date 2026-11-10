@@ -58,6 +58,11 @@ func _setup() -> void:
 		dir.y = 0
 		dir = dir.normalized()
 		views.append([a + Vector3.UP * 1.6 - dir * 4.0, a + dir * 30.0 + Vector3.UP * 0.5])
+	# VIEWS=x,y,z,tx,ty,tz;...: extra camera positions and look-at targets in world space.
+	if OS.has_environment("VIEWS"):
+		for v in OS.get_environment("VIEWS").split(";"):
+			var f := v.split_floats(",")
+			views.append([Vector3(f[0], f[1], f[2]), Vector3(f[3], f[4], f[5])])
 	var p: Vector3 = scene.player.get_position_ws()
 	views.append([p + Vector3(-9, 4.5, 6), p + Vector3(6, 0.5, -2)])
 	views.append([p + Vector3(0, 160, 120), p + Vector3(0, 0, -40)])

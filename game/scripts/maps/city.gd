@@ -77,6 +77,9 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var ac_units: Array[Transform3D] = []
 	var tanks: Array[Transform3D] = []
 	var antennas: Array[Transform3D] = []
+	var gates: Array[Transform3D] = []
+	var dumpsters: Array[Transform3D] = []
+	var dumpster_lids: Array[Transform3D] = []
 	var buildings: Array[Array] = []
 	for i in facades.size():
 		var batch: Array[Transform3D] = []
@@ -153,6 +156,21 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			# 1..4 buildings per block.
 			var split := rng.randi_range(1, 2)
 			var margin := 3.0
+			if split == 2:
+				# Back alleys between the four houses: gates at the four mouths, dumpsters inside.
+				var mid := Vector2(x0 + BLOCK * 0.5, z0 + BLOCK * 0.5)
+				for edge: float in [margin + 1.5, BLOCK - margin - 1.5]:
+					for gate_pos: Vector3 in [Vector3(mid.x, KERB + 1.1, z0 + edge), Vector3(x0 + edge, KERB + 1.1, mid.y)]:
+						var across_x := absf(gate_pos.x - mid.x) < 0.1
+						var gate_half := Vector3(1.5, 1.1, 0.06) if across_x else Vector3(0.06, 1.1, 1.5)
+						gates.append(Transform3D(Basis.from_scale(gate_half * 2.0), gate_pos))
+						world.add_box(gate_pos, gate_half, Vector3.ZERO, 0.6)
+				for k in 2:
+					var along := rng.randf_range(6.0, 16.0) * (1.0 if k == 0 else -1.0)
+					var dp := Vector3(mid.x + along, KERB, mid.y) if rng.randf() < 0.5 else Vector3(mid.x, KERB, mid.y + along)
+					var yaw := Basis(Vector3.UP, 0.0 if absf(dp.z - mid.y) < 0.1 else PI * 0.5)
+					dumpsters.append(Transform3D(yaw.scaled_local(Vector3(1.8, 1.2, 1.1)), dp + Vector3.UP * 0.62))
+					dumpster_lids.append(Transform3D(yaw.scaled_local(Vector3(1.86, 0.08, 1.16)), dp + Vector3.UP * 1.26))
 			for sx in split:
 				for sz in split:
 					var w := (BLOCK - margin * 2.0) / split
@@ -220,6 +238,9 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	tank.radial_segments = 12
 	C.scatter_multimesh(parent, tank, C.mat(Color(0.42, 0.33, 0.24), 0.8), tanks, false)
 	C.scatter_multimesh(parent, box_mesh, metal, antennas, false)
+	C.scatter_multimesh(parent, box_mesh, C.mat(Color(0.22, 0.23, 0.24), 0.45, 0.7), gates)
+	C.scatter_multimesh(parent, box_mesh, C.noise_mat(Color(0.20, 0.30, 0.42), 0.18, 3.0, 0.7), dumpsters, false)
+	C.scatter_multimesh(parent, box_mesh, C.mat(Color(0.12, 0.12, 0.12), 0.7), dumpster_lids, false)
 	for i in buildings.size():
 		C.scatter_multimesh(parent, box_mesh, facades[i], buildings[i])
 	var window := BoxMesh.new()
