@@ -453,6 +453,15 @@ func apply_visual_model(v: SBVehicle, info: Dictionary) -> void:
 			inner.albedo_color = Color(0.085, 0.085, 0.09)
 			inner.roughness = 0.92
 			own.next_pass = inner
+			# With the wear shader available, imported bodies chip, scratch and get dirty like the
+			# generated ones (SBVehicle adds the per-vertex mask to these surfaces).
+			if lib.get("paint_damage") is ShaderMaterial:
+				var worn: ShaderMaterial = (lib["paint_damage"] as ShaderMaterial).duplicate()
+				worn.set_shader_parameter("paint", own.albedo_color)
+				worn.set_shader_parameter("paint_metallic", own.metallic)
+				worn.next_pass = inner
+				overrides[k] = worn
+				continue
 			overrides[k] = own
 		elif lib.has(target):
 			overrides[k] = lib[target]

@@ -674,11 +674,31 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
                     garr[Mesh::ARRAY_TANGENT] = g.restTangents;
                 }
             }
-            g.mesh.instantiate();
-            g.mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, garr, Array(), Dictionary(), Mesh::ARRAY_FLAG_USE_DYNAMIC_UPDATE);
             Ref<Material> mat = part.mi->get_surface_override_material(s);
             if (mat.is_null()) mat = mesh->surface_get_material(s);
             mat = pickMaterial(mat);
+            // Body paint with the crash-wear/dirt shader: same per-vertex data as the generated body
+            // (r damage mask, g rest height; rest-pose box-projected UVs in metres).
+            const ShaderMaterial* paintShader = Object::cast_to<ShaderMaterial>(mat.ptr());
+            const bool wearPaint = paintShader && paintShader->get_shader().is_valid() &&
+                                   paintShader->get_shader()->get_path().ends_with("car_paint.gdshader");
+            if (wearPaint) {
+                PackedColorArray colors;
+                PackedVector2Array boxUv;
+                colors.resize(nv);
+                boxUv.resize(nv);
+                const double height = std::max(0.5, def_.body.height);
+                for (int i = 0; i < nv; ++i) {
+                    const Vector3 p = vb[i];
+                    const Vector3 a = nbv[i].abs();
+                    colors[i] = Color(1, static_cast<float>(std::clamp(p.y / height, 0.0, 1.0)), 1, 1);
+                    boxUv[i] = a.x >= a.y && a.x >= a.z ? Vector2(p.z, p.y) : (a.y >= a.z ? Vector2(p.x, p.z) : Vector2(p.x, p.y));
+                }
+                garr[Mesh::ARRAY_COLOR] = colors;
+                garr[Mesh::ARRAY_TEX_UV] = boxUv;
+            }
+            g.mesh.instantiate();
+            g.mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, garr, Array(), Dictionary(), Mesh::ARRAY_FLAG_USE_DYNAMIC_UPDATE);
             if (mat.is_valid()) g.mesh->surface_set_material(0, mat);
             g.arrays = garr;
             g.material = mat;
@@ -689,6 +709,13 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
             g.normalStride = rs->mesh_surface_get_format_normal_tangent_stride(fmt, nv);
             g.normalOffset = rs->mesh_surface_get_format_offset(fmt, nv, Mesh::ARRAY_NORMAL);
             g.buffer.resize(static_cast<int64_t>(g.normalOffset) + static_cast<int64_t>(nv) * g.normalStride);
+            if (wearPaint) {
+                g.damageMask = true;
+                g.attrStride = rs->mesh_surface_get_format_attribute_stride(fmt, nv);
+                g.colorOffset = rs->mesh_surface_get_format_offset(fmt, nv, Mesh::ARRAY_COLOR);
+                const Dictionary sd = rs->mesh_get_surface(g.mesh->get_rid(), 0);
+                g.attrBuffer = sd["attribute_data"];
+            }
             g.instance = memnew(MeshInstance3D);
             g.instance->set_mesh(g.mesh);
             g.instance->set_name(part.mi->get_name());
@@ -998,10 +1025,11 @@ void SBVehicle::update_visual(double delta) {
 
     if (damageDirty_ && !nodeDamage_.empty()) {
         damageDirty_ = false;
-        for (std::size_t si = 0; si < surfaces_.size() && si < visual_.skinned.size(); ++si) {
-            SurfaceGpu& g = surfaces_[si];
+        const std::size_t generated = std::min(surfaces_.size(), visual_.skinned.size());
+        for (std::size_t si = 0; si < generated + std::min(importedGpu_.size(), importedSurf_.size()); ++si) {
+            SurfaceGpu& g = si < generated ? surfaces_[si] : importedGpu_[si - generated];
             if (!g.damageMask || g.attrStride == 0) continue;
-            const sb::MeshSurface& s = visual_.skinned[si];
+            const sb::MeshSurface& s = si < generated ? visual_.skinned[si] : importedSurf_[si - generated];
             const std::size_t nv = s.skin.size();
             if (g.attrBuffer.size() < static_cast<int64_t>(nv * g.attrStride)) continue;
             uint8_t* attr = g.attrBuffer.ptrw();
