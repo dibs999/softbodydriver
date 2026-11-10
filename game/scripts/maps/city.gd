@@ -400,6 +400,8 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 				props.append({"kind": "cone", "position": Vector3(x, 0.0, z)})
 			for d in 3:
 				props.append({"kind": "barrel", "position": Vector3(x0 + 32.0 + d * 0.7, 0.0, zs + 6.6)})
+			for d in 2:
+				props.append({"kind": "barrier", "position": Vector3(x0 + 22.0, 0.0, zs + 5.0 + d * 1.25), "yaw": PI * 0.5})
 			_works = Vector3i(k, j, 1)
 			done = true
 			break

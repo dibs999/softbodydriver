@@ -403,6 +403,39 @@ func spawn_prop(world: SBWorld, kind: String, xform: Transform3D) -> SBProp:
 	var prop := world.spawn_prop(kind, xform)
 	if prop == null:
 		return null
+	if kind == "barrier":
+		# Water-filled roadworks barrier: red/white alternating segments, tapered top, fill cap.
+		var red := _prop_mat("barrier_red", Color(0.78, 0.10, 0.07), 0.55)
+		var white := _prop_mat("barrier_white", Color(0.92, 0.92, 0.90), 0.5)
+		for seg in 2:
+			var low := BoxMesh.new()
+			low.size = Vector3(0.6, 0.48, 0.45)
+			var l := MeshInstance3D.new()
+			l.mesh = low
+			l.material_override = red if seg == 0 else white
+			l.position = Vector3(-0.3 + seg * 0.6, 0.26, 0)
+			prop.add_child(l)
+			var top := BoxMesh.new()
+			top.size = Vector3(0.58, 0.30, 0.26)
+			var t := MeshInstance3D.new()
+			t.mesh = top
+			t.material_override = red if seg == 0 else white
+			t.position = Vector3(-0.3 + seg * 0.6, 0.65, 0)
+			prop.add_child(t)
+			var shoulder := PrismMesh.new()   # sloped flanks between the wide base and the narrow top
+			shoulder.size = Vector3(0.45, 0.10, 0.58)
+			var sh := MeshInstance3D.new()
+			sh.mesh = shoulder
+			sh.material_override = red if seg == 0 else white
+			sh.position = Vector3(-0.3 + seg * 0.6, 0.55, 0)
+			sh.rotation = Vector3(0, PI * 0.5, 0)
+			prop.add_child(sh)
+		var cap := CylinderMesh.new()
+		cap.top_radius = 0.06
+		cap.bottom_radius = 0.06
+		cap.height = 0.04
+		_prop_part(prop, cap, _prop_mat("barrier_cap", Color(0.15, 0.15, 0.16), 0.6), 0.81)
+		return prop
 	if kind == "cone":
 		var base := BoxMesh.new()
 		base.size = Vector3(0.40, 0.035, 0.40)

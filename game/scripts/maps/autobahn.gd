@@ -206,6 +206,9 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 				last = c
 	for d in 3:
 		props.append({"kind": "barrel", "position": Vector3(146.0 - d * 0.7, 0.0, RADIUS + CARRIAGE_OFFSET + CARRIAGE_HALF - 1.0)})
+	# Water-filled barriers across the closed shoulder at the start of the works.
+	for d in 2:
+		props.append({"kind": "barrier", "position": Vector3(153.5, 0.0, RADIUS + CARRIAGE_OFFSET + CARRIAGE_HALF - 0.7 - d * 1.25), "yaw": PI * 0.5})
 	var spawn_i := 20
 	var truck_x := (SERVICE_START + SERVICE_END) * 0.5 + 54.0
 	var truck_access := PackedVector3Array([Vector3(truck_x - 12.0, 0, -RADIUS + 35.0),

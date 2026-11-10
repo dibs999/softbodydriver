@@ -258,7 +258,9 @@ Pylonen und Ölfässer sind eigene kleine Soft-Bodies: Leitkegel (4,5 kg, biegsa
 federn zurück) auf dem Slalom und Handling-Parcours des Testgeländes, als Baustellen auf
 dem Autobahn-Seitenstreifen, vor Lindenau im Hügelland und in einer gesperrten
 Stadtspur, 200-Liter-Stahlfässer (20 kg, verbeulen) als Fasswand am Testgelände, an
-den Baustellen und an der Raststätte Coyote Flats in der Wüste. Autos stoßen sie um, schleifen
+den Baustellen und an der Raststätte Coyote Flats in der Wüste, und rot-weiße,
+wassergefüllte Absperrungen (300 kg, lassen sich wegschieben und eindrücken) an den
+Baustellen von Autobahn und Stadt. Autos stoßen sie um, schleifen
 Pylonen unter dem Stoßfänger mit oder schleudern Fässer weg; das Pausenmenü stellt
 alle wieder auf („Pylonen und Fässer zurückstellen“).
 
