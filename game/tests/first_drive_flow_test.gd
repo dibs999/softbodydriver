@@ -52,7 +52,7 @@ func run() -> void:
 	check(scene.lesson.stage == "service", "Actual braking produces a valid stop result")
 	var result: Dictionary = profile.get_best_braking("kestrel_hatch")
 	check(not result.is_empty() and float(result.get("distance_m", 0)) > 1, "Gameplay signal saves measured braking distance")
-	scene.player.release_bonnet()
+	scene.player.break_group("bonnet_latch")
 	scene.world.step_blocking(0.1)
 	scene.world.sync_visuals()
 	var damaged := int(scene.player.get_telemetry()["broken_beams"])

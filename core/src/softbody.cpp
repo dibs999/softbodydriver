@@ -152,7 +152,8 @@ void SoftBody::setSystems(const CarSystemsSpec& spec) {
 }
 
 void SoftBody::repair(const std::vector<Vec3>& restPositions) {
-    for (auto& door : doors_) { door.requestedOpen = false; door.latched = true; door.travel = 0; }
+    for (auto* list : {&doors_, &lids_})
+        for (auto& door : *list) { door.requestedOpen = false; door.latched = true; door.catching = false; door.travel = 0; }
     clearContacts();
     if (restPositions.size() == pos_.size()) pos_ = restPositions;
     for (auto& v : vel_) v = {};

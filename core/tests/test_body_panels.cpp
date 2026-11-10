@@ -267,3 +267,46 @@ TEST_CASE("rear impact deforms the tailgate as one panel; a front impact leaves 
         }
     }
 }
+
+TEST_CASE("bonnet and tailgate open on their struts, close again and relatch without repair") {
+    for (const char* file : {"kestrel_hatch", "meridian_wagon", "meridian_sedan", "trailhead_4x4"}) {
+        const std::string name = file;
+        CAPTURE(name);
+        auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/" + file + ".car.json"));
+        REQUIRE(car.body.lids().size() == 2);
+        World world;
+        world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+        world.addBody(car.body);
+        world.simulate(0.6);
+        auto& body = world.body(0);
+        for (std::size_t index = 0; index < 2; ++index) {
+            CAPTURE(index);
+            const auto& panel = index == 0 ? car.layout.bonnetNodes : car.layout.tailgateNodes;
+            auto opening = [&]() {
+                std::vector<float> frames;
+                computeNodeFrames(body.positions(), car.visual, frames);
+                const Vec3 rest = normalize(car.restPositions[panel[2]] - car.restPositions[panel[0]]);
+                const Vec3 rigid{frames[0] * rest.x + frames[1] * rest.y + frames[2] * rest.z,
+                                 frames[3] * rest.x + frames[4] * rest.y + frames[5] * rest.z,
+                                 frames[6] * rest.x + frames[7] * rest.y + frames[8] * rest.z};
+                const Vec3 actual = normalize(body.positions()[panel[2]] - body.positions()[panel[0]]);
+                return std::acos(std::clamp(dot(rigid, actual), -1.0, 1.0)) * 180.0 / 3.141592653589793;
+            };
+            CHECK(body.setLidOpen(index, true));
+            CHECK_FALSE(body.setLidOpen(index, true));
+            world.simulate(4.0);
+            const real open = opening();
+            MESSAGE(name << " lid " << index << " opened to " << open);
+            CHECK(open > 55.0);
+            CHECK_FALSE(body.lids()[index].latched);
+            CHECK(body.setLidOpen(index, false));
+            world.simulate(4.0);
+            MESSAGE(name << " lid " << index << " closed to " << opening());
+            CHECK(body.lids()[index].latched);
+            CHECK(opening() < 2.0);
+            for (auto beam : body.lids()[index].latchBeams) CHECK_FALSE(body.beams()[beam].disabled);
+        }
+        CHECK(world.stats().finite);
+        CHECK(body.telemetry().brokenBeams == 0);
+    }
+}

@@ -57,6 +57,10 @@ void SBVehicle::_bind_methods() {
     ClassDB::bind_method(D_METHOD("refuel", "litres"), &SBVehicle::refuel);
     ClassDB::bind_method(D_METHOD("release_bonnet"), &SBVehicle::release_bonnet);
     ClassDB::bind_method(D_METHOD("release_tailgate"), &SBVehicle::release_tailgate);
+    ClassDB::bind_method(D_METHOD("close_bonnet"), &SBVehicle::close_bonnet);
+    ClassDB::bind_method(D_METHOD("close_tailgate"), &SBVehicle::close_tailgate);
+    ClassDB::bind_method(D_METHOD("get_lid_states"), &SBVehicle::get_lid_states);
+    ClassDB::bind_method(D_METHOD("break_group", "name"), &SBVehicle::break_group);
     ClassDB::bind_method(D_METHOD("set_input", "throttle", "brake", "steer", "handbrake"), &SBVehicle::set_input);
     ClassDB::bind_method(D_METHOD("set_clutch", "clutch"), &SBVehicle::set_clutch);
     ClassDB::bind_method(D_METHOD("set_surface_grip", "grip"), &SBVehicle::set_surface_grip);
@@ -149,12 +153,6 @@ void SBVehicle::applyTransform(const Transform3D& xform) {
         p[i] = toS(w);
     }
     body.repair(p);
-    bonnetOpenRequested_ = false;
-    bonnetSupportTravel_ = 0.0;
-    body.setInput(1, 0.0);
-    tailgateOpenRequested_ = false;
-    tailgateSupportTravel_ = 0.0;
-    body.setInput(6, 0.0);
     visualResetPending_ = true;
 }
 
@@ -844,10 +842,6 @@ void SBVehicle::pre_step(double dt) {
         applyTransform(phys_.resetXform);
     }
     sb::VehicleControls& c = body.controls();
-    if (bonnetOpenRequested_) bonnetSupportTravel_ = std::min(1.0, bonnetSupportTravel_ + dt / 1.25);
-    body.setInput(1, bonnetSupportTravel_);
-    if (tailgateOpenRequested_) tailgateSupportTravel_ = std::min(1.0, tailgateSupportTravel_ + dt / 1.4);
-    if (!layout_.tailgateNodes.empty()) body.setInput(6, tailgateSupportTravel_);
     if (phys_.puncture >= 0 && static_cast<std::size_t>(phys_.puncture) < body.wheels().size()) {
         body.wheels()[static_cast<std::size_t>(phys_.puncture)].puncture(phys_.punctureLeak);
         phys_.puncture = -1;
@@ -1611,43 +1605,64 @@ void SBVehicle::replay_end() {
     visualResetPending_ = true;
 }
 
-bool SBVehicle::release_bonnet() {
-    if (!world_ || bodyIndex_ < 0 || layout_.bonnetNodes.size() != 8 || (hasImportedModel_ && !importedBonnet_)) return false;
-    std::lock_guard<std::mutex> lock(world_->mutex());
-    auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
-    if (body.telemetry().speedKmh > 2.0) return false;
-    bool released = false;
-    for (std::size_t i = 0; i < body.beams().size(); ++i) {
-        const auto& beam = body.beams()[i];
-        if (!beam.broken && beam.breakGroup >= 0 && body.breakGroupNames()[static_cast<std::size_t>(beam.breakGroup)] == "bonnet_latch") {
-            body.breakBeam(static_cast<std::uint32_t>(i));
-            released = true;
-        }
-    }
-    if (released) {
-        // The damped, breakable support struts lift the panel through channel 1.
-        // Do not add an instantaneous kick on top of the controlled stroke.
-        bonnetOpenRequested_ = true;
-    }
-    return released;
+bool SBVehicle::lidAvailable(int index) const {
+    if (!world_ || bodyIndex_ < 0) return false;
+    if (index == 0) return layout_.bonnetNodes.size() == 8 && (!hasImportedModel_ || importedBonnet_);
+    return layout_.tailgateNodes.size() == 8 && (!hasImportedModel_ || importedTailgate_);
 }
 
-bool SBVehicle::release_tailgate() {
-    if (!world_ || bodyIndex_ < 0 || layout_.tailgateNodes.size() != 8 || (hasImportedModel_ && !importedTailgate_)) return false;
+bool SBVehicle::setLid(int index, bool open) {
+    if (!lidAvailable(index)) return false;
     std::lock_guard<std::mutex> lock(world_->mutex());
     auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
-    if (body.telemetry().speedKmh > 2.0) return false;
-    bool released = false;
+    if (static_cast<std::size_t>(index) >= body.lids().size()) return false;
+    if (open && body.telemetry().speedKmh > 2.0) return false;
+    // The reversible latch lets go and the damped struts lift the panel (channel 1 / 6); closing
+    // lowers it on the struts until the latch catches it again.
+    return body.setLidOpen(static_cast<std::size_t>(index), open);
+}
+
+int SBVehicle::break_group(const String& name) {
+    if (!world_ || bodyIndex_ < 0) return 0;
+    std::lock_guard<std::mutex> lock(world_->mutex());
+    auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+    const std::string group = name.utf8().get_data();
+    int count = 0;
     for (std::size_t i = 0; i < body.beams().size(); ++i) {
         const auto& beam = body.beams()[i];
-        if (!beam.broken && beam.breakGroup >= 0 && body.breakGroupNames()[static_cast<std::size_t>(beam.breakGroup)] == "tailgate_latch") {
+        if (!beam.broken && beam.breakGroup >= 0 && body.breakGroupNames()[static_cast<std::size_t>(beam.breakGroup)] == group) {
             body.breakBeam(static_cast<std::uint32_t>(i));
-            released = true;
+            ++count;
         }
     }
-    // Gas struts lift the lid through channel 6 (see pre_step).
-    if (released) tailgateOpenRequested_ = true;
-    return released;
+    return count;
+}
+
+bool SBVehicle::release_bonnet() { return setLid(0, true); }
+bool SBVehicle::close_bonnet() { return setLid(0, false); }
+bool SBVehicle::release_tailgate() { return setLid(1, true); }
+bool SBVehicle::close_tailgate() { return setLid(1, false); }
+
+Array SBVehicle::get_lid_states() const {
+    Array result;
+    if (!world_ || bodyIndex_ < 0) return result;
+    std::lock_guard<std::mutex> lock(world_->mutex());
+    const auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+    for (std::size_t i = 0; i < body.lids().size(); ++i) {
+        const auto& lid = body.lids()[i];
+        bool broken = false;
+        for (const auto* list : {&lid.hingeBeams, &lid.latchBeams})
+            for (auto b : *list) broken |= body.beams()[b].broken;
+        Dictionary d;
+        d["name"] = i == 0 ? "bonnet" : "tailgate";
+        d["available"] = lidAvailable(static_cast<int>(i));
+        d["open_requested"] = lid.requestedOpen;
+        d["latched"] = lid.latched;
+        d["travel"] = lid.travel;
+        d["damaged"] = broken;
+        result.append(d);
+    }
+    return result;
 }
 
 double SBVehicle::refuel(double litres) {

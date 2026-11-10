@@ -203,37 +203,40 @@ func handle_action(event: InputEvent) -> bool:
 	game.hud.toast(status_text())
 	return true
 
-func release_bonnet() -> bool:
-	if not game or not is_instance_valid(game.player): return false
-	if not game.player.get_info().get("bonnet_supported", true):
-		game.hud.toast("Motorhaube für dieses Modell nicht verfügbar")
-		return false
-	if absf(game.player.get_speed_kmh()) > 2.0:
-		game.hud.toast("Zum Öffnen der Motorhaube zuerst anhalten")
-		return false
-	var opened: bool = game.player.release_bonnet()
-	game.hud.toast("Motorhaube entriegelt · Reparatur schließt sie" if opened else "Motorhaube bereits entriegelt")
-	return opened
-
-
 ## Tailgate of an estate / SUV, boot lid of a saloon.
-func lid_name() -> String:
+func lid_name(index: int) -> String:
+	if index == 0: return "Motorhaube"
 	var style := String(game.player.get_info().get("style", "")) if game and is_instance_valid(game.player) else ""
 	return "Kofferraumdeckel" if style in ["sedan", "coupe"] else "Heckklappe"
 
 
-func release_tailgate() -> bool:
+## Opens a shut bonnet (0) / rear lid (1) at standstill, or lowers an open one until it latches.
+func toggle_lid(index: int) -> bool:
 	if not game or not is_instance_valid(game.player): return false
-	var lid := lid_name()
-	if not game.player.get_info().get("tailgate_supported", false):
+	var v: SBVehicle = game.player
+	var lid := lid_name(index)
+	var states: Array = v.get_lid_states() if v.has_method("get_lid_states") else []
+	var state: Dictionary = states[index] if index < states.size() else {}
+	if state.is_empty() or not state.get("available", false):
 		game.hud.toast("%s für dieses Modell nicht verfügbar" % lid)
 		return false
-	if absf(game.player.get_speed_kmh()) > 2.0:
-		game.hud.toast("Zum Öffnen: %s erst anhalten" % ("des Kofferraums" if lid == "Kofferraumdeckel" else "der Heckklappe"))
+	if state.get("damaged", false):
+		game.hud.toast("%s beschädigt · Reparatur nötig" % lid)
 		return false
-	var opened: bool = game.player.release_tailgate()
-	game.hud.toast("%s entriegelt · Reparatur schließt sie" % lid if opened else "%s bereits entriegelt" % lid)
+	if state.get("open_requested", false):
+		var closing: bool = v.close_bonnet() if index == 0 else v.close_tailgate()
+		if closing: game.hud.toast("%s wird geschlossen" % lid)
+		return closing
+	if absf(v.get_speed_kmh()) > 2.0:
+		game.hud.toast("%s: zum Öffnen zuerst anhalten" % lid)
+		return false
+	var opened: bool = v.release_bonnet() if index == 0 else v.release_tailgate()
+	game.hud.toast("%s entriegelt" % lid if opened else "%s klemmt" % lid)
 	return opened
+
+
+func release_bonnet() -> bool: return toggle_lid(0)
+func release_tailgate() -> bool: return toggle_lid(1)
 
 
 func toggle_door(index: int) -> bool:

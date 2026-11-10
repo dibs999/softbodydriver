@@ -67,7 +67,7 @@ func run() -> void:
 	scene.player.set_input(0, 1, 0, 1)
 	scene.world.step_blocking(0.5)
 	scene.world.sync_visuals()
-	scene.player.release_bonnet()
+	scene.player.break_group("bonnet_latch")
 	scene.world.step_blocking(0.1)
 	scene.world.sync_visuals()
 	var damage := int(scene.player.get_telemetry()["broken_beams"])

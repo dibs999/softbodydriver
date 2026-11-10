@@ -28,7 +28,7 @@ func run() -> void:
 	car.set_ignition(false)
 	car.set_input(0, 1, 0, 1)
 	car.puncture_tire(0, 200.0)
-	car.release_bonnet()
+	car.break_group("bonnet_latch")
 	world.step_blocking(3.0)
 	world.sync_visuals()
 	var damaged: Dictionary = car.get_telemetry()

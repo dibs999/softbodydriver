@@ -687,12 +687,17 @@ CarBuild buildCar(const CarDefinition& def) {
         }
     }
     connectAll(car, bonnet, makeBeam(8.0e4, 35.0, 1.2e4, 5.0e4), nullptr);
+    DoorMechanism bonnetLatch;
+    bonnetLatch.nodes = bonnet;
+    bonnetLatch.inputChannel = 1;
+    bonnetLatch.stroke = 1.25;
+    bonnetLatch.catchTolerance = 0.06;
     for (int corner = 0; corner < 4; ++corner) {
         const auto n = bonnet[static_cast<std::size_t>(corner)];
         BeamParams mount = makeBeam(1.0e5, 55.0, 8.0e3, corner < 2 ? 1.2e4 : 5.0e3);
         mount.breakGroup = corner < 2 ? "bonnet_hinge" : "bonnet_latch";
         for (auto anchor : nearestNodes(car, rig.bodyNodes, car.positions()[n], 3))
-            car.addBeam(n, anchor, mount);
+            (corner < 2 ? bonnetLatch.hingeBeams : bonnetLatch.latchBeams).push_back(car.addBeam(n, anchor, mount));
     }
     // Two low-force gas supports make inspection an actual held-open pose.
     // Their target lengths come from rotating the bonnet by 65 degrees around
@@ -736,6 +741,9 @@ CarBuild buildCar(const CarDefinition& def) {
         support.breakGroup = "bonnet_hinge";
         build.layout.bonnetStrutBeams.push_back(car.addBeam(anchor, front, support));
     }
+    // Reversible latch: opened from the cabin, lowered on its struts and relatched when it is shut.
+    bonnetLatch.supportBeams = build.layout.bonnetStrutBeams;
+    car.addLid(bonnetLatch);
     ColTriParams panel;
     panel.dragCoef = 1.0;
     car.addTriangle(bonnet[4], bonnet[6], bonnet[7], panel);
@@ -761,7 +769,8 @@ CarBuild buildCar(const CarDefinition& def) {
         for (auto n : rig.bodyNodes) {
             const Vec3 d = car.positions()[n] - hingeLine;
             const real u = dot(Vec3{d.x, d.y, 0.0}, along), w = dot(Vec3{d.x, d.y, 0.0}, inward);
-            if (u > -0.02 && u < span + 0.02 && std::abs(d.z) < halfWidth && w < 0.0 && w > -0.25) proud = std::max(proud, -w);
+            // Wider than the lid itself: skin triangles reaching in from just outside count too.
+            if (u > -0.10 && u < span + 0.10 && std::abs(d.z) < halfWidth + 0.15 && w < 0.0 && w > -0.25) proud = std::max(proud, -w);
         }
         const Vec3 surface = -inward * (proud + 0.012);
         const real mass = bd.tailgateMass > 0.0 ? bd.tailgateMass : (hatch ? 18.0 : 11.0);
@@ -778,11 +787,17 @@ CarBuild buildCar(const CarDefinition& def) {
                                           line + surface - inward * (layer * 0.03) + Vec3{0.0, 0.0, z}, p));
             }
         connectAll(car, lid, makeBeam(8.0e4, 35.0, 1.2e4, 5.0e4), nullptr);
+        DoorMechanism lidLatch;
+        lidLatch.nodes = lid;
+        lidLatch.inputChannel = 6;
+        lidLatch.stroke = 1.4;
+        lidLatch.catchTolerance = 0.06;
         for (int corner = 0; corner < 4; ++corner) {
             const auto n = lid[static_cast<std::size_t>(corner)];
             BeamParams mount = makeBeam(1.0e5, 55.0, 8.0e3, corner < 2 ? 1.2e4 : 5.0e3);
             mount.breakGroup = corner < 2 ? "tailgate_hinge" : "tailgate_latch";
-            for (auto a : nearestNodes(car, rig.bodyNodes, car.positions()[n], 3)) car.addBeam(n, a, mount);
+            for (auto a : nearestNodes(car, rig.bodyNodes, car.positions()[n], 3))
+                (corner < 2 ? lidLatch.hingeBeams : lidLatch.latchBeams).push_back(car.addBeam(n, a, mount));
         }
         // Gas struts from the body beside the opening to the lid's far edge; open pose by rotating
         // the lid about its hinge line (upwards and back: negative about +z).
@@ -832,6 +847,8 @@ CarBuild buildCar(const CarDefinition& def) {
         };
         outerTri(lid[4], lid[6], lid[7]);
         outerTri(lid[4], lid[7], lid[5]);
+        lidLatch.supportBeams = build.layout.tailgateStrutBeams;
+        car.addLid(lidLatch);
     }
 
 
@@ -1154,6 +1171,21 @@ CarBuild buildCar(const CarDefinition& def) {
             };
             if (ctr.x > prof.xCowl + 0.025 && ctr.x < L - 0.12 &&
                 isShellTop(ua) && isShellTop(ub) && isShellTop(uc)) return;
+            // Skin above the (flat) bonnet cage would trap a released bonnet under it: crowned and
+            // boxy bonnets rise above the straight line between hinge and latch. Skin below it stays,
+            // the closed bonnet rests on that.
+            {
+                const auto& bn = build.layout.bonnetNodes;
+                const Vec3 rear = car.positions()[bn[0]], front = car.positions()[bn[2]];
+                const real u = std::clamp((ctr.x - rear.x) / (front.x - rear.x), 0.0, 1.0);
+                const real plane = rear.y + (front.y - rear.y) * u;
+                if (ctr.x > rear.x && ctr.x < front.x && std::abs(ctr.z) < prof.halfW(ctr.x) * 0.95) {
+                    if (std::min({pa.y, pb.y, pc.y}) > plane - 0.005) return;
+                    // Nose skin sloping up over a front corner (latch side) would hold it down.
+                    const real dz = std::abs(ctr.z) - std::abs(front.z);
+                    if (front.x - ctr.x < 0.25 && dz > -0.25 && std::max({pa.y, pb.y, pc.y}) > plane + 0.01) return;
+                }
+            }
             // Lower outer end skins belong to the bumper, not a second fixed
             // collision sheet remaining in space after the fascia detaches.
             if (bd.detachableBumpers) {

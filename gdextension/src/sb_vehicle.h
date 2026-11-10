@@ -82,6 +82,10 @@ public:
     void replay_end();
     bool release_bonnet(); ///< Releases latch once; hinges may subsequently break under impact.
     bool release_tailgate(); ///< Same for the rear lid (tailgate / boot lid), if the car has one.
+    bool close_bonnet();     ///< Lowers an open bonnet on its struts until its latch catches.
+    bool close_tailgate();
+    int break_group(const String& name); ///< Breaks every intact beam of a break group, as a crash would (tests, tools).
+    Array get_lid_states() const; ///< [{name, available, open_requested, latched, travel, damaged}] bonnet, tailgate
     void repair_in_place();                   ///< Repair, keep position and heading, set upright.
 
     void set_debug_view(bool on);
@@ -188,11 +192,9 @@ private:
     Controls ctl_, phys_;
     int appliedTuneSerial_ = 0;
     double starterTimer_ = 0.0;
-    // Physical bonnet support uses hydro channel 1; state is world-mutex protected.
-    bool bonnetOpenRequested_ = false;
-    double bonnetSupportTravel_ = 0.0;
-    bool tailgateOpenRequested_ = false;   // rear lid struts, hydro channel 6
-    double tailgateSupportTravel_ = 0.0;
+    // Bonnet (lid 0, struts on channel 1) and tailgate (lid 1, channel 6) are core latch mechanisms.
+    bool lidAvailable(int index) const;
+    bool setLid(int index, bool open);
 
     // Rendering.
     std::vector<SurfaceGpu> surfaces_;
