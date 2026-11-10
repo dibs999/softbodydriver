@@ -1359,6 +1359,29 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             vb.box("trim", (pivot + tip) * 0.5 - normal * 0.006, {0.006, 0.004, 0.19}, lidNodes, dir, normal, {0, 0, 1});
         }
         {
+            // Third brake light: under the roof spoiler of hatchbacks and SUVs, otherwise along the
+            // top of the rear window. It shares the tail-light material, so it lights with the brakes.
+            const auto sec = prof.section(prof.xRwTop + 0.04);
+            const real top = sec.y[10];
+            if (bd.style == BodyStyle::Hatchback || bd.style == BodyStyle::SUV) {
+                const real c = std::cos(0.16), s = std::sin(0.16);
+                const Vec3 ax{-c, -s, 0}, ay{s, -c, 0};
+                vb.box("taillight", {prof.xRwTop - 0.125, top - 0.002, 0}, {0.006, 0.006, 0.13}, lidNodes, ax, ay, {0, 0, 1});
+            } else {
+                const auto glass = prof.section(prof.xRwTop - 0.05);
+                vb.box("grille", {prof.xRwTop - 0.05, glass.y[10] - 0.028, 0}, {0.016, 0.012, 0.135}, bodyNodes);
+                vb.box("taillight", {prof.xRwTop - 0.058, glass.y[10] - 0.028, 0}, {0.008, 0.006, 0.12}, bodyNodes);
+            }
+        }
+        {
+            // Fuel filler flap in the right-hand rear quarter panel, above the wheel arch.
+            const real xf = prof.xRA + 0.02;
+            const real yf = prof.yBelt(xf) - 0.13;
+            const real zf = prof.halfW(xf) - 0.002;
+            vb.bevelBox("seam", {xf, yf, zf}, {0.062, 0.058, 0.004}, 0.012, bodyNodes);
+            vb.bevelBox("paint", {xf, yf, zf + 0.003}, {0.056, 0.052, 0.003}, 0.011, bodyNodes);
+        }
+        {
             // Shark-fin antenna at the back of the roof.
             const real xa = prof.xRwTop + 0.14;
             const real top = prof.section(xa).y[10];
