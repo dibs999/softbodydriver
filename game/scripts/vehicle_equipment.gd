@@ -146,7 +146,8 @@ func state_for(v: SBVehicle) -> Dictionary:
 			rig.add_child(lamp)
 			if side < 0: left.append(lamp)
 			else: right.append(lamp)
-	var s := {"rig": rig, "lamp_materials": lamp_materials, "tail_materials": tail_materials, "lamp_entries": lamp_entries, "broken": {}, "lamp_check": 0.0, "authored_signals": authored_signals, "headlights": headlights, "left": left, "right": right, "lights": false, "light_mode": 0, "signal": 0, "hazards": false}
+	var paint_rgb: Array = body.get("paint", [0.5, 0.1, 0.1])
+	var s := {"paint": Color(float(paint_rgb[0]), float(paint_rgb[1]), float(paint_rgb[2])), "rig": rig, "lamp_materials": lamp_materials, "tail_materials": tail_materials, "lamp_entries": lamp_entries, "broken": {}, "lamp_check": 0.0, "authored_signals": authored_signals, "headlights": headlights, "left": left, "right": right, "lights": false, "light_mode": 0, "signal": 0, "hazards": false}
 	states[v] = s
 	return s
 
@@ -353,6 +354,7 @@ func _update_lamp_damage(v: SBVehicle, s: Dictionary, delta: float) -> void:
 	if float(s["lamp_check"]) > 0.0 or not v.has_method("get_lamp_states"): return
 	s["lamp_check"] = 0.2
 	_update_glass(v, s)
+	_update_debris(v, s)
 	var broken: Dictionary = s["broken"]
 	for lamp in v.get_lamp_states():
 		var corner: String = lamp["name"]
@@ -364,6 +366,30 @@ func _update_lamp_damage(v: SBVehicle, s: Dictionary, delta: float) -> void:
 			if v == game.player and game.get("hud"):
 				game.hud.toast("%s zerstört" % LAMP_CAPTIONS.get(corner, corner))
 		broken[corner] = now
+
+## Clips and plastic chips when a bumper clip tears out, a burst of trim and paint flakes when a
+## door comes off. Counts reset with a repair.
+func _update_debris(v: SBVehicle, s: Dictionary) -> void:
+	if v.has_method("get_bumper_states"):
+		if not s.has("clips"): s["clips"] = {}
+		var clips: Dictionary = s["clips"]
+		for b in v.get_bumper_states():
+			var name := String(b["name"])
+			var now := int(b["clips"])
+			var before := int(clips.get(name, 4))
+			if now < before:
+				_spawn_shards(b["center"], v.get_velocity(), 14 * (before - now), Color(0.05, 0.05, 0.055, 1.0))
+				_spawn_shards(b["center"], v.get_velocity(), 6 * (before - now), s.get("paint", Color(0.5, 0.1, 0.1)))
+			clips[name] = now
+	if not s.has("doors_missing"): s["doors_missing"] = {}
+	var missing: Dictionary = s["doors_missing"]
+	for door in v.get_door_states():
+		var idx := int(door["index"])
+		var now := bool(door["missing"])
+		if now and not missing.get(idx, false):
+			var at := v.get_position_ws() + v.get_right() * (0.9 if idx == 1 else -0.9) + v.get_up() * 0.6
+			_spawn_shards(at, v.get_velocity(), 40, Color(0.06, 0.06, 0.06, 1.0))
+		missing[idx] = now
 
 const CRACKED_GLASS := preload("res://materials/cracked_glass.gdshader")
 const GLASS_CRACK := 0.3      # pane damage at which the first cracks show

@@ -77,6 +77,7 @@ void SBVehicle::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_door_states"), &SBVehicle::get_door_states);
     ClassDB::bind_method(D_METHOD("get_lamp_states"), &SBVehicle::get_lamp_states);
     ClassDB::bind_method(D_METHOD("get_glass_states"), &SBVehicle::get_glass_states);
+    ClassDB::bind_method(D_METHOD("get_bumper_states"), &SBVehicle::get_bumper_states);
     ClassDB::bind_method(D_METHOD("repair_in_place"), &SBVehicle::repair_in_place);
     ClassDB::bind_method(D_METHOD("set_debug_view", "on"), &SBVehicle::set_debug_view);
     ClassDB::bind_method(D_METHOD("get_debug_view"), &SBVehicle::get_debug_view);
@@ -1384,6 +1385,36 @@ Array SBVehicle::get_glass_states() const {
         state["damage"] = damage;
         state["center"] = toG(c);
         state["origin_uv"] = originUv;
+        result.push_back(state);
+    }
+    return result;
+}
+
+Array SBVehicle::get_bumper_states() const {
+    Array result;
+    if (!world_ || bodyIndex_ < 0) return result;
+    std::lock_guard<std::mutex> lock(world_->mutex());
+    const auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+    const auto& names = body.breakGroupNames();
+    for (int end = 0; end < 2; ++end) {
+        const auto& nodes = end == 0 ? layout_.frontBumperNodes : layout_.rearBumperNodes;
+        if (nodes.empty()) continue;
+        const std::string prefix = end == 0 ? "bumper_front_mounts_" : "bumper_rear_mounts_";
+        std::array<bool, 4> intact{false, false, false, false};
+        for (const auto& beam : body.beams()) {
+            if (beam.breakGroup < 0 || beam.broken) continue;
+            const std::string& g = names[static_cast<std::size_t>(beam.breakGroup)];
+            if (g.rfind(prefix, 0) == 0 && g.size() == prefix.size() + 1) {
+                const int c = g.back() - '0';
+                if (c >= 0 && c < 4) intact[static_cast<std::size_t>(c)] = true;
+            }
+        }
+        sb::Vec3 c{};
+        for (auto n : nodes) c += body.positions()[n];
+        Dictionary state;
+        state["name"] = end == 0 ? "front" : "rear";
+        state["clips"] = static_cast<int>(intact[0]) + intact[1] + intact[2] + intact[3];
+        state["center"] = toG(c / static_cast<double>(nodes.size()));
         result.push_back(state);
     }
     return result;

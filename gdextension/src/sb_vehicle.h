@@ -67,6 +67,8 @@ public:
     /// Glass panes of the generated body: [{name, instance, damage, center}]. Damage is the crush
     /// of the structure the pane is bonded to (0 intact, >= 1 shattered); repair resets it.
     Array get_glass_states() const;
+    /// Bumpers: [{name ("front"/"rear"), clips (intact clip groups, 0..4), center}].
+    Array get_bumper_states() const;
     bool release_bonnet(); ///< Releases latch once; hinges may subsequently break under impact.
     void repair_in_place();                   ///< Repair, keep position and heading, set upright.
 
