@@ -439,7 +439,10 @@ func _drive_player(delta: float) -> void:
 			_auto_hold = false
 		elif absf(kmh) < 0.8 and (brk > 0.3 or now_sim - _last_brake_sim < 0.5):
 			_auto_hold = true
-		if _auto_hold and thr <= 0.05 and absf(kmh) < 3.0:
+		# Like an electric parking brake taking over from Auto Hold: with the handbrake pulled, the
+		# service brakes are released (holding with both preloaded the body enough that a rear door
+		# could stop 2 deg short of its latch).
+		if _auto_hold and thr <= 0.05 and absf(kmh) < 3.0 and hb < 0.5:
 			brk = maxf(brk, 0.6)
 	else:
 		player.set_clutch(1.0 - Input.get_action_strength("clutch") if Input.is_action_pressed("clutch") else -1.0)
