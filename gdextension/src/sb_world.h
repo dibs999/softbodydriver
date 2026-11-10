@@ -15,6 +15,25 @@
 
 namespace godot {
 
+/// The world lock, shared by the physics thread and the main thread. A plain std::mutex is not
+/// fair: the physics thread re-took it right after each chunk of steps and, when it could not keep
+/// up with real time (under load, many vehicles), starved the main thread, so the game froze.
+/// Waiters are counted and the physics thread steps back while anyone is waiting.
+class WorldMutex {
+public:
+    void lock() {
+        waiting_.fetch_add(1, std::memory_order_acq_rel);
+        mtx_.lock();
+        waiting_.fetch_sub(1, std::memory_order_acq_rel);
+    }
+    void unlock() { mtx_.unlock(); }
+    bool contended() const { return waiting_.load(std::memory_order_acquire) > 0; }
+
+private:
+    std::mutex mtx_;
+    std::atomic<int> waiting_{0};
+};
+
 class SBVehicle;
 class SBProp;
 
@@ -63,7 +82,7 @@ public:
     void sync_visuals();
 
     // Internal (used by SBVehicle).
-    std::mutex& mutex() { return mtx_; }
+    WorldMutex& mutex() { return mtx_; }
     sb::World& world() { return world_; }
     int body_index_of(const SBVehicle* v) const;
 
@@ -77,7 +96,7 @@ private:
     void stopThread();
 
     sb::World world_;
-    std::mutex mtx_;
+    WorldMutex mtx_;
     std::thread thread_;
     std::atomic<bool> running_{false};
     std::atomic<double> timeScale_{1.0};

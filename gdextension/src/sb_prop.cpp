@@ -53,7 +53,7 @@ void SBProp::sync_from_world() {
 
 void SBProp::reset() {
     if (!world_ || bodyIndex_ < 0) return;
-    std::lock_guard<std::mutex> lock(world_->mutex());
+    std::lock_guard<WorldMutex> lock(world_->mutex());
     world_->world().body(static_cast<std::size_t>(bodyIndex_)).repair(spawn_);
 }
 

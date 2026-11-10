@@ -74,7 +74,7 @@ void SBWorld::sync_visuals() {
 void SBWorld::sync_visuals_with_delta(double delta) {
     // Snapshot every vehicle under one short lock, then rebuild meshes without holding it.
     {
-        std::lock_guard<std::mutex> lock(mtx_);
+        std::lock_guard<WorldMutex> lock(mtx_);
         for (SBVehicle* v : vehicles_) v->sync_from_world();
         for (SBProp* p : props_) p->sync_from_world();
     }
@@ -116,7 +116,7 @@ void SBWorld::threadMain() {
         while (steps > 0 && running_) {
             const int chunk = std::min(steps, 16);
             {
-                std::lock_guard<std::mutex> lock(mtx_);
+                std::lock_guard<WorldMutex> lock(mtx_);
                 for (int i = 0; i < chunk; ++i) {
                     for (SBVehicle* v : vehicles_) v->pre_step(dt);
                     world_.step();
@@ -126,6 +126,11 @@ void SBWorld::threadMain() {
             debt -= chunk * dt;
             statSteps += static_cast<std::uint64_t>(chunk);
             statSim += chunk * dt;
+            // Hand the lock to a waiting main thread before the next chunk.
+            for (int spin = 0; mtx_.contended() && running_; ++spin) {
+                if (spin < 64) std::this_thread::yield();
+                else std::this_thread::sleep_for(std::chrono::microseconds(50));
+            }
         }
         const double statWall = std::chrono::duration<double>(clock::now() - statT0).count();
         if (statWall > 0.5) {
@@ -139,12 +144,12 @@ void SBWorld::threadMain() {
 }
 
 void SBWorld::add_ground_plane(double friction) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<WorldMutex> lock(mtx_);
     world_.addCollider(sb::StaticCollider::plane({0, 0, 0}, {0, 1, 0}, friction, "ground"));
 }
 
 void SBWorld::add_box(const Vector3& c, const Vector3& h, const Vector3& e, double friction) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<WorldMutex> lock(mtx_);
     world_.addCollider(sb::StaticCollider::box({c.x, c.y, c.z}, {h.x, h.y, h.z}, {e.x, e.y, e.z}, friction, "box"));
 }
 
@@ -156,12 +161,12 @@ void SBWorld::add_heightfield(double ox, double oz, double cell, int nx, int nz,
     }
     std::vector<sb::real> h(static_cast<std::size_t>(nx) * static_cast<std::size_t>(nz));
     for (std::size_t i = 0; i < h.size(); ++i) h[i] = heights[static_cast<int64_t>(i)];
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<WorldMutex> lock(mtx_);
     world_.addCollider(sb::StaticCollider::heightfield(ox, oz, cell, cell, nx, nz, std::move(h), friction, "terrain"));
 }
 
 void SBWorld::clear_colliders() {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<WorldMutex> lock(mtx_);
     world_.clearColliders();
 }
 
@@ -183,7 +188,7 @@ SBVehicle* SBWorld::spawn_car(const String& path, const Transform3D& xform) {
     v->set_name(String(build.def.id.c_str()));
     add_child(v);
     {
-        std::lock_guard<std::mutex> lock(mtx_);
+        std::lock_guard<WorldMutex> lock(mtx_);
         v->setup(this, std::move(build), xform, materials_);
         vehicles_.push_back(v);
     }
@@ -193,7 +198,7 @@ SBVehicle* SBWorld::spawn_car(const String& path, const Transform3D& xform) {
 void SBWorld::remove_vehicle(SBVehicle* v) {
     if (!v) return;
     {
-        std::lock_guard<std::mutex> lock(mtx_);
+        std::lock_guard<WorldMutex> lock(mtx_);
         auto it = std::find(vehicles_.begin(), vehicles_.end(), v);
         if (it == vehicles_.end()) return;
         const int idx = v->body_index();
@@ -228,7 +233,7 @@ SBProp* SBWorld::spawn_prop(const String& kind, const Transform3D& xform) {
     prop->set_name(kind);
     add_child(prop);
     {
-        std::lock_guard<std::mutex> lock(mtx_);
+        std::lock_guard<WorldMutex> lock(mtx_);
         const int idx = static_cast<int>(world_.addBody(build.body));
         prop->setup(this, idx, build, spawn, kind);
         props_.push_back(prop);
@@ -240,7 +245,7 @@ SBProp* SBWorld::spawn_prop(const String& kind, const Transform3D& xform) {
 void SBWorld::remove_prop(SBProp* p) {
     if (!p) return;
     {
-        std::lock_guard<std::mutex> lock(mtx_);
+        std::lock_guard<WorldMutex> lock(mtx_);
         auto it = std::find(props_.begin(), props_.end(), p);
         if (it == props_.end()) return;
         const int idx = p->body_index();
@@ -269,7 +274,7 @@ int SBWorld::body_index_of(const SBVehicle* v) const {
 }
 
 void SBWorld::set_air_density(double d) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<WorldMutex> lock(mtx_);
     world_.settings().airDensity = d;
 }
 
@@ -282,7 +287,7 @@ Dictionary SBWorld::get_stats() {
     std::size_t nodes = 0, beams = 0;
     double simTime = 0;
     {
-        std::lock_guard<std::mutex> lock(mtx_);
+        std::lock_guard<WorldMutex> lock(mtx_);
         for (const auto& b : world_.bodies()) {
             nodes += b.nodeCount();
             beams += b.beamCount();
@@ -302,7 +307,7 @@ Dictionary SBWorld::get_stats() {
 void SBWorld::step_blocking(double seconds) {
     const double dt = world_.settings().dt;
     const auto n = static_cast<int>(seconds / dt);
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<WorldMutex> lock(mtx_);
     for (SBVehicle* v : vehicles_) v->sync_from_world();  // hand over pending controls
     for (int i = 0; i < n; ++i) {
         for (SBVehicle* v : vehicles_) v->pre_step(dt);

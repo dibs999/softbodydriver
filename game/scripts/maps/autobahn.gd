@@ -7,6 +7,7 @@ const STRAIGHT := 2600.0
 const RADIUS := 520.0
 const CARRIAGE_OFFSET := 7.6   # centre of a carriageway from the median
 const CARRIAGE_HALF := 6.9
+const SHOULDER_HIGH_U_A := true   # which UV side of carriageway A is its outer edge (checked in renders)
 const SERVICE_START := -990.0
 const SERVICE_END := -650.0
 
@@ -49,11 +50,19 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var concrete := C.noise_mat(Color(0.66, 0.66, 0.63), 0.1, 0.5, 0.8, 0.2)
 	var metal := C.mat(Color(0.72, 0.74, 0.76), 0.35, 0.85)
 	var road := C.road_material(3, CARRIAGE_HALF * 2.0, 14.0, "autobahn")
+	# RQ 31-like cross-section per carriageway: 0.75 m safety strip at the median, three 3.75 m lanes,
+	# a 30 cm solid edge line and the hard shoulder on the outside (both carriageways, mirrored).
+	road.set_shader_parameter("shoulder_m", CARRIAGE_HALF * 2.0 - 0.75 - 3.0 * 3.75)
+	road.set_shader_parameter("inner_strip_m", 0.75)
+	road.set_shader_parameter("edge_line_m", 0.30)
+	var road_b: ShaderMaterial = road.duplicate()
+	road.set_shader_parameter("shoulder_high_u", SHOULDER_HIGH_U_A)
+	road_b.set_shader_parameter("shoulder_high_u", not SHOULDER_HIGH_U_A)
 	var center := _loop()
 	var a_center := _offset(center, CARRIAGE_OFFSET)
 	var b_center := _offset(center, -CARRIAGE_OFFSET)
 	parent.add_child(C.road_mesh(a_center, CARRIAGE_HALF, road, true, 0.03, 14.0))
-	parent.add_child(C.road_mesh(b_center, CARRIAGE_HALF, road, true, 0.03, 14.0))
+	parent.add_child(C.road_mesh(b_center, CARRIAGE_HALF, road_b, true, 0.03, 14.0))
 	# Verges beyond the guard rails; the service area keeps its paving.
 	V.roadside_grass(parent, center, true, CARRIAGE_OFFSET + CARRIAGE_HALF + 1.6, CARRIAGE_OFFSET + CARRIAGE_HALF + 22.0, 1.6, 93,
 		Callable(), func(p: Vector3) -> bool: return p.x > SERVICE_START - 40.0 and p.x < SERVICE_END + 40.0 and p.z < -RADIUS + 120.0)
@@ -183,9 +192,11 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	_motorway_furniture(parent, world, center, a_center, b_center, open_start, open_end)
 
 	# Traffic: right-hand traffic, carriageway A follows the loop, B goes the other way.
-	var lane_a_mid := _offset(center, CARRIAGE_OFFSET + 0.4)
-	var lane_a_right := _offset(center, CARRIAGE_OFFSET + 4.1)
-	var lane_b := _offset(center, -(CARRIAGE_OFFSET + 0.4))
+	# Lane centres of the marked cross-section (0.75 m strip, 3.75 m lanes from the median side):
+	# middle lane 0.525 m and right lane 3.225 m off the carriageway centre.
+	var lane_a_mid := _offset(center, CARRIAGE_OFFSET - 0.525)
+	var lane_a_right := _offset(center, CARRIAGE_OFFSET + 3.225)
+	var lane_b := _offset(center, -(CARRIAGE_OFFSET - 0.525))
 	lane_b.reverse()
 	var speeds_a := C.speeds_from_curvature(lane_a_mid, 36.0, 30.0, 40.0)
 	var speeds_b := C.speeds_from_curvature(lane_b, 34.0, 30.0, 40.0)
