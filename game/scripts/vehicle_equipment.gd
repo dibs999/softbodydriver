@@ -190,6 +190,7 @@ func handle_action(event: InputEvent) -> bool:
 	if event.is_action_pressed("headlights"):
 		s["light_mode"] = (int(s["light_mode"]) + 1) % 3
 		s["lights"] = s["light_mode"] > 0
+		s["manual_lights"] = true   # the driver took over from the light sensor
 	elif event.is_action_pressed("indicator_left"):
 		s["hazards"] = false
 		s["signal"] = 0 if s["signal"] == -1 else -1
@@ -322,6 +323,7 @@ func _process(delta: float) -> void:
 		up = right.cross(forward).normalized()
 		s["rig"].global_transform = Transform3D(Basis(forward, up, right), v.get_position_ws())
 		_update_lamp_damage(v, s, delta)
+		_auto_lights(s)
 		var broken: Dictionary = s["broken"]
 		var braking := float(v.get_telemetry().get("brake", 0.0)) > 0.05
 		for entry in s["lamp_entries"]:
@@ -356,6 +358,21 @@ func _process(delta: float) -> void:
 ## sky ambient, which leaves the headliner and the seat fronts nearly black in daylight. One weak,
 ## shadowless light in the player's cabin stands in for that bounce light and fades out at night.
 var _cabin_light: OmniLight3D
+## Light sensor: until the driver switches the lights by hand, dipped beams follow the daylight
+## (dusk, night, heavy cloud and rain), with a little hysteresis so they do not flicker.
+func _auto_lights(s: Dictionary) -> void:
+	if s.get("manual_lights", false) or not game.get("weather"):
+		return
+	var daylight := float(game.weather.daylight)
+	var on: bool = s["lights"]
+	if on and daylight > 0.62:
+		on = false
+	elif not on and daylight < 0.5:
+		on = true
+	if on != s["lights"]:
+		s["lights"] = on
+		s["light_mode"] = 1 if on else 0
+
 func _update_cabin_light() -> void:
 	var car: SBVehicle = game.player if is_instance_valid(game.player) else null
 	if car == null:

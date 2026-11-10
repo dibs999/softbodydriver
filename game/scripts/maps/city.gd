@@ -758,13 +758,11 @@ static func _street_life(parent: Node3D, world: SBWorld, origin: float, metal: M
 	bin.height = 1.0
 	bin.radial_segments = 10
 	C.scatter_multimesh(parent, bin, C.mat(Color(0.14, 0.26, 0.17), 0.5, 0.3), bins, false)
-	var rack := TorusMesh.new()
-	rack.inner_radius = 0.34
-	rack.outer_radius = 0.38
-	rack.rings = 12
-	rack.ring_segments = 6
+	# Kreuzberger Bügel: an inverted U of 48 mm steel tube, 0.8 m high and 0.6 m wide, set in the
+	# pavement (they were floating rings).
+	var rack := _hoop_mesh(0.3, 0.8, 0.12, 0.024)
 	var rack_xf: Array[Transform3D] = []
-	for xf in racks: rack_xf.append(Transform3D(xf.basis * Basis(Vector3.RIGHT, PI * 0.5), xf.origin))
+	for xf in racks: rack_xf.append(Transform3D(xf.basis, xf.origin - Vector3.UP * 0.4))
 	C.scatter_multimesh(parent, rack, metal, rack_xf, false)
 	var bollard := CylinderMesh.new()
 	bollard.top_radius = 0.08
@@ -930,3 +928,39 @@ static func _arrow_texture() -> ImageTexture:
 	img.generate_mipmaps()
 	_tex_cache["arrow"] = ImageTexture.create_from_image(img)
 	return _tex_cache["arrow"]
+
+
+## Tube bent into an inverted U in the local x-y plane: legs at x = +-half_w from y = 0, joined by
+## a rounded top (bend radius `bend`) at `height`.
+static func _hoop_mesh(half_w: float, height: float, bend: float, radius: float) -> ArrayMesh:
+	var path := PackedVector3Array()
+	path.append(Vector3(-half_w, -0.05, 0))
+	path.append(Vector3(-half_w, height - bend, 0))
+	for i in range(1, 7):
+		var a := PI - i * (PI * 0.5) / 6.0
+		path.append(Vector3(-half_w + bend + cos(a) * bend, height - bend + sin(a) * bend, 0))
+	path.append(Vector3(half_w - bend, height, 0))
+	for i in range(1, 7):
+		var a := PI * 0.5 - i * (PI * 0.5) / 6.0
+		path.append(Vector3(half_w - bend + cos(a) * bend, height - bend + sin(a) * bend, 0))
+	path.append(Vector3(half_w, -0.05, 0))
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	const SIDES := 8
+	var rings: Array = []
+	for i in path.size():
+		var t := (path[mini(i + 1, path.size() - 1)] - path[maxi(i - 1, 0)]).normalized()
+		var n := Vector3(0, 0, 1)
+		var b := t.cross(n).normalized()
+		var ring := []
+		for k in SIDES:
+			var ang := TAU * k / SIDES
+			ring.append([path[i] + (n * cos(ang) + b * sin(ang)) * radius, (n * cos(ang) + b * sin(ang))])
+		rings.append(ring)
+	for i in path.size() - 1:
+		for k in SIDES:
+			var k2 := (k + 1) % SIDES
+			for v in [rings[i][k], rings[i + 1][k], rings[i + 1][k2], rings[i][k], rings[i + 1][k2], rings[i][k2]]:
+				st.set_normal(v[1])
+				st.add_vertex(v[0])
+	return st.commit()

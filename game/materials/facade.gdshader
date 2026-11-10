@@ -117,7 +117,12 @@ void fragment() {
 		vec3 dir = -vt;
 		dir = vec3(dir.x == 0.0 ? 1e-4 : dir.x, dir.y == 0.0 ? 1e-4 : dir.y, dir.z);
 		vec3 interior;
-		float lit = step(0.62, room_rand);
+		// About a quarter of the rooms lit at night, each with its own lamp: brightness varies and
+		// most are warm bulbs, some neutral, a few cool (LED, a television).
+		float lit = step(0.72, room_rand);
+		float lamp = mix(0.45, 1.4, fract(room_rand * 7.7));
+		float tone = fract(room_rand * 11.3);
+		vec3 tint = tone < 0.6 ? vec3(1.0, 0.76, 0.5) : (tone < 0.88 ? vec3(1.0, 0.9, 0.78) : vec3(0.72, 0.82, 1.0));
 		vec3 wall_in = mix(vec3(0.75, 0.72, 0.65), vec3(0.62, 0.66, 0.7), fract(room_rand * 5.3));
 		vec3 p = vec3(0.0, 0.0, -2.0);
 		if (facade_detail > 0.5) {
@@ -141,7 +146,8 @@ void fragment() {
 		float blinds_m = clamp((glass_v - (1.0 - blind)) / (gfw.y / (half_w.y * 2.0)) + 0.5, 0.0, 1.0) * step(0.08, blind);
 		vec3 blind_col = mix(vec3(0.78, 0.76, 0.7), vec3(0.45, 0.47, 0.5), step(0.5, fract(room_rand * 3.1)));
 		interior = mix(interior, blind_col, blinds_m);
-		float light = mix(0.035 + 0.13 * lit, 0.02 + 1.8 * lit, city_night) * (style == 2 ? 0.45 : 1.0);
+		float light = mix(0.035 + 0.13 * lit, 0.02 + 1.25 * lamp * lit, city_night) * (style == 2 ? 0.45 : 1.0);
+		light *= mix(1.0, 0.4, blinds_m * lit);   // a lowered blind only glows
 		float fresnel = 0.04 + 0.96 * pow(1.0 - vt.z, 5.0);
 		float mullion = style == 2 ? 0.0 : clamp((0.03 - abs(glass.x - center.x)) / gfw.x + 0.5, 0.0, 1.0) * (1.0 - blinds_m);
 		vec3 frame_col = frame_color.rgb * (style == 2 ? 0.6 : 1.0);
@@ -151,7 +157,7 @@ void fragment() {
 		vec3 albedo = mix(base, base * 1.25, sill_m);
 		albedo = mix(albedo, frame_col, outer - open);
 		ALBEDO = mix(albedo, inner, open);
-		EMISSION = interior * light * (1.0 - fresnel) * mix(vec3(1.0), vec3(1.0, 0.82, 0.6), lit) * open * glass_m * (1.0 - mullion);
+		EMISSION = interior * light * (1.0 - fresnel) * mix(vec3(1.0), tint, lit) * open * glass_m * (1.0 - mullion);
 		float inner_rough = mix(0.8, mix(0.04, 0.5, mullion), glass_m);
 		ROUGHNESS = mix(mix(0.85, 0.5, outer - open), inner_rough, open);
 		SPECULAR = mix(0.35, 0.5, open * glass_m);
