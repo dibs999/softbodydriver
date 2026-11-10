@@ -126,6 +126,9 @@ struct ColTriParams {
     real friction = 0.5;
     real dragCoef = 1.0;          ///< Aerodynamic pressure drag/lift coefficient.
     bool breakable = true;        ///< Deactivates when an underlying edge beam or breakGroup breaks.
+    /// false: skin that other bodies hit, but the car's own released panels (bonnet, doors)
+    /// pass, e.g. the nose corners a bonnet lifts past.
+    bool selfContact = true;
     std::string breakGroup;
 };
 
@@ -255,6 +258,11 @@ public:
     /// Index of node `id` or -1.
     std::int64_t findNode(const std::string& id) const;
 
+    /// Max penetration depth (m) at which other bodies' nodes are still caught by this body's
+    /// collision triangles (< 0 = the world setting). Thin, stiff objects (props) need less than
+    /// their half thickness, or a node pushed deep in is resolved against the wrong face.
+    void setContactThickness(real t) { contactThickness_ = t; }
+    real contactThickness() const { return contactThickness_; }
     void addDoor(const DoorMechanism& door);
     bool setDoorOpen(std::size_t side, bool open);
     const std::vector<DoorMechanism>& doors() const { return doors_; }
@@ -371,6 +379,7 @@ private:
     void updateDoors(real dt);
     bool requestOpen(DoorMechanism& m, bool open);
     std::vector<DoorMechanism> doors_, lids_;
+    real contactThickness_ = -1.0;
     std::vector<Beam> beams_;
     std::vector<BeamParams> beamParams_;
     std::vector<ColTri> triangles_;

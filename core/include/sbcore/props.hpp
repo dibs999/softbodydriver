@@ -8,7 +8,7 @@
 
 namespace sb {
 
-enum class PropKind { Cone, Barrel, Barrier };
+enum class PropKind { Cone, Barrel, Barrier, Log };
 
 struct PropBuild {
     PropKind kind = PropKind::Cone;
@@ -23,8 +23,9 @@ struct PropBuild {
 /// Barrel: 200 l steel drum, 0.58 m x 0.88 m, 20 kg empty, dents permanently.
 /// Barrier: water-filled plastic roadworks barrier, 1.2 x 0.45 x 0.8 m, ~300 kg; it slides and
 /// squashes, the shell deforms permanently (long axis along x).
+/// Log: felled tree trunk, 3 m x 0.4 m, ~380 kg (long axis along x); rolls, can be climbed.
 PropBuild buildProp(PropKind kind);
-/// "cone" / "barrel" / "barrier"; throws std::invalid_argument for anything else.
+/// "cone" / "barrel" / "barrier" / "log"; throws std::invalid_argument for anything else.
 PropKind propKindFromString(const std::string& name);
 
 }  // namespace sb

@@ -828,6 +828,39 @@ TEST_CASE("cars settle onto their tyres without body sag, toe-out or brake chatt
     }
 }
 
+TEST_CASE("brakes hold a car on a steep hill; the handbrake alone holds a moderate one") {
+    // A brake that only cancelled the spin of the current step, and friction that only acted on
+    // velocity after the position step, let a fully braked car creep down a 15 % hill at 1.5 km/h.
+    struct Case { const char* id; real grade; bool service; };
+    for (const Case cs : {Case{"meridian_sedan", 0.30, true}, Case{"trailhead_4x4", 0.30, true},
+                          Case{"kestrel_hatch", 0.30, true}, Case{"meridian_sedan", 0.20, false}}) {
+        CAPTURE(cs.id);
+        CAPTURE(cs.grade);
+        CAPTURE(cs.service);
+        CarBuild cb = buildCar(loadCarDefinition(carPath(cs.id)));
+        WorldSettings ws;
+        const real th = std::atan(cs.grade);
+        ws.gravity = {-9.81 * std::sin(th), -9.81 * std::cos(th), 0.0};   // nose uphill
+        World w(ws);
+        w.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+        w.addBody(std::move(cb.body));
+        auto& car = w.body(0);
+        VehicleControls controls;
+        controls.brake = cs.service ? 1.0 : 0.0;
+        controls.handbrake = cs.service ? 0.0 : 1.0;
+        car.setControls(controls);
+        w.simulate(3.0);
+        const real x0 = car.centerOfMass().x;
+        real energy = 0.0;
+        for (int i = 0; i < 40; ++i) {
+            w.simulate(0.1);
+            energy = std::max(energy, car.kineticEnergy());
+        }
+        CHECK(std::abs(car.centerOfMass().x - x0) < 0.03);   // was ~1.7 m in 4 s at 15 %
+        CHECK(energy < 20.0);                                // standing still, not rocking
+    }
+}
+
 TEST_CASE("tyre tread has no standing-wave resonance below autobahn top speeds") {
     // Without the inflated-membrane hoop tension the tread ring's wave speed was ~40 m/s and the
     // rolling loss peaked near 145 km/h (~1800 N without air).

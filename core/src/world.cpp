@@ -139,7 +139,13 @@ std::size_t World::collideBody(SoftBody& b) {
                 const Vec3 vt = vel[i] - n * dot(vel[i], n);
                 const real vtLen = length(vt);
                 const real maxDv = mu * (dvN + stopDv);
-                if (vtLen <= maxDv) vel[i] -= vt;
+                if (vtLen <= maxDv) {
+                    vel[i] -= vt;
+                    // Static friction holds the position too: the step already moved the node by
+                    // vt * dt before the friction saw it, and that drift made braked cars creep
+                    // down hills at ~1.5 km/h.
+                    pos[i] -= vt * dt;
+                }
                 else if (vtLen > 0) vel[i] -= vt * (maxDv / vtLen);
                 continue;
             }
@@ -176,7 +182,8 @@ std::size_t World::collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody)
     const auto& tInvM = triBody.invMasses();
 
     const real skin = settings_.colTriSkin;
-    const real maxDepth = settings_.colTriThickness;
+    const real maxDepth = triBody.contactThickness() > 0.0 ? std::min(settings_.colTriThickness, triBody.contactThickness())
+                                                          : settings_.colTriThickness;
     const real margin = std::max(skin, maxDepth);
 
     Vec3 nodeLo, nodeHi;

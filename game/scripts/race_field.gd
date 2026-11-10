@@ -52,11 +52,22 @@ func update(elapsed: float, crossed: Callable) -> void:
 		if g < gates.size():
 			var forward := gates[g] - gates[g - 1]
 			forward.y = 0
-			if crossed.call(_previous[i], p, gates[g], forward.normalized()):
+			if crossed.call(_previous[i], p, gates[g], forward.normalized()) or _crossed_wide(_previous[i], p, gates[g], forward.normalized()):
 				next_gate[i] = g + 1
 				if next_gate[i] >= gates.size():
 					finish_time[i] = elapsed
 		_previous[i] = p
+
+
+## Opponents on the racing line clip a corner's apex well inside the player's 7 m gate (8-9 m
+## from its centre on the proving-ground bends); missing one stalled their count for the rest
+## of the race. Their gates are a whole road wide.
+static func _crossed_wide(previous: Vector3, point: Vector3, center: Vector3, forward: Vector3) -> bool:
+	var a := (previous - center).dot(forward)
+	var b := (point - center).dot(forward)
+	if a >= 0 or b < 0 or point.distance_to(previous) > 22: return false
+	var hit := previous.lerp(point, -a / maxf(0.00001, b - a)) - center
+	return Vector2(hit.x, hit.z).length() <= 14.0 and absf(hit.y) < 3.0
 
 
 ## Race progress in gates (fractional towards the next gate).

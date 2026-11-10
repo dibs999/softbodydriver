@@ -120,10 +120,11 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	_sign(parent, world, ridge_path[5] + Vector3(5,0,0), "HÖHENWEG  /  LANGSAM", ground)
 	_sign(parent, world, rock_path[5] + Vector3(0,0,4), "GERÖLLPFAD  /  4x4", ground)
 	var stones := _rock_garden(parent, world, rock_path, ground)
+	var props := _loose_logs(paths, ground, timber)
 	var length_m := 0.0
 	for i in loop.size(): length_m += loop[i].distance_to(loop[(i+1)%loop.size()])
 	return {"spawns": [C.car_xform(loop[0], loop[1]-loop[0]), C.car_xform(loop[-3], loop[-2]-loop[-3])],
-		"waypoints": loop, "speeds": C.speeds_from_curvature(loop, 12.0, 6.0, 35),
+		"props": props, "waypoints": loop, "speeds": C.speeds_from_curvature(loop, 12.0, 6.0, 35),
 		"activity_route": loop, "map_paths": paths, "ai_spawns": [],
 		"map_path_color": Color("b6a27b"),
 		"surface_regions": [{"rect": Rect2(farm.x-17,farm.z-17,34,34),"surface":"gravel"}],
@@ -365,6 +366,48 @@ static func _logs(parent: Node3D, world: SBWorld, p: Vector3) -> void:
 			pile.append(Transform3D(Basis(Vector3.FORWARD,PI/2),center))
 	C.scatter_multimesh(parent,log_mesh,C.mat(Color("715334")),pile)
 	world.add_box(p+Vector3(0,0.8,0),Vector3(3.5,0.8,1.6),Vector3.ZERO,0.7)
+
+## Loose felled trunks (3 m, 380 kg soft-body props): a few beside the timber stack, some laid along
+## the edges of the forest trail, and one across the start of the 4x4 trail. They can be shoved,
+## rolled or climbed. None lies near the main loop the AI and the activities use, and only where the
+## ground across the trunk is level enough that it stays put instead of rolling off.
+static func _loose_logs(paths: Array[PackedVector3Array], ground: Callable, timber: Vector3) -> Array:
+	var out: Array = []
+	var place := func(p: Vector3, yaw: float) -> void:
+		var axis := Vector3(cos(yaw), 0, -sin(yaw))
+		var across := Vector3(-axis.z, 0, axis.x)
+		var a: float = ground.call(p.x + across.x * 0.6, p.z + across.z * 0.6)
+		var b: float = ground.call(p.x - across.x * 0.6, p.z - across.z * 0.6)
+		if absf(a - b) > 0.17: return   # steeper than ~8 deg across the trunk: it would roll away
+		var hi := -INF
+		for t: float in [-1.4, 0.0, 1.4]:
+			hi = maxf(hi, ground.call(p.x + axis.x * t, p.z + axis.z * t))
+		out.append({"kind": "log", "position": Vector3(p.x, hi + 0.03, p.z), "yaw": yaw})
+	# Beside the stack: two trunks side by side in front of it and one dragged out at an angle.
+	place.call(timber + Vector3(0, 0, 2.7), 0.0)
+	place.call(timber + Vector3(0.3, 0, 3.25), 0.0)
+	place.call(timber + Vector3(5.2, 0, 1.2), 0.5)
+	var others: Array[PackedVector3Array] = [paths[0], paths[2], paths[3], paths[4]]
+	var forest := paths[1]
+	var count := 0
+	for i in range(16, forest.size() - 16, 23):
+		var tangent := forest[i + 1] - forest[i - 1]
+		tangent.y = 0
+		tangent = tangent.normalized()
+		var side := Vector3(-tangent.z, 0, tangent.x)
+		var p := forest[i] + side * (3.1 if count % 2 == 0 else -3.1)
+		if _near_paths(Vector2(p.x, p.z), others, 8.0) or p.distance_to(timber) < 9.0: continue
+		place.call(p, atan2(-tangent.z, tangent.x))
+		count += 1
+	# Across the 4x4 trail ahead of the rock garden: an obstacle to crawl over.
+	var rock := paths[4]
+	var k := 10
+	var dir := rock[k + 1] - rock[k - 1]
+	dir.y = 0
+	dir = dir.normalized()
+	var across_trail := Vector3(-dir.z, 0, dir.x)
+	place.call(rock[k], atan2(-across_trail.z, across_trail.x))
+	return out
 
 static func _sign(parent: Node3D, world: SBWorld, p: Vector3, caption: String, ground: Callable) -> void:
 	p.y = ground.call(p.x,p.z)

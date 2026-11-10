@@ -436,6 +436,57 @@ func spawn_prop(world: SBWorld, kind: String, xform: Transform3D) -> SBProp:
 		cap.height = 0.04
 		_prop_part(prop, cap, _prop_mat("barrier_cap", Color(0.15, 0.15, 0.16), 0.6), 0.81)
 		return prop
+	if kind == "log":
+		# Felled trunk, 3 m x 0.4 m: dark furrowed bark, pale sawn end faces with a darker heart,
+		# and a stub of a lopped branch so a roll is visible.
+		var bark := _prop_mat("log_bark", Color(0.24, 0.17, 0.11), 0.95)
+		var trunk := CylinderMesh.new()
+		trunk.top_radius = 0.205
+		trunk.bottom_radius = 0.195
+		trunk.height = 2.96
+		trunk.radial_segments = 14
+		trunk.rings = 3
+		var t := MeshInstance3D.new()
+		t.mesh = trunk
+		t.material_override = bark
+		t.position = Vector3(0, 0.2, 0)
+		t.rotation = Vector3(0, 0, PI * 0.5)
+		prop.add_child(t)
+		for side: float in [-1.0, 1.0]:
+			var face := CylinderMesh.new()
+			face.top_radius = 0.19
+			face.bottom_radius = 0.19
+			face.height = 0.02
+			face.radial_segments = 14
+			var f := MeshInstance3D.new()
+			f.mesh = face
+			f.material_override = _prop_mat("log_cut", Color(0.78, 0.62, 0.40), 0.85)
+			f.position = Vector3(side * 1.48, 0.2, 0)
+			f.rotation = Vector3(0, 0, PI * 0.5)
+			prop.add_child(f)
+			var heart := CylinderMesh.new()
+			heart.top_radius = 0.07
+			heart.bottom_radius = 0.07
+			heart.height = 0.024
+			heart.radial_segments = 10
+			var h := MeshInstance3D.new()
+			h.mesh = heart
+			h.material_override = _prop_mat("log_heart", Color(0.55, 0.38, 0.20), 0.85)
+			h.position = Vector3(side * 1.48, 0.2, 0)
+			h.rotation = Vector3(0, 0, PI * 0.5)
+			prop.add_child(h)
+		var stub := CylinderMesh.new()
+		stub.top_radius = 0.035
+		stub.bottom_radius = 0.05
+		stub.height = 0.14
+		stub.radial_segments = 8
+		var s := MeshInstance3D.new()
+		s.mesh = stub
+		s.material_override = bark
+		s.position = Vector3(0.45, 0.2 + 0.16, 0.10)
+		s.rotation = Vector3(0.6, 0, 0)
+		prop.add_child(s)
+		return prop
 	if kind == "cone":
 		var base := BoxMesh.new()
 		base.size = Vector3(0.40, 0.035, 0.40)

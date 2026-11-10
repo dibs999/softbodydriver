@@ -31,7 +31,7 @@ void SoftBody::addSelfCollisionPanel(const std::string& panelGroup, const std::v
         }
     for (std::uint32_t t = 0; t < triangles_.size(); ++t) {
         const auto& tri = triangles_[t];
-        if (targetNode(tri.a) && targetNode(tri.b) && targetNode(tri.c)) panel.triangles.push_back(t);
+        if (tri.params.selfContact && targetNode(tri.a) && targetNode(tri.b) && targetNode(tri.c)) panel.triangles.push_back(t);
         // A broad bonnet can straddle the engine with all its corners outside
         // the block. Sample its face as well; distribute corrections/impulses
         // back to the three real nodes instead of inventing collision mass.

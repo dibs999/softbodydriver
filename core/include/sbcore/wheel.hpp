@@ -62,6 +62,12 @@ struct PressureWheel {
     real angularVelocity = 0.0;             ///< rad/s around spindle (+ = forward roll).
     real lastDriveTorque = 0.0;             ///< Nm applied in the last step.
     real lastBrakeTorque = 0.0;             ///< Nm applied in the last step.
+    /// Static brake hold: while the pads clamp a (nearly) stopped disc they hold it at an angle,
+    /// like a stiff torsion spring capped at the clamp torque. A brake that only cancels the spin
+    /// of the current step cannot hold against a steady torque (the car crept down hills).
+    bool brakeHolding = false;
+    real brakeAngle = 0.0;                  ///< Wheel angle relative to the knuckle (rad, integrated).
+    real brakeAnchor = 0.0;                 ///< Angle the pads hold the disc at.
 
     // ---- tyre condition (all updated in step())
     std::vector<std::uint32_t> spokeBeams;  ///< Sidewall beams whose stiffness comes from the air pressure.

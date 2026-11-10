@@ -44,10 +44,16 @@ PropBuild buildCone() {
     std::vector<std::uint32_t> all = base;
     all.insert(all.end(), mid.begin(), mid.end());
     all.push_back(apex);
-    // Flexible PVC: soft, damped, never yields or breaks; it lies down and pops back.
+    // Flexible PVC: soft, damped, never yields or breaks; it lies down and pops back. A hollow
+    // cone barely resists being squashed (a car runs it flat) but does not stretch: with one
+    // stiffness for both, a cone run under the front was held at full height, stretched over the
+    // bumper with its base under a front tyre, and dragged the car down by up to 19 km/h.
     BeamParams pvc;
-    pvc.spring = 3.0e3;
+    pvc.type = BeamType::Anisotropic;
+    pvc.spring = 500.0;          // compression
+    pvc.springExpansion = 3.0e3;
     pvc.damp = 8.0;
+    pvc.dampExpansion = 8.0;
     connectAll(b, all, pvc);
     ColTriParams skin;
     skin.friction = 0.35;
@@ -191,17 +197,83 @@ PropBuild buildBarrier() {
     out.restPositions = b.positions();
     return out;
 }
+PropBuild buildLog() {
+    PropBuild out;
+    out.kind = PropKind::Log;
+    SoftBody& b = out.body;
+    b.setName("log");
+    constexpr int N = 6;
+    const real r = 0.20, half = 1.5;
+    NodeParams np;
+    np.mass = 380.0 / (3 * N + 2);   // fresh hardwood, 3 m x 0.4 m
+    np.friction = 0.8;
+    np.group = "prop";
+    std::vector<std::vector<std::uint32_t>> rings(3);
+    for (int ring = 0; ring < 3; ++ring)
+        for (int i = 0; i < N; ++i) {
+            const real a = 2.0 * kPi * i / N;
+            rings[static_cast<std::size_t>(ring)].push_back(b.addNode("l" + std::to_string(ring) + "_" + std::to_string(i),
+                {-half + half * ring, r + r * std::cos(a), r * std::sin(a)}, np));
+        }
+    const auto endA = b.addNode("endA", {-half, r, 0}, np);
+    const auto endB = b.addNode("endB", {half, r, 0}, np);
+    BeamParams wood;
+    wood.spring = 4.0e5;
+    wood.damp = 120.0;
+    std::vector<std::uint32_t> all;
+    for (const auto& ring : rings) all.insert(all.end(), ring.begin(), ring.end());
+    all.push_back(endA);
+    all.push_back(endB);
+    for (std::size_t i = 0; i < all.size(); ++i)
+        for (std::size_t j = i + 1; j < all.size(); ++j) {
+            const Vec3 d = b.positions()[all[i]] - b.positions()[all[j]];
+            if (std::abs(d.x) <= half + 1e-6) b.addBeam(all[i], all[j], wood);
+        }
+    ColTriParams skin;
+    skin.friction = 0.8;
+    skin.dragCoef = 0.6;
+    for (int ring = 0; ring < 2; ++ring)
+        for (int i = 0; i < N; ++i) {
+            const auto& A = rings[static_cast<std::size_t>(ring)];
+            const auto& B = rings[static_cast<std::size_t>(ring + 1)];
+            const auto a0 = A[static_cast<std::size_t>(i)], a1 = A[static_cast<std::size_t>((i + 1) % N)];
+            const auto b0 = B[static_cast<std::size_t>(i)], b1 = B[static_cast<std::size_t>((i + 1) % N)];
+            const Vec3 c{-half * 0.5 + half * ring, r, 0};
+            outwardTri(b, a0, a1, b1, c, skin);
+            outwardTri(b, a0, b1, b0, c, skin);
+        }
+    for (int i = 0; i < N; ++i) {
+        outwardTri(b, endA, rings[0][static_cast<std::size_t>(i)], rings[0][static_cast<std::size_t>((i + 1) % N)], {0, r, 0}, skin);
+        outwardTri(b, endB, rings[2][static_cast<std::size_t>(i)], rings[2][static_cast<std::size_t>((i + 1) % N)], {0, r, 0}, skin);
+    }
+    out.frameOrigin = endA;
+    out.frameX = endB;
+    out.frameY = rings[1][1];
+    out.restPositions = b.positions();
+    return out;
+}
 }  // namespace
 
 PropBuild buildProp(PropKind kind) {
-    if (kind == PropKind::Barrier) return buildBarrier();
-    return kind == PropKind::Barrel ? buildBarrel() : buildCone();
+    PropBuild out = kind == PropKind::Log ? buildLog() : kind == PropKind::Barrier ? buildBarrier()
+                  : kind == PropKind::Barrel ? buildBarrel() : buildCone();
+    // Catch other bodies' nodes only within about half the prop's thinnest section: deeper, a
+    // node is resolved against the far face and the stiff little body is squeezed out and flung
+    // (a log under a tyre left faster than the car pushing it).
+    switch (kind) {
+        case PropKind::Cone: break;   // soft and hollow: the world depth works (a shallower one let it wedge under bumpers)
+        case PropKind::Barrel: out.body.setContactThickness(0.10); break;
+        case PropKind::Barrier: out.body.setContactThickness(0.10); break;
+        case PropKind::Log: out.body.setContactThickness(0.07); break;
+    }
+    return out;
 }
 
 PropKind propKindFromString(const std::string& name) {
     if (name == "cone") return PropKind::Cone;
     if (name == "barrel") return PropKind::Barrel;
     if (name == "barrier") return PropKind::Barrier;
+    if (name == "log") return PropKind::Log;
     throw std::invalid_argument("unknown prop kind '" + name + "'");
 }
 

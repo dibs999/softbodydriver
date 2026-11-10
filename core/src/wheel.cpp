@@ -49,6 +49,7 @@ void PressureWheel::resetCondition(SoftBody& body) {
     rimDamage = 0.0;
     peakNodeForce = 0.0;
     strikeGrace = 0.5;
+    brakeHolding = false;
     wear = 0.0;
     tempC = spec.ambientTempC;
     coldPressurePsi = spec.pressurePsi;
@@ -218,7 +219,30 @@ void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, rea
     const real relOmega = angularVelocity - knuckleOmega;
     const real maxStopTorque = dt > 0 ? std::abs(relOmega) * stopInertia / dt : 0.0;
     const real clampedBrake = std::min( std::max<real>(0.0, brakeTorque), maxStopTorque);
-    const real signedBrake = relOmega > 0 ? -clampedBrake : (relOmega < 0 ? clampedBrake : 0.0);
+    real signedBrake = relOmega > 0 ? -clampedBrake : (relOmega < 0 ? clampedBrake : 0.0);
+    // Static hold of a stopped (or locked) disc: a stiff, damped angular spring to the angle at
+    // which it stopped, capped at the clamp torque. Tuned from the ring's own inertia so the
+    // explicit step stays well inside its stability limit (omega_n * dt = 0.15).
+    if (brakeTorque > 1.0 && dt > 0.0 && stopInertia > 1e-6) {
+        brakeAngle += relOmega * dt;
+        if (!brakeHolding && std::abs(relOmega) < 0.5) {
+            brakeHolding = true;
+            brakeAnchor = brakeAngle;
+        }
+        if (brakeHolding) {
+            const real k = stopInertia * (0.15 / dt) * (0.15 / dt);
+            const real damp = 0.5 * stopInertia / dt;
+            real wind = brakeAngle - brakeAnchor;
+            if (std::abs(wind) * k > brakeTorque) {   // pads slip: the anchor follows the disc
+                wind = std::copysign(brakeTorque / k, wind);
+                brakeAnchor = brakeAngle - wind;
+            }
+            signedBrake = std::clamp(-k * wind - damp * relOmega, -brakeTorque, brakeTorque);
+            if (std::abs(relOmega) > 3.0) brakeHolding = false;   // spinning again (released by ABS, driven through)
+        }
+    } else {
+        brakeHolding = false;
+    }
     const real totalTorque = driveTorque + signedBrake;
     lastDriveTorque = driveTorque;
     lastBrakeTorque = signedBrake;
