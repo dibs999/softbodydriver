@@ -515,16 +515,37 @@ static func _market(parent: Node3D, world: SBWorld, center: Vector3, pavement: M
 
 
 static func _townhouses(parent: Node3D, world: SBWorld, center: Vector3, grass: Material) -> void:
+	## Six terraced family houses: plastered or brick walls with gable ends, framed windows front and
+	## back, front doors with steps, chimneys, hedged front gardens with paths, fenced back gardens
+	## with sheds and trees.
 	var p := Vector3(center.x, KERB, center.z)
-	var window := C.mat(Color(0.17, 0.27, 0.34), 0.30)
-	var roof := C.mat(Color(0.37, 0.19, 0.15))
-	var walls := [C.mat(Color(0.65, 0.43, 0.32)), C.mat(Color(0.65, 0.63, 0.51)), C.mat(Color(0.54, 0.58, 0.61))]
+	var window := C.mat(Color(0.10, 0.15, 0.19), 0.08, 0.4)
+	var roof := C.noise_mat(Color(0.40, 0.19, 0.14), 0.12, 3.0, 0.85)
+	var trim := C.mat(Color(0.86, 0.85, 0.80), 0.7)
+	var walls := [C.noise_mat(Color(0.62, 0.38, 0.28), 0.10, 6.0, 0.9), C.noise_mat(Color(0.70, 0.67, 0.55), 0.06, 3.0, 0.9),
+		C.noise_mat(Color(0.56, 0.60, 0.62), 0.06, 3.0, 0.9)]
 	var windows: Array[Transform3D] = []
+	var sills: Array[Transform3D] = []
 	var roofs: Array[Transform3D] = []
+	var gables: Array = []
+	for i in 3:
+		var batch: Array[Transform3D] = []
+		gables.append(batch)
+	var doors: Array[Transform3D] = []
+	var steps: Array[Transform3D] = []
+	var chimneys: Array[Transform3D] = []
+	var paths: Array[Transform3D] = []
+	var hedges: Array[Transform3D] = []
+	var fences: Array[Transform3D] = []
+	var sheds: Array[Transform3D] = []
+	var trees: Array[Vector3] = []
 	var window_mesh := BoxMesh.new()
 	window_mesh.size = Vector3(1.86, 1.34, 0.11)
 	var roof_mesh := BoxMesh.new()
 	roof_mesh.size = Vector3(15.8, 0.32, 6.24)
+	var unit := BoxMesh.new()
+	var gable := PrismMesh.new()
+	gable.size = Vector3.ONE
 	C.quad(parent, p + Vector3.UP * 0.006, Vector2(66, 64), grass)
 	for side: float in [-1.0, 1.0]:
 		for i in 3:
@@ -532,11 +553,54 @@ static func _townhouses(parent: Node3D, world: SBWorld, center: Vector3, grass: 
 			C.box(parent, world, house + Vector3.UP * 2.7, Vector3(7.6, 2.7, 5.5), Vector3.ZERO, walls[i])
 			for slope: float in [-1.0, 1.0]:
 				roofs.append(Transform3D(Basis(Vector3.RIGHT, 0.32 * slope), house + Vector3(0, 6.2, slope * 2.85)))
-			for floor_index in 2:
-				for x: float in [-4.6, 0.0, 4.6]:
-					windows.append(Transform3D(Basis(), house + Vector3(x, 1.62 + 2.35 * floor_index, side * 5.53)))
+			# Gable end walls close the triangles under the roof.
+			for end: float in [-1.0, 1.0]:
+				gables[i].append(Transform3D(Basis(Vector3.UP, PI * 0.5).scaled_local(Vector3(11.0, 1.85, 0.2)), house + Vector3(end * 7.5, 5.4 + 0.925, 0)))
+			for face: float in [side, -side]:
+				for floor_index in 2:
+					for x: float in [-4.6, 0.0, 4.6]:
+						if face == side and floor_index == 0 and x == 0.0:
+							continue
+						var w := house + Vector3(x, 1.62 + 2.35 * floor_index, face * 5.53)
+						windows.append(Transform3D(Basis(), w))
+						sills.append(Transform3D(Basis.from_scale(Vector3(2.1, 0.08, 0.26)), w + Vector3(0, -0.72, face * 0.08)))
+						sills.append(Transform3D(Basis.from_scale(Vector3(2.1, 0.16, 0.12)), w + Vector3(0, 0.74, face * 0.02)))
+						# White frame and a centre mullion over the glass.
+						var fz := face * 0.065
+						for fy: float in [-0.67, 0.67]:
+							sills.append(Transform3D(Basis.from_scale(Vector3(2.0, 0.1, 0.05)), w + Vector3(0, fy, fz)))
+						for fx: float in [-0.93, 0.0, 0.93]:
+							sills.append(Transform3D(Basis.from_scale(Vector3(0.1 if fx != 0.0 else 0.07, 1.34, 0.05)), w + Vector3(fx, 0, fz)))
+			doors.append(Transform3D(Basis.from_scale(Vector3(1.1, 2.1, 0.08)), house + Vector3(0, 1.17, side * 5.53)))
+			sills.append(Transform3D(Basis.from_scale(Vector3(1.5, 0.14, 0.14)), house + Vector3(0, 2.3, side * 5.56)))
+			steps.append(Transform3D(Basis.from_scale(Vector3(1.8, 0.16, 1.0)), house + Vector3(0, 0.08, side * 6.0)))
+			steps.append(Transform3D(Basis.from_scale(Vector3(15.32, 0.45, 11.08)), house + Vector3(0, 0.22, 0)))
+			chimneys.append(Transform3D(Basis.from_scale(Vector3(0.7, 1.9, 0.7)), house + Vector3(4.2, 6.9, -side * 1.5)))
+			# Front garden: path to the door and a hedge with a gap for it.
+			paths.append(Transform3D(Basis.from_scale(Vector3(1.3, 0.05, 11.0)), house + Vector3(0, 0.02, side * 11.5)))
+			for gap: float in [-1.0, 1.0]:
+				var hp := house + Vector3(gap * 5.75, 0.55, side * 13.0)
+				hedges.append(Transform3D(Basis.from_scale(Vector3(8.5, 1.1, 0.7)), hp))
+				world.add_box(hp, Vector3(4.25, 0.55, 0.35), Vector3.ZERO, 0.6)
+			sheds.append(Transform3D(Basis.from_scale(Vector3(2.2, 2.1, 2.6)), house + Vector3(5.5, 1.05, -side * 14.0)))
+			trees.append(house + Vector3(-4.5, 0, -side * 13.0))
+	# Fences between the plots and between the two rows of back gardens.
+	for fx: float in [-10.5, 10.5]:
+		fences.append(Transform3D(Basis.from_scale(Vector3(0.06, 1.0, 64.0)), p + Vector3(fx, 0.5, 0)))
+	fences.append(Transform3D(Basis.from_scale(Vector3(63.0, 1.0, 0.06)), p + Vector3(0, 0.5, 0)))
 	C.scatter_multimesh(parent, roof_mesh, roof, roofs)
+	for i in 3:
+		C.scatter_multimesh(parent, gable, walls[i], gables[i])
 	C.scatter_multimesh(parent, window_mesh, window, windows, false)
+	C.scatter_multimesh(parent, unit, trim, sills, false)
+	C.scatter_multimesh(parent, unit, C.noise_mat(Color(0.30, 0.17, 0.10), 0.1, 6.0, 0.7), doors, false)
+	C.scatter_multimesh(parent, unit, C.mat(Color(0.55, 0.54, 0.51)), steps, false)
+	C.scatter_multimesh(parent, unit, C.noise_mat(Color(0.45, 0.22, 0.16), 0.1, 6.0), chimneys)
+	C.scatter_multimesh(parent, unit, C.noise_mat(Color(0.58, 0.56, 0.52), 0.1, 2.0), paths, false)
+	C.scatter_multimesh(parent, unit, C.noise_mat(Color(0.16, 0.30, 0.11), 0.25, 1.5), hedges)
+	C.scatter_multimesh(parent, unit, C.noise_mat(Color(0.44, 0.33, 0.22), 0.12, 5.0), fences, false)
+	C.scatter_multimesh(parent, unit, C.noise_mat(Color(0.36, 0.30, 0.22), 0.12, 5.0), sheds)
+	V.plant(parent, "broadleaf", trees, 913, 0.55, 0.8)
 
 
 static func _plaza(parent: Node3D, world: SBWorld, center: Vector3, station: bool, concrete: Material, metal: Material) -> void:
