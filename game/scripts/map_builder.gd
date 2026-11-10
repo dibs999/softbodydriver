@@ -137,6 +137,7 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 		for z: float in [-44.2, -35.8]:
 			amber_marks.append(Transform3D(Basis.from_scale(Vector3(4.6, 1, 0.19)), Vector3(x, 0.013, z)))
 	C.scatter_multimesh(parent, paint, _mat(Color(0.95, 0.68, 0.11)), amber_marks, false)
+	_proving_wear(parent, world, waypoints, straight, radius, cz)
 	var steel := _mat(Color(0.32, 0.36, 0.39), 0.55, 0.6)
 	var blue := _mat(Color(0.10, 0.24, 0.41), 0.65)
 	_flat_quad(parent, Vector3(20, 0.005, -130), Vector2(330, 98), concrete)
@@ -237,6 +238,121 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 			{"name": "Handling-Parcours", "position": handling[3]},
 			{"name": "Werkstatt und Boxen", "position": workshop}],
 		"ai_spawns": [car_xform(waypoints[0], waypoints[1] - waypoints[0]), car_xform(waypoints[64], waypoints[65] - waypoints[64])]}
+
+
+## A used test facility: rubber laid down on the oval's racing line, in the braking zone and as
+## doughnuts; asphalt patches of different age; distance boards along the back straight; floodlight
+## masts around the pad.
+static func _proving_wear(parent: Node3D, world: SBWorld, oval: PackedVector3Array, straight: float, radius: float, cz: float) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 909
+	# Patches of older and newer asphalt.
+	var older := C.surface_material("asphalt", 2.0, Color(1.12, 1.10, 1.06), 0.30)
+	var newer := C.surface_material("asphalt", 2.0, Color(0.72, 0.72, 0.74), 0.30)
+	for i in 26:
+		var c := Vector3(rng.randf_range(-360, 360), 0.004 + 0.0004 * i, rng.randf_range(-210, 210))
+		var size := Vector2(rng.randf_range(12, 60), rng.randf_range(8, 40))
+		C.quad(parent, c, size, older if i % 3 else newer, snappedf(rng.randf_range(-0.3, 0.3), 0.05))
+	# Rubber marks: a streaky texture laid as transparent quads.
+	var rubber := StandardMaterial3D.new()
+	rubber.albedo_texture = _rubber_texture()
+	rubber.albedo_color = Color(0.05, 0.05, 0.05, 0.85)
+	rubber.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	rubber.roughness = 0.75
+	rubber.render_priority = 1
+	var marks: Array[Transform3D] = []
+	var n := oval.size()
+	for i in n:
+		var a := oval[i]
+		var b := oval[(i + 1) % n]
+		var curve := absf(a.x) > straight * 0.5 - 2.0
+		if not curve and rng.randf() > 0.25: continue
+		var d := b - a
+		# Racing line: the outside of the oval at the curve entry, the inside at the apex.
+		var inward := Vector3(-d.z, 0, d.x).normalized()
+		var lateral := (2.5 if curve else -2.0) * (1.0 if rng.randf() < 0.5 else 0.6)
+		var basis := Basis(Vector3.UP, atan2(-d.z, d.x)).scaled_local(Vector3(d.length() * 1.05, 1.0, 1.9))
+		marks.append(Transform3D(basis, (a + b) * 0.5 + inward * lateral + Vector3.UP * 0.014))
+	# Braking zone: dark straight streaks before the stop line.
+	for k in 18:
+		var x := rng.randf_range(60.0, 210.0)
+		var l := rng.randf_range(8.0, 30.0)
+		var z := -40.0 + rng.randf_range(-2.2, 2.2)
+		marks.append(Transform3D(Basis.from_scale(Vector3(l, 1.0, 1.7)), Vector3(x, 0.015, z)))
+	var plane := PlaneMesh.new()
+	plane.size = Vector2.ONE
+	C.scatter_multimesh(parent, plane, rubber, marks, false)
+	# Doughnuts on the open pad beside the start.
+	var ring := StandardMaterial3D.new()
+	ring.albedo_texture = _doughnut_texture()
+	ring.albedo_color = Color(0.04, 0.04, 0.04, 0.8)
+	ring.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ring.render_priority = 1
+	var rings: Array[Transform3D] = []
+	for k in 5:
+		var c := Vector3(rng.randf_range(-300, -200), 0.016, rng.randf_range(-170, -90))
+		rings.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled_local(Vector3.ONE * rng.randf_range(9, 13)), c))
+	C.scatter_multimesh(parent, plane, ring, rings, false)
+	# Distance boards along the back straight (every 50 m).
+	var board_mat := _mat(Color(0.95, 0.95, 0.93), 0.6)
+	var post_mat := _mat(Color(0.35, 0.36, 0.37), 0.5, 0.6)
+	for k in 7:
+		var x := straight * 0.5 - 30.0 - k * 50.0
+		var p := Vector3(x, 0, cz + radius + 11.0)
+		_box(parent, world, p + Vector3.UP * 0.9, Vector3(0.06, 0.9, 0.06), Vector3.ZERO, post_mat)
+		_box(parent, world, p + Vector3.UP * 2.0, Vector3(0.7, 0.45, 0.03), Vector3.ZERO, board_mat, 0.6, false)
+		C.label3d(parent, str(50 * (k + 1)), p + Vector3(0, 2.0, -0.04), PI, 0.7, Color(0.05, 0.05, 0.05))
+	# Floodlight masts around the pad.
+	var mast := CylinderMesh.new()
+	mast.top_radius = 0.18
+	mast.bottom_radius = 0.32
+	mast.height = 24.0
+	var head := BoxMesh.new()
+	head.size = Vector3(3.2, 1.2, 0.5)
+	var masts: Array[Transform3D] = []
+	var heads: Array[Transform3D] = []
+	for p: Vector3 in [Vector3(-390, 0, -230), Vector3(0, 0, -232), Vector3(390, 0, -230), Vector3(-390, 0, 230), Vector3(0, 0, 232), Vector3(390, 0, 230)]:
+		masts.append(Transform3D(Basis.IDENTITY, p + Vector3.UP * 12.0))
+		var face := Vector3(-p.x, 0, -p.z).normalized()
+		heads.append(Transform3D(Basis.looking_at(face, Vector3.UP).rotated(face.cross(Vector3.UP).normalized(), -0.35), p + Vector3.UP * 24.2))
+		world.add_box(p + Vector3.UP * 6.0, Vector3(0.35, 6.0, 0.35), Vector3.ZERO, 0.7)
+	C.scatter_multimesh(parent, mast, post_mat, masts)
+	C.scatter_multimesh(parent, head, _mat(Color(0.25, 0.26, 0.27), 0.5, 0.6), heads)
+
+
+static var _rubber_tex: ImageTexture
+static func _rubber_texture() -> ImageTexture:
+	if _rubber_tex: return _rubber_tex
+	var img := Image.create(256, 64, false, Image.FORMAT_LA8)
+	var noise := FastNoiseLite.new()
+	noise.frequency = 0.05
+	for y in 64:
+		for x in 256:
+			# Two tyre-width streaks, fading in and out along the length.
+			var v := float(y) / 63.0
+			var streak := maxf(1.0 - absf(v - 0.25) / 0.14, 1.0 - absf(v - 0.75) / 0.14)
+			var along := sin(PI * float(x) / 255.0)
+			var grain := 0.6 + 0.4 * noise.get_noise_2d(x * 3.0, y * 0.4)
+			img.set_pixel(x, y, Color(0, 0, 0, clampf(streak * along * grain, 0.0, 1.0)))
+	img.generate_mipmaps()
+	_rubber_tex = ImageTexture.create_from_image(img)
+	return _rubber_tex
+
+
+static var _ring_tex: ImageTexture
+static func _doughnut_texture() -> ImageTexture:
+	if _ring_tex: return _ring_tex
+	var s := 256
+	var img := Image.create(s, s, false, Image.FORMAT_LA8)
+	for y in s:
+		for x in s:
+			var d := Vector2(x - s * 0.5, y - s * 0.5).length() / (s * 0.5)
+			var a := atan2(y - s * 0.5, x - s * 0.5)
+			var band := maxf(1.0 - absf(d - 0.62) / 0.07, 1.0 - absf(d - 0.84) / 0.07)
+			img.set_pixel(x, y, Color(0, 0, 0, clampf(band * (0.55 + 0.45 * sin(a * 3.0 + d * 9.0)), 0.0, 1.0)))
+	img.generate_mipmaps()
+	_ring_tex = ImageTexture.create_from_image(img)
+	return _ring_tex
 
 
 static func _handling_course(world: SBWorld, parent: Node3D, paint: Material, sign_mat: Material) -> PackedVector3Array:
