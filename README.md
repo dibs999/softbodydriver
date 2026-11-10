@@ -264,7 +264,9 @@ dem Autobahn-Seitenstreifen, vor Lindenau im Hügelland und in einer gesperrten
 Stadtspur, 200-Liter-Stahlfässer (20 kg, verbeulen) als Fasswand am Testgelände, an
 den Baustellen und an der Raststätte Coyote Flats in der Wüste, und rot-weiße,
 wassergefüllte Absperrungen (300 kg, lassen sich wegschieben und eindrücken) an den
-Baustellen von Autobahn und Stadt. Autos stoßen sie um, schleifen
+Baustellen von Autobahn und Stadt. Im Gelände liegen gefällte Baumstämme (3 m,
+380 kg) am Holzlager, am Waldweg und quer über dem 4x4-Pfad: Sie lassen sich schieben,
+rollen und überklettern. Autos stoßen die Requisiten um, schleifen
 Pylonen unter dem Stoßfänger mit oder schleudern Fässer weg; das Pausenmenü stellt
 alle wieder auf („Pylonen und Fässer zurückstellen“).
 
@@ -409,7 +411,8 @@ Beispielausgabe des Prüfstands:
 - [x] Fahrzeugsysteme: Kühlung, Öl, Motorschaden, Kraftstoff, Bremsen, Traktionskontrolle und ABS
 - [x] Native Desktop-App (Godot 4.5 + GDExtension) für Windows, macOS und Linux, inklusive CI-Export
 - [ ] Abnehmbare Teile (Türen, Motorhaube, Stoßstangen als eigene Bruchgruppen) und splitterndes Glas
-- [ ] Bewegliche Requisiten (Pylonen, Fässer), Kollision mit Bäumen auf allen Karten
+- [x] Bewegliche Requisiten (Pylonen, Fässer, Wasserbarrieren, Baumstämme)
+- [ ] Kollision mit Bäumen auf allen Karten
 - [ ] Reifenmodell mit Lastabhängigkeit und Schräglaufkurve, Oberflächen (Schotter, Gras, Nässe)
 - [x] Import detaillierter glTF-Automodelle als Flexbody
 - [x] Reifenverschleiß, -temperatur, Luftdruck, Plattfuß und Platzen

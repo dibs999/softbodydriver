@@ -176,7 +176,8 @@ std::size_t World::collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody)
     const auto& tInvM = triBody.invMasses();
 
     const real skin = settings_.colTriSkin;
-    const real maxDepth = settings_.colTriThickness;
+    const real maxDepth = triBody.contactThickness() > 0.0 ? std::min(settings_.colTriThickness, triBody.contactThickness())
+                                                          : settings_.colTriThickness;
     const real margin = std::max(skin, maxDepth);
 
     Vec3 nodeLo, nodeHi;

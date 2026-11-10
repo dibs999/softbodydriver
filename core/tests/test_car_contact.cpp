@@ -147,3 +147,31 @@ TEST_CASE("a water-filled barrier stands, takes a hit, slides and squashes witho
     CHECK(moved < 30.0);
     CHECK(world.body(ic).telemetry().speedKmh < 34.0);   // 300 kg of water take real momentum
 }
+
+TEST_CASE("a felled log is shoved or climbed, never flung faster than the car") {
+    auto prop = buildProp(PropKind::Log);
+    CHECK(prop.body.totalMass() == doctest::Approx(380.0));
+    CHECK(prop.body.stabilityRatio(1.0 / 2000.0) < 0.9);
+    auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/trailhead_4x4.car.json"));
+    for (auto& p : prop.body.positions()) p = {car.def.body.length + 5.0 + p.z, p.y, p.x};   // across the path
+    const Vec3 start = prop.body.positions()[prop.frameY];
+    World world;
+    world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+    const auto ic = world.addBody(std::move(car.body));
+    const auto ip = world.addBody(std::move(prop.body));
+    world.simulate(1.0);
+    CHECK(length(world.body(ip).positions()[prop.frameY] - start) < 0.03);
+    VehicleControls c;
+    c.throttle = 0.6;
+    world.body(ic).setControls(c);
+    real worstExcess = 0.0;
+    for (int k = 0; k < 400; ++k) {
+        world.simulate(0.02);
+        const real logSpeed = length(world.body(ip).centerOfMassVelocity());
+        const real carSpeed = length(world.body(ic).centerOfMassVelocity());
+        worstExcess = std::max(worstExcess, logSpeed - carSpeed);
+    }
+    REQUIRE(world.stats().finite);
+    MESSAGE("log faster than the car by at most " << worstExcess << " m/s");
+    CHECK(worstExcess < 1.5);
+}
