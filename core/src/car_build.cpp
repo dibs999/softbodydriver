@@ -832,12 +832,15 @@ CarBuild buildCar(const CarDefinition& def) {
             auto cage = door.nodes;
             cage.insert(cage.end(), door.hingeNodes.begin(), door.hingeNodes.end());
             connectAll(car, cage, makeBeam(1.2e5, 45.0, 1.2e4, 8.0e4), nullptr);
-            BeamParams hinge = makeBeam(1.5e5, 55.0, 8.0e3, 6.0e3);
-            hinge.breakGroup = group + "_hinges";
-            for (auto node : door.hingeNodes)
-                for (auto anchor : nearestNodes(car, rig.bodyNodes, car.positions()[node], 4))
-                    door.hingeBeams.push_back(car.addBeam(node, anchor, hinge));
-            BeamParams latch = makeBeam(1.0e5, 40.0, 8.0e3, 5.0e3);
+            // Two bolted hinges, each its own break group: a door hangs from the surviving hinge
+            // and only falls off when both have torn out.
+            BeamParams hinge = makeBeam(1.5e5, 55.0, 1.4e4, 1.2e4);
+            for (std::size_t h = 0; h < door.hingeNodes.size(); ++h) {
+                hinge.breakGroup = group + (h == 0 ? "_hinge_lower" : "_hinge_upper");
+                for (auto anchor : nearestNodes(car, rig.bodyNodes, car.positions()[door.hingeNodes[h]], 4))
+                    door.hingeBeams.push_back(car.addBeam(door.hingeNodes[h], anchor, hinge));
+            }
+            BeamParams latch = makeBeam(1.0e5, 40.0, 1.2e4, 1.0e4);   // door latches hold > 10 kN
             latch.breakGroup = group + "_latch";
             for (auto node : {door.nodes[0], door.nodes[2]})
                 for (auto anchor : nearestNodes(car, rig.bodyNodes, car.positions()[node], 3))
@@ -853,11 +856,12 @@ CarBuild buildCar(const CarDefinition& def) {
             const Vec3 opened = pivot + Vec3{std::cos(angle) * delta.x + std::sin(angle) * delta.z,
                 delta.y, -std::sin(angle) * delta.x + std::cos(angle) * delta.z};
             const real closedLength = length(car.positions()[moving] - car.positions()[anchor]);
-            BeamParams support = makeBeam(2.0e3, 500.0, kInf, 3.0e3);
+            BeamParams support = makeBeam(2.0e3, 500.0, kInf, 9.0e3);
             support.type = BeamType::Hydro;
             support.hydroInput = door.inputChannel;
             support.hydroRatio = length(opened - car.positions()[anchor]) / closedLength - 1.0;
-            support.breakGroup = group + "_hinges";
+            // The check strap is riveted next to the upper hinge and tears out with it.
+            support.breakGroup = group + "_hinge_upper";
             door.supportBeams.push_back(car.addBeam(anchor, moving, support));
             addBoxCollision(door.nodes, 0.55);
             DoorMechanism mechanism;
@@ -1108,8 +1112,8 @@ CarBuild buildCar(const CarDefinition& def) {
     }
 
     if (bd.detachableDoors) {
-        car.addSelfCollisionPanel("door_left", {"body"}, {"door_left_latch", "door_left_hinges"});
-        car.addSelfCollisionPanel("door_right", {"body"}, {"door_right_latch", "door_right_hinges"});
+        for (const std::string door : {"door_left", "door_right"})
+            car.addSelfCollisionPanel(door, {"body"}, {door + "_latch", door + "_hinge_lower", door + "_hinge_upper"});
     }
 
     // ------------------------------------------------------------------ systems
