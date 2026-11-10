@@ -1,8 +1,12 @@
 extends Camera3D
 ## Vehicle cameras: chase (spring-damped), hood, cockpit, orbit (mouse), trackside.
 
-enum Mode { CHASE, ORBIT, COCKPIT, HOOD, TRACKSIDE }
-const MODE_NAMES := ["Verfolger", "Orbit (Maus)", "Cockpit", "Motorhaube", "Streckenrand"]
+enum Mode { CHASE, ORBIT, COCKPIT, HOOD, TRACKSIDE, FREE }
+const MODE_NAMES := ["Verfolger", "Orbit (Maus)", "Cockpit", "Motorhaube", "Streckenrand", "Freie Kamera"]
+## Free camera: fly with the driving keys (Q/E down/up, Shift faster), look with the right mouse
+## button. The car holds still meanwhile.
+var _free_yaw := 0.0
+var _free_pitch := -0.2
 const Instruments := preload("res://scripts/instrument_cluster.gd")
 
 var equipment: Node
@@ -124,10 +128,26 @@ func _update_dashboard(delta: float) -> void:
 
 func cycle() -> String:
 	mode = (mode + 1) % MODE_NAMES.size()
+	if mode == Mode.FREE:
+		var f := -global_basis.z
+		_free_yaw = atan2(-f.x, -f.z)
+		_free_pitch = asin(clampf(f.y, -1.0, 1.0))
 	_cockpit_yaw = 0.0
 	_cockpit_pitch = 0.0
 	_track_pos = Vector3.ZERO
 	return MODE_NAMES[mode]
+
+
+func _fly(delta: float) -> void:
+	fov = 62.0
+	h_offset = 0.0
+	v_offset = 0.0
+	global_basis = Basis.from_euler(Vector3(_free_pitch, _free_yaw, 0.0))
+	var move := Vector3(Input.get_action_strength("steer_right") - Input.get_action_strength("steer_left"),
+		(1.0 if Input.is_key_pressed(KEY_E) else 0.0) - (1.0 if Input.is_key_pressed(KEY_Q) else 0.0),
+		Input.get_action_strength("brake") - Input.get_action_strength("throttle"))
+	var speed := 12.0 * (4.0 if Input.is_key_pressed(KEY_SHIFT) else 1.0)
+	global_position += global_basis * move * speed * delta
 
 
 func snap() -> void:
@@ -152,7 +172,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif mode == Mode.ORBIT:
 				_dist = minf(30.0, _dist * 1.1)
 	elif event is InputEventMouseMotion and (_dragging or mode == Mode.ORBIT and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)):
-		if mode == Mode.COCKPIT:
+		if mode == Mode.FREE:
+			_free_yaw -= event.relative.x * 0.004
+			_free_pitch = clampf(_free_pitch - event.relative.y * 0.004, -1.45, 1.45)
+		elif mode == Mode.COCKPIT:
 			_cockpit_yaw = clampf(_cockpit_yaw - event.relative.x * 0.004, -1.9, 1.9)
 			_cockpit_pitch = clampf(_cockpit_pitch - event.relative.y * 0.003, -0.55, 0.45)
 		else:
@@ -161,6 +184,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	if mode == Mode.FREE:
+		_fly(delta)
+		_dashboard.hide()
+		mirrors.update_views(delta, self, null, false)
+		return
 	if target == null or not is_instance_valid(target):
 		_dashboard.hide()
 		_instrument_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED

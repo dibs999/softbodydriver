@@ -353,6 +353,9 @@ func _drive_player(delta: float) -> void:
 	if activity and activity.active and activity.countdown > 0:
 		player.set_input(0, 1, 0, 1)
 		return
+	if cam.mode == CameraRig.Mode.FREE:
+		player.set_input(0, 0, 0, 1)   # the driving keys fly the free camera
+		return
 	var t := player.get_telemetry()
 	var kmh := float(t["speed_kmh"])
 	var gear := int(t["gear"])
