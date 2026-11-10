@@ -240,3 +240,30 @@ TEST_CASE("tailgate and boot lid release, lift on their struts and hold open") {
         CHECK(opening() < 0.01);
     }
 }
+
+TEST_CASE("rear impact deforms the tailgate as one panel; a front impact leaves it latched") {
+    for (const char* file : {"meridian_wagon", "kestrel_hatch"}) {
+        for (int end = 0; end < 2; ++end) {
+            const std::string name = file;
+            CAPTURE(name);
+            CAPTURE(end);
+            auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/" + file + ".car.json"));
+            const auto lid = car.layout.tailgateNodes;
+            const real direction = end == 0 ? 1.0 : -1.0;
+            WorldSettings settings;
+            settings.gravity = {};
+            settings.airDensity = 0;
+            World world(settings);
+            for (auto& v : car.body.velocities()) v = {direction * 14.0, 0, 0};
+            const real length = car.def.body.length;
+            world.addBody(std::move(car.body));
+            world.addCollider(StaticCollider::plane({end == 0 ? length + 0.25 : -0.25, 0, 0}, {-direction, 0, 0}, 0.0));
+            world.simulate(0.25);
+            REQUIRE(world.stats().finite);
+            const int held = attached(world.body(0), lid);
+            MESSAGE(name << (end == 0 ? std::string(" front") : std::string(" rear")) << " impact: lid mounts still attached " << held);
+            CHECK(connected(world.body(0), lid));
+            if (end == 0) CHECK(held == 14);
+        }
+    }
+}
