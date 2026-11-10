@@ -5,10 +5,12 @@ const C := preload("res://scripts/maps/common.gd")
 const ROCKS := preload("res://scripts/maps/rocks.gd")
 const V := preload("res://scripts/maps/vegetation.gd")
 static var _post_index := 250
+static var _props: Array = []
 static var _post_side := 1.0
 
 
 static func build(world: SBWorld, parent: Node3D) -> Dictionary:
+	_props.clear()
 	var nx := 481
 	var nz := 481
 	var cell := 4.0
@@ -315,7 +317,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	for j: int in jumps:
 		for k in range(-12, 3):
 			speeds[(j + k) % n_track] = minf(speeds[(j + k) % n_track], 17.0)
-	return {"spawns": [C.car_xform(track[0], track[1] - track[0]), C.car_xform(track[n_track - 8], track[n_track - 7] - track[n_track - 8])],
+	return {"props": _props.duplicate(), "spawns": [C.car_xform(track[0], track[1] - track[0]), C.car_xform(track[n_track - 8], track[n_track - 7] - track[n_track - 8])],
 		"waypoints": track, "speeds": speeds,
 		"map_paths": [C.closed_route(track), shortcut],
 		"map_places": [{"name": "Rallyelager Red Mesa", "position": track[6]}, {"name": "Raststätte Coyote Flats", "position": post}, {"name": "Alte Mine", "position": mine},
@@ -468,6 +470,12 @@ static func _trading_post(parent: Node3D, world: SBWorld, track: PackedVector3Ar
 		for a: float in [-1.8, 1.8]:
 			C.box(parent, world, at.call(a, c, 0.95), Vector3(0.35, 0.75, 0.28), rot, trim, 0.6)
 			C.box(parent, world, at.call(a, c, 1.35), Vector3(0.30, 0.16, 0.30), rot, glass, 0.6, false)
+	# A cluster of oil drums on the pad by the diner's end wall (where the pad is clear of dunes).
+	for k in 5:
+		var d: Vector3 = at.call(-31.0 + (k % 3) * 0.62, 31.5 + (k / 3) * 0.62, 0.03)
+		_props.append({"kind": "barrel", "position": d})
+	for k in 2:
+		_props.append({"kind": "barrel", "position": at.call(-31.0 + k * 0.62, 32.74, 0.03)})
 	# Diner: stucco box, window band, door, flat roof with a parapet, pole sign at the road.
 	var diner: Vector3 = at.call(-20.0, 34.0, 2.2)
 	C.box(parent, world, diner, Vector3(8.0, 2.2, 5.0), rot, stucco, 0.8)
