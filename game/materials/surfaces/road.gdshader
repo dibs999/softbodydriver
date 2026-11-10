@@ -12,6 +12,13 @@ uniform float v_metres = 12.0;     // metres per UV.y unit along the road (road_
 // Centre-line dashes: period and painted share (German rural Leitlinie: 6 m line, 12 m gap).
 uniform float dash_period = 12.0;
 uniform float dash_fraction = 0.48;
+// Motorway layout (0 = lanes across the whole width): a hard shoulder of this width on one side
+// (high u when shoulder_high_u), a safety strip on the other, a broad solid line between lane and
+// shoulder and lanes of equal width in between.
+uniform float shoulder_m = 0.0;
+uniform bool shoulder_high_u = true;
+uniform float inner_strip_m = 0.0;
+uniform float edge_line_m = 0.12;
 uniform float wear = 1.0;          // 0 = fresh surface, 1 = typical public road
 global uniform float road_wetness;  // set by the weather (darker, glossier)
 
@@ -151,7 +158,20 @@ void fragment() {
 		float edge_distance = abs(min(u, 1.0 - u) - 0.22 / road_width);
 		float edge = 1.0 - smoothstep(0.06 / road_width - pixel, 0.06 / road_width + pixel, edge_distance);
 		float lane_distance = abs(fract(u * float(lanes) + 0.5) - 0.5) / float(lanes);
-		float divider = 1.0 - smoothstep(0.06 / road_width - pixel, 0.06 / road_width + pixel, lane_distance);
+		if (shoulder_m > 0.0) {
+			float x = (shoulder_high_u ? u : 1.0 - u) * road_width;   // metres from the median side
+			float lane_w = (road_width - shoulder_m - inner_strip_m) / float(lanes);
+			float x0 = inner_strip_m, x1 = road_width - shoulder_m;
+			float inner_line = abs(x - x0) / road_width;
+			float outer_line = abs(x - x1) / road_width;
+			float half_edge = edge_line_m * 0.5 / road_width;
+			edge = max(1.0 - smoothstep(0.075 / road_width - pixel, 0.075 / road_width + pixel, inner_line),
+				1.0 - smoothstep(half_edge - pixel, half_edge + pixel, outer_line));
+			float lane_x = clamp((x - x0) / lane_w, 0.0, float(lanes));
+			lane_distance = (x > x0 + 0.5 && x < x1 - 0.5) ? abs(fract(lane_x + 0.5) - 0.5) * lane_w / road_width : 1.0;
+		}
+		float half_lane_line = (shoulder_m > 0.0 ? 0.075 : 0.06) / road_width;   // 15 cm on motorways, 12 cm elsewhere
+		float divider = 1.0 - smoothstep(half_lane_line - pixel, half_lane_line + pixel, lane_distance);
 		float dash_v = UV.y * v_metres / dash_period;
 		float dash_distance = abs(fract(dash_v) - 0.5);
 		float dash_pixel = max(fwidth(dash_v) * 0.6, 0.0002);
