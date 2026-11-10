@@ -48,7 +48,11 @@ keine stabile Hochgeschwindigkeitsfahrt.
   Stadt gibt es zusätzlich Lieferfahrten. Im **Rennen** stehen zwei KI-Gegner eine
   Reihe vor dem Spieler, warten den Countdown ab, fahren dieselbe Runde (mit Überholen)
   und verlassen die Karte nach dem Ziel; das HUD zeigt die Position, das Ergebnis den
-  Platz. Verkehr am Start wird vorher weggesetzt. `F4` stellt das Auto am Start auf bzw.
+  Platz. Verkehr am Start wird vorher weggesetzt. Auf dem Testgelände gibt es den
+  **Crashtest**: Anlauf auf der Crashbahn, Aufprall auf die Betonwand mit mindestens
+  50 km/h; der Bericht nennt Aufprallgeschwindigkeit, Spitzenverzögerung, Front- und
+  Fahrgastzellenschaden, Motor- und Kühlerzustand und vergibt 1–5 Sterne (beste
+  Wertung wird gespeichert). `F4` stellt das Auto am Start auf bzw.
   bricht den Lauf ab. Checkpoints und Ziele erscheinen in Welt und Minikarte.
   Bestleistungen werden je Karte, Auto und Modus lokal gespeichert. Zurücksetzen,
   Reparatur und Fahrzeugwechsel beenden einen laufenden Versuch. Pausen stoppen
