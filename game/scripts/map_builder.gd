@@ -501,7 +501,7 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	var woods_noise := FastNoiseLite.new()
 	woods_noise.seed = 91
 	woods_noise.frequency = 0.006
-	var clearings := [[road[12], 175.0], [road[194], 175.0], [road[410], 175.0], [road[100], 75.0], [road[0], 60.0]]
+	var clearings := [[road[12], 175.0], [road[194], 175.0], [road[410], 175.0], [road[100], 75.0], [road[0], 60.0], [road[VILLAGE_AT], 140.0]]
 	var woods := func(x: float, z: float) -> float:
 		for c: Array in clearings:
 			var cp: Vector3 = c[0]
@@ -539,6 +539,8 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 		for f: Vector3 in farm_points:
 			if Vector2(p.x - f.x, p.z - f.z).length() < 34.0:
 				return false
+		if Vector2(p.x - road[VILLAGE_AT].x, p.z - road[VILLAGE_AT].z).length() < 110.0:
+			return false
 		return Vector2(p.x - road[0].x, p.z - road[0].z).length() > 30.0
 	R.utility_line(parent, world, road, -(half_w + 6.0), ground_height, true, 44.0, keep_clear)
 	var bale_rng := RandomNumberGenerator.new()
@@ -583,7 +585,7 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 		var p := Vector2(rng.randf_range(-636, 636), rng.randf_range(-636, 636))
 		if noise.get_noise_2d(p.x * 2.0, p.y * 2.0) < -0.18:
 			continue
-		if p.distance_to(Vector2(road[12].x, road[12].z)) < 42.0:
+		if p.distance_to(Vector2(road[12].x, road[12].z)) < 42.0 or p.distance_to(Vector2(road[VILLAGE_AT].x, road[VILLAGE_AT].z)) < 120.0:
 			continue
 		var near := false
 		for j in range(0, n_road, 6):
@@ -601,6 +603,7 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	var under: Array[Vector3] = []
 	for i in range(0, n_road, 2):
 		if noise.get_noise_2d(road[i].x * 1.3 + 900.0, road[i].z * 1.3) < 0.12: continue
+		if absi(i - VILLAGE_AT) < 26: continue
 		if Vector2(road[i].x - road[0].x, road[i].z - road[0].z).length() < 60.0: continue
 		var tangent := road[(i + 1) % n_road] - road[(i - 1 + n_road) % n_road]
 		var side := Vector3(-tangent.z, 0, tangent.x).normalized()
@@ -666,6 +669,7 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	V.plant(parent, "bush", hedges, 33, 0.8, 2.0, false)
 	V.roadside_grass(parent, road, true, half_w + 0.7, half_w + 16.0, 6.0, 34, ground_height)
 	_hill_landmarks(world, parent, road, ground_height)
+	_hill_village(world, parent, road, half_w, ground_height)
 	var lookout := _hill_lookout(world, parent, road, ground_height)
 
 	var speeds := PackedFloat32Array()
@@ -681,11 +685,107 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	return {"spawns": [car_xform(s0, s1 - s0), car_xform(road[n_road - 6], road[n_road - 5] - road[n_road - 6])],
 		"waypoints": road, "speeds": speeds,
 		"map_paths": [C.closed_route(road), lookout],
-		"map_places": [{"name": "Waldhof", "position": road[12]}, {"name": "Aussichtspunkt", "position": lookout[4]},
+		"map_places": [{"name": "Waldhof", "position": road[12]}, {"name": "Lindenau", "position": road[VILLAGE_AT]}, {"name": "Aussichtspunkt", "position": lookout[4]},
 			{"name": "Bergweide", "position": road[194]}, {"name": "Talblick", "position": road[410]}],
 		"ai_spawns": [car_xform(road[144], road[145] - road[144]), car_xform(road[320], road[321] - road[320])],
 		"environment": {"sky_top": Color(0.26, 0.48, 0.75), "horizon": Color(0.68, 0.76, 0.80),
 			"fog": Color(0.70, 0.78, 0.81), "fog_density": 0.00060, "sun": Vector3(-34, -54, 0), "sun_energy": 1.25}}
+
+
+const VILLAGE_AT := 300
+
+## Lindenau: a street village on both sides of the hill road with a church behind the houses and
+## town signs at both ends. Houses sit at the lowest corner of their footprint (cut into the slope).
+static func _hill_village(world: SBWorld, parent: Node3D, road: PackedVector3Array, half_w: float, height: Callable) -> void:
+	var village := preload("res://scripts/maps/village.gd").new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3001
+	var n := road.size()
+	var frame := func(i: int) -> Array:
+		var d := road[(i + 1) % n] - road[(i - 1 + n) % n]
+		d.y = 0
+		d = d.normalized()
+		return [d, Vector3(-d.z, 0, d.x)]
+	var floor_at := func(c: Vector3, yaw: float, l: float, w: float) -> Vector3:
+		var lowest := INF
+		for corner: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+			var q := c + Basis(Vector3.UP, yaw) * Vector3(corner.x * l * 0.5, 0, corner.y * w * 0.5)
+			lowest = minf(lowest, height.call(q.x, q.z))
+		return Vector3(c.x, lowest, c.z)
+	var steep := func(c: Vector3, yaw: float, l: float, w: float) -> bool:
+		var lo := INF
+		var hi := -INF
+		for corner: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+			var q := c + Basis(Vector3.UP, yaw) * Vector3(corner.x * l * 0.5, 0, corner.y * w * 0.5)
+			var hq: float = height.call(q.x, q.z)
+			lo = minf(lo, hq)
+			hi = maxf(hi, hq)
+		return hi - lo > 2.0
+	var trees: Array[Vector3] = []
+	for i in range(VILLAGE_AT - 16, VILLAGE_AT + 17, 4):
+		var f: Array = frame.call(i)
+		var d: Vector3 = f[0]
+		var side: Vector3 = f[1]
+		var yaw := atan2(-d.z, d.x)
+		for sgn: float in [-1.0, 1.0]:
+			if sgn < 0.0 and absi(i - VILLAGE_AT) <= 4:
+				continue   # the church stands here behind the row
+			var l := rng.randf_range(9.0, 12.5)
+			var w := rng.randf_range(7.5, 9.0)
+			var c := road[i] + side * sgn * (half_w + 9.5 + w * 0.5 + rng.randf_range(0.0, 3.0))
+			var storeys := 1 + int(rng.randf() < 0.55)
+			if not steep.call(c, yaw, l, w):
+				village.house(world, floor_at.call(c, yaw, l, w), yaw, l, w, storeys, rng)
+			var garden := road[i] + side * sgn * (half_w + 24.0 + rng.randf_range(0.0, 5.0)) + d * rng.randf_range(-4.0, 4.0)
+			garden.y = height.call(garden.x, garden.z)
+			trees.append(garden)
+			if rng.randf() < 0.5:
+				var back := road[i] + side * sgn * (half_w + 34.0) + d * 6.0
+				var byaw := yaw + PI * 0.5
+				var bl := rng.randf_range(8.0, 10.0)
+				if not steep.call(back, byaw, bl, 7.5):
+					village.house(world, floor_at.call(back, byaw, bl, 7.5), byaw, bl, 7.5, 1, rng)
+	# Church behind the row, tower towards the road.
+	var f0: Array = frame.call(VILLAGE_AT)
+	var cd: Vector3 = f0[0]
+	var cs: Vector3 = f0[1]
+	var cyaw := atan2(-cs.z, cs.x)
+	var nave := road[VILLAGE_AT] - cs * (half_w + 26.0)
+	village.house(world, floor_at.call(nave, cyaw, 18.0, 9.5), cyaw, 18.0, 9.5, 2, rng)
+	var tower := road[VILLAGE_AT] - cs * (half_w + 14.0)
+	tower.y = height.call(tower.x, tower.z) - 0.5
+	var plaster := C.noise_mat(Color(0.90, 0.87, 0.80), 0.05, 2.5, 0.92)
+	var slate := C.noise_mat(Color(0.26, 0.26, 0.29), 0.1, 3.0, 0.8)
+	C.box(parent, world, tower + Vector3.UP * 11.5, Vector3(2.6, 11.5, 2.6), Vector3(0, cyaw, 0), plaster, 0.8)
+	var spire := MeshInstance3D.new()
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.05
+	cone.bottom_radius = 3.6
+	cone.height = 10.0
+	cone.radial_segments = 4
+	spire.mesh = cone
+	spire.material_override = slate
+	spire.position = tower + Vector3.UP * 28.0
+	spire.rotation.y = cyaw + PI * 0.25
+	parent.add_child(spire)
+	village.build(parent)
+	V.plant(parent, "broadleaf", trees, 3002, 0.7, 1.0, false)
+	for t in trees:
+		if V.keep(t): world.add_box(t + Vector3.UP * 1.8, Vector3(0.22, 1.8, 0.22), Vector3.ZERO, 0.7)
+	# Yellow town signs at both ends.
+	var sign_mat := C.mat(Color(0.95, 0.78, 0.10), 0.5)
+	var post_mat := C.mat(Color(0.62, 0.63, 0.65), 0.4, 0.7)
+	for end: int in [VILLAGE_AT - 24, VILLAGE_AT + 24]:
+		var fe: Array = frame.call(end)
+		var d: Vector3 = fe[0]
+		var side: Vector3 = fe[1]
+		var toward := d if end < VILLAGE_AT else -d
+		var spot := road[end] + side * (half_w + 1.4) * (1.0 if end < VILLAGE_AT else -1.0)
+		spot.y = height.call(spot.x, spot.z)
+		C.box(parent, world, spot + Vector3.UP * 1.1, Vector3(0.05, 1.1, 0.05), Vector3.ZERO, post_mat, 0.6)
+		var yaw := atan2(-toward.z, toward.x)
+		C.box(parent, null, spot + Vector3.UP * 2.0, Vector3(0.03, 0.4, 0.62), Vector3(0, yaw, 0), sign_mat, 0.6, false)
+		C.label3d(parent, "Lindenau", spot + Vector3.UP * 2.0 - toward * 0.04, yaw + PI * 0.5, 0.3, Color(0.05, 0.05, 0.05))
 
 
 static func _hill_landmarks(world: SBWorld, parent: Node3D, road: PackedVector3Array, height: Callable) -> void:
