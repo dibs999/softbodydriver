@@ -255,6 +255,8 @@ noch nicht. Im Cockpit verwenden sichtbare Außenspiegel echte planare Ansichten
 der Spielwelt. Rechte Maustaste beziehungsweise rechter Gamepad-Stick ermöglichen
 den Blick auf beide Seiten. Unsichtbare Spiegel benötigen keine eigene Aufnahme.
 
+Mit Automatik hält **Auto Hold** das Auto nach dem Anhalten mit der Bremse (und beim Start) fest,
+bis Gas gegeben wird, statt es in der Fahrstufe davonkriechen zu lassen (`auto_hold_test`).
 Das Pausenmenü bietet Aktivitäten, Wetter und Tageszeit auch ohne Funktionstasten.
 Unter **Fahrzeug → Abstimmung** lassen sich der Reifendruck je Achse (18–50 psi) und der
 Bremskraftanteil vorn (50–80 %) einstellen; „Abstimmung auf Werkswerte“ setzt beides zurück.
