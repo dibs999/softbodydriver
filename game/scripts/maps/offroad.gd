@@ -79,7 +79,9 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			var base := Color(0.60,0.91,0.61) if field < 0 else (Color(0.99,0.86,0.49) if field == 0 else Color(0.75,0.71,0.46))
 			var row := sin(x * 1.2 + z * 0.12) * 0.04 if field >= 0 else 0.0
 			var slope := absf(heights[mini(ix + 1, COUNT-1)*COUNT+iz] - heights[maxi(0,ix-1)*COUNT+iz]) / (2*CELL)
-			colors[ix*COUNT+iz] = base.darkened(clampf(slope * 0.15 + row, 0, 0.2))
+			var c := base.darkened(clampf(slope * 0.15 + row, 0, 0.2))
+			# Forest floor (needles, moss, shade) under the woods so they read as forest from afar.
+			colors[ix*COUNT+iz] = c.lerp(Color(0.27, 0.32, 0.18), _woods(x, z) * 0.9)
 	C.terrain_tiles(parent, ORIGIN, ORIGIN, CELL, COUNT, COUNT, heights, C.terrain_material("grass", 3.8), colors)
 	var widths := [3.2, 2.5, 2.5, 4.0, 2.15]
 	for i in paths.size():
@@ -169,6 +171,19 @@ static func _near_paths(p: Vector2, paths: Array[PackedVector3Array], distance: 
 			if p.distance_squared_to(Geometry2D.get_closest_point_to_segment(p,a,b)) < distance*distance: return true
 	return false
 
+static var _woods_noise: FastNoiseLite
+## 0..1 forest cover: the forest zones and the ridges around the valley, with clearings.
+static func _woods(x: float, z: float) -> float:
+	if _woods_noise == null:
+		_woods_noise = FastNoiseLite.new()
+		_woods_noise.seed = 4471
+		_woods_noise.frequency = 0.02
+	var p := Vector2(x, z)
+	var zone := 1.0 if _field(p) < 0 and (z < 160 or x < -470 or x > 400) else 0.0
+	zone = maxf(zone, smoothstep(590.0, 640.0, maxf(absf(x), absf(z))))
+	return zone * clampf(0.85 + _woods_noise.get_noise_2d(x, z) * 1.2, 0.0, 1.0)
+
+
 static func _field(p: Vector2) -> int:
 	if Rect2(-425,150,230,180).has_point(p): return 0
 	if Rect2(140,300,220,130).has_point(p): return 1
@@ -198,6 +213,20 @@ static func _vegetation(parent: Node3D, world: SBWorld, paths: Array[PackedVecto
 		elif i % 7 == 0 and _field(p) < 0:
 			var scale := rng.randf_range(0.6,2.4)
 			rocks.append(Transform3D(Basis(Vector3.UP,rng.randf()*TAU).scaled_local(Vector3(scale,scale*0.7,scale)),Vector3(p.x,y+scale*0.3,p.y)))
+	# Closed forest: the woods were a loose scatter. Fill the forest zones and clothe the ridges
+	# that rise around the valley, which frame every view from the tracks.
+	for gx in range(-758, 760, 10):
+		for gz in range(-758, 760, 10):
+			var p := Vector2(gx + rng.randf_range(-3.5, 3.5), gz + rng.randf_range(-3.5, 3.5))
+			if _woods(p.x, p.y) < 0.55 or rng.randf() < 0.3: continue
+			if p.distance_to(Vector2(farm.x,farm.z)) < 48 or _near_paths(p,paths,7.5): continue
+			var edge_d := maxf(absf(p.x),absf(p.y))
+			var q := Vector3(p.x,ground.call(p.x,p.y),p.y)
+			if not V.keep(q): continue
+			if rng.randf() < 0.18: leafy.append(q)
+			else: pines.append(q)
+			if edge_d < 700.0:
+				world.add_box(q+Vector3.UP*1.8,Vector3(0.24,1.8,0.24),Vector3.ZERO,0.75)
 	# A continuous forest corridor contrasts with the open fields. Keep trunks
 	# outside all junctions, including the technical trail and logging clearing.
 	var woodland := paths[1]
