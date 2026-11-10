@@ -43,6 +43,7 @@ var _reverse_hold := 0.0
 ## Auto Hold (automatic gearbox): after braking to a stop, and at the start, the brakes hold the car
 ## until the driver accelerates, instead of it creeping away in gear.
 var _auto_hold := true
+var _last_brake_sim := -10.0   # simulation time the brake was last pressed (Auto Hold)
 var _time_scales := [1.0, 0.5, 0.25, 0.1]
 var _time_idx := 0
 var _pause_activity: OptionButton
@@ -428,9 +429,15 @@ func _drive_player(delta: float) -> void:
 			brk = tmp
 		if gear == 0 and thr > 0.2:
 			player.set_gear(1)
+		# Auto Hold engages when the car comes to rest under the brake. Measured in simulation time:
+		# under load one frame can cover the last 0.1 s of a stop, and a brake released in that
+		# frame left the car rolling in gear.
+		var now_sim := float(world.get_stats()["sim_time"])
+		if brk > 0.3:
+			_last_brake_sim = now_sim
 		if thr > 0.05:
 			_auto_hold = false
-		elif absf(kmh) < 0.8 and brk > 0.3:
+		elif absf(kmh) < 0.8 and (brk > 0.3 or now_sim - _last_brake_sim < 0.5):
 			_auto_hold = true
 		if _auto_hold and thr <= 0.05 and absf(kmh) < 3.0:
 			brk = maxf(brk, 0.6)
