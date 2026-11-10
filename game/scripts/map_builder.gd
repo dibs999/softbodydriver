@@ -123,6 +123,7 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 			var basis := Basis(Vector3.UP, yaw).scaled_local(Vector3(d.length(), 1.0, 0.2))
 			white_marks.append(Transform3D(basis, mid + n + Vector3(0, 0.012, 0)))
 
+	_oval_furniture(parent, world, straight, radius, cz)
 	# Start grid lines.
 	for i in 6:
 		white_marks.append(Transform3D(Basis.from_scale(Vector3(0.3, 1, 4)), Vector3(-20 + i * 9, 0.012, -40)))
@@ -243,6 +244,55 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 ## A used test facility: rubber laid down on the oval's racing line, in the braking zone and as
 ## doughnuts; asphalt patches of different age; distance boards along the back straight; floodlight
 ## masts around the pad.
+## Race-track furniture on the oval: red and white kerbs along the inside of both bends and
+## stacked tyre walls (colliding) behind the run-off on their outside.
+static func _oval_furniture(parent: Node3D, world: SBWorld, straight: float, radius: float, cz: float) -> void:
+	var kerb_red: Array[Transform3D] = []
+	var kerb_white: Array[Transform3D] = []
+	var tyres: Array[Transform3D] = []
+	var bands: Array[Transform3D] = []
+	for bend: float in [1.0, -1.0]:
+		var centre := Vector3(bend * straight / 2, 0, cz)
+		var arc := PI * radius
+		var n := int(arc / 2.0)
+		for k in n:
+			var a := (k + 0.5) / n * PI
+			var p := centre + Vector3(bend * sin(a), 0, -cos(a)) * (radius - 7.1)
+			var tangent := Vector3(bend * cos(a), 0, sin(a))
+			var xf := Transform3D(Basis(Vector3.UP, atan2(-tangent.z, tangent.x)).scaled_local(Vector3(arc / n, 0.06, 1.1)), p + Vector3.UP * 0.03)
+			(kerb_red if k % 2 == 0 else kerb_white).append(xf)
+		# Tyre wall: three tyres high, a painted belt on every other section.
+		var wall_r := radius + 20.0
+		var a0 := deg_to_rad(35.0)
+		var a1 := deg_to_rad(145.0)
+		var count := int((a1 - a0) * wall_r / 0.68)
+		for k in count:
+			var a := a0 + (a1 - a0) * k / (count - 1)
+			var p := centre + Vector3(bend * sin(a), 0, -cos(a)) * wall_r
+			for level in 3:
+				tyres.append(Transform3D(Basis.IDENTITY, p + Vector3.UP * (0.13 + level * 0.25)))
+			if (k / 6) % 2 == 0:
+				bands.append(Transform3D(Basis.IDENTITY, p + Vector3.UP * 0.63))
+			if k % 5 == 0:
+				var yaw := atan2(-cos(a) * bend, sin(a))
+				world.add_box(p + Vector3.UP * 0.38, Vector3(0.36, 0.38, 1.75), Vector3(0, -yaw, 0), 0.5)
+	var kerb := BoxMesh.new()
+	C.scatter_multimesh(parent, kerb, _mat(Color(0.78, 0.10, 0.08), 0.55), kerb_red, false)
+	C.scatter_multimesh(parent, kerb, _mat(Color(0.92, 0.92, 0.90), 0.55), kerb_white, false)
+	var tyre := CylinderMesh.new()
+	tyre.top_radius = 0.33
+	tyre.bottom_radius = 0.33
+	tyre.height = 0.24
+	tyre.radial_segments = 12
+	C.scatter_multimesh(parent, tyre, _mat(Color(0.06, 0.06, 0.06), 0.9), tyres)
+	var band := CylinderMesh.new()
+	band.top_radius = 0.335
+	band.bottom_radius = 0.335
+	band.height = 0.06
+	band.radial_segments = 12
+	C.scatter_multimesh(parent, band, _mat(Color(0.85, 0.85, 0.82), 0.6), bands, false)
+
+
 static func _proving_wear(parent: Node3D, world: SBWorld, oval: PackedVector3Array, straight: float, radius: float, cz: float) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 909

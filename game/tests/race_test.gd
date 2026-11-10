@@ -15,9 +15,11 @@ func check(value: bool, caption: String) -> void:
 
 func _initialize() -> void:
 	var game := root.get_node("Game")
-	game.selected_map = "proving_grounds"
+	# Optional: -- <map> [traffic] to try other maps.
+	var args := OS.get_cmdline_user_args()
+	game.selected_map = args[0] if args.size() > 0 else "proving_grounds"
 	game.selected_car = "res://cars/meridian_sedan.car.json"
-	game.settings["traffic"] = false
+	game.settings["traffic"] = args.size() > 1 and args[1] == "traffic"
 	game.settings["show_help"] = false
 	game.start_lesson = false
 	change_scene_to_file("res://scenes/game.tscn")
@@ -81,7 +83,7 @@ func _run(scene: Node) -> void:
 	var player_ai := AIDriver.new(scene.player, scene.map_data["waypoints"], scene.map_data["speeds"], 0.8)
 	t = 0.0
 	var moved := false
-	while activity.active and t < 200.0:
+	while activity.active and t < 400.0:
 		_step(scene, activity, player_ai)
 		t += STEP
 		if not moved and t > 5.0:
