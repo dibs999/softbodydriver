@@ -345,9 +345,13 @@ static func _motorway_furniture(parent: Node3D, world: SBWorld, center: PackedVe
 	var wire := BoxMesh.new()
 	wire.size = Vector3(0.012, 0.012, 1.0)
 	C.scatter_multimesh(parent, wire, C.mat(Color(0.3, 0.3, 0.3), 0.5, 0.6), wires, false)
-	# Emergency telephones (orange) and kilometre boards on both outer verges.
+	# Emergency telephones (orange) and kilometre boards on both outer verges, batched.
 	var phone_mat := C.mat(Color(0.95, 0.45, 0.08), 0.5)
 	var board_mat := C.mat(Color(0.92, 0.92, 0.9), 0.6)
+	var unit := BoxMesh.new()
+	unit.size = Vector3.ONE
+	var board_parts: Array[Transform3D] = []
+	var phone_parts: Array[Transform3D] = []
 	var travelled := 0.0
 	var next_board := 100.0
 	var next_phone := 400.0
@@ -357,27 +361,35 @@ static func _motorway_furniture(parent: Node3D, world: SBWorld, center: PackedVe
 		var d := (center[(i + 1) % n] - center[i]).normalized()
 		var side := Vector3(-d.z, 0, d.x)
 		var yaw := atan2(-d.z, d.x)
+		var rot := Basis(Vector3.UP, yaw)
 		for sgn: float in [1.0, -1.0]:
 			if sgn > 0.0 and i > open_start - 3 and i < open_end + 3: continue
 			var base := center[i] + side * sgn * (CARRIAGE_OFFSET + CARRIAGE_HALF + 2.3)
-			C.box(parent, world, base + Vector3.UP * 0.75, Vector3(0.04, 0.75, 0.04), Vector3(0, yaw, 0), board_mat, 0.6, false)
-			C.box(parent, world, base + Vector3.UP * 1.65, Vector3(0.02, 0.22, 0.32), Vector3(0, yaw, 0), board_mat, 0.6, false)
+			board_parts.append(Transform3D(rot.scaled_local(Vector3(0.08, 1.5, 0.08)), base + Vector3.UP * 0.75))
+			board_parts.append(Transform3D(rot.scaled_local(Vector3(0.04, 0.44, 0.64)), base + Vector3.UP * 1.65))
 			C.label3d(parent, "%.1f" % (travelled / 1000.0), base + Vector3.UP * 1.65 - side * sgn * 0.03, yaw + (PI * 0.5 if sgn > 0 else -PI * 0.5), 0.22, Color(0.05, 0.05, 0.05))
 			if travelled >= next_phone:
 				var ph := base + d * 6.0
-				C.box(parent, world, ph + Vector3.UP * 0.65, Vector3(0.16, 0.65, 0.16), Vector3(0, yaw, 0), phone_mat, 0.6)
-				C.box(parent, world, ph + Vector3.UP * 1.42, Vector3(0.20, 0.12, 0.20), Vector3(0, yaw, 0), phone_mat, 0.6, false)
+				phone_parts.append(Transform3D(rot.scaled_local(Vector3(0.32, 1.3, 0.32)), ph + Vector3.UP * 0.65))
+				phone_parts.append(Transform3D(rot.scaled_local(Vector3(0.40, 0.24, 0.40)), ph + Vector3.UP * 1.42))
+				world.add_box(ph + Vector3.UP * 0.65, Vector3(0.16, 0.65, 0.16), Vector3(0, yaw, 0), 0.6)
 		if travelled >= next_phone: next_phone += 2000.0
 		next_board += 500.0
+	C.scatter_multimesh(parent, unit, board_mat, board_parts, false)
+	C.scatter_multimesh(parent, unit, phone_mat, phone_parts, false)
 	# Noise barrier: 4 m panels along the outer edge of the southern straight (carriageway B side).
 	var wall_mat := C.noise_mat(Color(0.42, 0.50, 0.44), 0.08, 1.5, 0.85)
 	var post_mat := C.mat(Color(0.5, 0.5, 0.52), 0.5, 0.7)
-	var x0 := -600.0
-	while x0 < 400.0:
-		var zc := RADIUS + CARRIAGE_OFFSET + CARRIAGE_HALF + 3.2
-		C.box(parent, world, Vector3(x0 + 2.0, 2.0, zc), Vector3(2.0, 2.0, 0.08), Vector3.ZERO, wall_mat, 0.8)
-		C.box(parent, world, Vector3(x0, 2.1, zc), Vector3(0.08, 2.1, 0.12), Vector3.ZERO, post_mat, 0.8, false)
-		x0 += 4.0
+	var panels: Array[Transform3D] = []
+	var wall_posts: Array[Transform3D] = []
+	var zc := RADIUS + CARRIAGE_OFFSET + CARRIAGE_HALF + 3.2
+	for k in 250:
+		var x0 := -600.0 + k * 4.0
+		panels.append(Transform3D(Basis.from_scale(Vector3(4.0, 4.0, 0.16)), Vector3(x0 + 2.0, 2.0, zc)))
+		wall_posts.append(Transform3D(Basis.from_scale(Vector3(0.16, 4.2, 0.24)), Vector3(x0, 2.1, zc)))
+	world.add_box(Vector3(-100.0, 2.0, zc), Vector3(500.0, 2.0, 0.08), Vector3.ZERO, 0.8)
+	C.scatter_multimesh(parent, unit, wall_mat, panels)
+	C.scatter_multimesh(parent, unit, post_mat, wall_posts, false)
 
 
 static func _landmarks(parent: Node3D, world: SBWorld, metal: Material) -> void:
