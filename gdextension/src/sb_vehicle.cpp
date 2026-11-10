@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include <godot_cpp/classes/rendering_server.hpp>
+#include <godot_cpp/classes/shader_material.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
@@ -155,6 +156,18 @@ Ref<Material> SBVehicle::materialFor(const std::string& name, const Dictionary& 
     const String key(base == "bonnet" ? "paint" : base == "bonnet_inner" ? "interior" : base.c_str());
     Ref<Material> m;
     if (lib.has(key)) m = lib[key];
+    if ((base == "paint" || base == "bonnet") && lib.has("paint_damage")) {
+        // Paint with a damage mask (vertex colour): chipped to primer and scratched bare metal
+        // where the panel is crushed.
+        Ref<ShaderMaterial> tpl = lib["paint_damage"];
+        if (tpl.is_valid()) {
+            Ref<ShaderMaterial> sm = tpl->duplicate();
+            sm->set_shader_parameter("paint", Color(static_cast<float>(def_.body.paint[0]), static_cast<float>(def_.body.paint[1]),
+                                                    static_cast<float>(def_.body.paint[2])));
+            sm->set_shader_parameter("paint_metallic", static_cast<float>(def_.body.paintMetallic));
+            return sm;
+        }
+    }
     if (base == "paint" || base == "bonnet") {
         Ref<StandardMaterial3D> pm;
         if (m.is_valid() && Object::cast_to<StandardMaterial3D>(m.ptr())) pm = m->duplicate();
@@ -222,6 +235,16 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
         arrays[Mesh::ARRAY_VERTEX] = v;
         arrays[Mesh::ARRAY_NORMAL] = n;
         arrays[Mesh::ARRAY_TEX_UV] = uv;
+        std::string base = s.material;
+        for (const std::string prefix : {"bumper_front_", "bumper_rear_", "door_left_", "door_right_"})
+            if (base.rfind(prefix, 0) == 0) { base = base.substr(prefix.size()); break; }
+        const bool paintSurface = base == "paint" || base == "bonnet";
+        if (paintSurface) {
+            PackedColorArray colors;
+            colors.resize(static_cast<int64_t>(nv));
+            colors.fill(Color(1, 1, 1, 1));
+            arrays[Mesh::ARRAY_COLOR] = colors;
+        }
         arrays[Mesh::ARRAY_INDEX] = idx;
         g.mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, arrays, Array(), Dictionary(),
                                         Mesh::ARRAY_FLAG_USE_DYNAMIC_UPDATE);
@@ -232,6 +255,13 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
         g.normalStride = rs->mesh_surface_get_format_normal_tangent_stride(fmt, static_cast<int>(nv));
         g.normalOffset = rs->mesh_surface_get_format_offset(fmt, static_cast<int>(nv), Mesh::ARRAY_NORMAL);
         g.buffer.resize(static_cast<int64_t>(g.normalOffset) + static_cast<int64_t>(nv) * g.normalStride);
+        if (paintSurface) {
+            g.damageMask = true;
+            g.attrStride = rs->mesh_surface_get_format_attribute_stride(fmt, static_cast<int>(nv));
+            g.colorOffset = rs->mesh_surface_get_format_offset(fmt, static_cast<int>(nv), Mesh::ARRAY_COLOR);
+            const Dictionary sd = rs->mesh_get_surface(g.mesh->get_rid(), 0);
+            g.attrBuffer = sd["attribute_data"];
+        }
         g.instance = memnew(MeshInstance3D);
         g.instance->set_mesh(g.mesh);
         static const char* paneNames[5] = {"", "_windscreen", "_rear", "_left", "_right"};
@@ -848,6 +878,17 @@ void SBVehicle::sync_from_world() {
         impactAccum_ += static_cast<double>(d > lastDeformed_ ? d - lastDeformed_ : 0) +
                         6.0 * static_cast<double>(b > lastBroken_ ? b - lastBroken_ : 0);
     }
+    if (d != lastDeformed_ || b != lastBroken_ || nodeDamage_.size() != pos_.size()) {
+        // Worst plastic strain at each node (actuated beams excluded: steering is not damage).
+        nodeDamage_.assign(pos_.size(), 0.0f);
+        for (const sb::Beam& bm : body.beams()) {
+            if (bm.hydroInput >= 0 || bm.a >= nodeDamage_.size() || bm.b >= nodeDamage_.size()) continue;
+            const float strain = bm.broken ? 0.2f : static_cast<float>(bm.plasticStrain());
+            nodeDamage_[bm.a] = std::max(nodeDamage_[bm.a], strain);
+            nodeDamage_[bm.b] = std::max(nodeDamage_[bm.b], strain);
+        }
+        damageDirty_ = true;
+    }
     lastDeformed_ = d;
     lastBroken_ = b;
     if (debugView_) {
@@ -952,6 +993,26 @@ void SBVehicle::update_visual(double delta) {
     }
     const AABB box(lo - Vector3(0.5, 0.5, 0.5), (hi - lo) + Vector3(1, 1, 1));
 
+    if (damageDirty_ && !nodeDamage_.empty()) {
+        damageDirty_ = false;
+        for (std::size_t si = 0; si < surfaces_.size() && si < visual_.skinned.size(); ++si) {
+            SurfaceGpu& g = surfaces_[si];
+            if (!g.damageMask || g.attrStride == 0) continue;
+            const sb::MeshSurface& s = visual_.skinned[si];
+            const std::size_t nv = s.skin.size();
+            if (g.attrBuffer.size() < static_cast<int64_t>(nv * g.attrStride)) continue;
+            uint8_t* attr = g.attrBuffer.ptrw();
+            for (std::size_t i = 0; i < nv; ++i) {
+                float d = 0.0f;
+                for (int k = 0; k < 4; ++k)
+                    if (s.skin[i].node[k] < nodeDamage_.size()) d += s.skin[i].weight[k] * nodeDamage_[s.skin[i].node[k]];
+                // Paint survives small dents; it cracks from ~3 % crush and is gone by ~13 %.
+                const float v = std::clamp((d - 0.03f) / 0.10f, 0.0f, 1.0f);
+                attr[i * g.attrStride + g.colorOffset] = static_cast<uint8_t>(std::lround(255.0f * (1.0f - v)));
+            }
+            g.mesh->surface_update_attribute_region(0, 0, g.attrBuffer);
+        }
+    }
     for (std::size_t si = 0; si < surfaces_.size() && si < visual_.skinned.size(); ++si) {
         SurfaceGpu& g = surfaces_[si];
         if (!g.instance->is_visible()) continue;
