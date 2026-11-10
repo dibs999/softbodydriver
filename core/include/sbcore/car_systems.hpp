@@ -93,6 +93,12 @@ struct CarSystemsState {
     real overRevTimer = 0.0;     ///< Seconds above the bent-valve / thrown-rod limits
     bool valvesBent = false;
     bool rodBroken = false;
+    /// Rod bearings: wiped by oil starvation (low pressure) and very hot, thin oil. The engine
+    /// knocks louder and louder and finally throws a rod.
+    real rodBearingWear = 0.0;   ///< 0..1
+    /// Piston rings: scuffed by overheating and over-revving: lost compression, burns oil.
+    real pistonRingDamage = 0.0; ///< 0..1
+    real knock = 0.0;            ///< Output: audible bearing knock 0..1
     bool seized = false;
     bool running = true;
     bool driveshaftBroken = false;

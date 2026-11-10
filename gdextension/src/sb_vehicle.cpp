@@ -1767,10 +1767,13 @@ Dictionary SBVehicle::get_telemetry() const {
     d["radiator_damage"] = sys_.radiatorDamage;
     d["oilpan_damage"] = sys_.oilPanDamage;
     d["fueltank_damage"] = sys_.fuelTankDamage;
-    d["engine_damage"] = std::max({sys_.blockDamage, sys_.wear, sys_.overRevDamage});
+    d["engine_damage"] = std::max({sys_.blockDamage, sys_.wear, sys_.overRevDamage, sys_.rodBearingWear, sys_.pistonRingDamage});
     d["over_rev_damage"] = sys_.overRevDamage;
     d["valves_bent"] = sys_.valvesBent;
     d["rod_broken"] = sys_.rodBroken;
+    d["engine_knock"] = sys_.knock;
+    d["rod_bearing_wear"] = sys_.rodBearingWear;
+    d["piston_ring_damage"] = sys_.pistonRingDamage;
     d["over_rev"] = def_.engine.redlineRpm > 0 ? tel_.engineRpm / def_.engine.redlineRpm : 0.0;
     d["power_kw"] = sys_.powerKw;
     d["status"] = String(sys_.status.c_str());

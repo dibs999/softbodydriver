@@ -16,6 +16,7 @@
 namespace godot {
 
 class SBVehicle;
+class SBProp;
 
 class SBWorld : public Node3D {
     GDCLASS(SBWorld, Node3D)
@@ -39,6 +40,11 @@ public:
     SBVehicle* spawn_car(const String& path, const Transform3D& xform);
     void remove_vehicle(SBVehicle* v);
     TypedArray<SBVehicle> get_vehicles() const;
+
+    // Loose props ("cone", "barrel"): small soft bodies the cars can knock around.
+    SBProp* spawn_prop(const String& kind, const Transform3D& xform);
+    void remove_prop(SBProp* p);
+    TypedArray<SBProp> get_props() const;
 
     void set_time_scale(double s) { timeScale_ = s; }
     double get_time_scale() const { return timeScale_; }
@@ -77,6 +83,8 @@ private:
     std::atomic<double> timeScale_{1.0};
     std::atomic<bool> paused_{false};
     std::vector<SBVehicle*> vehicles_;
+    std::vector<SBProp*> props_;
+    void removeBodyAt(int idx);
     Dictionary materials_;
     // Statistics (written by the physics thread).
     std::atomic<double> stepsPerSecond_{0.0};

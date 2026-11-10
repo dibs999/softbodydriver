@@ -1014,3 +1014,27 @@ TEST_CASE("a money shift into 1st at speed blows the engine and hurts gearbox an
     CHECK(saneTel.gearboxDamage < 0.05);
     CHECK(sane.running);
 }
+
+TEST_CASE("an engine run without oil knocks first and then throws a rod") {
+    auto build = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+    World world;
+    world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+    world.addBody(std::move(build.body));
+    auto& car = world.body(0);
+    VehicleControls c;
+    c.throttle = 0.6;
+    car.setControls(c);
+    world.simulate(3.0);
+    car.systems().state().oilLevel = 0.05;   // sump drained
+    real firstKnock = -1.0, blown = -1.0;
+    for (int k = 0; k < 900 && blown < 0.0; ++k) {
+        world.simulate(0.1);
+        const auto& s = car.systems().state();
+        if (firstKnock < 0.0 && s.knock > 0.05) firstKnock = 0.1 * k;
+        if (s.seized) blown = 0.1 * k;
+    }
+    MESSAGE("knock after " << firstKnock << " s, engine dead after " << blown << " s");
+    CHECK(firstKnock > 2.0);
+    CHECK(blown > firstKnock + 5.0);
+    CHECK(blown < 90.0);
+}

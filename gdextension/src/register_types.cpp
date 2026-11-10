@@ -5,6 +5,7 @@
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
 
+#include "sb_prop.h"
 #include "sb_vehicle.h"
 #include "sb_world.h"
 
@@ -14,6 +15,7 @@ void initialize_softbodydriver(ModuleInitializationLevel p_level) {
     if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) return;
     GDREGISTER_CLASS(SBVehicle);
     GDREGISTER_CLASS(SBWorld);
+    GDREGISTER_CLASS(SBProp);
 }
 
 void uninitialize_softbodydriver(ModuleInitializationLevel p_level) {

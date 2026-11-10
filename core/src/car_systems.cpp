@@ -187,6 +187,24 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
         if (s.oilPressureBar < 0.5) s.wear += dt * 0.035 * std::max<real>(0.3, rpm / 3000.0);
         if (s.coolantTempC > 124.0) s.wear += dt * 0.0015 * (s.coolantTempC - 124.0);
         if (s.oilTempC > 150.0) s.wear += dt * 0.002 * (s.oilTempC - 150.0);
+        // Rod bearings: starved of oil they wipe within tens of seconds at high rpm.
+        if (s.oilPressureBar < 0.8)
+            s.rodBearingWear += dt * 0.03 * (0.8 - s.oilPressureBar) / 0.8 * std::max<real>(0.3, rpm / 3000.0);
+        if (s.oilTempC > 140.0) s.rodBearingWear += dt * 0.0012 * (s.oilTempC - 140.0);
+        // Rings scuff in an overheated bore and when the pistons are over-revved.
+        if (s.coolantTempC > 118.0) s.pistonRingDamage += dt * 0.004 * (s.coolantTempC - 118.0);
+        const real over = rpm / std::max<real>(1000.0, pt->spec().redlineRpm);
+        if (over > 1.15) s.pistonRingDamage += dt * 0.5 * (over - 1.15);
+        // Worn rings let oil past into the chambers: it burns (blue smoke) and the level drops.
+        s.oilLevel = std::max<real>(0.0, s.oilLevel - dt * 0.004 * s.pistonRingDamage * std::max<real>(0.3, rpm / 3000.0));
+    }
+    s.rodBearingWear = clamp01(s.rodBearingWear);
+    s.pistonRingDamage = clamp01(s.pistonRingDamage);
+    s.knock = s.running ? clamp01((s.rodBearingWear - 0.2) / 0.6) : 0.0;
+    if (s.rodBearingWear >= 1.0 && !s.rodBroken) {
+        s.rodBroken = true;                                    // the knock ends with a thrown rod
+        s.blockDamage = 1.0;
+        s.oilPanDamage = std::max<real>(s.oilPanDamage, 0.6);
     }
     if (!s.headGasketBlown && s.coolantTempC > spec_.headGasketC) s.headGasketBlown = true;
     // Over-rev: also when the wheels drive the engine with the throttle closed (a downshift into
@@ -219,6 +237,8 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
     scale *= 1.0 - 0.75 * s.blockDamage;
     scale *= 1.0 - 0.5 * s.wear;
     scale *= 1.0 - 0.6 * s.overRevDamage;   // bent valves: misfiring cylinders, lost compression
+    scale *= 1.0 - 0.35 * s.pistonRingDamage;
+    scale *= 1.0 - 0.15 * s.rodBearingWear;
     s.engineTorqueScale = std::max<real>(0.0, scale);
     s.extraFrictionNm = 45.0 * s.blockDamage + 90.0 * s.wear + 30.0 * s.overRevDamage;
 
@@ -237,6 +257,8 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
         else if (s.driveshaftBroken) s.status = "DRIVESHAFT BROKEN";
         else if (s.headGasketBlown) s.status = "HEAD GASKET BLOWN";
         else if (s.valvesBent) s.status = "VALVES DAMAGED";
+        else if (s.knock > 0.05) s.status = "ENGINE KNOCKING";
+        else if (s.pistonRingDamage > 0.3) s.status = "BURNING OIL";
         else if (rpm > pt->spec().redlineRpm * 1.10) s.status = "OVER-REV";
         else if (s.coolantTempC > 115.0) s.status = "OVERHEATING";
         else if (s.running && s.oilPressureBar < 0.6) s.status = "LOW OIL PRESSURE";
