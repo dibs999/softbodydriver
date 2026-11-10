@@ -148,15 +148,60 @@ PropBuild buildBarrel() {
     out.restPositions = b.positions();
     return out;
 }
+PropBuild buildBarrier() {
+    PropBuild out;
+    out.kind = PropKind::Barrier;
+    SoftBody& b = out.body;
+    b.setName("barrier");
+    // Two layers of four nodes (a box tapering to a narrower top), water ballast in the lower ones.
+    NodeParams low;
+    low.mass = 55.0;   // 4 x 55 + 4 x 20 = 300 kg
+    low.friction = 0.6;
+    low.group = "prop";
+    NodeParams high = low;
+    high.mass = 20.0;
+    std::vector<std::uint32_t> n;
+    for (int layer = 0; layer < 2; ++layer)
+        for (int i = 0; i < 4; ++i) {
+            const real hx = 0.60, hz = layer ? 0.11 : 0.225;
+            const real x = (i & 1) ? hx : -hx, z = (i & 2) ? hz : -hz;
+            n.push_back(b.addNode("b" + std::to_string(layer * 4 + i), {x, layer ? 0.80 : 0.02, z}, layer ? high : low));
+        }
+    // Polyethylene shell full of water: firm, yields under a car strike and stays squashed.
+    BeamParams shell;
+    shell.spring = 1.6e5;
+    shell.damp = 900.0;
+    shell.deform = 1.2e4;
+    shell.strength = 3.0e5;
+    shell.deformLimit = 0.35;
+    shell.deformLimitExpansion = 0.25;
+    connectAll(b, n, shell);
+    ColTriParams skin;
+    skin.friction = 0.5;
+    skin.dragCoef = 0.9;
+    const Vec3 c{0, 0.4, 0};
+    const int faces[6][4] = {{0, 1, 3, 2}, {4, 6, 7, 5}, {0, 4, 5, 1}, {2, 3, 7, 6}, {0, 2, 6, 4}, {1, 5, 7, 3}};
+    for (const auto& f : faces) {
+        outwardTri(b, n[static_cast<std::size_t>(f[0])], n[static_cast<std::size_t>(f[1])], n[static_cast<std::size_t>(f[2])], c, skin);
+        outwardTri(b, n[static_cast<std::size_t>(f[0])], n[static_cast<std::size_t>(f[2])], n[static_cast<std::size_t>(f[3])], c, skin);
+    }
+    out.frameOrigin = n[0];
+    out.frameX = n[1];
+    out.frameY = n[4];
+    out.restPositions = b.positions();
+    return out;
+}
 }  // namespace
 
 PropBuild buildProp(PropKind kind) {
+    if (kind == PropKind::Barrier) return buildBarrier();
     return kind == PropKind::Barrel ? buildBarrel() : buildCone();
 }
 
 PropKind propKindFromString(const std::string& name) {
     if (name == "cone") return PropKind::Cone;
     if (name == "barrel") return PropKind::Barrel;
+    if (name == "barrier") return PropKind::Barrier;
     throw std::invalid_argument("unknown prop kind '" + name + "'");
 }
 

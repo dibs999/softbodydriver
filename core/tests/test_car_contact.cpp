@@ -118,3 +118,32 @@ TEST_CASE("sliding a wheel into a kerb bends the rim and lets the air out; a gen
     CHECK(hardRim > 0.3);
     CHECK(hardPsi < 20.0);
 }
+
+TEST_CASE("a water-filled barrier stands, takes a hit, slides and squashes without exploding") {
+    auto prop = buildProp(PropKind::Barrier);
+    CHECK(prop.body.totalMass() == doctest::Approx(300.0));
+    CHECK(prop.body.stabilityRatio(1.0 / 2000.0) < 0.9);
+    auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+    // Broadside on to the car (long axis across the lane).
+    for (auto& p : prop.body.positions()) p = {car.def.body.length + 6.0 - p.z, p.y, p.x};
+    const Vec3 start = prop.body.positions()[prop.frameY];
+    World world;
+    world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+    const auto ic = world.addBody(std::move(car.body));
+    const auto ip = world.addBody(std::move(prop.body));
+    VehicleControls c;
+    c.gear = 0;
+    world.body(ic).setControls(c);
+    world.simulate(1.0);
+    CHECK(length(world.body(ip).positions()[prop.frameY] - start) < 0.03);
+    for (auto& v : world.body(ic).velocities()) v = {40.0 / 3.6, 0, 0};
+    world.simulate(3.0);
+    REQUIRE(world.stats().finite);
+    const real moved = length(world.body(ip).positions()[prop.frameY] - start);
+    std::size_t squashed = 0;
+    for (const auto& beam : world.body(ip).beams()) squashed += beam.plasticStrain() > 0.01 ? 1 : 0;
+    MESSAGE("barrier moved " << moved << " m, squashed beams " << squashed << ", car " << world.body(ic).telemetry().speedKmh << " km/h");
+    CHECK(moved > 1.0);
+    CHECK(moved < 30.0);
+    CHECK(world.body(ic).telemetry().speedKmh < 34.0);   // 300 kg of water take real momentum
+}
