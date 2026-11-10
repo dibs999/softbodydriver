@@ -794,6 +794,8 @@ static func _hill_landmarks(world: SBWorld, parent: Node3D, road: PackedVector3A
 	var wood := _mat(Color(0.26, 0.17, 0.10))
 	var glass := _mat(Color(0.13, 0.25, 0.29), 0.35, 0.15)
 	var gravel := C.surface_material("gravel", 2.1, Color(0.80, 0.78, 0.71))
+	var farms := preload("res://scripts/maps/village.gd").new()
+	var farm_rng := RandomNumberGenerator.new()
 	for index: int in [12, 194, 410]:
 		var point := road[index]
 		var tangent := road[index + 1] - road[index - 1]
@@ -803,13 +805,17 @@ static func _hill_landmarks(world: SBWorld, parent: Node3D, road: PackedVector3A
 		var center := point + side * 23.0
 		center.y = height.call(center.x, center.z)
 		var rotation := Vector3(0, yaw, 0)
-		_box(parent, world, center + Vector3.UP * 1.15, Vector3(6.7, 2.0, 3.5), rotation, plaster)
-		for slope: float in [-1.0, 1.0]:
-			_box(parent, world, center + side * (1.95 * slope) + Vector3.UP * 3.62, Vector3(7.0, 0.14, 2.20),
-				Vector3(0.37 * slope, yaw, 0), tile, 0.85, false)
-		for window_x: float in [-4.5, 0.0, 4.5]:
-			var window := center + forward * window_x - side * 3.52 + Vector3.UP * 1.7
-			_box(parent, world, window, Vector3(0.57, 0.66, 0.04), rotation, glass, 0.8, false)
+		# Farmhouse facing the yard and a timber barn beside it.
+		farm_rng.seed = index * 7 + 1
+		var lowest := func(c: Vector3, y: float, l: float, w: float) -> Vector3:
+			var low := INF
+			for corner: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+				var q := c + Basis(Vector3.UP, y) * Vector3(corner.x * l * 0.5, 0, corner.y * w * 0.5)
+				low = minf(low, height.call(q.x, q.z))
+			return Vector3(c.x, low - 0.1, c.z)
+		farms.house(world, lowest.call(center, yaw, 13.4, 7.4), yaw, 13.4, 7.4, 2, farm_rng)
+		var barn := point + side * 30.0 + forward * 17.0
+		farms.house(world, lowest.call(barn, yaw + PI * 0.5, 15.0, 10.0), yaw + PI * 0.5, 15.0, 10.0, 2, farm_rng, true)
 		var approach := PackedVector3Array([point - forward * 17.0, point - forward * 11.0 + side * 6.0,
 			point - forward * 4.0 + side * 11.0, center - side * 7.0, point + forward * 16.0 + side * 11.0,
 			point + forward * 25.0 + side * 3.5])
@@ -820,6 +826,7 @@ static func _hill_landmarks(world: SBWorld, parent: Node3D, road: PackedVector3A
 		_box(parent, world, sign + Vector3.UP * 1.70, Vector3(0.11, 0.36, 1.40), rotation, wood, 0.7, false)
 		C.label3d(parent, "WALDHOF" if index == 12 else ("BERGWEIDE" if index == 194 else "TALBLICK"),
 			sign + Vector3.UP * 1.70 - forward * 0.12, yaw - PI * 0.5, 0.40)
+	farms.build(parent)
 
 
 static func _hill_lookout(world: SBWorld, parent: Node3D, road: PackedVector3Array, height: Callable) -> PackedVector3Array:

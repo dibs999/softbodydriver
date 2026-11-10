@@ -19,6 +19,9 @@ var _trim: Array[Transform3D] = []
 var _doors: Array[Transform3D] = []
 var _stone: Array[Transform3D] = []
 var _chimneys: Array[Transform3D] = []
+var _barn_walls: Array[Transform3D] = []
+var _barn_gables: Array[Transform3D] = []
+var _barn_doors: Array[Transform3D] = []
 
 
 func _init() -> void:
@@ -36,7 +39,8 @@ func _init() -> void:
 
 ## One house standing on `ground` (floor level), long axis along `yaw`. Returns its footprint
 ## radius for spacing checks.
-func house(world: SBWorld, ground: Vector3, yaw: float, length: float, width: float, storeys: int, rng: RandomNumberGenerator) -> float:
+func house(world: SBWorld, ground: Vector3, yaw: float, length: float, width: float, storeys: int, rng: RandomNumberGenerator,
+		barn := false) -> float:
 	var basis := Basis(Vector3.UP, yaw)
 	var h := storeys * 2.8 + 0.4
 	var wall := rng.randi() % WALLS.size()
@@ -45,20 +49,25 @@ func house(world: SBWorld, ground: Vector3, yaw: float, length: float, width: fl
 	var at := func(local: Vector3) -> Vector3: return ground + basis * local
 	# Plinth, walls (with a collider) and gable ends.
 	_stone.append(Transform3D(basis.scaled_local(Vector3(length + 0.12, 0.5, width + 0.12)), at.call(Vector3(0, 0.25, 0))))
-	_walls[wall].append(Transform3D(basis.scaled_local(Vector3(length, h, width)), at.call(Vector3(0, h * 0.5, 0))))
+	(_barn_walls if barn else _walls[wall]).append(Transform3D(basis.scaled_local(Vector3(length, h, width)), at.call(Vector3(0, h * 0.5, 0))))
 	if world:
 		world.add_box(at.call(Vector3(0, h * 0.5, 0)), Vector3(length, h, width) * 0.5, Vector3(0, yaw, 0), 0.8)
 	var pitch := deg_to_rad(rng.randf_range(36.0, 46.0))
 	var rise := width * 0.5 * tan(pitch)
 	var gable_basis := Basis(Vector3.UP, yaw + PI * 0.5)
 	for end: float in [-1.0, 1.0]:
-		_gables[wall].append(Transform3D(gable_basis.scaled_local(Vector3(width, rise, 0.24)), at.call(Vector3(end * (length * 0.5 - 0.12), h + rise * 0.5, 0))))
+		(_barn_gables if barn else _gables[wall]).append(Transform3D(gable_basis.scaled_local(Vector3(width, rise, 0.24)), at.call(Vector3(end * (length * 0.5 - 0.12), h + rise * 0.5, 0))))
 	# Roof: two slabs with eaves and verge overhang.
 	var slope := width * 0.5 / cos(pitch) + 0.45
 	for sgn: float in [-1.0, 1.0]:
 		var tilt := Basis(Vector3.RIGHT, sgn * pitch)
 		var centre := Vector3(0, h + rise * 0.5, sgn * width * 0.25) + tilt * Vector3(0, 0.12, sgn * 0.22)
 		_roofs[roof].append(Transform3D((basis * tilt).scaled_local(Vector3(length + 0.7, 0.16, slope)), at.call(centre)))
+	if barn:
+		# Big doors on both long sides, nothing else.
+		for sgn: float in [-1.0, 1.0]:
+			_barn_doors.append(Transform3D(basis.scaled_local(Vector3(3.6, 3.4, 0.10)), at.call(Vector3(0, 1.9, sgn * (width * 0.5 + 0.03)))))
+		return maxf(length, width) * 0.6
 	_chimneys.append(Transform3D(basis.scaled_local(Vector3(0.6, rise + 0.9, 0.6)), at.call(Vector3(length * rng.randf_range(-0.3, 0.3), h + rise * 0.6, width * 0.18))))
 	# Windows on both long sides (door on the front ground floor), one per storey on the gables.
 	var per_side := maxi(2, int(length / 2.7))
@@ -110,3 +119,7 @@ func build(parent: Node3D) -> void:
 	C.scatter_multimesh(parent, unit, C.noise_mat(Color(0.33, 0.20, 0.12), 0.1, 6.0, 0.7), _doors, false)
 	C.scatter_multimesh(parent, unit, C.noise_mat(Color(0.52, 0.50, 0.47), 0.1, 2.0), _stone)
 	C.scatter_multimesh(parent, unit, C.noise_mat(Color(0.45, 0.24, 0.17), 0.1, 6.0), _chimneys)
+	var boards := C.noise_mat(Color(0.36, 0.25, 0.16), 0.14, 6.0, 0.9)
+	C.scatter_multimesh(parent, unit, boards, _barn_walls)
+	C.scatter_multimesh(parent, prism, boards, _barn_gables)
+	C.scatter_multimesh(parent, unit, C.noise_mat(Color(0.22, 0.15, 0.10), 0.12, 5.0, 0.85), _barn_doors, false)
