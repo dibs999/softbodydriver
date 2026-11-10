@@ -85,6 +85,7 @@ public:
     bool close_bonnet();     ///< Lowers an open bonnet on its struts until its latch catches.
     bool close_tailgate();
     int break_group(const String& name); ///< Breaks every intact beam of a break group, as a crash would (tests, tools).
+    void ignite(int source);              ///< Starts a vehicle fire: 0 engine bay, 1 fuel tank (tests, tools).
     Array get_lid_states() const; ///< [{name, available, open_requested, latched, travel, damaged}] bonnet, tailgate
     void repair_in_place();                   ///< Repair, keep position and heading, set upright.
 

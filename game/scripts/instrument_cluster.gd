@@ -21,6 +21,7 @@ var _gear := "N"
 var readings: Dictionary = {}
 
 static func warning_for(t: Dictionary, info: Dictionary, controls: Dictionary = {}) -> Dictionary:
+	if float(t.get("fire", 0)) > 0.0: return {"text": "FEUER", "urgent": true}
 	if bool(t.get("rod_broken", false)): return {"text": "MOTORSCHADEN", "urgent": true}
 	if bool(t.get("seized", false)): return {"text": "MOTOR FEST", "urgent": true}
 	if float(t.get("over_rev", 0)) > 1.1: return {"text": "DREHZAHL", "urgent": true}

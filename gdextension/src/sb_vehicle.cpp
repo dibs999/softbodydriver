@@ -61,6 +61,7 @@ void SBVehicle::_bind_methods() {
     ClassDB::bind_method(D_METHOD("close_tailgate"), &SBVehicle::close_tailgate);
     ClassDB::bind_method(D_METHOD("get_lid_states"), &SBVehicle::get_lid_states);
     ClassDB::bind_method(D_METHOD("break_group", "name"), &SBVehicle::break_group);
+    ClassDB::bind_method(D_METHOD("ignite", "source"), &SBVehicle::ignite);
     ClassDB::bind_method(D_METHOD("set_input", "throttle", "brake", "steer", "handbrake"), &SBVehicle::set_input);
     ClassDB::bind_method(D_METHOD("set_clutch", "clutch"), &SBVehicle::set_clutch);
     ClassDB::bind_method(D_METHOD("set_surface_grip", "grip"), &SBVehicle::set_surface_grip);
@@ -1636,6 +1637,15 @@ int SBVehicle::break_group(const String& name) {
         }
     }
     return count;
+}
+
+void SBVehicle::ignite(int source) {
+    if (!world_ || bodyIndex_ < 0) return;
+    std::lock_guard<std::mutex> lock(world_->mutex());
+    auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+    if (!body.hasSystems()) return;
+    auto& s = body.systems().state();
+    if (s.fire <= 0.0) { s.fire = 0.05; s.fireSource = source == 1 ? 1 : 0; }
 }
 
 bool SBVehicle::release_bonnet() { return setLid(0, true); }

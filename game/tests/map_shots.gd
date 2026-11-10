@@ -8,6 +8,7 @@ var scene: Node
 var cam: Camera3D
 var prefix := "/tmp/map"
 var views: Array = []
+var start_frame := 5
 
 func _initialize() -> void:
 	call_deferred("_setup")
@@ -33,6 +34,13 @@ func _setup() -> void:
 		scene.weather._apply_lighting()
 	if scene.get("hud"):
 		scene.hud.visible = false
+	# IGNITE=0|1: set the player car on fire (engine bay / tank) and let it burn for a while.
+	if OS.has_environment("IGNITE"):
+		scene.player.ignite(int(OS.get_environment("IGNITE")))
+		scene.world.step_blocking(15.0)
+		scene.world.sync_visuals()
+		scene.world.time_scale = 1.0   # particles run at the simulation's speed
+		start_frame = 90               # let the flames and smoke build up
 	var data: Dictionary = scene.map_data
 	var wps: Array = data.get("waypoints", [])
 	cam = Camera3D.new()
@@ -72,10 +80,11 @@ func _process(_d: float) -> bool:
 	frame += 1
 	if views.is_empty():
 		return frame > 600
-	var vi := (frame - 5) / 6
-	if frame >= 5 and (frame - 5) % 6 == 0 and vi < views.size():
+	var f0 := start_frame
+	var vi := (frame - f0) / 6
+	if frame >= f0 and (frame - f0) % 6 == 0 and vi < views.size():
 		cam.position = views[vi][0]
 		cam.look_at(views[vi][1])
-	if frame >= 5 and (frame - 5) % 6 == 5 and vi < views.size():
+	if frame >= f0 and (frame - f0) % 6 == 5 and vi < views.size():
 		root.get_viewport().get_texture().get_image().save_png("%s_%d.png" % [prefix, vi])
-	return frame > 5 + 6 * views.size()
+	return frame > f0 + 6 * views.size()
