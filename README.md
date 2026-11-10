@@ -230,7 +230,7 @@ bedienbare Fahrzeugausrüstung:
 
 | Taste | Funktion |
 |---|---|
-| `L` | Aus → Abblendlicht → Fernlicht |
+| `L` | Aus → Abblendlicht → Fernlicht (bis dahin schaltet der Lichtsensor das Abblendlicht bei Dämmerung, Nacht und starkem Regen selbst) |
 | `,` / `.` | Blinker links/rechts |
 | `H` | Warnblinker |
 | `Enter` (Gamepad: linker Stick drücken) | Hupe |
