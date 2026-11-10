@@ -9,6 +9,9 @@ uniform bool dirt = false;
 uniform vec4 dirt_tint : source_color = vec4(0.83, 0.68, 0.49, 1.0);
 uniform vec4 divider_color : source_color = vec4(0.86, 0.85, 0.77, 1.0);
 uniform float v_metres = 12.0;     // metres per UV.y unit along the road (road_mesh v_scale)
+// Centre-line dashes: period and painted share (German rural Leitlinie: 6 m line, 12 m gap).
+uniform float dash_period = 12.0;
+uniform float dash_fraction = 0.48;
 uniform float wear = 1.0;          // 0 = fresh surface, 1 = typical public road
 global uniform float road_wetness;  // set by the weather (darker, glossier)
 
@@ -149,9 +152,11 @@ void fragment() {
 		float edge = 1.0 - smoothstep(0.06 / road_width - pixel, 0.06 / road_width + pixel, edge_distance);
 		float lane_distance = abs(fract(u * float(lanes) + 0.5) - 0.5) / float(lanes);
 		float divider = 1.0 - smoothstep(0.06 / road_width - pixel, 0.06 / road_width + pixel, lane_distance);
-		float dash_distance = abs(fract(UV.y) - 0.5);
-		float dash_pixel = max(fwidth(UV.y) * 0.6, 0.0002);
-		divider *= (1.0 - smoothstep(0.24 - dash_pixel, 0.24 + dash_pixel, dash_distance)) * step(0.10, u) * step(u, 0.90);
+		float dash_v = UV.y * v_metres / dash_period;
+		float dash_distance = abs(fract(dash_v) - 0.5);
+		float dash_pixel = max(fwidth(dash_v) * 0.6, 0.0002);
+		float half_dash = dash_fraction * 0.5;
+		divider *= (1.0 - smoothstep(half_dash - dash_pixel, half_dash + dash_pixel, dash_distance)) * step(0.10, u) * step(u, 0.90);
 		float paint_wear = mix(1.0, smoothstep(0.25, 0.65, fine), 0.35 * wear);
 		base = mix(base, divider_color.rgb, divider * 0.92 * paint_wear);
 		base = mix(base, vec3(0.84, 0.83, 0.78), edge * 0.92 * paint_wear);

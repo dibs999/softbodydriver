@@ -262,7 +262,11 @@ static func road_material(lanes: int, width: float, texture_length: float, style
 	m.set_shader_parameter("dirt", dirt)
 	m.set_shader_parameter("v_metres", texture_length)
 	if style == "rural":
-		m.set_shader_parameter("divider_color", Color(0.93, 0.82, 0.44))
+		# German country road: white centre line, 6 m dashes with 12 m gaps (yellow is only for
+		# temporary roadworks markings).
+		m.set_shader_parameter("divider_color", Color(0.86, 0.85, 0.80))
+		m.set_shader_parameter("dash_period", 18.0)
+		m.set_shader_parameter("dash_fraction", 6.0 / 18.0)
 	elif style == "desert":
 		m.set_shader_parameter("dirt_tint", Color(0.66, 0.56, 0.46))   # compacted, darker than the loose sand
 	return m
