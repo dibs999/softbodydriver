@@ -7,10 +7,11 @@
 using namespace sb;
 namespace {
 CarBuild doorCar() { return buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json")); }
-real opening(const CarBuild& car, const SoftBody& body, std::size_t side) {
+// Door index as in SoftBody::doors(): 0/1 front left/right, 2/3 rear left/right.
+real opening(const CarBuild& car, const SoftBody& body, std::size_t index) {
     std::vector<float> frames;
     computeNodeFrames(body.positions(), car.visual, frames);
-    const auto& nodes = car.layout.frontDoors[side].nodes;
+    const auto& nodes = (index < 2 ? car.layout.frontDoors : car.layout.rearDoors)[index % 2].nodes;
     const Vec3 rest = normalize(car.restPositions[nodes[0]] - car.restPositions[nodes[4]]);
     const Vec3 rigid{frames[0]*rest.x + frames[1]*rest.y + frames[2]*rest.z,
                      frames[3]*rest.x + frames[4]*rest.y + frames[5]*rest.z,
@@ -19,13 +20,13 @@ real opening(const CarBuild& car, const SoftBody& body, std::size_t side) {
 }
 }
 
-TEST_CASE("front doors preserve mass budget and disengage without structural damage") {
+TEST_CASE("front and rear doors preserve mass budget and disengage without structural damage") {
     auto car = doorCar();
-    REQUIRE(car.body.doors().size() == 2);
+    REQUIRE(car.body.doors().size() == 4);
     CHECK(car.body.totalMass() == doctest::Approx(car.def.chassis.curbMass).epsilon(1e-6));
     const real rearAxle = car.def.body.length - car.def.body.frontOverhang - car.def.body.wheelbase;
     CHECK((car.body.centerOfMass().x - rearAxle) / car.def.body.wheelbase == doctest::Approx(car.def.chassis.frontWeight).epsilon(0.005));
-    for (std::size_t side = 0; side < 2; ++side) {
+    for (std::size_t side = 0; side < 4; ++side) {
         const auto& door = car.body.doors()[side];
         real mass = 0;
         for (auto node : door.nodes) mass += car.body.masses()[node];
@@ -53,16 +54,16 @@ TEST_CASE("front doors preserve mass budget and disengage without structural dam
     CHECK(buildCar(legacy).body.doors().empty());
 }
 
-TEST_CASE("front doors physically open hold and close with reversible intact latches") {
+TEST_CASE("front and rear doors physically open hold and close with reversible intact latches") {
     auto car = doorCar();
     World world;
     world.addCollider(StaticCollider::plane({0,0,0}, {0,1,0}));
     world.addBody(car.body);
     world.simulate(0.6);
     auto& body = world.body(0);
-    for (std::size_t side = 0; side < 2; ++side) REQUIRE(body.setDoorOpen(side, true));
+    for (std::size_t side = 0; side < 4; ++side) REQUIRE(body.setDoorOpen(side, true));
     world.simulate(4.0);
-    for (std::size_t side = 0; side < 2; ++side) {
+    for (std::size_t side = 0; side < 4; ++side) {
         const real angle = opening(car, body, side);
         CAPTURE(side); CAPTURE(angle);
         CHECK(angle > 58);
@@ -73,7 +74,7 @@ TEST_CASE("front doors physically open hold and close with reversible intact lat
     CHECK(world.stats().finite);
     CHECK(body.stats().brokenBeams == 0);
     world.simulate(5.0);
-    for (std::size_t side = 0; side < 2; ++side) {
+    for (std::size_t side = 0; side < 4; ++side) {
         const real angle = opening(car, body, side);
         CAPTURE(side); CAPTURE(angle);
         CHECK(angle < 3);

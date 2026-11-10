@@ -57,12 +57,12 @@ func run() -> void:
 	check(driver_door != null and passenger_door != null, "Both door controls are reachable as focusable pause menu buttons")
 	if driver_door: driver_door.pressed.emit()
 	var doors: Array = scene.player.get_door_states()
-	check(doors.size() == 2 and bool(doors[0].requested_open) and not bool(doors[1].requested_open) and not scene.pause_menu.visible,
+	check(doors.size() >= 2 and bool(doors[0].requested_open) and not bool(doors[1].requested_open) and not scene.pause_menu.visible,
 		"Driver menu command releases only driver door and resumes game")
 	scene._toggle_pause()
 	if passenger_door: passenger_door.pressed.emit()
 	doors = scene.player.get_door_states()
-	check(doors.size() == 2 and bool(doors[1].requested_open) and not scene.world.paused, "Passenger menu command releases passenger door and resumes game")
+	check(doors.size() >= 2 and bool(doors[1].requested_open) and not scene.world.paused, "Passenger menu command releases passenger door and resumes game")
 	scene.player.service_repair()
 	scene.player.set_input(0, 1, 0, 1)
 	scene.world.step_blocking(0.5)

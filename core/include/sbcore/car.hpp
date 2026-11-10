@@ -205,6 +205,7 @@ struct DoorLayout {
 
 struct CarLayout {
     std::array<DoorLayout, 2> frontDoors; // left, right
+    std::array<DoorLayout, 2> rearDoors;  // left, right (four-door bodies with detachable doors)
 
     std::vector<std::uint32_t> bodyNodes;
     /// Floor nodes at the front / rear axle (left, right): forward = front - rear, right = R - L.

@@ -91,7 +91,9 @@ CarBuild buildCar(const CarDefinition& def) {
     if (bd.detachableDoors) {
         // Collision skin must end at the actual aperture, not bridge across it
         // from coarse neighbouring stations and obstruct a closing door.
-        for (real boundary : {prof.xB - 0.025, prof.xCowl - 0.06}) {
+        std::vector<real> boundaries = {prof.xB - 0.025, prof.xCowl - 0.06};
+        if (bd.doors >= 4) boundaries.push_back(prof.xRD1 - 0.025);
+        for (real boundary : boundaries) {
             stations.erase(std::remove_if(stations.begin(), stations.end(),
                 [&](real x) { return std::abs(x - boundary) < 0.08; }), stations.end());
             stations.push_back(boundary);
@@ -800,16 +802,13 @@ CarBuild buildCar(const CarDefinition& def) {
         }
     }
 
-    // Two independent door cages. Latch disengagement is a mechanism state,
-    // not a broken beam; every hinge/check strap can still fail in a collision.
+    // Independent door cages (front, and rear on four-door bodies). Latch disengagement is a
+    // mechanism state, not a broken beam; every hinge/check strap can still fail in a collision.
     if (bd.detachableDoors) {
-        for (int side = 0; side < 2; ++side) {
-            auto& door = build.layout.frontDoors[static_cast<std::size_t>(side)];
-            const real sign = side ? 1.0 : -1.0;
-            const std::string group = side ? "door_right" : "door_left";
-            door.rearX = prof.xB + 0.004;
-            door.frontX = prof.xCowl - 0.09;
-            door.inputChannel = 2 + side;
+        auto makeDoor = [&](DoorLayout& door, const std::string& group, real rearX, real frontX, int channel, real sign, real openDeg) {
+            door.rearX = rearX;
+            door.frontX = frontX;
+            door.inputChannel = channel;
             for (int ix = 0; ix < 2; ++ix)
                 for (int iy = 0; iy < 2; ++iy)
                     for (int iz = 0; iz < 2; ++iz) {
@@ -845,14 +844,14 @@ CarBuild buildCar(const CarDefinition& def) {
             for (auto node : {door.nodes[0], door.nodes[2]})
                 for (auto anchor : nearestNodes(car, rig.bodyNodes, car.positions()[node], 3))
                     door.latchBeams.push_back(car.addBeam(node, anchor, latch));
-            // A breakable check strap/assisted opening actuator, rooted inside
-            // the A-pillar, provides a stable 68-degree inspection position.
+            // A breakable check strap/assisted opening actuator, rooted inside the pillar ahead
+            // of the door, provides a stable 68-degree inspection position.
             const auto moving = door.nodes[0];
             const auto anchor = nearestNodes(car, rig.bodyNodes,
                 {hingeX - 0.15, car.positions()[moving].y + 0.1, hingeZ - sign * 0.45}, 1).front();
             const Vec3 pivot{hingeX, car.positions()[moving].y, hingeZ};
             const Vec3 delta = car.positions()[moving] - pivot;
-            const real angle = sign * 68.0 * kPi / 180.0;
+            const real angle = sign * openDeg * kPi / 180.0;
             const Vec3 opened = pivot + Vec3{std::cos(angle) * delta.x + std::sin(angle) * delta.z,
                 delta.y, -std::sin(angle) * delta.x + std::cos(angle) * delta.z};
             const real closedLength = length(car.positions()[moving] - car.positions()[anchor]);
@@ -869,7 +868,15 @@ CarBuild buildCar(const CarDefinition& def) {
             mechanism.hingeBeams = door.hingeBeams; mechanism.latchBeams = door.latchBeams;
             mechanism.supportBeams = door.supportBeams; mechanism.inputChannel = door.inputChannel;
             car.addDoor(mechanism);
-        }
+        };
+        for (int side = 0; side < 2; ++side)
+            makeDoor(build.layout.frontDoors[static_cast<std::size_t>(side)], side ? "door_right" : "door_left",
+                     prof.xB + 0.004, prof.xCowl - 0.09, 2 + side, side ? 1.0 : -1.0, 68.0);
+        // Rear doors from the rear wheel arch to the B-pillar, which stays body structure.
+        if (bd.doors >= 4)
+            for (int side = 0; side < 2; ++side)
+                makeDoor(build.layout.rearDoors[static_cast<std::size_t>(side)], side ? "rdoor_right" : "rdoor_left",
+                         prof.xRD1 + 0.004, prof.xB - 0.045, 4 + side, side ? 1.0 : -1.0, 62.0);
     }
 
     // ------------------------------------------------------------------ mass distribution
@@ -1063,7 +1070,8 @@ CarBuild buildCar(const CarDefinition& def) {
                 if (std::max({pa.x, pb.x, pc.x}) < 0.12 &&
                     std::max({pa.y, pb.y, pc.y}) < bd.tailHeight - 0.28) return;
             }
-            if (bd.detachableDoors && ctr.x > prof.xB - 0.025 && ctr.x < prof.xCowl - 0.06 &&
+            const real apertureRear = bd.doors >= 4 ? prof.xRD1 - 0.025 : prof.xB - 0.025;
+            if (bd.detachableDoors && ctr.x > apertureRear && ctr.x < prof.xCowl - 0.06 &&
                 std::abs(ctr.z) > prof.hw * 0.6 &&
                 (pa.z * pb.z > 0 && pb.z * pc.z > 0) &&
                 ctr.y > prof.ySill(ctr.x) - 0.01) return;
@@ -1112,7 +1120,9 @@ CarBuild buildCar(const CarDefinition& def) {
     }
 
     if (bd.detachableDoors) {
-        for (const std::string door : {"door_left", "door_right"})
+        std::vector<std::string> doors = {"door_left", "door_right"};
+        if (bd.doors >= 4) doors.insert(doors.end(), {"rdoor_left", "rdoor_right"});
+        for (const std::string& door : doors)
             car.addSelfCollisionPanel(door, {"body"}, {door + "_latch", door + "_hinge_lower", door + "_hinge_upper"});
     }
 
@@ -1220,6 +1230,7 @@ CarBuild buildCar(const CarDefinition& def) {
 
     buildCarVisual(build, prof, rig);
     setRigidParts(build.visual, {build.layout.bonnetNodes, build.layout.frontDoors[0].nodes, build.layout.frontDoors[1].nodes,
+                                 build.layout.rearDoors[0].nodes, build.layout.rearDoors[1].nodes,
                                  build.layout.frontBumperNodes, build.layout.rearBumperNodes});
     build.restPositions = car.positions();
     return build;

@@ -21,8 +21,8 @@ func run() -> void:
 	world.step_blocking(2)
 	world.sync_visuals()
 	var doors := car.get_door_states()
-	check(doors.size() == 2, "Reference car exposes two physical front doors")
-	if doors.size() != 2:
+	check(doors.size() == 4, "Reference car exposes four physical doors (front and rear)")
+	if doors.size() != 4:
 		if game.audio: game.audio.free()
 		game.queue_free()
 		await process_frame
@@ -71,7 +71,7 @@ func run() -> void:
 	world.sync_visuals()
 	check(car.get_speed_kmh() > 2.0, "Moving fixture has measurable native velocity")
 	check(not car.set_door_open(0, true), "Native API rejects door opening while moving")
-	check(not car.set_door_open(-1, true) and not car.toggle_door(2), "Invalid door indices are rejected")
+	check(not car.set_door_open(-1, true) and not car.toggle_door(4), "Invalid door indices are rejected")
 	if game.audio: game.audio.free()
 	game.queue_free()
 	await process_frame

@@ -25,6 +25,9 @@ public:
         for (std::size_t side = 0; side < layout_.frontDoors.size(); ++side)
             if (!layout_.frontDoors[side].nodes.empty() && candidates.data() == layout_.frontDoors[side].nodes.data())
                 return std::string(side == 0 ? "door_left_" : "door_right_") + material;
+        for (std::size_t side = 0; side < layout_.rearDoors.size(); ++side)
+            if (!layout_.rearDoors[side].nodes.empty() && candidates.data() == layout_.rearDoors[side].nodes.data())
+                return std::string(side == 0 ? "rdoor_left_" : "rdoor_right_") + material;
         return material;
     }
 
@@ -35,7 +38,8 @@ public:
         vis_.skinned.emplace_back();
         vis_.skinned.back().material = material;
         vis_.skinned.back().steeringWheel = steeringWheel;
-        if (material == "glass" || material == "door_left_glass" || material == "door_right_glass") vis_.skinned.back().doubleSided = true;
+        if (material == "glass" || material == "door_left_glass" || material == "door_right_glass" ||
+            material == "rdoor_left_glass" || material == "rdoor_right_glass") vis_.skinned.back().doubleSided = true;
         index_[key] = vis_.skinned.size() - 1;
         return vis_.skinned.back();
     }
@@ -48,7 +52,8 @@ public:
             const Vec3 a = body_.positions()[candidates[0]], d = body_.positions()[candidates[1]] - a;
             return skinLine(p, candidates[0], candidates[1], candidates[2], dot(p - a, d) / lengthSq(d), 0.0);
         }
-        for (const auto& door : layout_.frontDoors) {
+        for (const DoorLayout* doorPtr : {&layout_.frontDoors[0], &layout_.frontDoors[1], &layout_.rearDoors[0], &layout_.rearDoors[1]}) {
+            const DoorLayout& door = *doorPtr;
             if (!door.nodes.empty() && candidates.data() == door.nodes.data()) {
                 const auto& nodes = door.nodes;
                 const Vec3 a = body_.positions()[nodes[1]], d = body_.positions()[nodes[5]] - a;
@@ -900,12 +905,17 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         if (material.rfind("bumper_rear_", 0) == 0) return rearNodes;
         if (material.rfind("door_left_", 0) == 0) return build.layout.frontDoors[0].nodes;
         if (material.rfind("door_right_", 0) == 0) return build.layout.frontDoors[1].nodes;
+        if (material.rfind("rdoor_left_", 0) == 0) return build.layout.rearDoors[0].nodes;
+        if (material.rfind("rdoor_right_", 0) == 0) return build.layout.rearDoors[1].nodes;
         return bodyNodes;
     };
     auto doorMaterial = [&](const std::string& material, real x, int seg, int side) {
         const auto& door = build.layout.frontDoors[static_cast<std::size_t>(side)];
         if (!door.nodes.empty() && x > door.rearX && x < door.frontX && seg >= 4 && seg <= 7)
             return std::string(side == 0 ? "door_left_" : "door_right_") + material;
+        const auto& rear = build.layout.rearDoors[static_cast<std::size_t>(side)];
+        if (!rear.nodes.empty() && x > rear.rearX && x < rear.frontX && seg >= 4 && seg <= 7)
+            return std::string(side == 0 ? "rdoor_left_" : "rdoor_right_") + material;
         return material;
     };
 
@@ -933,7 +943,9 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         for (real v : xs) if (d.empty() || v - d.back() > 0.0025) d.push_back(v);
         xs = d;
         // Preserve these exact cuts even when the regular tessellation is nearby.
-        for (const auto& door : build.layout.frontDoors) if (!door.nodes.empty()) {
+        for (const DoorLayout* doorPtr : {&build.layout.frontDoors[0], &build.layout.frontDoors[1], &build.layout.rearDoors[0], &build.layout.rearDoors[1]})
+            if (!doorPtr->nodes.empty()) {
+            const DoorLayout& door = *doorPtr;
             for (real edge : {door.rearX, door.frontX}) {
                 xs.erase(std::remove_if(xs.begin(), xs.end(), [&](real sampleX) { return std::abs(sampleX - edge) < 0.0025; }), xs.end());
                 xs.push_back(edge);
@@ -1010,7 +1022,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                 if (std::abs(xm - seam) < 0.004 && inDoorBand && (bd.doors >= 4 || seam != prof.xRD1)) return "seam";
             if (ym > yBe - 0.10 && ym < yBe - 0.055) {
                 if (build.layout.frontDoors[0].nodes.empty() && xm > handleF - 0.10 && xm < handleF) return "chrome";
-                if (bd.doors >= 4 && xm > handleR - 0.10 && xm < handleR) return "chrome";
+                if (bd.doors >= 4 && build.layout.rearDoors[0].nodes.empty() && xm > handleR - 0.10 && xm < handleR) return "chrome";
             }
             return "paint";
         }
@@ -1040,8 +1052,8 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         if (it != cache.end()) return it->second;
         const auto& pz = smp[si][static_cast<std::size_t>(k)];
         Vec3 p{xs[si], pz.second, side == 0 ? -pz.first : pz.first};
-        if (mat == "door_left_interior" || mat == "door_right_interior") {
-            const auto& nodes = build.layout.frontDoors[static_cast<std::size_t>(side)].nodes;
+        if (mat == "door_left_interior" || mat == "door_right_interior" || mat == "rdoor_left_interior" || mat == "rdoor_right_interior") {
+            const auto& nodes = (mat[0] == 'r' ? build.layout.rearDoors : build.layout.frontDoors)[static_cast<std::size_t>(side)].nodes;
             const real thickness = std::abs(body.positions()[nodes[0]].z - body.positions()[nodes[1]].z);
             p.z -= (side == 0 ? -1.0 : 1.0) * thickness;
         }
@@ -1075,7 +1087,8 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                 const int seg = segOf[static_cast<std::size_t>(k)];
                 const std::string mat = doorMaterial(bumperMaterial(quadMaterial(xm, ym, zm, seg), xm, ym), xm, seg, side);
                 for (int pass = 0; pass < 2; ++pass) {
-                    if (pass == 1 && (mat == "glass" || mat == "door_left_glass" || mat == "door_right_glass" || mat == "headlight" || mat == "taillight" || seg == 0)) continue;
+                    if (pass == 1 && (mat == "glass" || mat == "door_left_glass" || mat == "door_right_glass" || mat == "rdoor_left_glass" ||
+                                      mat == "rdoor_right_glass" || mat == "headlight" || mat == "taillight" || seg == 0)) continue;
                     const std::string mm = pass == 0 ? mat : (mat == "bonnet" ? "bonnet_inner" : doorMaterial(bumperMaterial("interior", xm, ym), xm, seg, side));
                     MeshSurface& m = vb.surf(mm);
                     const std::uint32_t v00 = gridVertex(i, side, k, mm, smp), v10 = gridVertex(i + 1, side, k, mm, smp);
@@ -1095,8 +1108,9 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
 
     // Pressed door returns and the fixed aperture are separate closed edges.
     // The inner skin follows the actual physical cage depth; its perimeter closes here.
-    for (int sideIndex = 0; sideIndex < 2; ++sideIndex) {
-        const auto& door = build.layout.frontDoors[static_cast<std::size_t>(sideIndex)];
+    for (int doorIndex = 0; doorIndex < 4; ++doorIndex) {
+        const int sideIndex = doorIndex % 2;
+        const auto& door = (doorIndex < 2 ? build.layout.frontDoors : build.layout.rearDoors)[static_cast<std::size_t>(sideIndex)];
         if (door.nodes.empty()) continue;
         const real side = sideIndex == 0 ? -1.0 : 1.0;
         const real thickness = std::abs(body.positions()[door.nodes[0]].z - body.positions()[door.nodes[1]].z);
@@ -1405,11 +1419,14 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         const auto& door = build.layout.frontDoors[static_cast<std::size_t>(sideIndex)];
         std::vector<real> sealX;
         for (int i = 0; i <= 40; ++i) sealX.push_back(prof.xRwBase + (prof.xCowl - prof.xRwBase) * i / 40);
+        const auto& rearDoor = build.layout.rearDoors[static_cast<std::size_t>(sideIndex)];
         if (!door.nodes.empty()) { sealX.push_back(door.rearX); sealX.push_back(door.frontX); }
+        if (!rearDoor.nodes.empty()) { sealX.push_back(rearDoor.rearX); sealX.push_back(rearDoor.frontX); }
         std::sort(sealX.begin(), sealX.end());
         for (std::size_t i = 0; i + 1 < sealX.size(); ++i) {
             const real x0 = sealX[i], x1 = sealX[i + 1], mid = (x0 + x1) * 0.5;
-            const auto& nodes = !door.nodes.empty() && mid > door.rearX && mid < door.frontX ? door.nodes : bodyNodes;
+            const auto& nodes = !door.nodes.empty() && mid > door.rearX && mid < door.frontX ? door.nodes
+                              : (!rearDoor.nodes.empty() && mid > rearDoor.rearX && mid < rearDoor.frontX ? rearDoor.nodes : bodyNodes);
             const auto a = samples(x0), b = samples(x1);
             for (int k : {21, 25})
                 vb.tube("trim", {x0, a[k].second - 0.005, side * (a[k].first + 0.004)},
@@ -1667,6 +1684,21 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                 vb.box("seam", {doorX + 0.08 - key * 0.035, beltY - 0.088, doorZ - doorSide * 0.055}, {0.012, 0.004, 0.012}, cardNodes);
             for (int slat = 0; slat < 5; ++slat)
                 vb.box("seam", {doorX + 0.15, beltY - 0.28 + slat * 0.014, doorZ - doorSide * 0.055}, {0.065, 0.003, 0.003}, cardNodes);
+        }
+        // Rear door cards with a pull handle, armrest and speaker grille travel with the rear doors.
+        for (int sideIndex = 0; sideIndex < 2; ++sideIndex) {
+            const auto& rearDoor = build.layout.rearDoors[static_cast<std::size_t>(sideIndex)];
+            if (rearDoor.nodes.empty()) continue;
+            const real doorSide = sideIndex == 0 ? -1.0 : 1.0;
+            const real doorX = (rearDoor.rearX + rearDoor.frontX) * 0.5;
+            const real doorZ = doorSide * (prof.shoulderHalf(doorX) - 0.090);
+            const real halfLen = std::max<real>(0.12, (rearDoor.frontX - rearDoor.rearX) * 0.5 - 0.07);
+            vb.bevelBox("interior", {doorX, beltY - 0.16, doorZ}, {halfLen, 0.12, 0.040}, 0.022, rearDoor.nodes);
+            vb.bevelBox("trim", {doorX, beltY - 0.12, doorZ - doorSide * 0.045}, {halfLen * 0.7, 0.028, 0.034}, 0.020, rearDoor.nodes);
+            vb.box("chrome", {doorX + halfLen * 0.4, beltY - 0.053, doorZ - doorSide * 0.047}, {0.050, 0.011, 0.012}, rearDoor.nodes);
+            vb.box("upholstery", {doorX, beltY - 0.24, doorZ - doorSide * 0.044}, {halfLen * 0.8, 0.055, 0.008}, rearDoor.nodes);
+            for (int slat = 0; slat < 4; ++slat)
+                vb.box("seam", {doorX - halfLen * 0.5, beltY - 0.28 + slat * 0.014, doorZ - doorSide * 0.055}, {0.05, 0.003, 0.003}, rearDoor.nodes);
         }
         if (rearSeats) {
             const real yBench = yFloor - 0.5 * bd.seatDrop;
@@ -2054,6 +2086,8 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         for (MeshSurface& m : vis.skinned) {
             if (m.material == "door_left_glass") m.pane = 3;
             if (m.material == "door_right_glass") m.pane = 4;
+            if (m.material == "rdoor_left_glass") m.pane = 3;
+            if (m.material == "rdoor_right_glass") m.pane = 4;
             if (m.material != "glass" || m.pane != 0) continue;
             MeshSurface parts[4];
             std::vector<std::uint32_t> remap[4];
