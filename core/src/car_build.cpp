@@ -92,7 +92,7 @@ CarBuild buildCar(const CarDefinition& def) {
         // Collision skin must end at the actual aperture, not bridge across it
         // from coarse neighbouring stations and obstruct a closing door.
         std::vector<real> boundaries = {prof.xB - 0.025, prof.xCowl - 0.06};
-        if (bd.doors >= 4) boundaries.push_back(prof.xRD1 - 0.025);
+        if (bd.doors >= 4 && bd.detachableRearDoors) boundaries.push_back(prof.xRD1 - 0.025);
         for (real boundary : boundaries) {
             stations.erase(std::remove_if(stations.begin(), stations.end(),
                 [&](real x) { return std::abs(x - boundary) < 0.08; }), stations.end());
@@ -873,7 +873,7 @@ CarBuild buildCar(const CarDefinition& def) {
             makeDoor(build.layout.frontDoors[static_cast<std::size_t>(side)], side ? "door_right" : "door_left",
                      prof.xB + 0.004, prof.xCowl - 0.09, 2 + side, side ? 1.0 : -1.0, 68.0);
         // Rear doors from the rear wheel arch to the B-pillar, which stays body structure.
-        if (bd.doors >= 4)
+        if (bd.doors >= 4 && bd.detachableRearDoors)
             for (int side = 0; side < 2; ++side)
                 makeDoor(build.layout.rearDoors[static_cast<std::size_t>(side)], side ? "rdoor_right" : "rdoor_left",
                          prof.xRD1 + 0.004, prof.xB - 0.045, 4 + side, side ? 1.0 : -1.0, 62.0);
@@ -1070,7 +1070,7 @@ CarBuild buildCar(const CarDefinition& def) {
                 if (std::max({pa.x, pb.x, pc.x}) < 0.12 &&
                     std::max({pa.y, pb.y, pc.y}) < bd.tailHeight - 0.28) return;
             }
-            const real apertureRear = bd.doors >= 4 ? prof.xRD1 - 0.025 : prof.xB - 0.025;
+            const real apertureRear = bd.doors >= 4 && bd.detachableRearDoors ? prof.xRD1 - 0.025 : prof.xB - 0.025;
             if (bd.detachableDoors && ctr.x > apertureRear && ctr.x < prof.xCowl - 0.06 &&
                 std::abs(ctr.z) > prof.hw * 0.6 &&
                 (pa.z * pb.z > 0 && pb.z * pc.z > 0) &&
@@ -1121,7 +1121,7 @@ CarBuild buildCar(const CarDefinition& def) {
 
     if (bd.detachableDoors) {
         std::vector<std::string> doors = {"door_left", "door_right"};
-        if (bd.doors >= 4) doors.insert(doors.end(), {"rdoor_left", "rdoor_right"});
+        if (bd.doors >= 4 && bd.detachableRearDoors) doors.insert(doors.end(), {"rdoor_left", "rdoor_right"});
         for (const std::string& door : doors)
             car.addSelfCollisionPanel(door, {"body"}, {door + "_latch", door + "_hinge_lower", door + "_hinge_upper"});
     }
