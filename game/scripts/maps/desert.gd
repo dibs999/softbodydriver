@@ -514,4 +514,23 @@ static func _trading_post(parent: Node3D, world: SBWorld, track: PackedVector3Ar
 	cap.material_override = tank.material_override
 	cap.position = tower + Vector3.UP * 18.2
 	parent.add_child(cap)
+	# Night: canopy lights over the pumps and a lamp at the diner, pooled spot lights.
+	var lens := StandardMaterial3D.new()
+	lens.albedo_color = Color(0.95, 0.95, 0.9)
+	lens.emission_enabled = true
+	lens.emission = Color(1.0, 0.92, 0.78)
+	lens.emission_energy_multiplier = 0.0
+	var lights := PackedVector3Array()
+	for a: float in [-4.5, 0.0, 4.5]:
+		for c: float in [18.0, 24.0]:
+			var lamp: Vector3 = at.call(a, c, 4.72)
+			C.box(parent, null, lamp, Vector3(0.6, 0.03, 0.25), rot, lens, 0.6, false)
+			lights.append(lamp - Vector3.UP * 0.1)
+	var porch: Vector3 = at.call(-20.0, 28.6, 3.4)
+	C.box(parent, null, porch, Vector3(0.25, 0.08, 0.25), rot, lens, 0.6, false)
+	lights.append(porch - Vector3.UP * 0.1)
+	var lighting := preload("res://scripts/maps/street_lighting.gd").new()
+	lighting.name = "CoyoteFlatsLighting"
+	parent.add_child(lighting)
+	lighting.setup(lights, lens)
 	return at.call(0.0, 25.0, 0.0)
