@@ -181,15 +181,11 @@ func handle_action(event: InputEvent) -> bool:
 	if event.is_action_pressed("driver_door", false, true):
 		toggle_door(0)
 		return true
-	if event.is_action_pressed("bonnet_release"):
-		if not game.player.get_info().get("bonnet_supported", true):
-			game.hud.toast("Motorhaube für dieses Modell nicht verfügbar")
-			return true
-		if absf(game.player.get_speed_kmh()) > 2.0:
-			game.hud.toast("Zum Öffnen der Motorhaube zuerst anhalten")
-			return true
-		var opened: bool = game.player.release_bonnet()
-		game.hud.toast("Motorhaube entriegelt · Reparatur schließt sie" if opened else "Motorhaube bereits entriegelt")
+	if event.is_action_pressed("tailgate_release", false, true):
+		release_tailgate()
+		return true
+	if event.is_action_pressed("bonnet_release", false, true):
+		release_bonnet()
 		return true
 	if event.is_action_pressed("headlights"):
 		s["light_mode"] = (int(s["light_mode"]) + 1) % 3
@@ -206,6 +202,39 @@ func handle_action(event: InputEvent) -> bool:
 		return false
 	game.hud.toast(status_text())
 	return true
+
+func release_bonnet() -> bool:
+	if not game or not is_instance_valid(game.player): return false
+	if not game.player.get_info().get("bonnet_supported", true):
+		game.hud.toast("Motorhaube für dieses Modell nicht verfügbar")
+		return false
+	if absf(game.player.get_speed_kmh()) > 2.0:
+		game.hud.toast("Zum Öffnen der Motorhaube zuerst anhalten")
+		return false
+	var opened: bool = game.player.release_bonnet()
+	game.hud.toast("Motorhaube entriegelt · Reparatur schließt sie" if opened else "Motorhaube bereits entriegelt")
+	return opened
+
+
+## Tailgate of an estate / SUV, boot lid of a saloon.
+func lid_name() -> String:
+	var style := String(game.player.get_info().get("style", "")) if game and is_instance_valid(game.player) else ""
+	return "Kofferraumdeckel" if style in ["sedan", "coupe"] else "Heckklappe"
+
+
+func release_tailgate() -> bool:
+	if not game or not is_instance_valid(game.player): return false
+	var lid := lid_name()
+	if not game.player.get_info().get("tailgate_supported", false):
+		game.hud.toast("%s für dieses Modell nicht verfügbar" % lid)
+		return false
+	if absf(game.player.get_speed_kmh()) > 2.0:
+		game.hud.toast("Zum Öffnen: %s erst anhalten" % ("des Kofferraums" if lid == "Kofferraumdeckel" else "der Heckklappe"))
+		return false
+	var opened: bool = game.player.release_tailgate()
+	game.hud.toast("%s entriegelt · Reparatur schließt sie" % lid if opened else "%s bereits entriegelt" % lid)
+	return opened
+
 
 func toggle_door(index: int) -> bool:
 	if not game or not is_instance_valid(game.player): return false

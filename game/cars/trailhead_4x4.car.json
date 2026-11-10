@@ -100,6 +100,20 @@
         "mirror_R",
         "mount_mirror_R"
       ],
+      "rdoor_left": [
+        "door_RL",
+        "door_trim_RL",
+        "glass_door_RL",
+        "handle_RL",
+        "latch_door_RL"
+      ],
+      "rdoor_right": [
+        "door_RR",
+        "door_trim_RR",
+        "glass_door_RR",
+        "handle_RR",
+        "latch_door_RR"
+      ],
       "bumper_front": [
         "bumper_front",
         "bolt_bumper_front"
@@ -107,10 +121,19 @@
       "bumper_rear": [
         "bumper_rear",
         "bolt_bumper_rear"
+      ],
+      "tailgate": [
+        "tailgate",
+        "glass_rear",
+        "latch_tailgate",
+        "spare"
       ]
     }
   },
   "body": {
+    "detachableTailgate": true, "tailgateHingeX": 0.189, "tailgateHingeY": 1.8, "tailgateLatchX": 0.159, "tailgateLatchY": 0.7,
+    "tailgateHalfWidth": 0.68, "tailgateOpenDeg": 80, "tailgateMass": 40,
+    "frontDoorHingeX": 3.209, "bPillarX": 2.378, "rearDoorHingeX": 2.359, "rearDoorRearX": 1.305,
     "style": "suv",
     "doors": 4,
     "length": 4.7,
@@ -132,8 +155,8 @@
     "roofWidthRatio": 0.78,
     "cornerRadiusFront": 0.14,
     "cornerRadiusRear": 0.12,
-    "seatShift": -0.50,
-    "rearSeatShift": -0.72,
+    "seatShift": -0.677,
+    "rearSeatShift": -0.897,
     "seatDrop": 0.10,
     "archClearance": 0.07,
     "paint": [

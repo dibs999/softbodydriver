@@ -52,8 +52,17 @@ TEST_CASE("front and rear doors preserve mass budget and disengage without struc
     CHECK_FALSE(car.body.setDoorOpen(0, true));
     auto legacy = car.def; legacy.body.detachableDoors = false;
     CHECK(buildCar(legacy).body.doors().empty());
-    // An imported model without rear door parts keeps rigid rear doors (only its front doors move).
-    CHECK(buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/meridian_sedan.car.json")).body.doors().size() == 2);
+    // Imported models with rear door parts get all four doors, hinged on the model's own door
+    // lines; without those parts the rear doors stay rigid body structure.
+    const auto sedan = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/meridian_sedan.car.json"));
+    CHECK(sedan.body.doors().size() == 4);
+    CHECK(sedan.restPositions[sedan.layout.frontDoors[0].hingeNodes[0]].x == doctest::Approx(3.355).epsilon(1e-6));
+    CHECK(sedan.restPositions[sedan.layout.rearDoors[0].hingeNodes[0]].x == doctest::Approx(2.255).epsilon(1e-6));
+    CHECK(sedan.layout.rearDoors[0].rearX == doctest::Approx(1.275));
+    CHECK(sedan.layout.frontDoors[0].rearX == doctest::Approx(2.277));
+    const std::string json = R"({"id": "x", "visualModel": {"path": "m.glb", "parts": {"door_left": ["door_FL"]}},
+        "body": {"doors": 4, "detachableDoors": true}})";
+    CHECK(buildCar(parseCarDefinition(json)).body.doors().size() == 2);
 }
 
 TEST_CASE("front and rear doors physically open hold and close with reversible intact latches") {

@@ -35,6 +35,8 @@ struct Profile {
     const CarBodyDef& b;
     const TireDef& t;
     real L, hw, xFA, xRA, xCowl, xWsTop, xRwTop, xRwBase, xB, xFD0, xRD1, Ra, hubY;
+    // Physical door cages: front door rear/front edge and hinge line, rear door likewise.
+    real xDoorFR, xDoorFF, xDoorFH, xDoorRR, xDoorRF, xDoorRH;
 
     Profile(const CarBodyDef& body, const TireDef& tire) : b(body), t(tire) {
         L = b.length;
@@ -56,6 +58,13 @@ struct Profile {
             xRD1 = xRA + Ra + 0.25;
             xB = xRD1 + 0.08;
         }
+        const real pillar = b.bPillarX > 0.0 ? b.bPillarX : xB;
+        xDoorFR = pillar + 0.004;
+        xDoorFF = b.frontDoorHingeX > 0.0 ? std::min(b.frontDoorHingeX + 0.015, xCowl - 0.03) : xCowl - 0.09;
+        xDoorFH = b.frontDoorHingeX > 0.0 ? b.frontDoorHingeX : xDoorFF - 0.015;
+        xDoorRF = pillar - 0.045;
+        xDoorRH = b.rearDoorHingeX > 0.0 ? std::min(b.rearDoorHingeX, xDoorRF + 0.04) : xDoorRF - 0.015;
+        xDoorRR = b.rearDoorRearX > 0.0 ? b.rearDoorRearX : xRD1 + 0.004;
     }
 
     bool inGreenhouse(real x) const { return x > xRwBase && x < xCowl; }

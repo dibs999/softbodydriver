@@ -51,12 +51,24 @@ struct CarBodyDef {
     /// from the B pillar, rear bench likewise, and front seat height lowered by seatDrop. Used to
     /// fit the generated seats to the seat positions of imported models.
     real seatShift = 0.0, rearSeatShift = 0.0, seatDrop = 0.0;
+    /// Door lines of the physical doors (m from the rear bumper, 0 = derived from the profile), so
+    /// an imported model's doors swing about its own hinges: front door hinge line, B-pillar seam
+    /// (front door rear edge), rear door hinge line and rear door rear edge.
+    real frontDoorHingeX = 0.0, bPillarX = 0.0, rearDoorHingeX = 0.0, rearDoorRearX = 0.0;
     int doors = 4;
     std::array<real, 3> paint{0.62, 0.05, 0.04};
     real paintMetallic = 0.55;
     bool detachableDoors = false; ///< Opt-in physical front doors with reversible latches.
     bool detachableRearDoors = true; ///< Four-door bodies also get physical rear doors (off for imported models without rear door parts).
     bool detachableBumpers = false; ///< Opt-in independent front/rear lower fascia assemblies.
+    /// Opt-in physical rear lid: the tailgate of a hatchback / estate / SUV or the boot lid of a
+    /// saloon, with breakable hinges and latch and gas struts on input channel 6. Its hinge and
+    /// latch lines (x from the rear bumper, y above the ground; 0 = derived from the profile) let an
+    /// imported model's lid swing about its own hinges. Off for imported models without a
+    /// "tailgate" part.
+    bool detachableTailgate = false;
+    real tailgateHingeX = 0.0, tailgateHingeY = 0.0, tailgateLatchX = 0.0, tailgateLatchY = 0.0;
+    real tailgateHalfWidth = 0.0, tailgateOpenDeg = 0.0, tailgateMass = 0.0;
     /// Aerodynamics. The collision skin's per-triangle drag is calibrated so that the whole
     /// body produces exactly Cd * A head-on. 0 = typical value for the body style /
     /// 0.84 * width * (height - groundClearance).
@@ -216,6 +228,9 @@ struct CarLayout {
     // Independent eight-node bonnet: rear-left/right, front-left/right, lower then upper skin.
     std::vector<std::uint32_t> bonnetNodes;
     std::vector<std::uint32_t> bonnetStrutBeams; ///< Channel-1 lift supports; share the hinge breakgroup.
+    // Optional eight-node rear lid (tailgate / boot lid): hinge-left/right, latch-left/right,
+    // inner then outer skin. Gas struts on channel 6 share the hinge breakgroup.
+    std::vector<std::uint32_t> tailgateNodes, tailgateStrutBeams;
     std::vector<std::uint32_t> frontBumperNodes, rearBumperNodes; // cuboid ix*4 + iy*2 + iz
     real length = 0, width = 0, height = 0;
 };

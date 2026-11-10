@@ -222,7 +222,8 @@ bedienbare Fahrzeugausrüstung:
 | `,` / `.` | Blinker links/rechts |
 | `H` | Warnblinker |
 | `Enter` (Gamepad: linker Stick drücken) | Hupe |
-| `O` | Am stehenden prozeduralen Fahrzeug Motorhaube öffnen |
+| `O` | Im Stand Motorhaube entriegeln; auch im Pausenmenü |
+| `Shift`+`O` | Im Stand Heckklappe (Kombi, SUV) bzw. Kofferraumdeckel (Limousine, Fastback) entriegeln; auch im Pausenmenü |
 | `U` / `Shift`+`U` | Kestrel: Fahrer-/Beifahrertür im Stand öffnen oder schließen; auch im Pausenmenü |
 | `F` halten | Am markierten Serviceplatz tanken; anhalten und Motor mit `I` abstellen |
 | `G` halten | Am Serviceplatz vier Simulationssekunden reparieren; Tankinhalt bleibt erhalten |
@@ -247,6 +248,13 @@ und dem Motor. Beim Kestrel Hatch können außerdem die unteren Stoßfänger vor
 hinten als eigene Bauteile abreißen. Das importierte Concept-Modell besitzt noch
 keine separat bewegliche Haube. Grenzen der Kontaktauflösung und verbleibende
 Schadensbaugruppen stehen in [PHYSICS_ACCEPTANCE.md](docs/PHYSICS_ACCEPTANCE.md).
+
+Meridian Estate und Trailhead 4x4 haben eine Heckklappe, Meridian-Limousinen und
+der Fastback einen Kofferraumdeckel: ein eigenes Bauteil mit brechbaren Scharnieren
+und Schloss, das an den Scharnierpunkten des Modells aufschwingt und von zwei
+gedämpften Gasdruckfedern offen gehalten wird (Heckklappe etwa 80°, Deckel etwa 70°).
+Bei einem Heckaufprall kann es sich lösen; Reparieren schließt es. Die importierten
+Viertürer öffnen außerdem alle vier Türen um die Scharnierlinien des Modells.
 
 Beim Kestrel haben beide Vordertüren eigene Massepunkte, brechbare Scharniere,
 reversible Schlösser, Innenverkleidung und mitbewegte Scheiben/Spiegel. Normales

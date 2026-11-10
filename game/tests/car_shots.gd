@@ -58,6 +58,8 @@ func _setup() -> void:
 		for d in car.get_door_states().size():
 			print("door ", d, " ", car.set_door_open(d, true))
 		print("bonnet ", car.release_bonnet())
+		if car.has_method("release_tailgate"):
+			print("tailgate ", car.release_tailgate())
 		for i in 40:
 			world.step_blocking(0.1)
 			world.sync_visuals()

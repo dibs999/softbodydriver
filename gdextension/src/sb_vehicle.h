@@ -81,6 +81,7 @@ public:
     void replay_show(int frame);
     void replay_end();
     bool release_bonnet(); ///< Releases latch once; hinges may subsequently break under impact.
+    bool release_tailgate(); ///< Same for the rear lid (tailgate / boot lid), if the car has one.
     void repair_in_place();                   ///< Repair, keep position and heading, set upright.
 
     void set_debug_view(bool on);
@@ -190,6 +191,8 @@ private:
     // Physical bonnet support uses hydro channel 1; state is world-mutex protected.
     bool bonnetOpenRequested_ = false;
     double bonnetSupportTravel_ = 0.0;
+    bool tailgateOpenRequested_ = false;   // rear lid struts, hydro channel 6
+    double tailgateSupportTravel_ = 0.0;
 
     // Rendering.
     std::vector<SurfaceGpu> surfaces_;
@@ -224,6 +227,7 @@ private:
     bool hasImportedModel_ = false;
     unsigned tearCheckCounter_ = 0;
     bool importedDoors_ = false;   ///< imported door panels follow the physical door cages
+    bool importedTailgate_ = false;
     bool importedBonnet_ = false;  ///< imported bonnet follows the physical bonnet
     bool dashboardAvailable_ = true;
     /// Beams around each lamp corner (head left/right, tail left/right), collected on first use.

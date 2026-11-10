@@ -107,10 +107,17 @@
       "bumper_rear": [
         "bumper_rear",
         "bolt_bumper_rear"
+      ],
+      "tailgate": [
+        "trunk_lid",
+        "latch_trunk"
       ]
     }
   },
   "body": {
+    "detachableTailgate": true, "tailgateHingeX": 0.733, "tailgateHingeY": 0.925, "tailgateLatchX": 0.063, "tailgateLatchY": 0.905,
+    "tailgateHalfWidth": 0.72, "tailgateOpenDeg": 70, "tailgateMass": 13,
+    "frontDoorHingeX": 3.018, "bPillarX": 1.736,
     "style": "coupe",
     "doors": 2,
     "length": 4.722,

@@ -28,6 +28,7 @@ public:
         for (std::size_t side = 0; side < layout_.rearDoors.size(); ++side)
             if (!layout_.rearDoors[side].nodes.empty() && candidates.data() == layout_.rearDoors[side].nodes.data())
                 return std::string(side == 0 ? "rdoor_left_" : "rdoor_right_") + material;
+        if (!layout_.tailgateNodes.empty() && candidates.data() == layout_.tailgateNodes.data()) return "tailgate_" + material;
         return material;
     }
 
@@ -39,7 +40,7 @@ public:
         vis_.skinned.back().material = material;
         vis_.skinned.back().steeringWheel = steeringWheel;
         if (material == "glass" || material == "door_left_glass" || material == "door_right_glass" ||
-            material == "rdoor_left_glass" || material == "rdoor_right_glass") vis_.skinned.back().doubleSided = true;
+            material == "rdoor_left_glass" || material == "rdoor_right_glass" || material == "tailgate_glass") vis_.skinned.back().doubleSided = true;
         index_[key] = vis_.skinned.size() - 1;
         return vis_.skinned.back();
     }
@@ -907,7 +908,18 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         if (material.rfind("door_right_", 0) == 0) return build.layout.frontDoors[1].nodes;
         if (material.rfind("rdoor_left_", 0) == 0) return build.layout.rearDoors[0].nodes;
         if (material.rfind("rdoor_right_", 0) == 0) return build.layout.rearDoors[1].nodes;
+        if (material.rfind("tailgate_", 0) == 0) return build.layout.tailgateNodes;
         return bodyNodes;
+    };
+    // Rear lid (tailgate / boot lid): the deck and rear window ahead of the latch line up to the
+    // hinge, and the whole rear face above the latch, so its shut lines run along the rear corners.
+    const auto& lidNodes = build.layout.tailgateNodes.size() == 8 ? build.layout.tailgateNodes : bodyNodes;
+    const bool hasLid = build.layout.tailgateNodes.size() == 8;
+    const real lidHingeX = hasLid ? 0.5 * (body.positions()[lidNodes[4]].x + body.positions()[lidNodes[0]].x) : -1.0;
+    const real lidLatchY = hasLid ? 0.5 * (body.positions()[lidNodes[6]].y + body.positions()[lidNodes[2]].y) : 1e9;
+    auto lidMaterial = [&](const std::string& material, real x, int seg) {
+        if (hasLid && seg >= 8 && x < lidHingeX - 0.005 && material.rfind("bumper_", 0) != 0) return "tailgate_" + material;
+        return material;
     };
     auto doorMaterial = [&](const std::string& material, real x, int seg, int side) {
         const auto& door = build.layout.frontDoors[static_cast<std::size_t>(side)];
@@ -1085,11 +1097,12 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                 const real ym = 0.5 * (a.second + b.second);
                 const real zm = 0.5 * (a.first + b.first) * (side ? 1.0 : -1.0);
                 const int seg = segOf[static_cast<std::size_t>(k)];
-                const std::string mat = doorMaterial(bumperMaterial(quadMaterial(xm, ym, zm, seg), xm, ym), xm, seg, side);
+                const std::string mat = lidMaterial(doorMaterial(bumperMaterial(quadMaterial(xm, ym, zm, seg), xm, ym), xm, seg, side), xm, seg);
                 for (int pass = 0; pass < 2; ++pass) {
                     if (pass == 1 && (mat == "glass" || mat == "door_left_glass" || mat == "door_right_glass" || mat == "rdoor_left_glass" ||
-                                      mat == "rdoor_right_glass" || mat == "headlight" || mat == "taillight" || seg == 0)) continue;
-                    const std::string mm = pass == 0 ? mat : (mat == "bonnet" ? "bonnet_inner" : doorMaterial(bumperMaterial("interior", xm, ym), xm, seg, side));
+                                      mat == "rdoor_right_glass" || mat == "tailgate_glass" || mat == "headlight" || mat == "taillight" || seg == 0)) continue;
+                    const std::string mm = pass == 0 ? mat : (mat == "bonnet" ? "bonnet_inner" : mat.rfind("tailgate_", 0) == 0 ? "tailgate_interior"
+                                                                 : doorMaterial(bumperMaterial("interior", xm, ym), xm, seg, side));
                     MeshSurface& m = vb.surf(mm);
                     const std::uint32_t v00 = gridVertex(i, side, k, mm, smp), v10 = gridVertex(i + 1, side, k, mm, smp);
                     const std::uint32_t v11 = gridVertex(i + 1, side, k + 1, mm, smp), v01 = gridVertex(i, side, k + 1, mm, smp);
@@ -1212,7 +1225,8 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                 const Vec3 p00 = capPoint(k, c), p01 = capPoint(k, c + 1), p10 = capPoint(k + 1, c), p11 = capPoint(k + 1, c + 1);
                 if (std::abs(p00.y - p10.y) < 1e-5 && std::abs(p01.z - p00.z) < 1e-6) continue;
                 const Vec3 midpoint = (p00 + p11) * 0.5;
-                const std::string mat = bumperMaterial(capMaterial(midpoint), midpoint.x, midpoint.y);
+                std::string mat = bumperMaterial(capMaterial(midpoint), midpoint.x, midpoint.y);
+                if (end == 0 && hasLid && midpoint.y > lidLatchY && mat.rfind("bumper_", 0) != 0) mat = "tailgate_" + mat;
                 const auto& capNodes = surfaceNodes(mat);
                 MeshSurface& m = vb.surf(mat);
                 const std::uint32_t a = vb.vertex(m, p00, vb.skinNearest(p00, capNodes));
@@ -1278,11 +1292,11 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             const real zc = sg * (hwR - tw - 0.04);
             const Vec3 ax = normalize(Vec3{1.0, 0.0, -sg * 0.3});
             const Vec3 az = normalize(cross(ax, Vec3{0, 1, 0})) * -1.0;
-            vb.box("grille", {0.009, yT, zc}, {0.023, sport ? 0.034 : 0.048, tw + 0.015}, bodyNodes, ax, {0, 1, 0}, az);
+            vb.box("grille", {0.009, yT, zc}, {0.023, sport ? 0.034 : 0.048, tw + 0.015}, yT > lidLatchY ? lidNodes : bodyNodes, ax, {0, 1, 0}, az);
             for (real stripe : {-0.015, 0.017})
-                vb.box("taillight", {-0.011, yT + stripe, zc}, {0.010, 0.009, tw}, bodyNodes, ax, {0, 1, 0}, az);
+                vb.box("taillight", {-0.011, yT + stripe, zc}, {0.010, 0.009, tw}, yT > lidLatchY ? lidNodes : bodyNodes, ax, {0, 1, 0}, az);
         }
-        vb.box("plate", {-0.020, yT - 0.145, 0.0}, {0.013, 0.046, 0.23}, bodyNodes);
+        vb.box("plate", {-0.020, yT - 0.145, 0.0}, {0.013, 0.046, 0.23}, yT - 0.145 > lidLatchY ? lidNodes : bodyNodes);
     }
 
     // Black rocker mouldings between the wheel arches, a roof spoiler over the tailgate of
@@ -1311,10 +1325,10 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             const real halfZ = sec.z[8] * 0.94;
             const real c = std::cos(0.16), s = std::sin(0.16);
             const Vec3 ax{-c, -s, 0}, ay{s, -c, 0};
-            vb.bevelBox("trim", {prof.xRwTop - 0.03, top + 0.006, 0}, {0.11, 0.016, halfZ}, 0.012, bodyNodes, ax, ay, {0, 0, 1});
+            vb.bevelBox("trim", {prof.xRwTop - 0.03, top + 0.006, 0}, {0.11, 0.016, halfZ}, 0.012, lidNodes, ax, ay, {0, 0, 1});
             for (real side : {-1.0, 1.0})
                 vb.bevelBox("trim", {prof.xRwTop - 0.02, top - 0.010, side * (halfZ - 0.012)}, {0.09, 0.022, 0.012}, 0.008,
-                            bodyNodes, ax, ay, {0, 0, 1});
+                            lidNodes, ax, ay, {0, 0, 1});
         }
         if (bd.style == BodyStyle::Hatchback || bd.style == BodyStyle::SUV) {
             // Rear wiper parked along the bottom of the tailgate glass.
@@ -1325,10 +1339,10 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             const Vec3 dir = normalize(g1 - g0);
             const Vec3 normal = normalize(cross(dir, Vec3{0, 0, 1})) * -1.0;   // out of the glass, backwards
             const Vec3 pivot = g0 + dir * 0.05 + normal * 0.022;
-            vb.tube("trim", pivot - normal * 0.012, pivot + normal * 0.010, 0.016, bodyNodes, 12);
+            vb.tube("trim", pivot - normal * 0.012, pivot + normal * 0.010, 0.016, lidNodes, 12);
             const Vec3 tip = pivot + Vec3{0, 0, -0.34} + dir * 0.04;
-            vb.tube("trim", pivot, tip, 0.006, bodyNodes, 6);
-            vb.box("trim", (pivot + tip) * 0.5 - normal * 0.006, {0.006, 0.004, 0.19}, bodyNodes, dir, normal, {0, 0, 1});
+            vb.tube("trim", pivot, tip, 0.006, lidNodes, 6);
+            vb.box("trim", (pivot + tip) * 0.5 - normal * 0.006, {0.006, 0.004, 0.19}, lidNodes, dir, normal, {0, 0, 1});
         }
         {
             // Shark-fin antenna at the back of the roof.
@@ -2088,6 +2102,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             if (m.material == "door_right_glass") m.pane = 4;
             if (m.material == "rdoor_left_glass") m.pane = 3;
             if (m.material == "rdoor_right_glass") m.pane = 4;
+            if (m.material == "tailgate_glass") m.pane = 2;
             if (m.material != "glass" || m.pane != 0) continue;
             MeshSurface parts[4];
             std::vector<std::uint32_t> remap[4];

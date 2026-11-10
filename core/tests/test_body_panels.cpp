@@ -40,7 +40,7 @@ TEST_CASE("reference bumpers have independent mass-budgeted cages and sacrificia
     CHECK(car.body.totalMass() == doctest::Approx(car.def.chassis.curbMass).epsilon(1e-6));
     const real rearAxle = car.def.body.length - car.def.body.frontOverhang - car.def.body.wheelbase;
     CHECK((car.body.centerOfMass().x - rearAxle) / car.def.body.wheelbase == doctest::Approx(car.def.chassis.frontWeight).epsilon(0.005));
-    REQUIRE(car.body.selfCollisionPanels().size() == 7);   // bonnet, two bumpers, four doors
+    REQUIRE(car.body.selfCollisionPanels().size() == 8);   // bonnet, two bumpers, four doors, tailgate
     for (const auto& panel : car.body.selfCollisionPanels()) {
         CHECK_FALSE(car.body.selfCollisionActive(panel));
         CHECK_FALSE(panel.triangles.empty());
@@ -185,4 +185,58 @@ TEST_CASE("bonnet inspection supports lift and hold a useful angle without break
     world.simulate(0.1);
     CHECK(opening() < 2.0);
     CHECK(attached(body, bonnet) == 14);
+}
+
+TEST_CASE("tailgate and boot lid release, lift on their struts and hold open") {
+    struct Case { const char* file; real lo, hi; };
+    for (const Case c : {Case{"meridian_wagon", 68.0, 90.0}, Case{"trailhead_4x4", 68.0, 90.0},
+                         Case{"meridian_sedan", 58.0, 78.0}, Case{"kestrel_hatch", 68.0, 90.0}}) {
+        const std::string name = c.file;
+        CAPTURE(name);
+        auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/" + c.file + ".car.json"));
+        const auto lid = car.layout.tailgateNodes;
+        REQUIRE(lid.size() == 8);
+        REQUIRE(car.layout.tailgateStrutBeams.size() == 2);
+        CHECK(connected(car.body, lid));
+        CHECK(attached(car.body, lid) == 14);
+        World world;
+        world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+        world.addBody(car.body);
+        world.simulate(0.6);
+        auto& body = world.body(0);
+        auto opening = [&]() {
+            std::vector<float> frames;
+            computeNodeFrames(body.positions(), car.visual, frames);
+            const Vec3 rest = normalize(car.restPositions[lid[2]] - car.restPositions[lid[0]]);
+            const Vec3 rigid{frames[0] * rest.x + frames[1] * rest.y + frames[2] * rest.z,
+                             frames[3] * rest.x + frames[4] * rest.y + frames[5] * rest.z,
+                             frames[6] * rest.x + frames[7] * rest.y + frames[8] * rest.z};
+            const Vec3 actual = normalize(body.positions()[lid[2]] - body.positions()[lid[0]]);
+            return std::acos(std::clamp(dot(rigid, actual), -1.0, 1.0)) * 180.0 / 3.141592653589793;
+        };
+        // Closed and latched: settling does not move it.
+        CHECK(opening() < 2.0);
+        for (std::size_t i = 0; i < body.beamCount(); ++i) {
+            const auto& beam = body.beams()[i];
+            if (beam.breakGroup >= 0 && body.breakGroupNames()[static_cast<std::size_t>(beam.breakGroup)] == "tailgate_latch")
+                body.breakBeam(static_cast<std::uint32_t>(i));
+        }
+        for (int tick = 1; tick <= 125; ++tick) {
+            body.setInput(6, static_cast<real>(tick) / 125.0);
+            world.simulate(0.01);
+        }
+        world.simulate(2.5);
+        const real angle = opening();
+        CAPTURE(angle);
+        CHECK(world.stats().finite);
+        CHECK(angle > c.lo);
+        CHECK(angle < c.hi);
+        CHECK(attached(body, lid) == 8);
+        world.simulate(0.6);
+        CHECK(std::abs(opening() - angle) < 3.0);
+        for (auto index : car.layout.tailgateStrutBeams) CHECK_FALSE(body.beams()[index].broken);
+        body.repair(car.restPositions);
+        CHECK(attached(body, lid) == 14);
+        CHECK(opening() < 0.01);
+    }
 }
