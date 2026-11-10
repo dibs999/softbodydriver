@@ -1740,6 +1740,9 @@ Dictionary SBVehicle::get_telemetry() const {
     Array burst;
     for (bool b : tel_.wheelBurst) burst.push_back(b);
     d["wheel_burst"] = burst;
+    Array rims;
+    for (double v : tel_.wheelRimDamage) rims.push_back(v);
+    d["rim_damage"] = rims;
     Array wear, ttemp, press;
     for (double v : tel_.wheelWear) wear.push_back(v);
     for (double v : tel_.wheelTempC) ttemp.push_back(v);

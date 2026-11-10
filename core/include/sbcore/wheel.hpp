@@ -43,6 +43,9 @@ struct PressureWheelSpec {
     // Tyre condition model.
     real wearRate = 1.0;         ///< Multiplier on tread wear (1 = realistic, >1 = faster for gameplay).
     real burstTempC = 175.0;     ///< Carcass temperature at which the tyre bursts.
+    /// Static wheel load (N). A single tread node pressed harder than ~4.5x this (a kerb edge or a
+    /// pothole lip, not flat road) pinches the tyre against the rim: bent rim, leak, pinch flat.
+    real ratedLoad = 0.0;
     real ambientTempC = 22.0;
     /// Fraction of the inflation pressure acting as a membrane on the tread ring (pressure on
     /// every segment + matching belt hoop tension). 0 = off.
@@ -68,6 +71,8 @@ struct PressureWheel {
     real pressurePsi = 0.0;                 ///< Current gauge pressure (hot), 0 when burst
     real coldPressurePsi = 0.0;             ///< Gauge pressure referred to ambient temperature
     real leakPsiPerS = 0.0;                 ///< Slow puncture leak rate
+    real rimDamage = 0.0;                   ///< 0..1 bent rim from kerb / pothole strikes
+    real peakNodeForce = 0.0;               ///< Highest single tread node contact force since the last condition update
     real load = 0.0;                        ///< Estimated vertical load (N)
     real slipSpeed = 0.0;                   ///< Sliding speed of the contact patch (m/s)
     real contactAge = 1.0;

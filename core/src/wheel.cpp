@@ -46,6 +46,8 @@ real PressureWheel::measureAngularVelocity(const SoftBody& body, real* outInerti
 
 void PressureWheel::resetCondition(SoftBody& body) {
     burst = false;
+    rimDamage = 0.0;
+    peakNodeForce = 0.0;
     wear = 0.0;
     tempC = spec.ambientTempC;
     coldPressurePsi = spec.pressurePsi;
@@ -84,6 +86,18 @@ void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, rea
         }
         // A bent rim / cut sidewall lets the air out slowly.
         if (worstDent > 0.02) leakPsiPerS = std::max(leakPsiPerS, std::min<real>(6.0, 60.0 * (worstDent - 0.02)));
+        // Rim strike: a kerb edge or pothole lip concentrates the load on one or two tread nodes and
+        // pinches the tyre against the rim flange. The rim bends (the bead then leaks); a very hard
+        // hit cuts the tyre (pinch flat). Running on a flat tyre wears the rim too.
+        if (spec.ratedLoad > 0.0 && !burst) {
+            const real ratio = peakNodeForce / spec.ratedLoad;
+            if (ratio > 4.5) {
+                rimDamage = std::min<real>(1.0, rimDamage + 0.10 * (ratio - 4.5));
+                if (ratio > 7.5) leakPsiPerS = std::max<real>(leakPsiPerS, 20.0);
+            }
+            if (rimDamage > 0.08) leakPsiPerS = std::max<real>(leakPsiPerS, std::min<real>(8.0, 1.0 + 10.0 * rimDamage));
+        }
+        peakNodeForce = 0.0;
     }
 
     // ------------------------------------------------------------- load, slip, heat, wear
@@ -97,6 +111,7 @@ void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, rea
         for (std::uint32_t idx : treadNodes) {
             const Vec3 j = body.contactImpulses()[idx];
             const real amount = length(j);
+            peakNodeForce = std::max(peakNodeForce, amount / std::max<real>(dt, 1e-6));
             impulse += amount;
             normal += j;
             patch += pos[idx] * amount;

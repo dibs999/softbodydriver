@@ -454,8 +454,12 @@ CarBuild buildCar(const CarDefinition& def) {
         hubDroop.precompression = 1.24;
         sb.push_back(car.addBeam(cn.tower, cn.hubOut, hubDroop));
         // Tie rod (hydro steering on the front axle, fixed toe link on the rear).
+        // The tie rod is the weak link of a wheel strike: it yields at ~45 kN (hard cornering and
+        // landings stay well below), so a wheel driven into a kerb knocks the toe out and the car
+        // pulls, while the wishbones only bend in real crashes.
         BeamParams tie = arm;
         tie.spring = 2.2e6;
+        tie.deform = 4.5e4;
         if (cn.front) {
             const real tieLen = length(car.positions()[cn.steerArm] - car.positions()[cn.rackEnd]);
             const real lockDelta = 0.14 * std::sin(34.0 * kPi / 180.0);
@@ -1107,6 +1111,7 @@ CarBuild buildCar(const CarDefinition& def) {
         // tread standing wave that peaked rolling loss around 145 km/h.
         ws.membranePressure = 2.0;
         ws.steered = cn.front;
+        ws.ratedLoad = std::max<real>(1500.0, (car.totalMass() + tire.totalMass()) * 9.81 * (cn.front ? def.chassis.frontWeight : 1.0 - def.chassis.frontWeight) * 0.5);
         ws.braked = true;
         ws.handbraked = !cn.front;
         ws.driven = layout == DriveLayout::AWD || (layout == DriveLayout::FWD && cn.front) ||

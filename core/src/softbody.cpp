@@ -592,6 +592,7 @@ VehicleTelemetry SoftBody::telemetry() const {
         t.wheelWear.push_back(w.wear);
         t.wheelTempC.push_back(w.tempC);
         t.wheelPressurePsi.push_back(w.pressurePsi);
+        t.wheelRimDamage.push_back(w.rimDamage);
         t.wheelSlip.push_back(w.slipSpeed);
         t.wheelLoad.push_back(w.load);
     }

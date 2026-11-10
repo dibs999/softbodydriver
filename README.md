@@ -119,6 +119,8 @@ So kommt ein eigenes Auto ins Spiel:
 | Motorlager / Kardanwelle | Bruch | Kraftfluss unterbrochen |
 | Kupplung | Anhaltender Schlupf erzeugt Reibungswärme | Ab 180 °C sinkt das übertragbare Drehmoment, über 230 °C entsteht dauerhafter Verschleiß; vollständig verschlissen kein Vortrieb |
 | Getriebe | Wiederholte Schaltvorgänge unter Last ohne Auskuppeln, extreme Rückschaltungen oder Richtungswechsel | Schleifgeräusch, längere Schaltunterbrechung, Leistungsverlust bis zum Ausfall; ein Gang, dessen Drehzahl weit über dem roten Bereich läge (z. B. bei 150 km/h in den 1.), kostet auf einen Schlag einen großen Teil des Getriebes; Automatik schützt vor destruktiven Gangwechseln |
+| Felgen und Reifen (Bordstein, Schlagloch) | Ein Bordstein- oder Schlaglochrand drückt einen einzelnen Laufflächenpunkt mit mehr als dem ~4,5-fachen der Radlast gegen die Felge | Felge verbogen (Wulst undicht, Reifen verliert langsam Luft, Diagnose „Felge verbogen“), bei sehr hartem Schlag Durchschlag mit schnellem Luftverlust; ein platter Reifen zieht das Auto zur Seite |
+| Spurstangen | Seitlicher Schlag aufs Rad | Spurstangen geben ab ~45 kN nach, Querlenker erst bei echten Unfällen: verstellte Spur, das Auto zieht |
 | Motor (Überdrehzahl) | Die Räder treiben den Motor über die rote Linie, meist durch zu tiefes Zurückschalten | Ab ~1,1 × Drehzahlgrenze Ventilflattern und Verschleiß, ab ~1,35 × verbogene Ventile (Leistungsverlust, unrunder Lauf), ab ~1,6 × reißt ein Pleuel: Knall, Ölverlust, Motor fest; die Kupplung nimmt beim schlagartigen Einkuppeln zusätzlich Schaden |
 | Tank | Beschädigung | Kraftstoffleck |
 | Bremsen | Scheibentemperatur | Fading ab ca. 450 °C |

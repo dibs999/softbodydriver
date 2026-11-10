@@ -95,3 +95,26 @@ TEST_CASE("props stand still on the ground and a car knocks them over without te
         CHECK(alone - speed < (kind == PropKind::Cone ? 2.0 : 5.0));
     }
 }
+
+TEST_CASE("sliding a wheel into a kerb bends the rim and lets the air out; a gentle touch does not") {
+    auto slide = [](real kmh) {
+        auto build = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+        World world;
+        world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+        world.addCollider(StaticCollider::box({2.0, 0.06, -2.4}, {20.0, 0.06, 0.25}, {0, 0, 0}, 0.8));
+        world.addBody(std::move(build.body));
+        auto& car = world.body(0);
+        world.simulate(0.5);
+        for (auto& v : car.velocities()) v = {0, 0, -kmh / 3.6};
+        world.simulate(4.0);
+        REQUIRE(world.stats().finite);
+        return std::make_pair(car.wheels()[0].rimDamage, car.wheels()[0].pressurePsi);  // front left leads
+    };
+    const auto [gentleRim, gentlePsi] = slide(12.0);
+    CHECK(gentleRim == doctest::Approx(0.0));
+    CHECK(gentlePsi > 30.0);
+    const auto [hardRim, hardPsi] = slide(30.0);
+    MESSAGE("kerb strike at 30 km/h: rim damage " << hardRim << ", " << hardPsi << " psi left");
+    CHECK(hardRim > 0.3);
+    CHECK(hardPsi < 20.0);
+}
