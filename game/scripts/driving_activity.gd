@@ -54,6 +54,8 @@ var _crash_peak_g := 0.0
 var _crash_settle := -1.0       # s since the impact (-1 = not yet)
 var _last_velocity := Vector3.ZERO
 var report := {}                # crash test result for the HUD
+var _ref_speed := 15.0          # m/s, mean of the map's AI target speeds (medal reference pace)
+const MEDALS := ["", "Bronze", "Silber", "Gold"]
 
 func configure(id: String, data: Dictionary) -> void:
 	_race_route.clear()
@@ -81,6 +83,11 @@ func configure(id: String, data: Dictionary) -> void:
 				distance = 0.0
 		if _race_gates.size() > 2:
 			_race_gates.append(_race_gates[0])
+	var speeds: PackedFloat32Array = data.get("speeds", PackedFloat32Array())
+	if speeds.size() > 0:
+		var total := 0.0
+		for v in speeds: total += v
+		_ref_speed = clampf(total / speeds.size(), 6.0, 45.0)
 	_records.load(records_path)
 	_marker = Node3D.new()
 	add_child(_marker)
@@ -348,6 +355,46 @@ func navigation_hint() -> String:
 			instruction = "Rechtskurve" if angle > 0 else "Linkskurve"
 	return "%s in %.0f m" % [instruction, distance]
 
+## Reference time (s) for a timed run over `points`: the AI's mean target pace on this map.
+## Deliveries run on streets, ~35 % longer than the straight lines between the stops.
+func reference_time(points: PackedVector3Array, run_mode: int) -> float:
+	var length := 0.0
+	for i in range(1, points.size()): length += points[i].distance_to(points[i - 1])
+	if run_mode == 3: length *= 1.35
+	return length / _ref_speed
+
+## Medal for a result: 0 none, 1 bronze, 2 silver, 3 gold. Timed runs against the reference
+## pace (gold at it, silver within 20 %, bronze within 50 %), races by place, the crash test by
+## stars. The drift challenge has no fixed scale and awards none.
+func medal_for(run_mode: int, result: Dictionary) -> int:
+	match run_mode:
+		1, 3:
+			var ref := reference_time(route, run_mode)
+			var t := float(result.get("elapsed", INF))
+			if ref <= 0.0: return 0
+			return 3 if t <= ref else (2 if t <= ref * 1.2 else (1 if t <= ref * 1.5 else 0))
+		4:
+			var p := int(result.get("place", 0))
+			return 3 if p == 1 else (2 if p == 2 else (1 if p == 3 and int(result.get("field", 3)) > 3 else 0))
+		5:
+			var stars := int(result.get("crash", {}).get("stars", 0))
+			return 3 if stars >= 5 else (2 if stars == 4 else (1 if stars == 3 else 0))
+	return 0
+
+## Best medal won so far on this map in a mode (any car).
+func best_medal(for_map: String, run_mode: int) -> int:
+	return int(_records.get_value("medals", for_map + ":" + str(run_mode), 0))
+
+## Medal tally over all maps and modes: [bronze, silver, gold].
+static func medal_tally(path := "user://driving_records.cfg") -> Array[int]:
+	var cfg := ConfigFile.new()
+	var out: Array[int] = [0, 0, 0]
+	if cfg.load(path) != OK or not cfg.has_section("medals"): return out
+	for key in cfg.get_section_keys("medals"):
+		var m := int(cfg.get_value("medals", key, 0))
+		if m >= 1 and m <= 3: out[m - 1] += 1
+	return out
+
 func _finish() -> void:
 	if not active: return
 	var higher_is_better := mode == 2 or mode == 5
@@ -379,6 +426,18 @@ func _finish() -> void:
 		last_result["place"] = place
 		last_result["field"] = race_size + 1
 		summary = "Platz %d von %d · %.2f s" % [place, race_size + 1, elapsed] + (" · Bestzeit!" if improved else "")
+	var medal := medal_for(mode, last_result)
+	last_result["medal"] = medal
+	if medal > 0:
+		var previous_medal := best_medal(map_id, mode)
+		summary += " · %s" % MEDALS[medal]
+		if medal > previous_medal:
+			_records.set_value("medals", map_id + ":" + str(mode), medal)
+			if _records.save(records_path) != OK:
+				_records.set_value("medals", map_id + ":" + str(mode), previous_medal)
+				save_error = FAILED
+			else:
+				summary += " (neu)"
 	if save_error != OK: summary += " · Speichern fehlgeschlagen"
 	cancel(summary)
 	completed.emit(last_result.duplicate(true))
