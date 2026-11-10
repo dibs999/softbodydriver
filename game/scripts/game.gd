@@ -522,6 +522,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		_time_idx = (_time_idx + 1) % _time_scales.size()
 		world.time_scale = _time_scales[_time_idx]
 		hud.toast("Zeit x%.2f" % world.time_scale)
+	elif event.is_action_pressed("camera_free"):
+		hud.camera_name = cam.toggle_free()
+		hud.cockpit = cam.mode == CameraRig.Mode.COCKPIT
+		minimap.cockpit = hud.cockpit
+		minimap._layout()
+		audio.cockpit = hud.cockpit
+		hud.toast("Kamera: " + hud.camera_name)
 	elif event.is_action_pressed("replay"):
 		toggle_replay()
 	elif event.is_action_pressed("pause_physics"):

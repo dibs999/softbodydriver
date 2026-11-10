@@ -175,7 +175,8 @@ Details und verbleibende Release-Abnahmen: [Linux-Paketierung](docs/RELEASE_LINU
 | `Q` / `E`, `M` | Gang runter / hoch, Automatik oder Manuell (`Shift` = Kupplung) |
 | `I` | Motor starten / abstellen |
 | `T` / `Z` | Traktionskontrolle / ABS ein/aus |
-| `C`, `V` | Kamera wechseln (Verfolger, Orbit, Cockpit, Motorhaube, Streckenrand, freie Kamera), Rückblick. Freie Kamera: Fahrtasten bewegen, `Q`/`E` runter/hoch, `Umschalt` schneller, rechte Maustaste umsehen; das Auto steht solange still |
+| `C`, `V` | Kamera wechseln (Verfolger, Orbit, Cockpit, Motorhaube, Streckenrand), Rückblick |
+| `F9` | Freie Kamera ein/aus: Fahrtasten bewegen, `Q`/`E` runter/hoch, `Umschalt` schneller, rechte Maustaste umsehen; das Auto steht solange still |
 | Rechte Maustaste, Mausrad | Umsehen auch im Cockpit, Zoom in Außenkameras |
 | `R` / `Rücktaste` | Zurücksetzen / an Ort und Stelle reparieren |
 | `B` | Node-Beam-Röntgenansicht (verformte Beams gelb bis rot) |

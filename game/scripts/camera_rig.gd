@@ -126,12 +126,26 @@ func _update_dashboard(delta: float) -> void:
 			_center_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 
-func cycle() -> String:
-	mode = (mode + 1) % MODE_NAMES.size()
+var _before_free: int = Mode.CHASE
+
+## Free camera on its own key (like a free cam in sandbox simulators): cycling the driving cameras
+## must never take the car's controls away.
+func toggle_free() -> String:
 	if mode == Mode.FREE:
+		mode = _before_free
+	else:
+		_before_free = mode
+		mode = Mode.FREE
 		var f := -global_basis.z
 		_free_yaw = atan2(-f.x, -f.z)
 		_free_pitch = asin(clampf(f.y, -1.0, 1.0))
+	return MODE_NAMES[mode]
+
+
+func cycle() -> String:
+	if mode == Mode.FREE:
+		mode = _before_free
+	mode = (mode + 1) % Mode.FREE   # the driving cameras only
 	_cockpit_yaw = 0.0
 	_cockpit_pitch = 0.0
 	_track_pos = Vector3.ZERO

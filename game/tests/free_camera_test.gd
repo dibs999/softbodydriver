@@ -1,5 +1,6 @@
 extends SceneTree
-## Free camera: the camera cycle reaches it, the driving keys fly it, and the car holds still.
+## Free camera: its own key (F9) toggles it, the camera cycle skips it, the driving keys fly it,
+## and the car holds still.
 ## godot --headless -s res://tests/free_camera_test.gd
 
 var frame := 0
@@ -25,9 +26,11 @@ func _process(_d: float) -> bool:
 		return frame > 600
 	if frame == 30:
 		var CameraRig: GDScript = load("res://scripts/camera_rig.gd")
-		while scene.cam.mode != CameraRig.Mode.FREE:
+		for k in 8:
 			scene.cam.cycle()
-		check(CameraRig.MODE_NAMES[scene.cam.mode] == "Freie Kamera", "Camera cycle reaches the free camera")
+			check(scene.cam.mode != CameraRig.Mode.FREE, "Cycling the driving cameras never enters the free camera (%d)" % k)
+		scene.cam.toggle_free()
+		check(CameraRig.MODE_NAMES[scene.cam.mode] == "Freie Kamera", "Its own key switches to the free camera")
 		start_cam = scene.cam.global_position
 		start_car = scene.player.get_position_ws()
 		Input.action_press("throttle")
@@ -38,6 +41,9 @@ func _process(_d: float) -> bool:
 		print("  camera moved %.1f m, car moved %.2f m" % [moved.length(), scene.player.get_position_ws().distance_to(start_car)])
 		check(moved.length() > 3.0 and moved.normalized().dot(forward) > 0.9, "Throttle key flies the camera forward")
 		check(scene.player.get_position_ws().distance_to(start_car) < 0.5, "The car holds still while the free camera flies")
+		scene.cam.toggle_free()
+		var Rig: GDScript = load("res://scripts/camera_rig.gd")
+		check(scene.cam.mode != Rig.Mode.FREE, "The same key returns to the driving camera")
 		print("TEST OK" if not failed else "TEST FAILED")
 		quit(1 if failed else 0)
 		return true
