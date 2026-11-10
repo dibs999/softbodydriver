@@ -101,6 +101,7 @@ public:
     Vector3 get_chase_target() const;
     Vector3 get_driver_eye() const;
     Variant get_dashboard_transform() const;
+    Array get_plate_transforms() const;
     Array get_mirror_surfaces() const; ///< Live optical faces and their deformed planes, in world space.
     Basis get_visual_basis() const;
     Vector3 get_forward() const;

@@ -1193,6 +1193,8 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
     }
 
     // ---- end caps (front fascia / rear panel)
+    Vec3 frontPlateSum{0, 0, 0};
+    int frontPlateCount = 0;
     for (int end = 0; end < 2; ++end) {
         const std::size_t si = end == 0 ? 0 : xs.size() - 1;
         const real xEnd = xs[si];
@@ -1216,7 +1218,8 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                 if (p.y < yB + 0.13) return "trim";
                 return "paint";
             }
-            if (az < 0.26 && p.y > bd.tailHeight - 0.40 && p.y < bd.tailHeight - 0.27) return "plate";
+            // The rear plate is a separate box above (with its lettering); a second white field
+            // in the panel below it read as a doubled, blank plate.
             if (p.y < yB + 0.15) return "trim";
             return "paint";
         };
@@ -1226,6 +1229,10 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                 if (std::abs(p00.y - p10.y) < 1e-5 && std::abs(p01.z - p00.z) < 1e-6) continue;
                 const Vec3 midpoint = (p00 + p11) * 0.5;
                 std::string mat = bumperMaterial(capMaterial(midpoint), midpoint.x, midpoint.y);
+                if (end == 1 && capMaterial(midpoint) == "plate") {
+                    frontPlateSum += midpoint;
+                    ++frontPlateCount;
+                }
                 if (end == 0 && hasLid && midpoint.y > lidLatchY && mat.rfind("bumper_", 0) != 0) mat = "tailgate_" + mat;
                 const auto& capNodes = surfaceNodes(mat);
                 MeshSurface& m = vb.surf(mat);
@@ -1297,6 +1304,13 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                 vb.box("taillight", {-0.011, yT + stripe, zc}, {0.010, 0.009, tw}, yT > lidLatchY ? lidNodes : bodyNodes, ax, {0, 1, 0}, az);
         }
         vb.box("plate", {-0.020, yT - 0.145, 0.0}, {0.013, 0.046, 0.23}, yT - 0.145 > lidLatchY ? lidNodes : bodyNodes);
+        // Lettering anchors: the rear plate's outer face, the front plate region's centre.
+        vis.plateRear = vb.skinNearest({-0.034, yT - 0.145, 0.0}, yT - 0.145 > lidLatchY ? lidNodes : bodyNodes);
+        if (frontPlateCount > 0) {
+            const Vec3 c = frontPlateSum * (1.0 / frontPlateCount);
+            vis.plateFront = vb.skinNearest({c.x + 0.004, c.y, 0.0}, frontNodes);
+            vis.hasPlates = true;
+        }
     }
 
     // Black rocker mouldings between the wheel arches, a roof spoiler over the tailgate of
