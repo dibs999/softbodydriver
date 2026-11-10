@@ -265,6 +265,12 @@ public:
     real contactThickness() const { return contactThickness_; }
     /// Sleep (props): a body that has come to rest is not simulated until a moving body comes
     /// near it, it is repaired or moved. Dozens of resting cones, drums and bins then cost nothing.
+    /// Props: faces pointing down (into the ground they lie on) do not catch other bodies' nodes.
+    /// A tyre's contact-patch nodes sit a few mm deep in the road, i.e. under the bottom face of
+    /// anything lying there; that contact lifted the object's edge until the tyre flipped it and
+    /// jammed on it. The prop's own nodes still collide with the other body's faces.
+    void setDownFacesPassive(bool on) { downFacesPassive_ = on; }
+    bool downFacesPassive() const { return downFacesPassive_; }
     void setSleepEnabled(bool on) { sleepEnabled_ = on; if (!on) wake(); }
     bool sleepEnabled() const { return sleepEnabled_; }
     bool asleep() const { return asleep_; }
@@ -391,7 +397,7 @@ private:
     bool requestOpen(DoorMechanism& m, bool open);
     std::vector<DoorMechanism> doors_, lids_;
     real contactThickness_ = -1.0;
-    bool sleepEnabled_ = false, asleep_ = false;
+    bool sleepEnabled_ = false, asleep_ = false, downFacesPassive_ = false;
     real restTime_ = 0.0, maxSpeedSq_ = 0.0;
     std::vector<Vec3> prevPos_;
     std::vector<Beam> beams_;

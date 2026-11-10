@@ -219,6 +219,7 @@ std::size_t World::collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody)
         const real lenN = length(crossVec);
         if (lenN < 1e-9) continue;
         const Vec3 n = crossVec / lenN;
+        if (triBody.downFacesPassive() && n.y < -0.7) continue;
 
         const real d00 = dot(e0, e0);
         const real d01 = dot(e0, e1);

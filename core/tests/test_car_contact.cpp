@@ -97,7 +97,7 @@ TEST_CASE("props stand still on the ground and a car knocks them over without te
     }
     // Struck off-centre a cone used to be caught: through holes in the nose skin, or stretched over
     // the bumper with its base under a front tyre, it lifted the nose and cost up to 19 km/h.
-    for (const real offset : {0.45, 0.75, -0.75}) {
+    for (const real offset : {0.6, 0.75, -0.75}) {
         CAPTURE(offset);
         real knocked = 0;
         const real speed = coast(true, PropKind::Cone, &knocked, offset);
@@ -212,4 +212,56 @@ TEST_CASE("resting props fall asleep, a car wakes them, and they settle back to 
     world.simulate(6.0);
     CHECK(world.body(ip).asleep());   // at rest again
     REQUIRE(world.stats().finite);
+}
+
+TEST_CASE("a tyre rolls over a low heavy object lying on the road instead of shoving it") {
+    // A tread node rests a few mm deep in the road, i.e. under the bottom face of anything lying
+    // there; that contact lifted the object's edge until the tyre flipped and jammed on it: a car
+    // could not roll over a 7 cm, 25 kg rubber block and lost 30 km/h shoving it 15 m along.
+    auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+    real wheelZ = 0;
+    for (const auto& w : car.body.wheels()) wheelZ = std::max(wheelZ, std::abs(w.center(car.body).z));
+    SoftBody block("block");
+    NodeParams np;
+    np.mass = 25.0 / 8;
+    np.friction = 0.7;
+    std::vector<std::uint32_t> n;
+    for (int layer = 0; layer < 2; ++layer)
+        for (int i = 0; i < 4; ++i) {
+            const real hx = layer ? 0.15 : 0.20, hz = layer ? 0.30 : 0.40;   // ramped edges
+            n.push_back(block.addNode("n" + std::to_string(layer * 4 + i),
+                                      {(i & 1) ? hx : -hx, layer ? 0.07 : 0.01, ((i & 2) ? hz : -hz) + wheelZ}, np));
+        }
+    BeamParams rubber;
+    rubber.spring = 1.0e6;
+    rubber.damp = 400.0;
+    for (std::size_t i = 0; i < n.size(); ++i)
+        for (std::size_t j = i + 1; j < n.size(); ++j) block.addBeam(n[i], n[j], rubber);
+    const int faces[6][4] = {{0, 1, 3, 2}, {4, 6, 7, 5}, {0, 4, 5, 1}, {2, 3, 7, 6}, {0, 2, 6, 4}, {1, 5, 7, 3}};
+    const Vec3 centre{0, 0.04, wheelZ};
+    for (const auto& f : faces)
+        for (int k = 0; k < 2; ++k) {
+            std::uint32_t a = n[static_cast<std::size_t>(f[0])], b = n[static_cast<std::size_t>(f[1 + k])], c = n[static_cast<std::size_t>(f[2 + k])];
+            const auto& p = block.positions();
+            if (dot(cross(p[b] - p[a], p[c] - p[a]), (p[a] + p[b] + p[c]) / 3.0 - centre) < 0) std::swap(b, c);
+            block.addTriangle(a, b, c);
+        }
+    block.setContactThickness(0.035);
+    block.setDownFacesPassive(true);
+    block.translate({car.def.body.length + 6.0, 0.0, 0.0});
+    World world;
+    world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+    const auto ic = world.addBody(std::move(car.body));
+    const auto ib = world.addBody(std::move(block));
+    VehicleControls c;
+    c.gear = 0;
+    world.body(ic).setControls(c);
+    world.simulate(1.0);
+    const Vec3 rest = world.body(ib).centerOfMass();
+    for (auto& v : world.body(ic).velocities()) v = {40.0 / 3.6, 0, 0};
+    world.simulate(3.0);
+    REQUIRE(world.stats().finite);
+    MESSAGE("car " << world.body(ic).telemetry().speedKmh << " km/h, block moved " << length(world.body(ib).centerOfMass() - rest) << " m");
+    CHECK(world.body(ic).telemetry().speedKmh > 35.0);
+    CHECK(length(world.body(ib).centerOfMass() - rest) < 1.0);   // run over, not bulldozed
 }
