@@ -82,7 +82,15 @@ CarDefinition parseCarDefinition(const std::string& text, const std::string& sou
     try {
         forEach(j, source, [&](const std::string& k, const json& v) {
             SB_STR("id", d.id) SB_STR("name", d.name) SB_STR("brand", d.brand) SB_STR("description", d.description)
-            if (k == "visualModel" || k == "credits") return true;  // handled by the game (render model)
+            if (k == "visualModel") {
+                // Rendered by the game. A model without its own rear door parts keeps rigid rear
+                // doors, so the physics does not open or shed a door the model cannot show.
+                const bool rearParts = v.is_object() && v.contains("parts") && v["parts"].is_object() &&
+                                       v["parts"].contains("rdoor_left") && v["parts"].contains("rdoor_right");
+                if (!rearParts) d.body.detachableRearDoors = false;
+                return true;
+            }
+            if (k == "credits") return true;
             if (k == "body") { parseBody(d.body, v); return true; }
             if (k == "chassis") {
                 forEach(v, "chassis", [&](const std::string& k2, const json& v2) {

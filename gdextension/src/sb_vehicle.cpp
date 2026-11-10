@@ -156,7 +156,7 @@ void SBVehicle::applyTransform(const Transform3D& xform) {
 
 Ref<Material> SBVehicle::materialFor(const std::string& name, const Dictionary& lib) const {
     std::string base = name;
-    for (const std::string prefix : {"bumper_front_", "bumper_rear_", "door_left_", "door_right_"})
+    for (const std::string prefix : {"bumper_front_", "bumper_rear_", "door_left_", "door_right_", "rdoor_left_", "rdoor_right_"})
         if (base.rfind(prefix, 0) == 0) { base = base.substr(prefix.size()); break; }
     if (base == "mirror_left" || base == "mirror_right") base = "mirror";
     const String key(base == "bonnet" ? "paint" : base == "bonnet_inner" ? "interior" : base.c_str());
@@ -242,7 +242,7 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
         arrays[Mesh::ARRAY_NORMAL] = n;
         arrays[Mesh::ARRAY_TEX_UV] = uv;
         std::string base = s.material;
-        for (const std::string prefix : {"bumper_front_", "bumper_rear_", "door_left_", "door_right_"})
+        for (const std::string prefix : {"bumper_front_", "bumper_rear_", "door_left_", "door_right_", "rdoor_left_", "rdoor_right_"})
             if (base.rfind(prefix, 0) == 0) { base = base.substr(prefix.size()); break; }
         const bool paintSurface = base == "paint" || base == "bonnet";
         if (paintSurface) {
@@ -258,7 +258,8 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
         g.mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, arrays, Array(), Dictionary(),
                                         Mesh::ARRAY_FLAG_USE_DYNAMIC_UPDATE);
         // Rear and rear-quarter panes of the generated bodies are tinted privacy glass.
-        const bool privacy = s.material == "glass" && s.pane >= 2 && materials.has("glass_privacy");
+        const bool privacy = ((s.material == "glass" && s.pane >= 2) || s.material == "rdoor_left_glass" || s.material == "rdoor_right_glass") &&
+                             materials.has("glass_privacy");
         g.mesh->surface_set_material(0, materialFor(privacy ? std::string("glass_privacy") : s.material, materials));
         g.format = static_cast<int64_t>(g.mesh->surface_get_format(0));
         const auto fmt = static_cast<BitField<RenderingServer::ArrayFormat>>(g.format);
@@ -949,8 +950,14 @@ void SBVehicle::sync_from_world() {
     if (d != lastDeformed_ || b != lastBroken_ || nodeDamage_.size() != pos_.size()) {
         // Worst plastic strain at each node (actuated beams excluded: steering is not damage).
         nodeDamage_.assign(pos_.size(), 0.0f);
+        // A released latch (bonnet opened from the cabin) breaks its beams on purpose: that is not
+        // crash damage, so it must not scratch the paint around the striker.
+        const auto& groupNames = body.breakGroupNames();
+        std::vector<bool> latch(groupNames.size(), false);
+        for (std::size_t g = 0; g < groupNames.size(); ++g) latch[g] = groupNames[g].ends_with("_latch");
         for (const sb::Beam& bm : body.beams()) {
             if (bm.hydroInput >= 0 || bm.a >= nodeDamage_.size() || bm.b >= nodeDamage_.size()) continue;
+            if (bm.broken && bm.breakGroup >= 0 && static_cast<std::size_t>(bm.breakGroup) < latch.size() && latch[static_cast<std::size_t>(bm.breakGroup)]) continue;
             const float strain = bm.broken ? 0.2f : static_cast<float>(bm.plasticStrain());
             nodeDamage_[bm.a] = std::max(nodeDamage_[bm.a], strain);
             nodeDamage_[bm.b] = std::max(nodeDamage_[bm.b], strain);

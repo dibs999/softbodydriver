@@ -124,6 +124,7 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 			white_marks.append(Transform3D(basis, mid + n + Vector3(0, 0.012, 0)))
 
 	_oval_furniture(parent, world, straight, radius, cz)
+	_grandstand(parent, world, Vector3(0, 0, cz + radius + 26.0), 96.0)
 	# Start grid lines.
 	for i in 6:
 		white_marks.append(Transform3D(Basis.from_scale(Vector3(0.3, 1, 4)), Vector3(-20 + i * 9, 0.012, -40)))
@@ -244,6 +245,52 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 ## A used test facility: rubber laid down on the oval's racing line, in the braking zone and as
 ## doughnuts; asphalt patches of different age; distance boards along the back straight; floodlight
 ## masts around the pad.
+## Grandstand behind the north straight: eight concrete tiers with seat rows in alternating
+## colours, stairs, a cantilever roof on columns, a front fence and flags. One box collider.
+static func _grandstand(parent: Node3D, world: SBWorld, front: Vector3, length: float) -> void:
+	var concrete := C.noise_mat(Color(0.66, 0.66, 0.64), 0.08, 2.0, 0.9)
+	var steel := C.mat(Color(0.30, 0.32, 0.35), 0.45, 0.7)
+	var tiers: Array[Transform3D] = []
+	var seats: Array = [[], []]
+	var depth := 0.95
+	var rise := 0.48
+	for t in 8:
+		var z := front.z + depth * (t + 0.5)
+		var top := rise * (t + 1)
+		tiers.append(Transform3D(Basis.from_scale(Vector3(length, top, depth)), Vector3(front.x, top * 0.5, z)))
+		for block in 12:
+			var x := front.x - length * 0.5 + (block + 0.5) * length / 12.0
+			if block % 4 == 3:
+				continue   # stairs
+			var row: Array = seats[(t + block) % 2]
+			row.append(Transform3D(Basis.from_scale(Vector3(length / 12.0 - 0.4, 0.42, 0.42)), Vector3(x, top + 0.21, z + 0.18)))
+	var unit := BoxMesh.new()
+	C.scatter_multimesh(parent, unit, concrete, tiers)
+	var typed: Array[Transform3D] = []
+	typed.assign(seats[0])
+	C.scatter_multimesh(parent, unit, C.mat(Color(0.12, 0.30, 0.62), 0.6), typed, false)
+	typed = []
+	typed.assign(seats[1])
+	C.scatter_multimesh(parent, unit, C.mat(Color(0.86, 0.30, 0.10), 0.6), typed, false)
+	var back := front.z + depth * 8.0
+	world.add_box(Vector3(front.x, rise * 4.0, front.z + depth * 4.0), Vector3(length * 0.5, rise * 4.0, depth * 4.0), Vector3.ZERO, 0.8)
+	# Back wall, columns and a roof sloping towards the track.
+	C.box(parent, world, Vector3(front.x, 3.2, back + 0.15), Vector3(length * 0.5, 3.2, 0.15), Vector3.ZERO, concrete, 0.8)
+	for k in 9:
+		var x := front.x - length * 0.5 + k * length / 8.0
+		C.box(parent, world, Vector3(x, 4.6, back - 0.3), Vector3(0.18, 4.6, 0.18), Vector3.ZERO, steel, 0.6)
+	C.box(parent, null, Vector3(front.x, 9.1, front.z + depth * 4.6), Vector3(length * 0.5 + 1.0, 0.14, depth * 4.6), Vector3(-0.09, 0, 0),
+		C.mat(Color(0.82, 0.83, 0.85), 0.5, 0.4), 0.8, false)
+	# Front fence and flags.
+	C.box(parent, world, Vector3(front.x, 0.6, front.z - 0.6), Vector3(length * 0.5, 0.6, 0.04), Vector3.ZERO, steel, 0.6)
+	var flag_colours := [Color(0.86, 0.30, 0.10), Color(0.12, 0.30, 0.62), Color(0.95, 0.95, 0.92)]
+	for k in 7:
+		var x := front.x - length * 0.5 + k * length / 6.0
+		C.box(parent, null, Vector3(x, 6.5, back + 0.6), Vector3(0.05, 6.5, 0.05), Vector3.ZERO, steel, 0.6, false)
+		C.box(parent, null, Vector3(x + 0.75, 12.2, back + 0.6), Vector3(0.7, 0.45, 0.02), Vector3.ZERO, C.mat(flag_colours[k % 3], 0.8), 0.6, false)
+	C.label3d(parent, "TRIBÜNE  ·  START / ZIEL", Vector3(front.x, 7.6, back - 0.02), PI, 1.0)
+
+
 ## Race-track furniture on the oval: red and white kerbs along the inside of both bends and
 ## stacked tyre walls (colliding) behind the run-off on their outside.
 static func _oval_furniture(parent: Node3D, world: SBWorld, straight: float, radius: float, cz: float) -> void:

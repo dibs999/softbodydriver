@@ -71,8 +71,12 @@ func update(delta: float) -> void:
 				continue
 			var rel: Vector3 = other.get_position_ws() - p
 			var along := rel.dot(fwd)
-			if along > -3.0 and along < 22.0 and absf(rel.dot(right)) < 2.4 and other.get_velocity().dot(fwd) < v - 0.5:
-				want = -3.0 if rel.dot(right) >= 0.0 else 3.0
+			var lateral := rel.dot(right)
+			if absf(along) < 6.0 and absf(lateral) < 3.0:
+				# Running side by side: keep a car's width of air instead of both taking the line.
+				want = -2.6 if lateral >= 0.0 else 2.6
+			elif along > -3.0 and along < 22.0 and absf(lateral) < 2.4 and other.get_velocity().dot(fwd) < v - 0.5:
+				want = -3.0 if lateral >= 0.0 else 3.0
 		_lane = move_toward(_lane, want, delta * 2.5)
 		var path_dir := waypoints[(idx + look) % n] - waypoints[(idx + look - 1 + n) % n]
 		var path_right := Vector3(-path_dir.z, 0, path_dir.x).normalized()   # = dir × up, as in car_xform

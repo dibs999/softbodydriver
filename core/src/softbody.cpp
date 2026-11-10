@@ -466,7 +466,9 @@ void SoftBody::accumulateBeamForces(real dt) {
 
         real hydroTravel = 0.0;
         if (bm.hydroInput >= 0) {
-            const real in = inputs_[static_cast<std::size_t>(bm.hydroInput)];
+            // Channels never written read as 0 (the vector only grows on setInput).
+            const auto channel = static_cast<std::size_t>(bm.hydroInput);
+            const real in = channel < inputs_.size() ? inputs_[channel] : 0.0;
             hydroTravel = bm.baseRestLength * bm.hydroRatio * in;
             bm.restLength = bm.baseRestLength + hydroTravel + bm.hydroOffset;
         }

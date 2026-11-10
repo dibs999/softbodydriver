@@ -55,6 +55,7 @@ struct CarBodyDef {
     std::array<real, 3> paint{0.62, 0.05, 0.04};
     real paintMetallic = 0.55;
     bool detachableDoors = false; ///< Opt-in physical front doors with reversible latches.
+    bool detachableRearDoors = true; ///< Four-door bodies also get physical rear doors (off for imported models without rear door parts).
     bool detachableBumpers = false; ///< Opt-in independent front/rear lower fascia assemblies.
     /// Aerodynamics. The collision skin's per-triangle drag is calibrated so that the whole
     /// body produces exactly Cd * A head-on. 0 = typical value for the body style /
@@ -205,6 +206,7 @@ struct DoorLayout {
 
 struct CarLayout {
     std::array<DoorLayout, 2> frontDoors; // left, right
+    std::array<DoorLayout, 2> rearDoors;  // left, right (four-door bodies with detachable doors)
 
     std::vector<std::uint32_t> bodyNodes;
     /// Floor nodes at the front / rear axle (left, right): forward = front - rear, right = R - L.

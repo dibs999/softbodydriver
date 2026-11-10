@@ -210,7 +210,7 @@ func handle_action(event: InputEvent) -> bool:
 func toggle_door(index: int) -> bool:
 	if not game or not is_instance_valid(game.player): return false
 	var doors: Array = game.player.get_door_states()
-	var name := "Fahrertür" if index == 0 else "Beifahrertür"
+	var name: String = ["Fahrertür", "Beifahrertür", "Tür hinten links", "Tür hinten rechts"][clampi(index, 0, 3)]
 	if index < 0 or index >= doors.size():
 		game.hud.toast("Bewegliche Türen für dieses Modell nicht verfügbar")
 		return false
@@ -387,7 +387,7 @@ func _update_debris(v: SBVehicle, s: Dictionary) -> void:
 		var idx := int(door["index"])
 		var now := bool(door["missing"])
 		if now and not missing.get(idx, false):
-			var at := v.get_position_ws() + v.get_right() * (0.9 if idx == 1 else -0.9) + v.get_up() * 0.6
+			var at := v.get_position_ws() + v.get_right() * (0.9 if idx % 2 == 1 else -0.9) + v.get_forward() * (-0.6 if idx >= 2 else 0.4) + v.get_up() * 0.6
 			_spawn_shards(at, v.get_velocity(), 40, Color(0.06, 0.06, 0.06, 1.0))
 		missing[idx] = now
 

@@ -83,7 +83,13 @@ func run() -> void:
 	for suffix in ["", ".bak", ".tmp", ".bak.tmp"]:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(profile.profile_path + suffix))
 	if scene.audio: scene.audio.free()
+	# Generator-fed audio (rain, vehicle) sometimes hung the engine on quit when it was torn down
+	# with the scene; stop and free every player first.
+	for player in scene.find_children("*", "AudioStreamPlayer", true, false):
+		(player as AudioStreamPlayer).stop()
+		player.free()
 	scene.queue_free()
+	await process_frame
 	await process_frame
 	print("FIRST DRIVE FLOW TEST ", "OK" if failures == 0 else "FAILED")
 	quit(1 if failures else 0)

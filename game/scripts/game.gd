@@ -719,6 +719,13 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 			["Beifahrertür öffnen / schließen", func():
 				equipment.toggle_door(1)
 				_toggle_pause()],
+			["Hintertüren öffnen / schließen", func():
+				if player.get_door_states().size() >= 4:
+					equipment.toggle_door(2)
+					player.toggle_door(3)
+				else:
+					hud.toast("Dieses Modell hat keine beweglichen Hintertüren")
+				_toggle_pause()],
 			["Scheibenwischer umschalten", func():
 				hud.toast(wipers.cycle_mode())
 				_toggle_pause()]]:

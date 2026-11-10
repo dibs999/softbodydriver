@@ -72,12 +72,12 @@ func run_cycle() -> bool:
 	counts.drives += 1
 	hold("handbrake", true)
 	var before_doors := int(scene.player.get_telemetry()["broken_beams"])
-	for side in 2:
+	for side in scene.player.get_door_states().size():
 		if not check(scene.player.set_door_open(side, true), "door opens after driving and braking"): return false
 	if not ticks(16): return false
 	for door: Dictionary in scene.player.get_door_states():
 		if not check(door.attached and float(door.angle_degrees) > 50, "door physically opens on intact hinges"): return false
-	for side in 2:
+	for side in scene.player.get_door_states().size():
 		if not check(scene.player.set_door_open(side, false), "door closure accepted"): return false
 	if not ticks(20): return false
 	for door: Dictionary in scene.player.get_door_states():

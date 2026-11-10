@@ -55,7 +55,9 @@ func _setup() -> void:
 	car.set_input(0, 1, 0, 1)
 	world.step_blocking(2.0)
 	if args.size() > 2 and args[2] == "open":
-		print("door ", car.set_door_open(0, true), " bonnet ", car.release_bonnet())
+		for d in car.get_door_states().size():
+			print("door ", d, " ", car.set_door_open(d, true))
+		print("bonnet ", car.release_bonnet())
 		for i in 40:
 			world.step_blocking(0.1)
 			world.sync_visuals()

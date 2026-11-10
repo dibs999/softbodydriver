@@ -40,7 +40,7 @@ TEST_CASE("reference bumpers have independent mass-budgeted cages and sacrificia
     CHECK(car.body.totalMass() == doctest::Approx(car.def.chassis.curbMass).epsilon(1e-6));
     const real rearAxle = car.def.body.length - car.def.body.frontOverhang - car.def.body.wheelbase;
     CHECK((car.body.centerOfMass().x - rearAxle) / car.def.body.wheelbase == doctest::Approx(car.def.chassis.frontWeight).epsilon(0.005));
-    REQUIRE(car.body.selfCollisionPanels().size() == 5);
+    REQUIRE(car.body.selfCollisionPanels().size() == 7);   // bonnet, two bumpers, four doors
     for (const auto& panel : car.body.selfCollisionPanels()) {
         CHECK_FALSE(car.body.selfCollisionActive(panel));
         CHECK_FALSE(panel.triangles.empty());
