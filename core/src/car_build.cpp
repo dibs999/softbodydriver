@@ -1199,7 +1199,11 @@ CarBuild buildCar(const CarDefinition& def) {
                 std::abs(ctr.z) > prof.hw * 0.6 &&
                 (pa.z * pb.z > 0 && pb.z * pc.z > 0) &&
                 ctr.y > prof.ySill(ctr.x) - 0.01) return;
-            Vec3 out{0.0, ctr.y - yAxis, ctr.z};
+            // Outward = away from the car's centre line, including along it near the ends: sliver
+            // triangles at the nose and tail must not face into the car, or they hold a foreign
+            // node from behind (two cars hooked together after a rear-end collision).
+            const real axisX = std::clamp(ctr.x, 0.55, L - 0.55);
+            Vec3 out{ctr.x - axisX, ctr.y - yAxis, ctr.z};
             if (ctr.x > L - 0.05) out.x += 1.0;
             if (ctr.x < 0.05) out.x -= 1.0;
             if (dot(n, out) < 0) std::swap(ub, uc);

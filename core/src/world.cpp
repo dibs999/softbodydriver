@@ -182,7 +182,13 @@ std::size_t World::collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody)
     Vec3 nodeLo, nodeHi;
     nodeBody.aabb(nodeLo, nodeHi);
 
-    std::size_t contacts = 0;
+    // Gather the single best contact per node first. Applying every triangle in range lets two
+    // faces of the other body that point towards each other (a crease, a pocket behind a fascia)
+    // push a penetrated node back and forth and hold it: the cars hooked together and towed each
+    // other. A node outside the surface beats one inside it; inside, the shallowest wins.
+    using Candidate = BodyContactCandidate;
+    std::vector<Candidate>& best = contactScratch_;
+    best.assign(nPos.size(), Candidate{});
     for (const ColTri& tri : triBody.triangles()) {
         if (tri.broken) continue;
         const std::uint32_t ia = tri.a, ib = tri.b, ic = tri.c;
@@ -225,6 +231,7 @@ std::size_t World::collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody)
 
             const real dist = dot(p - pa, n);
             if (dist >= skin || dist < -maxDepth) continue;
+            if (best[i].valid && dist <= best[i].dist) continue;
 
             // Project onto triangle plane and compute barycentric coordinates (w0, w1, w2).
             const Vec3 pProj = p - n * dist;
@@ -242,45 +249,53 @@ std::size_t World::collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody)
             w2 = std::max<real>(0.0, w2);
             const real wSum = w0 + w1 + w2;
             if (wSum <= 0.0) continue;
-            w0 /= wSum;
-            w1 /= wSum;
-            w2 /= wSum;
 
-            const Vec3 vTri = tVel[ia] * w0 + tVel[ib] * w1 + tVel[ic] * w2;
-            const Vec3 vRel = nVel[i] - vTri;
-            const real vn = dot(vRel, n);
+            const Vec3 vTri = (tVel[ia] * w0 + tVel[ib] * w1 + tVel[ic] * w2) / wSum;
+            const real vn = dot(nVel[i] - vTri, n);
             // Ignore back-face encounters where the node is moving along +n from behind.
             if (dist < 0.0 && vn > 1.0) continue;
+            best[i] = {dist, n, ia, ib, ic, w0 / wSum, w1 / wSum, w2 / wSum, tri.friction, true};
+        }
+    }
 
-            const real wp = nInvM[i];
-            const real wa = tInvM[ia], wb = tInvM[ib], wc = tInvM[ic];
-            const real wTri = w0 * w0 * wa + w1 * w1 * wb + w2 * w2 * wc;
-            const real wTotal = wp + wTri;
-            if (wTotal <= 0.0) continue;
+    std::size_t contacts = 0;
+    for (std::size_t i = 0; i < nPos.size(); ++i) {
+        const Candidate& c = best[i];
+        if (!c.valid) continue;
+        const Vec3 n = c.n;
+        const std::uint32_t ia = c.a, ib = c.b, ic = c.c;
+        const real w0 = c.w0, w1 = c.w1, w2 = c.w2;
+        const real wp = nInvM[i];
+        const real wa = tInvM[ia], wb = tInvM[ib], wc = tInvM[ic];
+        const real wTri = w0 * w0 * wa + w1 * w1 * wb + w2 * w2 * wc;
+        const real wTotal = wp + wTri;
+        if (wTotal <= 0.0) continue;
 
-            const real penetration = skin - dist;
-            const Vec3 corr = n * (penetration / wTotal);
-            nPos[i] += corr * wp;
-            tPos[ia] -= corr * (w0 * wa);
-            tPos[ib] -= corr * (w1 * wb);
-            tPos[ic] -= corr * (w2 * wc);
-            ++contacts;
+        const real penetration = skin - c.dist;
+        const Vec3 corr = n * (penetration / wTotal);
+        nPos[i] += corr * wp;
+        tPos[ia] -= corr * (w0 * wa);
+        tPos[ib] -= corr * (w1 * wb);
+        tPos[ic] -= corr * (w2 * wc);
+        ++contacts;
 
-            if (vn < 0.0) {
-                constexpr real kRestitution = 0.05;
-                const real jn = -(1.0 + kRestitution) * vn / wTotal;
-                const Vec3 vt = vRel - n * vn;
-                const real vtLen = length(vt);
-                const real mu = 0.5 * (nFric[i] + tri.friction);
-                const real jt = vtLen > 1e-9 ? std::min(mu * jn, vtLen / wTotal) : 0.0;
-                const Vec3 vtDir = vtLen > 1e-9 ? (vt / vtLen) : Vec3{};
-                const Vec3 impulse = n * jn - vtDir * jt;
+        const Vec3 vTri = tVel[ia] * w0 + tVel[ib] * w1 + tVel[ic] * w2;
+        const Vec3 vRel = nVel[i] - vTri;
+        const real vn = dot(vRel, n);
+        if (vn < 0.0) {
+            constexpr real kRestitution = 0.05;
+            const real jn = -(1.0 + kRestitution) * vn / wTotal;
+            const Vec3 vt = vRel - n * vn;
+            const real vtLen = length(vt);
+            const real mu = 0.5 * (nFric[i] + c.friction);
+            const real jt = vtLen > 1e-9 ? std::min(mu * jn, vtLen / wTotal) : 0.0;
+            const Vec3 vtDir = vtLen > 1e-9 ? (vt / vtLen) : Vec3{};
+            const Vec3 impulse = n * jn - vtDir * jt;
 
-                nVel[i] += impulse * wp;
-                tVel[ia] -= impulse * (w0 * wa);
-                tVel[ib] -= impulse * (w1 * wb);
-                tVel[ic] -= impulse * (w2 * wc);
-            }
+            nVel[i] += impulse * wp;
+            tVel[ia] -= impulse * (w0 * wa);
+            tVel[ib] -= impulse * (w1 * wb);
+            tVel[ic] -= impulse * (w2 * wc);
         }
     }
     return contacts;

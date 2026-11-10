@@ -1,4 +1,4 @@
-add_executable(sbcore_tests test_physics.cpp test_car.cpp test_body_panels.cpp test_car_visual_doors.cpp test_doors.cpp test_self_contact.cpp)
+add_executable(sbcore_tests test_physics.cpp test_car.cpp test_body_panels.cpp test_car_visual_doors.cpp test_doors.cpp test_self_contact.cpp test_car_contact.cpp)
 target_compile_definitions(sbcore_tests PRIVATE SB_CARS_DIR="${PROJECT_SOURCE_DIR}/game/cars")
 target_link_libraries(sbcore_tests PRIVATE sb::core)
 target_include_directories(sbcore_tests SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/third_party)

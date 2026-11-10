@@ -81,6 +81,14 @@ private:
     std::size_t lastBodyContacts_ = 0;
     std::size_t lastSelfContacts_ = 0, lastSelfContactCandidates_ = 0;
     std::vector<Vec3> selfContactPrevious_; ///< Reused only for bodies with active panel contact.
+    struct BodyContactCandidate {
+        real dist = -1e9;
+        Vec3 n{};
+        std::uint32_t a = 0, b = 0, c = 0;
+        real w0 = 0, w1 = 0, w2 = 0, friction = 0;
+        bool valid = false;
+    };
+    std::vector<BodyContactCandidate> contactScratch_; ///< Best node-vs-triangle contact per node (inter-body).
 };
 
 }  // namespace sb
