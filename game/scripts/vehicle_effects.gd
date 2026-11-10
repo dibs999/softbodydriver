@@ -9,6 +9,11 @@ var surfaces: RefCounted
 var marks: MultiMeshInstance3D
 var wheel_surfaces := ["asphalt", "asphalt", "asphalt", "asphalt"]
 var _surface_timer := 0.0
+## 0 clean .. 1 caked; grows on loose ground, washes off in the rain.
+var grime := 0.0
+var grime_color := Color(0.36, 0.28, 0.19)
+var _paint_materials: Array = []
+var _grime_applied := -1.0
 var _mark_timer := 0.0
 var _effect_time := 0.0
 var tires: Array[CPUParticles3D] = []
@@ -127,6 +132,7 @@ func _process(delta: float) -> void:
 				wheel_surfaces[i] = surfaces.at(wheels[i])
 				grip[i] = surfaces.effective_grip(wheel_surfaces[i])
 			vehicle.set_surface_grip(grip)
+			_update_grime(0.08)
 	for p: CPUParticles3D in get_children():
 		p.speed_scale = 0.0 if world.paused else world.time_scale
 		if teleported:
@@ -137,6 +143,37 @@ func _process(delta: float) -> void:
 	if world.paused or not near:
 		return
 	update_effects(vehicle.get_telemetry(), vehicle.get_effect_anchors(), vehicle.get_wheel_slip(), vehicle.get_wheel_load(), delta * world.time_scale)
+
+
+## Dust on sand, mud on grass and gravel: dirt climbs up the body with speed and time on loose
+## ground; rain washes it off slowly.
+func _update_grime(dt: float) -> void:
+	var loose := 0
+	var sand := 0
+	for i in 4:
+		var kind := String(wheel_surfaces[i]) if i < wheel_surfaces.size() else ""
+		if kind in ["sand", "gravel", "grass"]: loose += 1
+		if kind == "sand": sand += 1
+	var speed := absf(vehicle.get_speed_kmh())
+	if loose > 0 and speed > 3.0:
+		var target := Color(0.74, 0.62, 0.47) if sand * 2 >= loose else Color(0.34, 0.27, 0.18)
+		grime_color = grime_color.lerp(target, 0.02)
+		grime = minf(1.0, grime + dt * 0.0045 * loose / 4.0 * clampf(speed / 40.0, 0.25, 1.6))
+	var scene := get_tree().current_scene if is_inside_tree() else null
+	var weather: Node = scene.get("weather") if scene else null
+	var wet := float(weather.get("wetness")) if weather and weather.get("wetness") != null else 0.0
+	grime = maxf(0.0, grime - dt * 0.004 * wet)
+	if absf(grime - _grime_applied) < 0.01: return
+	_grime_applied = grime
+	if _paint_materials.is_empty():
+		for child in vehicle.get_children():
+			if child is MeshInstance3D:
+				var m: Material = (child as MeshInstance3D).get_active_material(0)
+				if m is ShaderMaterial and (m as ShaderMaterial).shader.resource_path.ends_with("car_paint.gdshader"):
+					_paint_materials.append(m)
+	for m: ShaderMaterial in _paint_materials:
+		m.set_shader_parameter("dirt_amount", grime)
+		m.set_shader_parameter("dirt_color", grime_color)
 
 
 func update_effects(t: Dictionary, anchors: Dictionary, slip: PackedFloat32Array, load: PackedFloat32Array, delta: float) -> void:

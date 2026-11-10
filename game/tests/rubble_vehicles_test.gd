@@ -45,6 +45,9 @@ func run() -> void:
 				if m is StandardMaterial3D:
 					paint = (m as StandardMaterial3D).albedo_color
 					found = true
+				elif m is ShaderMaterial and (m as ShaderMaterial).get_shader_parameter("paint") is Color:
+					paint = (m as ShaderMaterial).get_shader_parameter("paint")   # crash-wear paint
+					found = true
 		var rgb: Array = info["paint"]
 		check(found and absf(paint.r - float(rgb[0])) < 0.01 and absf(paint.b - float(rgb[2])) < 0.01, "%s keeps its own paint colour" % id)
 		var start := car.get_position_ws()
