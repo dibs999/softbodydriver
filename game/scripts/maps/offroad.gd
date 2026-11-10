@@ -335,16 +335,17 @@ static func _sign(parent: Node3D, world: SBWorld, p: Vector3, caption: String, g
 	C.label3d(parent,caption,p+Vector3(0,1.9,0.11),0,0.32)
 
 static func _rock_garden(parent: Node3D, world: SBWorld, path: PackedVector3Array, ground: Callable) -> Vector3:
-	var rock := SphereMesh.new()
-	rock.radius = 1
-	rock.height = 2
-	rock.radial_segments = 7
-	rock.rings = 3
-	var transforms: Array[Transform3D] = []
+	var ROCKS := preload("res://scripts/maps/rocks.gd")
+	var batches: Array = [[], [], [], []]
 	for i in range(14,path.size()-10,4):
 		var p := path[i]+Vector3(0.75 if i%8==0 else -0.75,0,0)
 		p.y = ground.call(p.x,p.z)+0.06
-		transforms.append(Transform3D(Basis.from_scale(Vector3(0.48,0.18,0.55)),p))
+		var yaw := float(i) * 1.7
+		batches[(i / 4) % 4].append(Transform3D(Basis(Vector3.UP, yaw).scaled_local(Vector3(0.96,0.4,1.1)),p))
 		world.add_box(p,Vector3(0.31,0.12,0.36),Vector3.ZERO,0.9)
-	C.scatter_multimesh(parent,rock,C.surface_material("gravel",1.2,Color(0.68,0.68,0.62)),transforms,false)
+	var grey := ROCKS.grey_material()
+	for v in 4:
+		var transforms: Array[Transform3D] = []
+		transforms.assign(batches[v])
+		C.scatter_multimesh(parent,ROCKS.mesh(v),grey,transforms,true)
 	return path[path.size()/2]
