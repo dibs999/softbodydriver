@@ -176,10 +176,12 @@ Details und verbleibende Release-Abnahmen: [Linux-Paketierung](docs/RELEASE_LINU
 | `I` | Motor starten / abstellen |
 | `T` / `Z` | Traktionskontrolle / ABS ein/aus |
 | `C`, `V` | Kamera wechseln (Verfolger, Orbit, Cockpit, Motorhaube, Streckenrand), Rückblick |
+| `F9` | Freie Kamera ein/aus: Fahrtasten bewegen, `Q`/`E` runter/hoch, `Umschalt` schneller, rechte Maustaste umsehen; das Auto steht solange still |
 | Rechte Maustaste, Mausrad | Umsehen auch im Cockpit, Zoom in Außenkameras |
 | `R` / `Rücktaste` | Zurücksetzen / an Ort und Stelle reparieren |
 | `B` | Node-Beam-Röntgenansicht (verformte Beams gelb bis rot) |
 | `J`, `P` | Zeitlupe (×0,5 / ×0,25 / ×0,1), Physik pausieren |
+| `F5` | Wiederholung der letzten 20 Sekunden (läuft in Schleife, jede Kamera inklusive freier Kamera; `F5` beendet) |
 | `Tab` | Fahrzeug wechseln |
 | `F6` | Hindernis-Auto vor dir abstellen |
 | `F1`, `F2`, `Esc` | Hilfe, Fahrzeugdiagnose, Pausenmenü |

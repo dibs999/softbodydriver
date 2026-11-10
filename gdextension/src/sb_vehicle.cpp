@@ -80,6 +80,9 @@ void SBVehicle::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_lamp_states"), &SBVehicle::get_lamp_states);
     ClassDB::bind_method(D_METHOD("get_glass_states"), &SBVehicle::get_glass_states);
     ClassDB::bind_method(D_METHOD("get_bumper_states"), &SBVehicle::get_bumper_states);
+    ClassDB::bind_method(D_METHOD("replay_begin"), &SBVehicle::replay_begin);
+    ClassDB::bind_method(D_METHOD("replay_show", "frame"), &SBVehicle::replay_show);
+    ClassDB::bind_method(D_METHOD("replay_end"), &SBVehicle::replay_end);
     ClassDB::bind_method(D_METHOD("repair_in_place"), &SBVehicle::repair_in_place);
     ClassDB::bind_method(D_METHOD("set_debug_view", "on"), &SBVehicle::set_debug_view);
     ClassDB::bind_method(D_METHOD("get_debug_view"), &SBVehicle::get_debug_view);
@@ -883,8 +886,30 @@ void SBVehicle::sync_from_world() {
         ctl_.gear = -99;
     }
     const sb::SoftBody& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+    if (replaying_) {
+        // The visual shows the recording; controls above were still handed over.
+        visualReset_ = visualReset_ || visualResetPending_;
+        visualResetPending_ = false;
+        snapshotValid_ = true;
+        return;
+    }
     pos_ = body.positions();
     vel_ = body.velocities();
+    {
+        const double now = world_->world().time();
+        if (now < lastRecordTime_) replay_.clear();   // world restarted
+        if (lastRecordTime_ < 0.0 || now - lastRecordTime_ >= 1.0 / 30.0) {
+            lastRecordTime_ = now;
+            std::vector<float> frame(pos_.size() * 3);
+            for (std::size_t i = 0; i < pos_.size(); ++i) {
+                frame[i * 3] = static_cast<float>(pos_[i].x);
+                frame[i * 3 + 1] = static_cast<float>(pos_[i].y);
+                frame[i * 3 + 2] = static_cast<float>(pos_[i].z);
+            }
+            replay_.push_back(std::move(frame));
+            while (replay_.size() > 600) replay_.pop_front();
+        }
+    }
     visualReset_ = visualReset_ || visualResetPending_;
     visualResetPending_ = false;
     tel_ = body.telemetry();
@@ -1511,6 +1536,26 @@ Array SBVehicle::get_bumper_states() const {
         result.push_back(state);
     }
     return result;
+}
+
+int SBVehicle::replay_begin() {
+    if (replay_.empty()) return 0;
+    replaying_ = true;
+    return static_cast<int>(replay_.size());
+}
+
+void SBVehicle::replay_show(int frame) {
+    if (!replaying_ || replay_.empty()) return;
+    const auto& f = replay_[static_cast<std::size_t>(std::clamp(frame, 0, static_cast<int>(replay_.size()) - 1))];
+    if (f.size() != pos_.size() * 3) return;
+    for (std::size_t i = 0; i < pos_.size(); ++i) pos_[i] = {f[i * 3], f[i * 3 + 1], f[i * 3 + 2]};
+    vel_.assign(pos_.size(), sb::Vec3{});
+    visualResetPending_ = true;   // show the frame as it is, without render smoothing
+}
+
+void SBVehicle::replay_end() {
+    replaying_ = false;
+    visualResetPending_ = true;
 }
 
 bool SBVehicle::release_bonnet() {
