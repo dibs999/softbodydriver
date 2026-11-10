@@ -100,6 +100,20 @@
         "mirror_R",
         "mount_mirror_R"
       ],
+      "rdoor_left": [
+        "door_RL",
+        "door_trim_RL",
+        "glass_door_RL",
+        "handle_RL",
+        "latch_door_RL"
+      ],
+      "rdoor_right": [
+        "door_RR",
+        "door_trim_RR",
+        "glass_door_RR",
+        "handle_RR",
+        "latch_door_RR"
+      ],
       "bumper_front": [
         "bumper_front",
         "bolt_bumper_front"
@@ -107,10 +121,17 @@
       "bumper_rear": [
         "bumper_rear",
         "bolt_bumper_rear"
+      ],
+      "tailgate": [
+        "trunk_lid",
+        "latch_trunk"
       ]
     }
   },
   "body": {
+    "detachableTailgate": true, "tailgateHingeX": 0.745, "tailgateHingeY": 1.02, "tailgateLatchX": 0.045, "tailgateLatchY": 0.98,
+    "tailgateHalfWidth": 0.74, "tailgateOpenDeg": 70, "tailgateMass": 12,
+    "frontDoorHingeX": 3.355, "bPillarX": 2.273, "rearDoorHingeX": 2.255, "rearDoorRearX": 1.275,
     "style": "sedan",
     "doors": 4,
     "length": 4.88,

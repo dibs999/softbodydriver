@@ -478,5 +478,5 @@ static func _backdrop_hills(parent: Node3D) -> void:
 				var q := Vector3(x + rng.randf_range(-10, 10), h - 0.5, z + rng.randf_range(-10, 10))
 				(conifers if rng.randf() < 0.6 else trees).append(q)
 	C.terrain_tiles(parent, ox, oz, cell, nx, nz, heights, C.terrain_material("grass", 3.5, Color(0.73, 0.92, 0.66)), colors)
-	V.plant(parent, "conifer", conifers, 4042, 1.0, 1.4, false)
-	V.plant(parent, "broadleaf", trees, 4043, 1.0, 1.4, false)
+	V.plant(parent, "conifer", conifers, 4042, 1.0, 1.4, false, true)
+	V.plant(parent, "broadleaf", trees, 4043, 1.0, 1.4, false, true)

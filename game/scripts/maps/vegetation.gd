@@ -39,7 +39,9 @@ const LOD_DISTANCE := 130.0
 
 ## Places one species at ground points (base of the trunk). Colliders stay the caller's job.
 static func plant(parent: Node3D, kind: String, ground: Array[Vector3], seed := 1,
-		min_scale := 0.8, max_scale := 1.25, shadow := true) -> void:
+		min_scale := 0.8, max_scale := 1.25, shadow := true, backdrop := false) -> void:
+	## backdrop: trees that are only ever seen from far away (horizon hills) get just the low-detail
+	## cards in 600 m chunks: thousands of tiny near/far chunk pairs cost a draw call each.
 	if ground.is_empty():
 		return
 	var rng := RandomNumberGenerator.new()
@@ -65,7 +67,8 @@ static func plant(parent: Node3D, kind: String, ground: Array[Vector3], seed := 
 		# Spatial chunks with a detailed mesh near the camera and a few large cards beyond.
 		var chunks: Dictionary = {}
 		for xf in list:
-			var key := Vector2i(floori(xf.origin.x / 160.0), floori(xf.origin.z / 160.0))
+			var size := 600.0 if backdrop else 160.0
+			var key := Vector2i(floori(xf.origin.x / size), floori(xf.origin.z / size))
 			if not chunks.has(key):
 				var arr: Array[Transform3D] = []
 				chunks[key] = arr
@@ -73,6 +76,8 @@ static func plant(parent: Node3D, kind: String, ground: Array[Vector3], seed := 
 		for arr: Array[Transform3D] in chunks.values():
 			if small:
 				_chunk(parent, mesh(kind, v), arr, shadow, 0.0, minf(far, 260.0))
+			elif backdrop:
+				_chunk(parent, mesh(kind + "_far", v), arr, false, 0.0, far)
 			else:
 				_chunk(parent, mesh(kind, v), arr, shadow, 0.0, LOD_DISTANCE)
 				_chunk(parent, mesh(kind + "_far", v), arr, false, LOD_DISTANCE, far * 0.8)

@@ -222,7 +222,8 @@ bedienbare Fahrzeugausrüstung:
 | `,` / `.` | Blinker links/rechts |
 | `H` | Warnblinker |
 | `Enter` (Gamepad: linker Stick drücken) | Hupe |
-| `O` | Am stehenden prozeduralen Fahrzeug Motorhaube öffnen |
+| `O` | Motorhaube im Stand öffnen, erneut drücken schließt sie; auch im Pausenmenü |
+| `Shift`+`O` | Heckklappe (Kombi, SUV, Kestrel) bzw. Kofferraumdeckel (Limousine, Fastback) öffnen/schließen; auch im Pausenmenü |
 | `U` / `Shift`+`U` | Kestrel: Fahrer-/Beifahrertür im Stand öffnen oder schließen; auch im Pausenmenü |
 | `F` halten | Am markierten Serviceplatz tanken; anhalten und Motor mit `I` abstellen |
 | `G` halten | Am Serviceplatz vier Simulationssekunden reparieren; Tankinhalt bleibt erhalten |
@@ -241,12 +242,22 @@ Service-Dächern leiser. Eine offene oder fehlende Vordertür hebt die vereinfac
 Innenraum-Abschirmung auf; eine exakte Abdichtung jeder verformten Fuge fehlt noch.
 
 Die Motorhaube besitzt eigene Massepunkte, brechbare Halterungen und gedämpfte
-Hubstützen. `O` öffnet sie langsam; Reparieren schließt sie und stellt die Halterungen
-wieder her. Lose Hauben kollidieren mit ausgewählten Flächen der eigenen Karosserie
+Hubstützen. `O` entriegelt ihr Schloss und öffnet sie langsam; erneutes `O` senkt sie
+auf den Stützen ab, bis das Schloss sie fängt, zuzieht und wieder einrastet. Ein im
+Unfall abgerissenes Schloss oder Scharnier bleibt bis zur Reparatur kaputt. Lose Hauben kollidieren mit ausgewählten Flächen der eigenen Karosserie
 und dem Motor. Beim Kestrel Hatch können außerdem die unteren Stoßfänger vorn und
 hinten als eigene Bauteile abreißen. Das importierte Concept-Modell besitzt noch
 keine separat bewegliche Haube. Grenzen der Kontaktauflösung und verbleibende
 Schadensbaugruppen stehen in [PHYSICS_ACCEPTANCE.md](docs/PHYSICS_ACCEPTANCE.md).
+
+Meridian Estate und Trailhead 4x4 haben eine Heckklappe, Meridian-Limousinen und
+der Fastback einen Kofferraumdeckel: ein eigenes Bauteil mit brechbaren Scharnieren
+und Schloss, das an den Scharnierpunkten des Modells aufschwingt und von zwei
+gedämpften Gasdruckfedern offen gehalten wird (Heckklappe etwa 80°, Deckel etwa 70°)
+und sich wie die Haube wieder schließen lässt. Bei einem Heckaufprall springt das
+Schloss auf; Reparieren stellt es wieder her. Beim Kestrel bilden Heckscheibe,
+Heckblech, Rückleuchten, Wischer und Spoiler die Heckklappe. Die importierten
+Viertürer öffnen außerdem alle vier Türen um die Scharnierlinien des Modells.
 
 Beim Kestrel haben beide Vordertüren eigene Massepunkte, brechbare Scharniere,
 reversible Schlösser, Innenverkleidung und mitbewegte Scheiben/Spiegel. Normales

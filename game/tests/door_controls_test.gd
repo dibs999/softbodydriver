@@ -29,13 +29,15 @@ func run() -> void:
 		quit(1)
 		return
 	check(doors[0]["latched"] and doors[1]["latched"] and not doors[0]["open"], "Both doors start closed and latched")
-	# The bonnet uses a separate hydro channel and intentionally broken latch.
-	# Door closing must not silently repair that existing mechanical state.
+	# The bonnet has its own latch mechanism and hydro channel; existing crash damage (a torn
+	# bonnet latch) must not be silently repaired by door operation.
 	check(car.release_bonnet(), "Bonnet remains independently operable alongside doors")
 	world.step_blocking(3)
+	check(car.break_group("bonnet_hinge") > 0, "Fixture tears the bonnet hinges")
+	world.step_blocking(0.5)
 	world.sync_visuals()
 	var broken := int(car.get_telemetry()["broken_beams"])
-	check(broken > 0, "Fixture contains existing broken bonnet latch beams")
+	check(broken > 0, "Fixture contains existing broken bonnet mounts")
 	var fuel := float(car.get_telemetry()["fuel_l"])
 	var key := InputEventKey.new()
 	key.physical_keycode = KEY_U

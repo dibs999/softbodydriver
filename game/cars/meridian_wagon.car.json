@@ -100,6 +100,20 @@
         "mirror_R",
         "mount_mirror_R"
       ],
+      "rdoor_left": [
+        "door_RL",
+        "door_trim_RL",
+        "glass_door_RL",
+        "handle_RL",
+        "latch_door_RL"
+      ],
+      "rdoor_right": [
+        "door_RR",
+        "door_trim_RR",
+        "glass_door_RR",
+        "handle_RR",
+        "latch_door_RR"
+      ],
       "bumper_front": [
         "bumper_front",
         "bolt_bumper_front"
@@ -107,10 +121,18 @@
       "bumper_rear": [
         "bumper_rear",
         "bolt_bumper_rear"
+      ],
+      "tailgate": [
+        "tailgate",
+        "glass_rear",
+        "latch_tailgate"
       ]
     }
   },
   "body": {
+    "detachableTailgate": true, "tailgateHingeX": 0.07, "tailgateHingeY": 1.36, "tailgateLatchX": 0.03, "tailgateLatchY": 0.62,
+    "tailgateHalfWidth": 0.62, "tailgateOpenDeg": 80, "tailgateMass": 22,
+    "frontDoorHingeX": 3.33, "bPillarX": 2.248, "rearDoorHingeX": 2.23, "rearDoorRearX": 1.25,
     "style": "hatchback",
     "doors": 4,
     "length": 4.855,

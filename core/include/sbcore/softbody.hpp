@@ -204,6 +204,12 @@ struct DoorMechanism {
     int inputChannel = -1;
     bool requestedOpen = false, latched = true;
     real travel = 0;
+    real stroke = 1.5;            ///< s for a full open / close stroke of the actuator
+    real latchTolerance = 0.015;  ///< m: latch beams re-engage once this close to their rest length
+    /// Lids: a lowered panel within this distance of shut is caught by its latch, which then draws
+    /// it in at `catchSpeed` (m/s) to the exact shut position (0 = only the strict tolerance).
+    real catchTolerance = 0.0, catchSpeed = 0.2;
+    bool catching = false;
 };
 
 class SoftBody {
@@ -252,6 +258,10 @@ public:
     void addDoor(const DoorMechanism& door);
     bool setDoorOpen(std::size_t side, bool open);
     const std::vector<DoorMechanism>& doors() const { return doors_; }
+    /// Bonnet / tailgate: the same reversible latch, lifted and lowered by struts on `inputChannel`.
+    void addLid(const DoorMechanism& lid);
+    bool setLidOpen(std::size_t index, bool open);
+    const std::vector<DoorMechanism>& lids() const { return lids_; }
 
     // ---------------------------------------------------------------- simulation
     /// Computes beam, powertrain and wheel forces into force(); applies plasticity and breaking.
@@ -359,7 +369,8 @@ private:
     std::unordered_map<std::string, std::uint32_t> nodeLookup_;
 
     void updateDoors(real dt);
-    std::vector<DoorMechanism> doors_;
+    bool requestOpen(DoorMechanism& m, bool open);
+    std::vector<DoorMechanism> doors_, lids_;
     std::vector<Beam> beams_;
     std::vector<BeamParams> beamParams_;
     std::vector<ColTri> triangles_;

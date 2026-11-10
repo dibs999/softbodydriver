@@ -350,6 +350,8 @@ func scan_cars() -> void:
 			"paint_metallic": data.get("body", {}).get("paintMetallic", 0.5),
 			"style": data.get("body", {}).get("style", ""),
 			"length": data.get("body", {}).get("length", 4.3),
+			"wheelbase": float(data.get("body", {}).get("wheelbase", 2.62)),
+			"rear_axle": float(data.get("body", {}).get("length", 4.26)) - float(data.get("body", {}).get("frontOverhang", 0.89)) - float(data.get("body", {}).get("wheelbase", 2.62)),
 			"visual_model": data.get("visualModel", {}),
 			"credits": data.get("credits", ""),
 		}
@@ -434,6 +436,12 @@ func apply_visual_model(v: SBVehicle, info: Dictionary) -> void:
 		scale = float(info.get("length", 4.3)) / (hi.x - lo.x)
 	var ground: float = wheel_bounds[0].y if wheel_bounds[0].y < INF else lo.y
 	var offset := Vector3(-lo.x, -ground, -(lo.z + hi.z) * 0.5) * scale
+	if wheel_bounds[0].x < INF and info.has("rear_axle"):
+		# Centre the model's wheels on the physical axles. The body bounds alone misplace models
+		# with parts sticking out at one end (a spare wheel on the tailgate shifted the SUV body
+		# 14 cm forward of its wheels).
+		var axle_mid := float(info["rear_axle"]) + float(info.get("wheelbase", 2.62)) * 0.5
+		offset.x = axle_mid - (wheel_bounds[0].x + wheel_bounds[1].x) * 0.5 * scale
 	var xf := Transform3D(rot.scaled(Vector3(scale, scale, scale)), offset)
 	var overrides := {}
 	var lib := material_library()
@@ -561,6 +569,11 @@ func _setup_input() -> void:
 	_action("map_compact"); _key("map_compact", [KEY_N])
 	_action("menu"); _key("menu", [KEY_ESCAPE]); _joy_button("menu", JOY_BUTTON_START)
 	_action("bonnet_release"); _key("bonnet_release", [KEY_O])
+	_action("tailgate_release")
+	var tailgate_key := InputEventKey.new()
+	tailgate_key.physical_keycode = KEY_O
+	tailgate_key.shift_pressed = true
+	InputMap.action_add_event("tailgate_release", tailgate_key)
 	_action("headlights"); _key("headlights", [KEY_L]); _joy_button("headlights", JOY_BUTTON_DPAD_UP)
 	_action("wipers"); _key("wipers", [KEY_X])
 	_action("indicator_left"); _key("indicator_left", [KEY_COMMA])

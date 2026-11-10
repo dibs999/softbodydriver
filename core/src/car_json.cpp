@@ -52,10 +52,17 @@ void parseBody(CarBodyDef& b, const json& j) {
         SB_REAL("cornerRadiusFront", b.cornerRadiusFront) SB_REAL("cornerRadiusRear", b.cornerRadiusRear)
         SB_REAL("archClearance", b.archClearance) SB_INT("doors", b.doors)
         SB_REAL("seatShift", b.seatShift) SB_REAL("rearSeatShift", b.rearSeatShift) SB_REAL("seatDrop", b.seatDrop)
+        SB_REAL("frontDoorHingeX", b.frontDoorHingeX) SB_REAL("bPillarX", b.bPillarX)
+        SB_REAL("rearDoorHingeX", b.rearDoorHingeX) SB_REAL("rearDoorRearX", b.rearDoorRearX)
+        SB_REAL("tailgateHingeX", b.tailgateHingeX) SB_REAL("tailgateHingeY", b.tailgateHingeY)
+        SB_REAL("tailgateLatchX", b.tailgateLatchX) SB_REAL("tailgateLatchY", b.tailgateLatchY)
+        SB_REAL("tailgateHalfWidth", b.tailgateHalfWidth) SB_REAL("tailgateOpenDeg", b.tailgateOpenDeg)
+        SB_REAL("tailgateMass", b.tailgateMass)
         SB_REAL("paintMetallic", b.paintMetallic)
         SB_REAL("dragCoefficient", b.dragCoefficient) SB_REAL("frontalArea", b.frontalArea)
         SB_BOOL("detachableBumpers", b.detachableBumpers)
         SB_BOOL("detachableDoors", b.detachableDoors)
+        SB_BOOL("detachableTailgate", b.detachableTailgate)
         return false;
     });
 }
@@ -79,6 +86,7 @@ CarDefinition parseCarDefinition(const std::string& text, const std::string& sou
         throw std::runtime_error(source + ": JSON parse error: " + e.what());
     }
     CarDefinition d;
+    bool noLidPart = false;
     try {
         forEach(j, source, [&](const std::string& k, const json& v) {
             SB_STR("id", d.id) SB_STR("name", d.name) SB_STR("brand", d.brand) SB_STR("description", d.description)
@@ -88,6 +96,9 @@ CarDefinition parseCarDefinition(const std::string& text, const std::string& sou
                 const bool rearParts = v.is_object() && v.contains("parts") && v["parts"].is_object() &&
                                        v["parts"].contains("rdoor_left") && v["parts"].contains("rdoor_right");
                 if (!rearParts) d.body.detachableRearDoors = false;
+                // Likewise a model without its own lid part keeps a rigid rear end.
+                if (!(v.is_object() && v.contains("parts") && v["parts"].is_object() && v["parts"].contains("tailgate")))
+                    noLidPart = true;
                 return true;
             }
             if (k == "credits") return true;
@@ -171,6 +182,7 @@ CarDefinition parseCarDefinition(const std::string& text, const std::string& sou
     } catch (const nlohmann::json::exception& e) {
         throw std::runtime_error(source + ": " + e.what());
     }
+    if (noLidPart) d.body.detachableTailgate = false;
     if (d.engine.torqueCurve.empty())
         d.engine.torqueCurve = {{800, 120}, {1500, 200}, {2500, 240}, {4500, 240}, {6000, 200}, {6600, 0}};
     if (d.body.wheelbase + d.body.frontOverhang >= d.body.length)

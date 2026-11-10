@@ -56,6 +56,11 @@ Color fallbackColor(const std::string& n) {
 void SBVehicle::_bind_methods() {
     ClassDB::bind_method(D_METHOD("refuel", "litres"), &SBVehicle::refuel);
     ClassDB::bind_method(D_METHOD("release_bonnet"), &SBVehicle::release_bonnet);
+    ClassDB::bind_method(D_METHOD("release_tailgate"), &SBVehicle::release_tailgate);
+    ClassDB::bind_method(D_METHOD("close_bonnet"), &SBVehicle::close_bonnet);
+    ClassDB::bind_method(D_METHOD("close_tailgate"), &SBVehicle::close_tailgate);
+    ClassDB::bind_method(D_METHOD("get_lid_states"), &SBVehicle::get_lid_states);
+    ClassDB::bind_method(D_METHOD("break_group", "name"), &SBVehicle::break_group);
     ClassDB::bind_method(D_METHOD("set_input", "throttle", "brake", "steer", "handbrake"), &SBVehicle::set_input);
     ClassDB::bind_method(D_METHOD("set_clutch", "clutch"), &SBVehicle::set_clutch);
     ClassDB::bind_method(D_METHOD("set_surface_grip", "grip"), &SBVehicle::set_surface_grip);
@@ -148,15 +153,12 @@ void SBVehicle::applyTransform(const Transform3D& xform) {
         p[i] = toS(w);
     }
     body.repair(p);
-    bonnetOpenRequested_ = false;
-    bonnetSupportTravel_ = 0.0;
-    body.setInput(1, 0.0);
     visualResetPending_ = true;
 }
 
 Ref<Material> SBVehicle::materialFor(const std::string& name, const Dictionary& lib) const {
     std::string base = name;
-    for (const std::string prefix : {"bumper_front_", "bumper_rear_", "door_left_", "door_right_", "rdoor_left_", "rdoor_right_"})
+    for (const std::string prefix : {"bumper_front_", "bumper_rear_", "door_left_", "door_right_", "rdoor_left_", "rdoor_right_", "tailgate_"})
         if (base.rfind(prefix, 0) == 0) { base = base.substr(prefix.size()); break; }
     if (base == "mirror_left" || base == "mirror_right") base = "mirror";
     const String key(base == "bonnet" ? "paint" : base == "bonnet_inner" ? "interior" : base.c_str());
@@ -242,7 +244,7 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
         arrays[Mesh::ARRAY_NORMAL] = n;
         arrays[Mesh::ARRAY_TEX_UV] = uv;
         std::string base = s.material;
-        for (const std::string prefix : {"bumper_front_", "bumper_rear_", "door_left_", "door_right_", "rdoor_left_", "rdoor_right_"})
+        for (const std::string prefix : {"bumper_front_", "bumper_rear_", "door_left_", "door_right_", "rdoor_left_", "rdoor_right_", "tailgate_"})
             if (base.rfind(prefix, 0) == 0) { base = base.substr(prefix.size()); break; }
         const bool paintSurface = base == "paint" || base == "bonnet";
         if (paintSurface) {
@@ -258,7 +260,7 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
         g.mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, arrays, Array(), Dictionary(),
                                         Mesh::ARRAY_FLAG_USE_DYNAMIC_UPDATE);
         // Rear and rear-quarter panes of the generated bodies are tinted privacy glass.
-        const bool privacy = ((s.material == "glass" && s.pane >= 2) || s.material == "rdoor_left_glass" || s.material == "rdoor_right_glass") &&
+        const bool privacy = ((s.material == "glass" && s.pane >= 2) || s.material == "rdoor_left_glass" || s.material == "rdoor_right_glass" || s.material == "tailgate_glass") &&
                              materials.has("glass_privacy");
         g.mesh->surface_set_material(0, materialFor(privacy ? std::string("glass_privacy") : s.material, materials));
         g.format = static_cast<int64_t>(g.mesh->surface_get_format(0));
@@ -607,6 +609,9 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
                     if (key == "bonnet") nodes = &layout_.bonnetNodes;
                     else if (key == "door_left") nodes = &layout_.frontDoors[0].nodes;
                     else if (key == "door_right") nodes = &layout_.frontDoors[1].nodes;
+                    else if (key == "tailgate") nodes = &layout_.tailgateNodes;
+                    else if (key == "rdoor_left") nodes = &layout_.rearDoors[0].nodes;
+                    else if (key == "rdoor_right") nodes = &layout_.rearDoors[1].nodes;
                     else if (key == "bumper_front") nodes = &layout_.frontBumperNodes;
                     else if (key == "bumper_rear") nodes = &layout_.rearBumperNodes;
                     if (!nodes || nodes->size() < 4) continue;
@@ -616,7 +621,8 @@ void SBVehicle::attach_model(Node3D* root, const Transform3D& toBuild, const Dic
                     if (match) {
                         bindCandidates = nodes;
                         if (key == "bonnet") importedBonnet_ = true;
-                        if (key.begins_with("door_")) importedDoors_ = true;
+                        if (key == "tailgate") importedTailgate_ = true;
+                        if (key.begins_with("door_") || key.begins_with("rdoor_")) importedDoors_ = true;
                         break;
                     }
                 }
@@ -836,8 +842,6 @@ void SBVehicle::pre_step(double dt) {
         applyTransform(phys_.resetXform);
     }
     sb::VehicleControls& c = body.controls();
-    if (bonnetOpenRequested_) bonnetSupportTravel_ = std::min(1.0, bonnetSupportTravel_ + dt / 1.25);
-    body.setInput(1, bonnetSupportTravel_);
     if (phys_.puncture >= 0 && static_cast<std::size_t>(phys_.puncture) < body.wheels().size()) {
         body.wheels()[static_cast<std::size_t>(phys_.puncture)].puncture(phys_.punctureLeak);
         phys_.puncture = -1;
@@ -1601,25 +1605,64 @@ void SBVehicle::replay_end() {
     visualResetPending_ = true;
 }
 
-bool SBVehicle::release_bonnet() {
-    if (!world_ || bodyIndex_ < 0 || layout_.bonnetNodes.size() != 8 || (hasImportedModel_ && !importedBonnet_)) return false;
+bool SBVehicle::lidAvailable(int index) const {
+    if (!world_ || bodyIndex_ < 0) return false;
+    if (index == 0) return layout_.bonnetNodes.size() == 8 && (!hasImportedModel_ || importedBonnet_);
+    return layout_.tailgateNodes.size() == 8 && (!hasImportedModel_ || importedTailgate_);
+}
+
+bool SBVehicle::setLid(int index, bool open) {
+    if (!lidAvailable(index)) return false;
     std::lock_guard<std::mutex> lock(world_->mutex());
     auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
-    if (body.telemetry().speedKmh > 2.0) return false;
-    bool released = false;
+    if (static_cast<std::size_t>(index) >= body.lids().size()) return false;
+    if (open && body.telemetry().speedKmh > 2.0) return false;
+    // The reversible latch lets go and the damped struts lift the panel (channel 1 / 6); closing
+    // lowers it on the struts until the latch catches it again.
+    return body.setLidOpen(static_cast<std::size_t>(index), open);
+}
+
+int SBVehicle::break_group(const String& name) {
+    if (!world_ || bodyIndex_ < 0) return 0;
+    std::lock_guard<std::mutex> lock(world_->mutex());
+    auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+    const std::string group = name.utf8().get_data();
+    int count = 0;
     for (std::size_t i = 0; i < body.beams().size(); ++i) {
         const auto& beam = body.beams()[i];
-        if (!beam.broken && beam.breakGroup >= 0 && body.breakGroupNames()[static_cast<std::size_t>(beam.breakGroup)] == "bonnet_latch") {
+        if (!beam.broken && beam.breakGroup >= 0 && body.breakGroupNames()[static_cast<std::size_t>(beam.breakGroup)] == group) {
             body.breakBeam(static_cast<std::uint32_t>(i));
-            released = true;
+            ++count;
         }
     }
-    if (released) {
-        // The damped, breakable support struts lift the panel through channel 1.
-        // Do not add an instantaneous kick on top of the controlled stroke.
-        bonnetOpenRequested_ = true;
+    return count;
+}
+
+bool SBVehicle::release_bonnet() { return setLid(0, true); }
+bool SBVehicle::close_bonnet() { return setLid(0, false); }
+bool SBVehicle::release_tailgate() { return setLid(1, true); }
+bool SBVehicle::close_tailgate() { return setLid(1, false); }
+
+Array SBVehicle::get_lid_states() const {
+    Array result;
+    if (!world_ || bodyIndex_ < 0) return result;
+    std::lock_guard<std::mutex> lock(world_->mutex());
+    const auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+    for (std::size_t i = 0; i < body.lids().size(); ++i) {
+        const auto& lid = body.lids()[i];
+        bool broken = false;
+        for (const auto* list : {&lid.hingeBeams, &lid.latchBeams})
+            for (auto b : *list) broken |= body.beams()[b].broken;
+        Dictionary d;
+        d["name"] = i == 0 ? "bonnet" : "tailgate";
+        d["available"] = lidAvailable(static_cast<int>(i));
+        d["open_requested"] = lid.requestedOpen;
+        d["latched"] = lid.latched;
+        d["travel"] = lid.travel;
+        d["damaged"] = broken;
+        result.append(d);
     }
-    return released;
+    return result;
 }
 
 double SBVehicle::refuel(double litres) {
@@ -1782,6 +1825,9 @@ Dictionary SBVehicle::get_info() const {
     d["width"] = def_.body.width;
     d["height"] = def_.body.height;
     d["bonnet_supported"] = !hasImportedModel_ || importedBonnet_;
+    d["style"] = def_.body.style == sb::BodyStyle::Sedan ? "sedan" : def_.body.style == sb::BodyStyle::Coupe ? "coupe"
+               : def_.body.style == sb::BodyStyle::SUV ? "suv" : "hatchback";
+    d["tailgate_supported"] = layout_.tailgateNodes.size() == 8 && (!hasImportedModel_ || importedTailgate_);
     double peakT = 0, peakP = 0;
     for (const auto& tq : def_.engine.torqueCurve) {
         peakT = std::max(peakT, tq.second);

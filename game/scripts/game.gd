@@ -726,6 +726,12 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 				else:
 					hud.toast("Dieses Modell hat keine beweglichen Hintertüren")
 				_toggle_pause()],
+			["Motorhaube öffnen / schließen", func():
+				equipment.release_bonnet()
+				_toggle_pause()],
+			["Heckklappe / Kofferraum öffnen / schließen", func():
+				equipment.release_tailgate()
+				_toggle_pause()],
 			["Scheibenwischer umschalten", func():
 				hud.toast(wipers.cycle_mode())
 				_toggle_pause()]]:
