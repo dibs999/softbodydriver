@@ -4,7 +4,11 @@ signal completed(result: Dictionary)
 
 const C := preload("res://scripts/maps/common.gd")
 const RaceField := preload("res://scripts/race_field.gd")
-const MODES := ["Freie Fahrt", "Zeitfahren", "Drift-Challenge", "Lieferfahrt", "Rennen"]
+const MODES := ["Freie Fahrt", "Zeitfahren", "Drift-Challenge", "Lieferfahrt", "Rennen", "Crashtest"]
+## Crash test (proving ground): run-up on the crash lane into the concrete wall at >= 50 km/h.
+const CRASH_START := Vector3(60.0, 0.0, -34.0)
+const CRASH_WALL_X := 224.0
+const CRASH_MIN_KMH := 50.0
 ## Race opponents are created and removed by the game scene, which owns the vehicles:
 ## spawn_opponents(grid: Array[Transform3D]) -> Array (AIDriver) and release_opponents(drivers).
 var spawn_opponents: Callable
@@ -45,6 +49,11 @@ var _spawn_position := Vector3.ZERO
 var _reset_wait := 0.0
 var _race_gates := PackedVector3Array()
 var _field := RaceField.new()
+var _crash_speed := 0.0         # km/h just before the impact
+var _crash_peak_g := 0.0
+var _crash_settle := -1.0       # s since the impact (-1 = not yet)
+var _last_velocity := Vector3.ZERO
+var report := {}                # crash test result for the HUD
 
 func configure(id: String, data: Dictionary) -> void:
 	_race_route.clear()
@@ -87,6 +96,7 @@ func available_modes() -> Array[int]:
 	var out: Array[int] = [0, 1, 2]
 	if map_id == "city": out.append(3)
 	if _race_gates.size() > 3: out.append(4)
+	if map_id == "proving_grounds": out.append(5)
 	return out
 
 func choose() -> void:
@@ -117,6 +127,14 @@ func start() -> void:
 			return
 		route = _race_gates.duplicate()
 		spawn = C.car_xform(route[0], route[1] - route[0])
+	elif mode == 5:
+		route = PackedVector3Array([CRASH_START, Vector3(CRASH_WALL_X, 0, CRASH_START.z)])
+		spawn = C.car_xform(CRASH_START, Vector3.RIGHT)
+		_crash_speed = 0.0
+		_crash_peak_g = 0.0
+		_crash_settle = -1.0
+		_last_velocity = Vector3.ZERO
+		report = {}
 	elif mode == 3:
 		# Curbside stops along existing streets, not inside the buildings.
 		route = PackedVector3Array([Vector3(4, 0, 44), Vector3(92, 0, -132), Vector3(260, 0, 220), Vector3(-4, 0, 132)])
@@ -158,7 +176,7 @@ func opponents() -> Array:
 	return _field.drivers.map(func(d): return d.vehicle)
 
 func target() -> Vector3:
-	return route[gate] if active and mode != 2 and gate < route.size() else Vector3.INF
+	return route[gate] if active and mode != 2 and mode != 5 and gate < route.size() else Vector3.INF
 
 func on_impact(strength: float) -> void:
 	if active and mode == 2 and strength > 35.0:
@@ -207,6 +225,10 @@ func _process(_delta: float) -> void:
 		return
 	elapsed += dt
 	var t := vehicle.get_telemetry()
+	if mode == 5:
+		_crash_test(dt, t)
+		_previous = position
+		return
 	if mode == 2:
 		var velocity := vehicle.get_velocity()
 		velocity.y = 0
@@ -257,8 +279,65 @@ func _process(_delta: float) -> void:
 		else: _update_marker()
 	_previous = position
 
+func _crash_test(dt: float, t: Dictionary) -> void:
+	var velocity := vehicle.get_velocity()
+	var speed := absf(float(t["speed_kmh"]))
+	if _crash_settle < 0.0:
+		var to_wall := CRASH_WALL_X - 1.0 - vehicle.get_position_ws().x
+		message = "Crashtest · Wand in %.0f m · %.0f km/h (mind. %.0f)" % [maxf(0.0, to_wall), speed, CRASH_MIN_KMH]
+		if dt > 0.0 and _last_velocity != Vector3.ZERO:
+			var decel := (_last_velocity - velocity).length() / dt / 9.81
+			if decel > 6.0 and to_wall < 6.0:
+				_crash_settle = 0.0
+				_crash_speed = _last_velocity.length() * 3.6
+				_crash_peak_g = decel
+		_last_velocity = velocity
+		if elapsed > 60.0: cancel("Crashtest abgebrochen: Wand nicht erreicht")
+		return
+	if dt > 0.0:
+		_crash_peak_g = maxf(_crash_peak_g, (_last_velocity - velocity).length() / dt / 9.81)
+	_last_velocity = velocity
+	_crash_settle += dt
+	message = "Aufprall mit %.0f km/h …" % _crash_speed
+	if _crash_settle >= 2.5 and speed < 3.0:
+		_crash_report(t)
+
+## Rates the crash: occupant load from the deceleration, how much of the impact the crumple zone
+## took (front damage) and whether the passenger cell stayed intact (roof / side zones).
+static func crash_stars(speed: float, peak_g: float, front: float, cabin: float) -> int:
+	if speed < CRASH_MIN_KMH: return 0
+	var stars := 5
+	if peak_g > 45.0: stars -= 1
+	if peak_g > 65.0: stars -= 1
+	if peak_g > 90.0: stars -= 1
+	if cabin > 0.15: stars -= 1
+	if cabin > 0.35: stars -= 1
+	if front < 0.15: stars -= 1   # a rigid front passes the crash pulse straight to the occupants
+	return clampi(stars, 1, 5)
+
+func _crash_report(t: Dictionary) -> void:
+	var zones: Array = t.get("zones", [])
+	var front := float(zones[0]) if zones.size() > 0 else 0.0
+	var cabin := 0.0
+	for z in [2, 3, 4]:
+		if zones.size() > z: cabin = maxf(cabin, float(zones[z]))
+	var stars := crash_stars(_crash_speed, _crash_peak_g, front, cabin)
+	var doors_off := 0
+	for state: Dictionary in vehicle.get_door_states():
+		if bool(state.get("missing", false)): doors_off += 1
+	var engine := "Motor läuft" if bool(t["running"]) else ("Motor fest" if bool(t["seized"]) else "Motor aus")
+	if doors_off > 0: engine += " · %d Tür%s abgerissen" % [doors_off, "en" if doors_off > 1 else ""]
+	if float(t.get("radiator_damage", 0.0)) > 0.04: engine += " · Kühler leck"
+	if float(t.get("fire", 0.0)) > 0.0: engine += " · BRAND"
+	report = {"speed": _crash_speed, "peak_g": _crash_peak_g, "front": front, "cabin": cabin, "stars": stars, "engine": engine}
+	score = stars
+	if _crash_speed < CRASH_MIN_KMH:
+		cancel("Zu langsam: %.0f km/h (mindestens %.0f) · F4 neuer Versuch" % [_crash_speed, CRASH_MIN_KMH])
+		return
+	_finish()
+
 func navigation_hint() -> String:
-	if not active or mode == 2 or gate >= route.size() or not is_instance_valid(vehicle): return ""
+	if not active or mode == 2 or mode == 5 or gate >= route.size() or not is_instance_valid(vehicle): return ""
 	var distance := Vector2(vehicle.get_position_ws().x - route[gate].x, vehicle.get_position_ws().z - route[gate].z).length()
 	var instruction := "Ziel" if gate == route.size() - 1 else "Geradeaus"
 	if gate + 1 < route.size():
@@ -271,9 +350,10 @@ func navigation_hint() -> String:
 
 func _finish() -> void:
 	if not active: return
-	var value := score if mode == 2 else elapsed
+	var higher_is_better := mode == 2 or mode == 5
+	var value := score if higher_is_better else elapsed
 	var previous_best := best
-	var improved := best == 0 or (value > best if mode == 2 else value < best)
+	var improved := best == 0 or (value > best if higher_is_better else value < best)
 	var save_error := OK
 	if improved:
 		_records.set_value(map_id + ":" + _car_id, str(mode), value)
@@ -290,6 +370,11 @@ func _finish() -> void:
 		"record_saved": save_error == OK, "record_save_error": save_error,
 	}
 	var summary := ("Neue Bestleistung! " if improved else "Ziel! ") + ("%d Punkte" % score if mode == 2 else "%.2f s" % elapsed)
+	if mode == 5:
+		last_result["crash"] = report.duplicate()
+		summary = "Crashtest: %d von 5 Sternen · %.0f km/h · %.0f g · Front %d %% · Fahrgastzelle %d %% · %s" % [
+			int(report["stars"]), report["speed"], report["peak_g"], roundi(100 * float(report["front"])), roundi(100 * float(report["cabin"])), report["engine"]]
+		if improved: summary += " · Bestwert!"
 	if mode == 4:
 		last_result["place"] = place
 		last_result["field"] = race_size + 1

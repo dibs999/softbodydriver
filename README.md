@@ -48,7 +48,11 @@ keine stabile Hochgeschwindigkeitsfahrt.
   Stadt gibt es zusätzlich Lieferfahrten. Im **Rennen** stehen zwei KI-Gegner eine
   Reihe vor dem Spieler, warten den Countdown ab, fahren dieselbe Runde (mit Überholen)
   und verlassen die Karte nach dem Ziel; das HUD zeigt die Position, das Ergebnis den
-  Platz. Verkehr am Start wird vorher weggesetzt. `F4` stellt das Auto am Start auf bzw.
+  Platz. Verkehr am Start wird vorher weggesetzt. Auf dem Testgelände gibt es den
+  **Crashtest**: Anlauf auf der Crashbahn, Aufprall auf die Betonwand mit mindestens
+  50 km/h; der Bericht nennt Aufprallgeschwindigkeit, Spitzenverzögerung, Front- und
+  Fahrgastzellenschaden, Motor- und Kühlerzustand und vergibt 1–5 Sterne (beste
+  Wertung wird gespeichert). `F4` stellt das Auto am Start auf bzw.
   bricht den Lauf ab. Checkpoints und Ziele erscheinen in Welt und Minikarte.
   Bestleistungen werden je Karte, Auto und Modus lokal gespeichert. Zurücksetzen,
   Reparatur und Fahrzeugwechsel beenden einen laufenden Versuch. Pausen stoppen
@@ -258,7 +262,9 @@ Pylonen und Ölfässer sind eigene kleine Soft-Bodies: Leitkegel (4,5 kg, biegsa
 federn zurück) auf dem Slalom und Handling-Parcours des Testgeländes, als Baustellen auf
 dem Autobahn-Seitenstreifen, vor Lindenau im Hügelland und in einer gesperrten
 Stadtspur, 200-Liter-Stahlfässer (20 kg, verbeulen) als Fasswand am Testgelände, an
-den Baustellen und an der Raststätte Coyote Flats in der Wüste. Autos stoßen sie um, schleifen
+den Baustellen und an der Raststätte Coyote Flats in der Wüste, und rot-weiße,
+wassergefüllte Absperrungen (300 kg, lassen sich wegschieben und eindrücken) an den
+Baustellen von Autobahn und Stadt. Autos stoßen sie um, schleifen
 Pylonen unter dem Stoßfänger mit oder schleudern Fässer weg; das Pausenmenü stellt
 alle wieder auf („Pylonen und Fässer zurückstellen“).
 
