@@ -4,6 +4,8 @@ extends RefCounted
 const C := preload("res://scripts/maps/common.gd")
 const ROCKS := preload("res://scripts/maps/rocks.gd")
 const V := preload("res://scripts/maps/vegetation.gd")
+static var _post_index := 250
+static var _post_side := 1.0
 
 
 static func build(world: SBWorld, parent: Node3D) -> Dictionary:
@@ -77,6 +79,31 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	for i in n_track:
 		track[i].y = elev[i]
 	var half_w := 6.0
+	# Roadside stop: the flattest open stretch beside the loop, clear of the start, the jumps, the
+	# shortcut and other parts of the loop.
+	var best_cost := INF
+	for i in range(150, n_track - 30, 6):
+		if absi(i - 463) < 25:
+			continue
+		var d := Vector3(track[i + 1].x - track[i - 1].x, 0, track[i + 1].z - track[i - 1].z).normalized()
+		for sgn: float in [1.0, -1.0]:
+			var sd := Vector3(-d.z, 0, d.x) * sgn
+			var cost := 0.0
+			for a: float in [-32.0, 0.0, 32.0]:
+				for c: float in [14.0, 32.0, 54.0]:
+					var q := track[i] + d * a + sd * c
+					cost = maxf(cost, absf(C.sample(heights, nx, nz, ox, oz, cell, q.x, q.z) - track[i].y))
+			var centre := track[i] + sd * 32.0
+			for j in range(0, n_track, 4):
+				if absi(j - i) > 25 and absi(j - i) < n_track - 25 and Vector2(track[j].x - centre.x, track[j].z - centre.z).length() < 70.0:
+					cost = INF
+			if cost < best_cost:
+				best_cost = cost
+				_post_index = i
+				_post_side = sgn
+	var post_dir := Vector3(track[_post_index + 1].x - track[_post_index - 1].x, 0, track[_post_index + 1].z - track[_post_index - 1].z).normalized()
+	var post_centre := track[_post_index] + Vector3(-post_dir.z, 0, post_dir.x) * (32.0 * _post_side)
+	_post_zone = Vector2(post_centre.x, post_centre.z)
 	C.carve_path(heights, nx, nz, ox, oz, cell, track, half_w + 1.6, 14.0, 0.08)
 	var shortcut := PackedVector3Array()
 	for i in range(23, 96):
@@ -273,6 +300,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			pebbles.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled_local(Vector3.ONE * scale), p))
 	C.scatter_multimesh(parent, pebble, C.mat(Color(0.48, 0.3, 0.19)), pebbles, false)
 	_rally_station(parent, world, track, ground_height)
+	var post: Vector3 = _trading_post(parent, world, track, _post_index, ground_height)
 	var marker_bases: Array[Transform3D] = []
 	for i in range(0, n_track, 20):
 		var direction := (track[(i + 1) % n_track] - track[i]).normalized()
@@ -290,7 +318,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	return {"spawns": [C.car_xform(track[0], track[1] - track[0]), C.car_xform(track[n_track - 8], track[n_track - 7] - track[n_track - 8])],
 		"waypoints": track, "speeds": speeds,
 		"map_paths": [C.closed_route(track), shortcut],
-		"map_places": [{"name": "Rallyelager Red Mesa", "position": track[6]}, {"name": "Alte Mine", "position": mine},
+		"map_places": [{"name": "Rallyelager Red Mesa", "position": track[6]}, {"name": "Raststätte Coyote Flats", "position": post}, {"name": "Alte Mine", "position": mine},
 			{"name": "Dünensprung", "position": track[jumps[0]]}, {"name": "Schluchtsprung", "position": track[jumps[1]]}],
 		"ai_spawns": [C.car_xform(track[200], track[201] - track[200]), C.car_xform(track[540], track[541] - track[540])],
 		"environment": {"sky_top": Color(0.32, 0.5, 0.78), "horizon": Color(0.92, 0.82, 0.68), "fog": Color(0.93, 0.83, 0.68),
@@ -329,7 +357,10 @@ static func _saguaro_mesh() -> Mesh:
 	return st.commit()
 
 
+static var _post_zone := Vector2(INF, INF)
 static func _near_track(p: Vector2, track: PackedVector3Array, dist: float, closed := true) -> bool:
+	if p.distance_to(_post_zone) < 50.0:
+		return true
 	for j in (track.size() if closed else track.size() - 1):
 		var a := Vector2(track[j].x, track[j].z)
 		var next := track[(j + 1) % track.size()]
@@ -401,3 +432,86 @@ static func _rally_station(parent: Node3D, world: SBWorld, track: PackedVector3A
 			post.y = base + half
 			C.box(parent, world, post, Vector3(0.12, half, 0.12), rotation, steel, 0.6)
 		C.box(parent, world, p + Vector3.UP * 3.1, Vector3(3.9, 0.13, 3.2), rotation, shade, 0.75, false)
+
+
+## Roadside stop beside the rally loop: a levelled gravel pad with a petrol canopy and pumps, a
+## diner with a pole sign, a motel row with a covered walkway and a water tower behind it.
+static func _trading_post(parent: Node3D, world: SBWorld, track: PackedVector3Array, index: int, height: Callable) -> Vector3:
+	var n := track.size()
+	var point := track[index]
+	var heading := Vector3(track[(index + 1) % n].x - track[index - 1].x, 0, track[(index + 1) % n].z - track[index - 1].z).normalized()
+	var side := Vector3(-heading.z, 0, heading.x) * _post_side
+	var yaw := atan2(-heading.z, heading.x)
+	var rot := Vector3(0, yaw, 0)
+	var label_yaw := yaw + PI * 0.5 * _post_side
+	var basis := Basis(Vector3.UP, yaw)
+	var stucco := C.noise_mat(Color(0.83, 0.70, 0.55), 0.08, 2.0, 0.9)
+	var trim := C.mat(Color(0.55, 0.20, 0.14), 0.7)
+	var steel := C.mat(Color(0.75, 0.76, 0.77), 0.4, 0.7)
+	var dark := C.mat(Color(0.12, 0.12, 0.13), 0.6)
+	var glass := C.mat(Color(0.20, 0.28, 0.32), 0.1, 0.4)
+	var gravel := C.surface_material("gravel", 2.2, Color(0.86, 0.74, 0.60))
+	var white := C.mat(Color(0.92, 0.91, 0.88), 0.6)
+	var y := point.y
+	var at := func(along: float, across: float, up: float) -> Vector3:
+		return Vector3(point.x, y + up, point.z) + heading * along + side * across
+	# Level pad from the verge outwards (its body reaches down into the sand).
+	C.box(parent, world, at.call(0.0, 30.0, -1.48), Vector3(34.0, 1.5, 20.0), rot, gravel, 0.9)
+	# Petrol canopy with two pump islands.
+	for a: float in [-7.0, 7.0]:
+		for c: float in [16.0, 26.0]:
+			C.box(parent, world, at.call(a, c, 2.6), Vector3(0.22, 2.6, 0.22), rot, steel, 0.6)
+	C.box(parent, world, at.call(0.0, 21.0, 5.35), Vector3(9.0, 0.25, 7.0), rot, white, 0.8, false)
+	C.box(parent, world, at.call(0.0, 21.0, 5.0), Vector3(9.05, 0.45, 7.05), rot, trim, 0.8, false)
+	for c: float in [18.5, 23.5]:
+		C.box(parent, world, at.call(0.0, c, 0.12), Vector3(3.2, 0.12, 0.6), rot, C.mat(Color(0.6, 0.6, 0.58)), 0.8)
+		for a: float in [-1.8, 1.8]:
+			C.box(parent, world, at.call(a, c, 0.95), Vector3(0.35, 0.75, 0.28), rot, trim, 0.6)
+			C.box(parent, world, at.call(a, c, 1.35), Vector3(0.30, 0.16, 0.30), rot, glass, 0.6, false)
+	# Diner: stucco box, window band, door, flat roof with a parapet, pole sign at the road.
+	var diner: Vector3 = at.call(-20.0, 34.0, 2.2)
+	C.box(parent, world, diner, Vector3(8.0, 2.2, 5.0), rot, stucco, 0.8)
+	C.box(parent, world, diner + Vector3.UP * 2.35, Vector3(8.2, 0.25, 5.2), rot, trim, 0.8, false)
+	C.box(parent, world, diner + side * -5.02 + Vector3.UP * 0.2, Vector3(6.4, 0.75, 0.05), rot, glass, 0.6, false)
+	C.box(parent, world, diner + side * -5.03 + heading * 6.8 + Vector3.UP * -0.9, Vector3(0.6, 1.1, 0.05), rot, dark, 0.6, false)
+	var pole: Vector3 = at.call(-12.0, 12.5, 4.0)
+	C.box(parent, world, pole, Vector3(0.18, 4.0, 0.18), rot, steel, 0.6)
+	C.box(parent, world, pole + Vector3.UP * 4.6, Vector3(0.25, 1.1, 2.6), rot, trim, 0.8, false)
+	C.label3d(parent, "COYOTE FLATS", pole + Vector3.UP * 4.9 - side * 0.27, label_yaw, 0.55, Color(1.0, 0.92, 0.75))
+	C.label3d(parent, "DINER  ·  GAS  ·  MOTEL", pole + Vector3.UP * 4.2 - side * 0.27, label_yaw, 0.32, Color(1.0, 0.92, 0.75))
+	# Motel row with numbered doors under a covered walkway.
+	var motel: Vector3 = at.call(14.0, 42.0, 1.6)
+	C.box(parent, world, motel, Vector3(16.0, 1.6, 3.5), rot, stucco, 0.8)
+	C.box(parent, world, motel + Vector3.UP * 1.75 - side * 1.2, Vector3(16.3, 0.15, 5.0), rot, trim, 0.8, false)
+	for k in 8:
+		var a := -14.0 + k * 4.0
+		var door: Vector3 = motel + heading * a - side * 3.52 + Vector3.UP * -0.5
+		C.box(parent, world, door, Vector3(0.5, 1.05, 0.04), rot, C.mat(Color(0.25, 0.38, 0.42), 0.6), 0.6, false)
+		C.box(parent, world, door + heading * 1.3 + Vector3.UP * 0.6, Vector3(0.65, 0.4, 0.04), rot, glass, 0.6, false)
+		C.label3d(parent, str(k + 1), door + Vector3.UP * 1.35 - side * 0.05, label_yaw, 0.22)
+		if k % 2 == 0:
+			C.box(parent, world, motel + heading * (a + 2.0) - side * 6.0 + Vector3.UP * 0.0, Vector3(0.10, 1.7, 0.10), rot, steel, 0.6, false)
+	# Water tower behind the buildings.
+	var tower: Vector3 = at.call(-4.0, 52.0, 0.0)
+	for leg in 4:
+		var o := Vector3(2.2 if leg % 2 == 0 else -2.2, 0, 2.2 if leg < 2 else -2.2)
+		C.box(parent, world, tower + o + Vector3.UP * 6.5, Vector3(0.15, 6.5, 0.15), Vector3.ZERO, steel, 0.6)
+	var tank := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 3.2
+	cyl.bottom_radius = 3.2
+	cyl.height = 4.5
+	tank.mesh = cyl
+	tank.material_override = C.mat(Color(0.70, 0.66, 0.60), 0.5, 0.5)
+	tank.position = tower + Vector3.UP * 15.2
+	parent.add_child(tank)
+	var cap := MeshInstance3D.new()
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.2
+	cone.bottom_radius = 3.4
+	cone.height = 1.6
+	cap.mesh = cone
+	cap.material_override = tank.material_override
+	cap.position = tower + Vector3.UP * 18.2
+	parent.add_child(cap)
+	return at.call(0.0, 25.0, 0.0)

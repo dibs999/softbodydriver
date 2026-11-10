@@ -384,6 +384,7 @@ func _process(delta: float) -> void:
 
 
 func _drive_player(delta: float) -> void:
+	if audio: audio.horn = false
 	if world.paused:
 		_reverse_hold = 0.0
 		return
@@ -439,6 +440,7 @@ func _drive_player(delta: float) -> void:
 		hb = 1.0
 	player.set_input(thr, brk, steer, hb)
 	cam.look_back = Input.is_action_pressed("look_back")
+	if audio: audio.horn = Input.is_action_pressed("horn")
 
 
 func _unhandled_input(event: InputEvent) -> void:

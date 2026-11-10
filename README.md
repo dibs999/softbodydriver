@@ -221,6 +221,7 @@ bedienbare Fahrzeugausrüstung:
 | `L` | Aus → Abblendlicht → Fernlicht |
 | `,` / `.` | Blinker links/rechts |
 | `H` | Warnblinker |
+| `Enter` (Gamepad: linker Stick drücken) | Hupe |
 | `O` | Am stehenden prozeduralen Fahrzeug Motorhaube öffnen |
 | `U` / `Shift`+`U` | Kestrel: Fahrer-/Beifahrertür im Stand öffnen oder schließen; auch im Pausenmenü |
 | `F` halten | Am markierten Serviceplatz tanken; anhalten und Motor mit `I` abstellen |

@@ -303,25 +303,41 @@ static func _countryside(parent: Node3D, world: SBWorld, center: PackedVector3Ar
 			z += cell.y
 		x += cell.x
 	# Village beyond the north-east bend: houses round a church.
-	var plaster := [C.mat(Color(0.86, 0.82, 0.72)), C.mat(Color(0.78, 0.74, 0.66)), C.mat(Color(0.83, 0.77, 0.62))]
-	var roof := C.mat(Color(0.52, 0.20, 0.13), 0.8)
+	var village := preload("res://scripts/maps/village.gd").new()
+	var plaster := C.noise_mat(Color(0.88, 0.85, 0.78), 0.05, 2.5, 0.92)
+	var slate := C.noise_mat(Color(0.26, 0.26, 0.29), 0.1, 3.0, 0.8)
 	var vc := Vector3(STRAIGHT / 2 + RADIUS + 260.0, 0, -160.0)
-	C.box(parent, world, vc + Vector3(0, 11, 0), Vector3(2.6, 11, 2.6), Vector3.ZERO, plaster[0], 0.8)
-	C.box(parent, world, vc + Vector3(0, 24, 0), Vector3(1.6, 2.5, 1.6), Vector3(0, PI * 0.25, 0), roof, 0.8, false)
-	C.box(parent, world, vc + Vector3(0, 5, 9), Vector3(5, 5, 8), Vector3.ZERO, plaster[1], 0.8)
-	for i in 22:
+	# Church: nave as a long house, west tower with a four-sided spire.
+	village.house(world, vc + Vector3(0, 0, 10.0), PI * 0.5, 17.0, 9.0, 2, rng)
+	C.box(parent, world, vc + Vector3(0, 11, 0), Vector3(2.6, 11, 2.6), Vector3.ZERO, plaster, 0.8)
+	C.box(parent, null, vc + Vector3(0, 22.3, 0), Vector3(2.75, 0.3, 2.75), Vector3.ZERO, slate, 0.8, false)
+	var spire := MeshInstance3D.new()
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.05
+	cone.bottom_radius = 3.6
+	cone.height = 9.0
+	cone.radial_segments = 4
+	spire.mesh = cone
+	spire.material_override = slate
+	spire.position = vc + Vector3(0, 27.1, 0)
+	spire.rotation.y = PI * 0.25
+	parent.add_child(spire)
+	for face in 4:
+		var d := Basis(Vector3.UP, face * PI * 0.5) * Vector3(0, 0, 2.62)
+		C.box(parent, null, vc + Vector3(0, 18.5, 0) + d, Vector3(0.9 if face % 2 == 0 else 0.05, 0.9, 0.05 if face % 2 == 0 else 0.9), Vector3.ZERO,
+			C.mat(Color(0.9, 0.88, 0.8)), 0.8, false)
+	var placed: Array[Vector3] = [vc, vc + Vector3(0, 0, 10.0)]
+	for i in 40:
 		var a := rng.randf() * TAU
-		var d := rng.randf_range(22, 95)
+		var d := rng.randf_range(24, 110)
 		var p := vc + Vector3(cos(a) * d, 0, sin(a) * d)
 		if _loop_distance(p.x, p.z) < 70.0: continue
-		var yaw := snappedf(rng.randf() * PI, PI * 0.5) + rng.randf_range(-0.2, 0.2)
-		var w := rng.randf_range(4.5, 7.0)
-		var l := rng.randf_range(5.5, 9.0)
-		C.box(parent, world, p + Vector3(0, 2.8, 0), Vector3(l, 2.8, w), Vector3(0, yaw, 0), plaster[i % 3], 0.8)
-		for sgn: float in [-1.0, 1.0]:
-			var side := Vector3(-sin(yaw), 0, -cos(yaw)) * 0.0 + Basis(Vector3.UP, yaw) * Vector3(0, 0, sgn * w * 0.5)
-			C.box(parent, world, p + side + Vector3(0, 6.3, 0), Vector3(l + 0.4, 0.15, w * 0.58), Vector3(sgn * 0.6, yaw, 0), roof, 0.8, false)
-		trees.append(p + Basis(Vector3.UP, yaw) * Vector3(0, 0, w + 6.0))
+		if placed.any(func(q: Vector3) -> bool: return q.distance_to(p) < 17.0): continue
+		var yaw := snappedf(atan2(vc.x - p.x, vc.z - p.z), PI * 0.5) + rng.randf_range(-0.15, 0.15)
+		village.house(world, p, yaw, rng.randf_range(9.0, 13.0), rng.randf_range(7.5, 9.5), 1 + int(rng.randf() < 0.6), rng)
+		placed.append(p)
+		trees.append(p + Basis(Vector3.UP, yaw) * Vector3(0, 0, 9.0))
+	village.build(parent)
 
 
 ## Wildlife fence, emergency telephones every 2 km, kilometre boards every 500 m and a noise

@@ -51,6 +51,11 @@ var _flat := 0.0
 var _flat_phase := 0.0
 var _wheel_hz := 0.0
 var _filter_cutoff := 1800.0
+## Two-tone horn (~405 / 507 Hz, soft-clipped), heard through the same cabin filter as the road.
+var horn := false
+var _horn_level := 0.0
+var _horn_p1 := 0.0
+var _horn_p2 := 0.0
 
 
 func _ready() -> void:
@@ -248,7 +253,13 @@ func _fill() -> void:
 		var grind := (noise - _air_noise) * _grind * 0.13
 		_impact *= 0.9989
 		_impact_tail *= 0.9998
-		var common := (air + tire + flap + grind) * road_volume + hit
+		_horn_level = move_toward(_horn_level, 1.0 if horn else 0.0, 1.0 / (0.012 * MIX_RATE) if horn else 1.0 / (0.07 * MIX_RATE))
+		var honk := 0.0
+		if _horn_level > 0.0:
+			_horn_p1 = fmod(_horn_p1 + TAU * 405.0 / MIX_RATE, TAU)
+			_horn_p2 = fmod(_horn_p2 + TAU * 507.0 / MIX_RATE, TAU)
+			honk = (sin(_horn_p1) + 0.33 * sin(3.0 * _horn_p1) + sin(_horn_p2) + 0.3 * sin(3.0 * _horn_p2)) * 0.15 * _horn_level
+		var common := (air + tire + flap + grind) * road_volume + hit + honk
 		var spread := (_air_noise - _low_noise) * _wind * 0.065 * road_volume
 		_cabin_l = lerpf(_cabin_l, common + spread, filter)
 		_cabin_r = lerpf(_cabin_r, common - spread, filter)
