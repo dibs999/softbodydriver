@@ -115,3 +115,13 @@ Vorschau: `tests/facade_shots.gd -- <png> <stil> [debug]`.
 * **Hänge:** An steilen Hängen und Böschungen kommt auf allen Karten Erde und Gestein durch (Bodenshader).
 
 Bausteine in `scripts/maps/roadside.gd`; Ansichten bestimmter Stellen mit `AT=<Wegpunkte> tests/map_shots.gd`.
+
+## Weitere Karten
+
+| Karte | Neu |
+|---|---|
+| Wüste | Saguaros mit Rippen; dichtes Gestrüpp und Felsen in Sichtweite der Piste; Telegrafenleitung; Kurventafeln; Boden aus Wüstenlack, rotem Boden und hellen Trockenrinnen. |
+| Autobahn | Flickenteppich aus Weizen, Raps, Mais, Wiese und Acker mit Hecken; Dorf mit Kirchturm; Wildschutzzaun; Kilometertafeln (500 m); Notrufsäulen (2 km); Lärmschutzwand; W-Profil-Leitplanken auf Pfosten. |
+| Offroad | Feldwege mit geschlängelten Spuren, Staub- und Feuchtflecken, Kieseln, ausgefransten Rändern und Pfützen (mehr bei Nässe); Gebüsch, Stämme, Stümpfe und verwitterte Felsen am Rand. |
+| Stadt | Geparkte Autos an den Nebenstraßen: gebackene Low-Poly-Fassungen der glTF-Modelle, ~20.000 Dreiecke mit Detailstufen, `tests/bake_parked_cars.gd`. Dazu Bänke, Mülleimer, Fahrradständer, Poller und Gullydeckel. |
+| Asphalt (alle Karten) | Rissnetze, einzelne Bitumen-Vergussfugen, Randrisse mit Splitt, Ölflecken. |

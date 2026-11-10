@@ -131,3 +131,26 @@ TEST_CASE("crash detached doors cannot be relatched or healed by manual commands
         CHECK(body.doors()[side].travel == 0);
     }
 }
+
+TEST_CASE("a side impact leaves the far door shut and the struck door on its hinges") {
+    auto car = doorCar();
+    World world;
+    world.addCollider(StaticCollider::plane({0,0,0}, {0,1,0}));
+    world.addBody(car.body);
+    auto& body = world.body(0);
+    world.simulate(0.6);
+    // 30 km/h sideways into a wall on the left (-z) side.
+    world.addCollider(StaticCollider::plane({0,0,-1.6}, {0,0,1}));
+    body.setVelocity({0,0,-8.3});
+    world.simulate(0.8);
+    REQUIRE(world.stats().finite);
+    const auto& struck = body.doors()[0];
+    const auto& far = body.doors()[1];
+    int struckIntact = 0;
+    for (auto beam : struck.hingeBeams) struckIntact += body.beams()[beam].broken ? 0 : 1;
+    CHECK(struckIntact >= static_cast<int>(struck.hingeBeams.size() / 2));
+    for (auto beam : far.hingeBeams) CHECK_FALSE(body.beams()[beam].broken);
+    for (auto beam : far.latchBeams) CHECK_FALSE(body.beams()[beam].broken);
+    CHECK(far.latched);
+}
+

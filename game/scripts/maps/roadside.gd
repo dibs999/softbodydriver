@@ -155,6 +155,12 @@ static func _resample(pts: PackedVector3Array, step: float) -> PackedVector3Arra
 	return out
 
 
+## A W-beam rail along pts; `face` is the side of travel (+1: the road lies to the left of pts'
+## direction... as used by guardrails()). Without a world, only the visual is built.
+static func rail(parent: Node3D, pts: PackedVector3Array, face: float) -> void:
+	_rail(parent, null, pts, face)
+
+
 static func _rail(parent: Node3D, world: SBWorld, pts: PackedVector3Array, face: float) -> void:
 	var line := _resample(pts, 2.0)
 	var m := line.size()
@@ -183,7 +189,7 @@ static func _rail(parent: Node3D, world: SBWorld, pts: PackedVector3Array, face:
 				st.add_vertex(q[0]); st.add_vertex(q[2]); st.add_vertex(q[3])
 		posts.append(Transform3D(Basis(Vector3.UP, atan2(-dir.z, dir.x)), base + Vector3.UP * 0.36 - lateral * 0.06))
 		# Collider per 4 m: the beam face at bumper height.
-		if i % 2 == 0 and i < m - 2:
+		if world != null and i % 2 == 0 and i < m - 2:
 			var c := (line[i] + line[i + 2]) * 0.5 + Vector3.UP * 0.6 - lateral * 0.03
 			var dd := line[i + 2] - line[i]
 			world.add_box(c, Vector3(Vector2(dd.x, dd.z).length() * 0.5 + 0.1, 0.32, 0.06), Vector3(0, atan2(-dd.z, dd.x), 0), 0.35)

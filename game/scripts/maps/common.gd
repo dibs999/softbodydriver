@@ -69,7 +69,9 @@ static func terrain_material(kind: String, tile_metres: float, tint := Color.WHI
 	m.set_shader_parameter("has_slope", true)
 	m.set_shader_parameter("slope_tex", load(SURFACE_PATH + "gravel.jpg"))
 	m.set_shader_parameter("slope_tile", 2.6)
-	m.set_shader_parameter("slope_tint", Color(0.80, 0.66, 0.50) if kind != "sand" else Color(0.86, 0.58, 0.42))
+	m.set_shader_parameter("slope_tint", Color(0.60, 0.55, 0.47) if kind != "sand" else Color(0.80, 0.60, 0.46))
+	m.set_shader_parameter("slope_start", 0.84)
+	m.set_shader_parameter("slope_full", 0.62)
 	return m
 
 
@@ -356,6 +358,8 @@ static func barrier(parent: Node3D, world: SBWorld, points: PackedVector3Array, 
 		xfs.append(Transform3D(Basis(Vector3.UP, yaw) * Basis.from_scale(half * 2.0), mid))
 		start = b
 		acc = 0.0
+	if material == null:
+		return   # colliders only; the caller draws the barrier
 	mm.instance_count = xfs.size()
 	for i in xfs.size():
 		mm.set_instance_transform(i, xfs[i])

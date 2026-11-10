@@ -69,8 +69,14 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var outer_rail := PackedVector3Array()
 	for i in range(open_end, center.size() + open_start + 1):
 		outer_rail.append(center[i % center.size()])
-	C.barrier(parent, world, outer_rail, CARRIAGE_OFFSET + CARRIAGE_HALF + 0.9, 0.75, 0.22, metal, false)
-	C.barrier(parent, world, center, -(CARRIAGE_OFFSET + CARRIAGE_HALF + 0.9), 0.75, 0.22, metal)
+	# Outer guard rails: the colliders stay boxes, the visual is a galvanised W-beam on posts.
+	C.barrier(parent, world, outer_rail, CARRIAGE_OFFSET + CARRIAGE_HALF + 0.9, 0.75, 0.22, null, false)
+	C.barrier(parent, world, center, -(CARRIAGE_OFFSET + CARRIAGE_HALF + 0.9), 0.75, 0.22, null)
+	var R := preload("res://scripts/maps/roadside.gd")
+	R.rail(parent, _offset(outer_rail, CARRIAGE_OFFSET + CARRIAGE_HALF + 1.0), -1.0)
+	var inner_rail := _offset(center, -(CARRIAGE_OFFSET + CARRIAGE_HALF + 1.0))
+	inner_rail.append(inner_rail[0])
+	R.rail(parent, inner_rail, 1.0)
 	var service_road := _service_area(parent, world, concrete, metal)
 	# Rail posts (visual).
 	var post := BoxMesh.new()
@@ -155,9 +161,11 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		if dist < 45.0 or (p.x > SERVICE_START and p.x < SERVICE_END and p.z < -RADIUS + 87.0):
 			continue
 		(conifers if rng.randf() < 0.35 else trees).append(p)
+	_countryside(parent, world, center, trees, rng)
 	V.plant(parent, "broadleaf", trees, 91, 0.8, 1.3, false)
 	V.plant(parent, "conifer", conifers, 92, 0.7, 1.05, false)
 	_landmarks(parent, world, metal)
+	_motorway_furniture(parent, world, center, a_center, b_center, open_start, open_end)
 
 	# Traffic: right-hand traffic, carriageway A follows the loop, B goes the other way.
 	var lane_a_mid := _offset(center, CARRIAGE_OFFSET + 0.4)
@@ -228,6 +236,160 @@ static func _service_area(parent: Node3D, world: SBWorld, concrete: Material, me
 			C.box(parent, world, Vector3(x + 2.5, 2.35, truck_box.z + 5.0), Vector3(1.35, 1.35, 6.4), Vector3.ZERO, truck_color, 0.7)
 			C.box(parent, world, Vector3(x + 2.5, 0.49, truck_box.z + 9.0), Vector3(1.35, 0.49, 1.28), Vector3.ZERO, metal)
 	return road
+
+
+## Distance of a point from the loop's centre line.
+static func _loop_distance(x: float, z: float) -> float:
+	if absf(x) <= STRAIGHT / 2:
+		return absf(absf(z) - RADIUS)
+	return absf(Vector2(absf(x) - STRAIGHT / 2, z).length() - RADIUS)
+
+
+## Patchwork farmland around the loop (wheat, rapeseed, maize, meadow, ploughed), hedgerow trees
+## along the field edges and a small village with a church tower.
+static func _countryside(parent: Node3D, world: SBWorld, center: PackedVector3Array, trees: Array[Vector3],
+		rng: RandomNumberGenerator) -> void:
+	var kinds := [
+		["grass", Color(1.30, 1.12, 0.55), 0.30],   # ripe wheat
+		["grass", Color(1.75, 1.55, 0.25), 0.12],   # rapeseed in flower
+		["grass", Color(0.55, 0.85, 0.40), 0.18],   # maize
+		["grass", Color(0.80, 1.05, 0.68), 0.22],   # meadow
+		["sand", Color(0.98, 0.74, 0.54), 0.18],    # ploughed
+	]
+	var mats: Array = []
+	for k: Array in kinds:
+		mats.append(C.surface_material(k[0], 3.2 if k[0] == "grass" else 4.0, k[1]))
+	var cell := Vector2(150.0, 105.0)
+	var x := -STRAIGHT / 2 - RADIUS - 600.0
+	while x < STRAIGHT / 2 + RADIUS + 600.0:
+		var z := -RADIUS - 520.0
+		while z < RADIUS + 520.0:
+			var c := Vector2(x + cell.x * 0.5 + rng.randf_range(-12, 12), z + cell.y * 0.5 + rng.randf_range(-10, 10))
+			var size := cell - Vector2(rng.randf_range(6, 16), rng.randf_range(6, 14))
+			var reach := size.length() * 0.5
+			# Fields run up to the wildlife fence; the raised carriageways and verges cover their inner edge.
+			if _loop_distance(c.x, c.y) > reach * 0.35 + 30.0 and not (c.x > SERVICE_START - 150 and c.x < SERVICE_END + 150 and absf(c.y + RADIUS) < 220):
+				var r := rng.randf()
+				var pick := 0
+				var acc := 0.0
+				for i in kinds.size():
+					acc += float(kinds[i][2])
+					if r <= acc:
+						pick = i
+						break
+				C.quad(parent, Vector3(c.x, -0.006, c.y), size, mats[pick])
+				# Hedgerow trees along one long and one short edge.
+				for t in 7:
+					if rng.randf() < 0.45:
+						trees.append(Vector3(c.x - size.x * 0.5 + size.x * t / 6.0, 0, c.y - size.y * 0.5 - 3.0))
+				for t in 4:
+					if rng.randf() < 0.35:
+						trees.append(Vector3(c.x + size.x * 0.5 + 3.0, 0, c.y - size.y * 0.5 + size.y * t / 3.0))
+			z += cell.y
+		x += cell.x
+	# Village beyond the north-east bend: houses round a church.
+	var plaster := [C.mat(Color(0.86, 0.82, 0.72)), C.mat(Color(0.78, 0.74, 0.66)), C.mat(Color(0.83, 0.77, 0.62))]
+	var roof := C.mat(Color(0.52, 0.20, 0.13), 0.8)
+	var vc := Vector3(STRAIGHT / 2 + RADIUS + 260.0, 0, -160.0)
+	C.box(parent, world, vc + Vector3(0, 11, 0), Vector3(2.6, 11, 2.6), Vector3.ZERO, plaster[0], 0.8)
+	C.box(parent, world, vc + Vector3(0, 24, 0), Vector3(1.6, 2.5, 1.6), Vector3(0, PI * 0.25, 0), roof, 0.8, false)
+	C.box(parent, world, vc + Vector3(0, 5, 9), Vector3(5, 5, 8), Vector3.ZERO, plaster[1], 0.8)
+	for i in 22:
+		var a := rng.randf() * TAU
+		var d := rng.randf_range(22, 95)
+		var p := vc + Vector3(cos(a) * d, 0, sin(a) * d)
+		if _loop_distance(p.x, p.z) < 70.0: continue
+		var yaw := snappedf(rng.randf() * PI, PI * 0.5) + rng.randf_range(-0.2, 0.2)
+		var w := rng.randf_range(4.5, 7.0)
+		var l := rng.randf_range(5.5, 9.0)
+		C.box(parent, world, p + Vector3(0, 2.8, 0), Vector3(l, 2.8, w), Vector3(0, yaw, 0), plaster[i % 3], 0.8)
+		for sgn: float in [-1.0, 1.0]:
+			var side := Vector3(-sin(yaw), 0, -cos(yaw)) * 0.0 + Basis(Vector3.UP, yaw) * Vector3(0, 0, sgn * w * 0.5)
+			C.box(parent, world, p + side + Vector3(0, 6.3, 0), Vector3(l + 0.4, 0.15, w * 0.58), Vector3(sgn * 0.6, yaw, 0), roof, 0.8, false)
+		trees.append(p + Basis(Vector3.UP, yaw) * Vector3(0, 0, w + 6.0))
+
+
+## Wildlife fence, emergency telephones every 2 km, kilometre boards every 500 m and a noise
+## barrier along the southern straight.
+static func _motorway_furniture(parent: Node3D, world: SBWorld, center: PackedVector3Array, a_center: PackedVector3Array,
+		b_center: PackedVector3Array, open_start: int, open_end: int) -> void:
+	var n := center.size()
+	var fence_off := CARRIAGE_OFFSET + CARRIAGE_HALF + 7.0
+	var posts: Array[Transform3D] = []
+	var wires: Array[Transform3D] = []
+	var mesh_panels: Array[Transform3D] = []
+	for sgn: float in [1.0, -1.0]:
+		var line := _offset(center, sgn * fence_off)
+		for i in n:
+			if sgn > 0.0 and i > open_start - 3 and i < open_end + 3: continue
+			var a := line[i]
+			var b := line[(i + 1) % n]
+			posts.append(Transform3D(Basis.IDENTITY, a + Vector3.UP * 0.9))
+			var d := b - a
+			var basis := Basis.looking_at(d.normalized(), Vector3.UP) * Basis.from_scale(Vector3(1, 1, d.length()))
+			mesh_panels.append(Transform3D(basis, (a + b) * 0.5 + Vector3.UP * 0.85))
+			wires.append(Transform3D(basis, (a + b) * 0.5 + Vector3.UP * 1.75))
+	var post := CylinderMesh.new()
+	post.top_radius = 0.04
+	post.bottom_radius = 0.05
+	post.height = 1.8
+	post.radial_segments = 6
+	C.scatter_multimesh(parent, post, C.mat(Color(0.30, 0.24, 0.16), 0.9), posts, false)
+	var panel := QuadMesh.new()
+	panel.size = Vector2(0.0, 0.0)
+	var mesh_box := BoxMesh.new()
+	mesh_box.size = Vector3(0.01, 1.5, 1.0)
+	var mesh_mat := C.mat(Color(0.45, 0.47, 0.45, 0.35), 0.6, 0.6)
+	mesh_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	C.scatter_multimesh(parent, mesh_box, mesh_mat, mesh_panels, false)
+	var wire := BoxMesh.new()
+	wire.size = Vector3(0.012, 0.012, 1.0)
+	C.scatter_multimesh(parent, wire, C.mat(Color(0.3, 0.3, 0.3), 0.5, 0.6), wires, false)
+	# Emergency telephones (orange) and kilometre boards on both outer verges, batched.
+	var phone_mat := C.mat(Color(0.95, 0.45, 0.08), 0.5)
+	var board_mat := C.mat(Color(0.92, 0.92, 0.9), 0.6)
+	var unit := BoxMesh.new()
+	unit.size = Vector3.ONE
+	var board_parts: Array[Transform3D] = []
+	var phone_parts: Array[Transform3D] = []
+	var travelled := 0.0
+	var next_board := 100.0
+	var next_phone := 400.0
+	for i in n:
+		travelled += center[i].distance_to(center[(i + 1) % n])
+		if travelled < next_board: continue
+		var d := (center[(i + 1) % n] - center[i]).normalized()
+		var side := Vector3(-d.z, 0, d.x)
+		var yaw := atan2(-d.z, d.x)
+		var rot := Basis(Vector3.UP, yaw)
+		for sgn: float in [1.0, -1.0]:
+			if sgn > 0.0 and i > open_start - 3 and i < open_end + 3: continue
+			var base := center[i] + side * sgn * (CARRIAGE_OFFSET + CARRIAGE_HALF + 2.3)
+			board_parts.append(Transform3D(rot.scaled_local(Vector3(0.08, 1.5, 0.08)), base + Vector3.UP * 0.75))
+			board_parts.append(Transform3D(rot.scaled_local(Vector3(0.04, 0.44, 0.64)), base + Vector3.UP * 1.65))
+			C.label3d(parent, "%.1f" % (travelled / 1000.0), base + Vector3.UP * 1.65 - side * sgn * 0.03, yaw + (PI * 0.5 if sgn > 0 else -PI * 0.5), 0.22, Color(0.05, 0.05, 0.05))
+			if travelled >= next_phone:
+				var ph := base + d * 6.0
+				phone_parts.append(Transform3D(rot.scaled_local(Vector3(0.32, 1.3, 0.32)), ph + Vector3.UP * 0.65))
+				phone_parts.append(Transform3D(rot.scaled_local(Vector3(0.40, 0.24, 0.40)), ph + Vector3.UP * 1.42))
+				world.add_box(ph + Vector3.UP * 0.65, Vector3(0.16, 0.65, 0.16), Vector3(0, yaw, 0), 0.6)
+		if travelled >= next_phone: next_phone += 2000.0
+		next_board += 500.0
+	C.scatter_multimesh(parent, unit, board_mat, board_parts, false)
+	C.scatter_multimesh(parent, unit, phone_mat, phone_parts, false)
+	# Noise barrier: 4 m panels along the outer edge of the southern straight (carriageway B side).
+	var wall_mat := C.noise_mat(Color(0.42, 0.50, 0.44), 0.08, 1.5, 0.85)
+	var post_mat := C.mat(Color(0.5, 0.5, 0.52), 0.5, 0.7)
+	var panels: Array[Transform3D] = []
+	var wall_posts: Array[Transform3D] = []
+	var zc := RADIUS + CARRIAGE_OFFSET + CARRIAGE_HALF + 3.2
+	for k in 250:
+		var x0 := -600.0 + k * 4.0
+		panels.append(Transform3D(Basis.from_scale(Vector3(4.0, 4.0, 0.16)), Vector3(x0 + 2.0, 2.0, zc)))
+		wall_posts.append(Transform3D(Basis.from_scale(Vector3(0.16, 4.2, 0.24)), Vector3(x0, 2.1, zc)))
+	world.add_box(Vector3(-100.0, 2.0, zc), Vector3(500.0, 2.0, 0.08), Vector3.ZERO, 0.8)
+	C.scatter_multimesh(parent, unit, wall_mat, panels)
+	C.scatter_multimesh(parent, unit, post_mat, wall_posts, false)
 
 
 static func _landmarks(parent: Node3D, world: SBWorld, metal: Material) -> void:

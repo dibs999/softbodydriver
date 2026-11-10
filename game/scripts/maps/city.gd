@@ -287,6 +287,8 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	parent.add_child(street_lighting)
 	street_lighting.setup(lamp_lights, lens_material)
 
+	_street_life(parent, world, origin, metal)
+
 	# AI loop: rectangle around the inner blocks, right-hand lane.
 	var lo := origin + STREET * 0.5 + 1 * PITCH
 	var hi := origin + STREET * 0.5 + (BLOCKS - 1) * PITCH
@@ -486,3 +488,105 @@ static func _plaza(parent: Node3D, world: SBWorld, center: Vector3, station: boo
 		C.box(parent, world, p + Vector3(0, 0.72, 0), Vector3(4.0, 0.72, 4.0), Vector3.ZERO, concrete)
 		for i in 3:
 			C.box(parent, world, p + Vector3.UP * (2.1 + i * 2.3), Vector3(1.4, 1.15, 1.35), Vector3(0, i * 0.42, 0.13), accent, 0.8, false)
+
+
+const SPECIAL_BLOCKS := [Vector2i(1, 5), Vector2i(6, 3), Vector2i(7, 4), Vector2i(6, 5), Vector2i(8, 7), Vector2i(4, 6),
+	Vector2i(4, 5), Vector2i(7, 2), Vector2i(2, 7)]
+
+## Parked cars along the kerbs of the side streets (not on the AI loop, the spawn street or beside
+## special blocks), and street furniture on the pavements: benches, bins, bike racks, corner
+## bollards, and manhole covers in the carriageway.
+static func _street_life(parent: Node3D, world: SBWorld, origin: float, metal: Material) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	var parked: Array[Transform3D] = []
+	var benches: Array[Transform3D] = []
+	var bench_backs: Array[Transform3D] = []
+	var bins: Array[Transform3D] = []
+	var racks: Array[Transform3D] = []
+	var bollards: Array[Transform3D] = []
+	var manholes: Array[Transform3D] = []
+	for line in BLOCKS + 1:
+		var s := origin + STREET * 0.5 + line * PITCH
+		for axis in 2:   # 0: street along x at z = s, 1: street along z at x = s
+			for j in BLOCKS:
+				var a0 := origin + STREET + j * PITCH
+				var d := Vector3(1, 0, 0) if axis == 0 else Vector3(0, 0, 1)
+				var side_v := Vector3(0, 0, 1) if axis == 0 else Vector3(-1, 0, 0)
+				var centre := (Vector3(a0, 0, s) if axis == 0 else Vector3(s, 0, a0))
+				# Manholes in the carriageway.
+				for t: float in [18.0, 52.0]:
+					manholes.append(Transform3D(Basis.from_scale(Vector3(0.8, 1, 0.8)), centre + d * t + side_v * (2.0 if j % 2 == 0 else -2.0) + Vector3.UP * 0.035))
+				var parking_ok := line >= 2 and line <= BLOCKS - 2 and not (axis == 1 and line == 5)
+				for side: float in [-1.0, 1.0]:
+					var blk := Vector2i(j, line - (1 if side < 0.0 else 0)) if axis == 0 else Vector2i(line - (1 if side > 0.0 else 0), j)
+					if blk in SPECIAL_BLOCKS:
+						continue
+					if parking_ok:
+						var t := 9.0
+						while t < BLOCK - 9.0:
+							if rng.randf() < 0.30:
+								var p := centre + d * (t + rng.randf_range(-0.4, 0.4)) + side_v * side * (STREET * 0.5 - 1.25)
+								var heading := d * side   # right-hand traffic: cars face their direction of travel
+								parked.append(Transform3D(Basis.looking_at(-heading, Vector3.UP).rotated(Vector3.UP, rng.randf_range(-0.03, 0.03)), p))
+							t += 6.3
+					# Pavement furniture, 1.1 m in from the kerb.
+					var walk := centre + side_v * side * (STREET * 0.5 + 1.1) + Vector3.UP * KERB
+					var yaw := atan2(d.x, d.z)
+					for t: float in [22.0, 50.0]:
+						var roll := rng.randf()
+						var p := walk + d * t
+						if roll < 0.35:
+							benches.append(Transform3D(Basis(Vector3.UP, yaw), p + Vector3.UP * 0.45))
+							bench_backs.append(Transform3D(Basis(Vector3.UP, yaw), p + side_v * side * 0.22 + Vector3.UP * 0.75))
+							world.add_box(p + Vector3.UP * 0.45, Vector3(0.9, 0.45, 0.3).rotated(Vector3.UP, yaw).abs(), Vector3.ZERO, 0.6)
+						elif roll < 0.65:
+							bins.append(Transform3D(Basis.IDENTITY, p + Vector3.UP * 0.5))
+							world.add_box(p + Vector3.UP * 0.5, Vector3(0.25, 0.5, 0.25), Vector3.ZERO, 0.6)
+						elif roll < 0.8:
+							for k in 4:
+								racks.append(Transform3D(Basis(Vector3.UP, yaw + PI * 0.5), p + d * (k * 0.8 - 1.2) + Vector3.UP * 0.4))
+			# Bollards at the block corners of this line.
+			for j in BLOCKS + 1:
+				var c := origin + STREET * 0.5 + j * PITCH
+				var corner := Vector3(c, 0, s) if axis == 0 else Vector3(s, 0, c)
+				for dx: float in [-1.0, 1.0]:
+					for dz: float in [-1.0, 1.0]:
+						var b := corner + Vector3(dx * (STREET * 0.5 + 0.6), KERB, dz * (STREET * 0.5 + 0.6))
+						if axis == 0:
+							bollards.append(Transform3D(Basis.IDENTITY, b + Vector3(dx * 0.9, 0.5, 0)))
+	var P := preload("res://scripts/maps/parked_cars.gd")
+	P.place(parent, world, parked)
+	var seat := BoxMesh.new()
+	seat.size = Vector3(1.8, 0.08, 0.45)
+	var back := BoxMesh.new()
+	back.size = Vector3(1.8, 0.45, 0.06)
+	var wood := C.noise_mat(Color(0.42, 0.28, 0.16), 0.1, 5.0, 0.8)
+	C.scatter_multimesh(parent, seat, wood, benches, false)
+	C.scatter_multimesh(parent, back, wood, bench_backs, false)
+	var bin := CylinderMesh.new()
+	bin.top_radius = 0.26
+	bin.bottom_radius = 0.22
+	bin.height = 1.0
+	bin.radial_segments = 10
+	C.scatter_multimesh(parent, bin, C.mat(Color(0.14, 0.26, 0.17), 0.5, 0.3), bins, false)
+	var rack := TorusMesh.new()
+	rack.inner_radius = 0.34
+	rack.outer_radius = 0.38
+	rack.rings = 12
+	rack.ring_segments = 6
+	var rack_xf: Array[Transform3D] = []
+	for xf in racks: rack_xf.append(Transform3D(xf.basis * Basis(Vector3.RIGHT, PI * 0.5), xf.origin))
+	C.scatter_multimesh(parent, rack, metal, rack_xf, false)
+	var bollard := CylinderMesh.new()
+	bollard.top_radius = 0.08
+	bollard.bottom_radius = 0.09
+	bollard.height = 1.0
+	bollard.radial_segments = 8
+	C.scatter_multimesh(parent, bollard, C.mat(Color(0.18, 0.18, 0.2), 0.4, 0.6), bollards, false)
+	var cover := CylinderMesh.new()
+	cover.top_radius = 0.5
+	cover.bottom_radius = 0.5
+	cover.height = 0.01
+	cover.radial_segments = 16
+	C.scatter_multimesh(parent, cover, C.noise_mat(Color(0.20, 0.19, 0.18), 0.3, 6.0, 0.5, 0.2, false), manholes, false)

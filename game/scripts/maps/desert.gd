@@ -100,6 +100,16 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	colors.resize(nx * nz)
 	var sand := Color(1.0, 0.89, 0.69)
 	var rock := Color(0.76, 0.45, 0.30)
+	# Ground variety: dark desert pavement (varnished gravel), red soil and pale dry washes.
+	var patch_noise := FastNoiseLite.new()
+	patch_noise.seed = 19
+	patch_noise.frequency = 0.012
+	patch_noise.fractal_octaves = 3
+	var wash_noise := FastNoiseLite.new()
+	wash_noise.seed = 23
+	wash_noise.frequency = 0.006
+	wash_noise.noise_type = FastNoiseLite.TYPE_CELLULAR
+	wash_noise.cellular_return_type = FastNoiseLite.RETURN_DISTANCE2_SUB
 	for ix in nx:
 		for iz in nz:
 			var i := ix * nz + iz
@@ -109,6 +119,12 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			var band := 0.5 + 0.5 * sin(heights[i] * 0.95 + 0.35 * sin(ix * 0.04))
 			var cliff := rock.lerp(Color(0.86, 0.58, 0.41), band * 0.52)
 			var dust := sand.lerp(Color(0.88, 0.72, 0.53), 0.28 + 0.22 * sin(ix * 0.022 + iz * 0.036))
+			var wx := ox + ix * cell
+			var wz := oz + iz * cell
+			var pn := patch_noise.get_noise_2d(wx, wz)
+			dust = dust.lerp(Color(0.70, 0.56, 0.43), smoothstep(0.18, 0.45, pn) * 0.75)      # desert pavement
+			dust = dust.lerp(Color(1.0, 0.70, 0.52), smoothstep(0.20, 0.5, -pn) * 0.55)       # red soil
+			dust = dust.lerp(Color(1.08, 1.0, 0.86), (1.0 - smoothstep(0.0, 0.06, wash_noise.get_noise_2d(wx, wz) + 0.5)) * 0.6)  # washes
 			colors[i] = dust.lerp(cliff, smoothstep(0.17, 0.73, slope)).darkened(clampf(heights[i] / 330.0, 0.0, 0.22))
 	C.terrain_tiles(parent, ox, oz, cell, nx, nz, heights, C.terrain_material("gravel", 5.0, Color(0.80, 0.72, 0.62)), colors)
 	var ground_height := func(x: float, z: float) -> float:
@@ -152,12 +168,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			if size > 3.8:
 				world.add_box(p, Vector3(0.35, 0.28, 0.28) * size, Vector3(0, yaw, 0), 0.7)
 	C.scatter_multimesh(parent, boulder, rock_mat, boulders, false)
-	var cactus := CylinderMesh.new()
-	cactus.top_radius = 0.18
-	cactus.bottom_radius = 0.24
-	cactus.height = 3.0
-	cactus.radial_segments = 8
-	cactus.rings = 0
+	var cactus := _saguaro_mesh()
 	var xfs: Array[Transform3D] = []
 	var arms: Array[Transform3D] = []
 	for i in 420:
@@ -182,7 +193,25 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		var stalk := Transform3D(Basis(Vector3.UP, rng.randf() * TAU), p + Vector3.UP * 1.4)
 		xfs.append(stalk)
 		arms.append(stalk * Transform3D(Basis(Vector3.BACK, -0.75).scaled_local(Vector3(0.72, 0.52, 0.72)), Vector3(0.53, 0.2, 0)))
-	var cactus_mat := C.mat(Color(0.25, 0.42, 0.2), 0.8)
+	# More saguaros where the track shows them: 12-70 m to either side.
+	for i in range(0, n_track, 2):
+		if rng.randf() > 0.55: continue
+		var tangent := track[(i + 1) % n_track] - track[(i - 1 + n_track) % n_track]
+		var side := Vector3(-tangent.z, 0, tangent.x).normalized()
+		var p := track[i] + side * (-1.0 if rng.randf() < 0.5 else 1.0) * rng.randf_range(12.0, 70.0)
+		if _near_track(Vector2(p.x, p.z), track, 10.0) or _near_track(Vector2(p.x, p.z), shortcut, 7.0, false):
+			continue
+		p.y = ground_height.call(p.x, p.z)
+		var s := rng.randf_range(0.55, 1.35)
+		var stalk := Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled_local(Vector3.ONE * s), p + Vector3.UP * 1.4 * s)
+		xfs.append(stalk)
+		if rng.randf() < 0.75:
+			arms.append(stalk * Transform3D(Basis(Vector3.BACK, -0.75).scaled_local(Vector3(0.72, 0.52, 0.72)), Vector3(0.53, 0.2, 0)))
+		if rng.randf() < 0.45:
+			arms.append(stalk * Transform3D(Basis(Vector3.BACK, 0.8).scaled_local(Vector3(0.68, 0.44, 0.68)), Vector3(-0.5, -0.14, 0)))
+		if s > 0.8:
+			world.add_box(p + Vector3.UP * 1.4 * s, Vector3(0.22, 1.4 * s, 0.22) * s, Vector3.ZERO, 0.6)
+	var cactus_mat := C.noise_mat(Color(0.27, 0.42, 0.22), 0.12, 2.5, 0.8)
 	C.scatter_multimesh(parent, cactus, cactus_mat, xfs)
 	C.scatter_multimesh(parent, cactus, cactus_mat, arms, false)
 	var sx: Array[Vector3] = []
@@ -191,7 +220,35 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		if _near_track(p, track, 8.0) or _near_track(p, shortcut, 6.0, false):
 			continue
 		sx.append(Vector3(p.x, C.sample(heights, nx, nz, ox, oz, cell, p.x, p.y), p.y))
+	# Dense scrub in sight of the track, thinning out with distance.
+	for i in 1400:
+		var k := rng.randi() % n_track
+		var tangent := track[(k + 1) % n_track] - track[(k - 1 + n_track) % n_track]
+		var side := Vector3(-tangent.z, 0, tangent.x).normalized()
+		var dist := 9.0 + pow(rng.randf(), 1.8) * 90.0
+		var p := track[k] + side * (-1.0 if rng.randf() < 0.5 else 1.0) * dist
+		if _near_track(Vector2(p.x, p.z), shortcut, 6.0, false) or _near_track(Vector2(p.x, p.z), track, 7.5):
+			continue
+		sx.append(Vector3(p.x, ground_height.call(p.x, p.z), p.z))
 	V.plant(parent, "dry_shrub", sx, 680, 0.45, 1.1, false)
+	# Weathered boulders along the track, a telegraph line and chevrons on the sharp bends.
+	var R := preload("res://scripts/maps/roadside.gd")
+	var rocks: Array[Transform3D] = []
+	for i in 260:
+		var k := rng.randi() % n_track
+		var tangent := track[(k + 1) % n_track] - track[(k - 1 + n_track) % n_track]
+		var side := Vector3(-tangent.z, 0, tangent.x).normalized()
+		var p := track[k] + side * (-1.0 if rng.randf() < 0.5 else 1.0) * rng.randf_range(10.0, 60.0)
+		if _near_track(Vector2(p.x, p.z), track, 9.0) or _near_track(Vector2(p.x, p.z), shortcut, 7.0, false):
+			continue
+		p.y = ground_height.call(p.x, p.z)
+		var sc := rng.randf_range(0.4, 1.4) * (2.2 if rng.randf() < 0.12 else 1.0)
+		rocks.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(sc, sc * rng.randf_range(0.6, 1.0), sc * rng.randf_range(0.8, 1.3))), p))
+	R.boulders(parent, world, rocks)
+	R.bend_signs(parent, track, half_w, ground_height, true, 0.30)
+	var clear := func(p: Vector3) -> bool:
+		return not _near_track(Vector2(p.x, p.z), shortcut, 9.0, false) and Vector2(p.x - track[6].x, p.z - track[6].z).length() > 45.0
+	R.utility_line(parent, world, track, -18.0, ground_height, true, 55.0, clear)
 	var pebble := SphereMesh.new()
 	pebble.radius = 0.55
 	pebble.height = 0.45
@@ -230,6 +287,38 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		"ai_spawns": [C.car_xform(track[200], track[201] - track[200]), C.car_xform(track[540], track[541] - track[540])],
 		"environment": {"sky_top": Color(0.32, 0.5, 0.78), "horizon": Color(0.92, 0.82, 0.68), "fog": Color(0.93, 0.83, 0.68),
 			"fog_density": 0.00065, "sun": Vector3(-43, -120, 0), "sun_energy": 1.5, "sun_color": Color(1.0, 0.93, 0.80)}}
+
+
+## Saguaro: ribbed column with a rounded crown (also used, scaled, for the arms).
+static func _saguaro_mesh() -> Mesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var seg := 24
+	var rows: Array = []
+	var profile: Array = []
+	for k in 12:
+		var y := -1.5 + 2.6 * k / 11.0
+		profile.append(Vector2(0.23 - 0.03 * (y + 1.5) / 2.6, y))
+	for k in range(1, 6):
+		var a := PI * 0.5 * k / 5.0
+		profile.append(Vector2(0.20 * cos(a), 1.1 + 0.20 * sin(a) * 1.4))
+	for pr: Vector2 in profile:
+		var row: Array = []
+		for j in seg + 1:
+			var t := TAU * j / seg
+			var rib := 1.0 + 0.09 * cos(t * 12.0)
+			row.append(Vector3(cos(t) * pr.x * rib, pr.y, sin(t) * pr.x * rib))
+		rows.append(row)
+	for i in rows.size() - 1:
+		for j in seg:
+			var a: Vector3 = rows[i][j]
+			var b: Vector3 = rows[i][j + 1]
+			var c: Vector3 = rows[i + 1][j + 1]
+			var d: Vector3 = rows[i + 1][j]
+			st.add_vertex(a); st.add_vertex(c); st.add_vertex(b)
+			st.add_vertex(a); st.add_vertex(d); st.add_vertex(c)
+	st.generate_normals()
+	return st.commit()
 
 
 static func _near_track(p: Vector2, track: PackedVector3Array, dist: float, closed := true) -> bool:

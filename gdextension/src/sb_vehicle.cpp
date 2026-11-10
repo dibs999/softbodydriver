@@ -42,6 +42,7 @@ Color fallbackColor(const std::string& n) {
     if (n == "tank") return Color(0.10, 0.10, 0.105);
     if (n == "seat_frame") return Color(0.25, 0.25, 0.26);
     if (n == "seat_insert") return Color(0.07, 0.072, 0.08);
+    if (n == "seat_belt") return Color(0.035, 0.035, 0.04);
     if (n == "spring") return Color(0.75, 0.1, 0.08);
     if (n == "caliper") return Color(0.8, 0.15, 0.1);
     if (n == "engine") return Color(0.35, 0.36, 0.38);
@@ -77,6 +78,7 @@ void SBVehicle::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_door_states"), &SBVehicle::get_door_states);
     ClassDB::bind_method(D_METHOD("get_lamp_states"), &SBVehicle::get_lamp_states);
     ClassDB::bind_method(D_METHOD("get_glass_states"), &SBVehicle::get_glass_states);
+    ClassDB::bind_method(D_METHOD("get_bumper_states"), &SBVehicle::get_bumper_states);
     ClassDB::bind_method(D_METHOD("repair_in_place"), &SBVehicle::repair_in_place);
     ClassDB::bind_method(D_METHOD("set_debug_view", "on"), &SBVehicle::set_debug_view);
     ClassDB::bind_method(D_METHOD("get_debug_view"), &SBVehicle::get_debug_view);
@@ -1299,8 +1301,16 @@ Array SBVehicle::get_lamp_states() const {
             else strain = std::max(strain, beam.plasticStrain());
             damage = std::max(damage, beam.broken ? 1.0 : std::min(1.0, beam.plasticStrain() / kLampBreakStrain));
         }
+        sb::Vec3 centre{};
+        std::size_t count = 0;
+        for (auto bi : lampBeams_[static_cast<std::size_t>(c)]) {
+            if (bi >= beams.size()) continue;
+            centre += body.positions()[beams[bi].a];
+            ++count;
+        }
         Dictionary state;
         state["name"] = names[c];
+        state["center"] = count ? toG(centre / static_cast<double>(count)) : get_position_ws();
         state["front"] = c < 2;
         state["side"] = c % 2 == 0 ? -1 : 1;
         state["damage"] = damage;
@@ -1376,6 +1386,36 @@ Array SBVehicle::get_glass_states() const {
         state["damage"] = damage;
         state["center"] = toG(c);
         state["origin_uv"] = originUv;
+        result.push_back(state);
+    }
+    return result;
+}
+
+Array SBVehicle::get_bumper_states() const {
+    Array result;
+    if (!world_ || bodyIndex_ < 0) return result;
+    std::lock_guard<std::mutex> lock(world_->mutex());
+    const auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+    const auto& names = body.breakGroupNames();
+    for (int end = 0; end < 2; ++end) {
+        const auto& nodes = end == 0 ? layout_.frontBumperNodes : layout_.rearBumperNodes;
+        if (nodes.empty()) continue;
+        const std::string prefix = end == 0 ? "bumper_front_mounts_" : "bumper_rear_mounts_";
+        std::array<bool, 4> intact{false, false, false, false};
+        for (const auto& beam : body.beams()) {
+            if (beam.breakGroup < 0 || beam.broken) continue;
+            const std::string& g = names[static_cast<std::size_t>(beam.breakGroup)];
+            if (g.rfind(prefix, 0) == 0 && g.size() == prefix.size() + 1) {
+                const int c = g.back() - '0';
+                if (c >= 0 && c < 4) intact[static_cast<std::size_t>(c)] = true;
+            }
+        }
+        sb::Vec3 c{};
+        for (auto n : nodes) c += body.positions()[n];
+        Dictionary state;
+        state["name"] = end == 0 ? "front" : "rear";
+        state["clips"] = static_cast<int>(intact[0]) + intact[1] + intact[2] + intact[3];
+        state["center"] = toG(c / static_cast<double>(nodes.size()));
         result.push_back(state);
     }
     return result;

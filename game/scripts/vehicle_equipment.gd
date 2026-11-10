@@ -146,7 +146,8 @@ func state_for(v: SBVehicle) -> Dictionary:
 			rig.add_child(lamp)
 			if side < 0: left.append(lamp)
 			else: right.append(lamp)
-	var s := {"rig": rig, "lamp_materials": lamp_materials, "tail_materials": tail_materials, "lamp_entries": lamp_entries, "broken": {}, "lamp_check": 0.0, "authored_signals": authored_signals, "headlights": headlights, "left": left, "right": right, "lights": false, "light_mode": 0, "signal": 0, "hazards": false}
+	var paint_rgb: Array = body.get("paint", [0.5, 0.1, 0.1])
+	var s := {"paint": Color(float(paint_rgb[0]), float(paint_rgb[1]), float(paint_rgb[2])), "rig": rig, "lamp_materials": lamp_materials, "tail_materials": tail_materials, "lamp_entries": lamp_entries, "broken": {}, "lamp_check": 0.0, "authored_signals": authored_signals, "headlights": headlights, "left": left, "right": right, "lights": false, "light_mode": 0, "signal": 0, "hazards": false}
 	states[v] = s
 	return s
 
@@ -353,13 +354,42 @@ func _update_lamp_damage(v: SBVehicle, s: Dictionary, delta: float) -> void:
 	if float(s["lamp_check"]) > 0.0 or not v.has_method("get_lamp_states"): return
 	s["lamp_check"] = 0.2
 	_update_glass(v, s)
+	_update_debris(v, s)
 	var broken: Dictionary = s["broken"]
 	for lamp in v.get_lamp_states():
 		var corner: String = lamp["name"]
 		var now := bool(lamp["broken"])
-		if now and not broken.get(corner, false) and v == game.player and game.get("hud"):
-			game.hud.toast("%s zerstört" % LAMP_CAPTIONS.get(corner, corner))
+		if now and not broken.get(corner, false):
+			# Lens fragments: clear for headlights, red for tail lights.
+			_spawn_shards(lamp.get("center", v.get_position_ws()), v.get_velocity(), 30,
+				Color(0.85, 0.88, 0.9, 0.7) if lamp["front"] else Color(0.75, 0.05, 0.04, 0.8))
+			if v == game.player and game.get("hud"):
+				game.hud.toast("%s zerstört" % LAMP_CAPTIONS.get(corner, corner))
 		broken[corner] = now
+
+## Clips and plastic chips when a bumper clip tears out, a burst of trim and paint flakes when a
+## door comes off. Counts reset with a repair.
+func _update_debris(v: SBVehicle, s: Dictionary) -> void:
+	if v.has_method("get_bumper_states"):
+		if not s.has("clips"): s["clips"] = {}
+		var clips: Dictionary = s["clips"]
+		for b in v.get_bumper_states():
+			var name := String(b["name"])
+			var now := int(b["clips"])
+			var before := int(clips.get(name, 4))
+			if now < before:
+				_spawn_shards(b["center"], v.get_velocity(), 14 * (before - now), Color(0.05, 0.05, 0.055, 1.0))
+				_spawn_shards(b["center"], v.get_velocity(), 6 * (before - now), s.get("paint", Color(0.5, 0.1, 0.1)))
+			clips[name] = now
+	if not s.has("doors_missing"): s["doors_missing"] = {}
+	var missing: Dictionary = s["doors_missing"]
+	for door in v.get_door_states():
+		var idx := int(door["index"])
+		var now := bool(door["missing"])
+		if now and not missing.get(idx, false):
+			var at := v.get_position_ws() + v.get_right() * (0.9 if idx == 1 else -0.9) + v.get_up() * 0.6
+			_spawn_shards(at, v.get_velocity(), 40, Color(0.06, 0.06, 0.06, 1.0))
+		missing[idx] = now
 
 const CRACKED_GLASS := preload("res://materials/cracked_glass.gdshader")
 const GLASS_CRACK := 0.3      # pane damage at which the first cracks show
@@ -397,26 +427,30 @@ func _update_glass(v: SBVehicle, s: Dictionary) -> void:
 			var m := ShaderMaterial.new()
 			m.shader = CRACKED_GLASS
 			m.set_shader_parameter("seed", float(hash(key) % 997))
+			# Laminated windscreen: a web of long cracks; tempered side and rear glass: small cubes.
+			m.set_shader_parameter("cell_scale", 4.0 if key == "windscreen" else 9.0)
+			m.set_shader_parameter("fine_scale", 26.0 if key == "windscreen" else 38.0)
 			inst.material_override = m
 			pane["material"] = m
 		var mat: ShaderMaterial = pane["material"]
 		mat.set_shader_parameter("origin", g["origin_uv"])
 		mat.set_shader_parameter("crack", clampf((damage - GLASS_CRACK) / (GLASS_SHATTER - GLASS_CRACK), 0.05, 1.0))
 
-static var _shard_mesh: BoxMesh
-func _spawn_shards(at: Vector3, velocity: Vector3) -> void:
-	if _shard_mesh == null:
-		_shard_mesh = BoxMesh.new()
-		_shard_mesh.size = Vector3(0.018, 0.003, 0.014)
+static var _shard_meshes := {}
+func _spawn_shards(at: Vector3, velocity: Vector3, amount := 90, colour := Color(0.75, 0.82, 0.85, 0.7)) -> void:
+	if not _shard_meshes.has(colour):
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(0.018, 0.003, 0.014)
 		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(0.75, 0.82, 0.85, 0.7)
+		m.albedo_color = colour
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.metallic = 0.4
 		m.roughness = 0.1
-		_shard_mesh.material = m
+		mesh.material = m
+		_shard_meshes[colour] = mesh
 	var p := CPUParticles3D.new()
-	p.mesh = _shard_mesh
-	p.amount = 90 if Game.graphics.get("effects", 1) > 0 else 35
+	p.mesh = _shard_meshes[colour]
+	p.amount = amount if Game.graphics.get("effects", 1) > 0 else maxi(8, amount / 3)
 	p.one_shot = true
 	p.explosiveness = 0.95
 	p.lifetime = 1.4
