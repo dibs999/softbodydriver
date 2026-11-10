@@ -189,6 +189,26 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
         if (s.oilTempC > 150.0) s.wear += dt * 0.002 * (s.oilTempC - 150.0);
     }
     if (!s.headGasketBlown && s.coolantTempC > spec_.headGasketC) s.headGasketBlown = true;
+    // Over-rev: also when the wheels drive the engine with the throttle closed (a downshift into
+    // a far too low gear). Valve float above ~1.1x redline wears the valvetrain; at ~1.35x the
+    // valves hit the pistons, at ~1.6x a connecting rod lets go.
+    {
+        const real redline = std::max<real>(1000.0, pt->spec().redlineRpm);
+        const real over = rpm / redline;
+        s.peakOverRev = std::max(s.peakOverRev, over);
+        if (over > 1.10) s.overRevDamage = clamp01(s.overRevDamage + dt * 4.0 * (over - 1.10) * (over - 1.10));
+        s.overRevTimer = over > 1.35 ? s.overRevTimer + dt : 0.0;
+        if (s.overRevTimer > 0.015 && !s.valvesBent) {
+            s.valvesBent = true;
+            s.overRevDamage = std::max<real>(s.overRevDamage, 0.6);
+        }
+        if (over > 1.60 && s.overRevTimer > 0.03 && !s.rodBroken) {
+            s.rodBroken = true;
+            s.overRevDamage = 1.0;
+            s.blockDamage = 1.0;                                   // rod through the block
+            s.oilPanDamage = std::max<real>(s.oilPanDamage, 0.6);  // and the oil runs out
+        }
+    }
     s.wear = clamp01(s.wear);
     if (s.coolantTempC > spec_.seizeC || s.wear >= 1.0 || s.blockDamage >= 1.0) s.seized = true;
 
@@ -198,8 +218,9 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
     if (s.headGasketBlown) scale *= 0.72;
     scale *= 1.0 - 0.75 * s.blockDamage;
     scale *= 1.0 - 0.5 * s.wear;
+    scale *= 1.0 - 0.6 * s.overRevDamage;   // bent valves: misfiring cylinders, lost compression
     s.engineTorqueScale = std::max<real>(0.0, scale);
-    s.extraFrictionNm = 45.0 * s.blockDamage + 90.0 * s.wear;
+    s.extraFrictionNm = 45.0 * s.blockDamage + 90.0 * s.wear + 30.0 * s.overRevDamage;
 
     EngineCondition c;
     c.torqueScale = s.engineTorqueScale;
@@ -210,10 +231,13 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
 
     // ------------------------------------------------------------------ status text (priority order)
     if (structuralCounter_ == 0) {
-        if (s.seized) s.status = "ENGINE SEIZED";
+        if (s.rodBroken) s.status = "ENGINE BLOWN";
+        else if (s.seized) s.status = "ENGINE SEIZED";
         else if (s.fuelL <= 0.0) s.status = "OUT OF FUEL";
         else if (s.driveshaftBroken) s.status = "DRIVESHAFT BROKEN";
         else if (s.headGasketBlown) s.status = "HEAD GASKET BLOWN";
+        else if (s.valvesBent) s.status = "VALVES DAMAGED";
+        else if (rpm > pt->spec().redlineRpm * 1.10) s.status = "OVER-REV";
         else if (s.coolantTempC > 115.0) s.status = "OVERHEATING";
         else if (s.running && s.oilPressureBar < 0.6) s.status = "LOW OIL PRESSURE";
         else if (s.coolantLevel < 0.35) s.status = "LOW COOLANT";

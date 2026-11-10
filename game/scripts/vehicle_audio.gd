@@ -125,6 +125,9 @@ func configure(next_vehicle: SBVehicle, cylinders: int) -> void:
 			player.play()
 
 
+var _rod_broken := false
+
+
 func impact(strength: float) -> void:
 	_impact = clampf(_impact + strength, 0.0, 1.0)
 	_impact_tail = clampf(_impact_tail + strength * 0.7, 0.0, 1.0)
@@ -141,6 +144,11 @@ func _process(delta: float) -> void:
 	if paused:
 		return
 	var t := vehicle.get_telemetry()
+	# A thrown connecting rod is a loud bang from the engine bay.
+	var rod := bool(t.get("rod_broken", false))
+	if rod and not _rod_broken:
+		impact(0.85)
+	_rod_broken = rod
 	var gear: int = t["gear"]
 	var slip := 0.0
 	var grip := 0.0

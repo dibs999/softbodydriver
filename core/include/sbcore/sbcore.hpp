@@ -7,6 +7,7 @@
 #include "sbcore/c_api.h"
 #include "sbcore/colliders.hpp"
 #include "sbcore/powertrain.hpp"
+#include "sbcore/props.hpp"
 #include "sbcore/recorder.hpp"
 #include "sbcore/sbeam_io.hpp"
 #include "sbcore/scenes.hpp"

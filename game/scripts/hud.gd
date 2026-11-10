@@ -53,6 +53,8 @@ const STATUS := {
 	"OIL LEAK": "Ölverlust", "FUEL LEAK": "Kraftstoffverlust", "ENGINE OFF": "Motor aus · I starten",
 	"GEARBOX FAILED": "Getriebe ausgefallen · kein Vortrieb", "CLUTCH FAILED": "Kupplung verschlissen · kein Vortrieb",
 	"CLUTCH OVERHEATING": "Kupplung überhitzt · entlasten",
+	"ENGINE BLOWN": "Motorschaden · Pleuel durch den Block", "VALVES DAMAGED": "Ventile verbogen · Motor läuft unrund",
+	"OVER-REV": "Überdrehzahl · Motor nimmt Schaden",
 }
 
 func _ready() -> void:

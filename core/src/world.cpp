@@ -271,7 +271,10 @@ std::size_t World::collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody)
         const real wTotal = wp + wTri;
         if (wTotal <= 0.0) continue;
 
-        const real penetration = skin - c.dist;
+        // Resolve deep penetration over a few steps rather than at once: a heavy car node sunk
+        // into a light prop would otherwise shove the prop's nodes ~15 cm in one 0.5 ms step and
+        // its beams would fling it away. The impulse below still removes the approach speed.
+        const real penetration = std::min(skin - c.dist, 0.02);
         const Vec3 corr = n * (penetration / wTotal);
         nPos[i] += corr * wp;
         tPos[ia] -= corr * (w0 * wa);

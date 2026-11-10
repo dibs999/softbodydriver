@@ -978,3 +978,39 @@ TEST_CASE("panels on their own rigid frame keep their shape when they swing open
     }
     CHECK(worst < 0.002);
 }
+
+TEST_CASE("a money shift into 1st at speed blows the engine and hurts gearbox and clutch; a sane downshift does not") {
+    auto shiftAt = [](real kmh, int gear) {
+        auto build = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+        World world;
+        world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+        world.addBody(std::move(build.body));
+        auto& car = world.body(0);
+        VehicleControls c;
+        c.throttle = 1.0;
+        car.setControls(c);
+        while (car.telemetry().speedKmh < kmh && world.time() < 60.0) world.simulate(0.1);
+        car.powertrain().setAutomatic(false);
+        c = {};
+        c.gear = gear;
+        car.setControls(c);
+        world.simulate(0.05);
+        c.gear = -99;
+        car.setControls(c);
+        world.simulate(2.0);
+        REQUIRE(world.stats().finite);
+        return std::make_pair(car.telemetry(), car.systems().state());
+    };
+    const auto [moneyTel, money] = shiftAt(150.0, 1);
+    CHECK(money.rodBroken);
+    CHECK(money.seized);
+    CHECK(money.status == "ENGINE BLOWN");
+    CHECK(money.peakOverRev > 1.6);
+    CHECK(moneyTel.gearboxDamage > 0.4);
+    CHECK(moneyTel.clutchWear > 0.05);
+    const auto [saneTel, sane] = shiftAt(130.0, 3);
+    CHECK_FALSE(sane.valvesBent);
+    CHECK(sane.overRevDamage < 0.01);
+    CHECK(saneTel.gearboxDamage < 0.05);
+    CHECK(sane.running);
+}

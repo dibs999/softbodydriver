@@ -86,6 +86,13 @@ struct CarSystemsState {
     real blockDamage = 0.0;      ///< 0..1 (structural)
     real wear = 0.0;             ///< 0..1 accumulated bearing / overheat wear
     bool headGasketBlown = false;
+    /// Over-revving (engine dragged past redline, e.g. a "money shift" into a far too low gear):
+    /// valve float wears it, bent valves misfire, a thrown connecting rod destroys the engine.
+    real overRevDamage = 0.0;    ///< 0..1
+    real peakOverRev = 0.0;      ///< Highest rpm / redline reached
+    real overRevTimer = 0.0;     ///< Seconds above the bent-valve / thrown-rod limits
+    bool valvesBent = false;
+    bool rodBroken = false;
     bool seized = false;
     bool running = true;
     bool driveshaftBroken = false;

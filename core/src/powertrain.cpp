@@ -106,6 +106,12 @@ void Powertrain::step(const PowertrainInputs& in,
                 const real forced = std::clamp((mismatch - 650.0) / 2800.0, 0.0, 1.0) * engaged;
                 const real abuse = forced * (0.25 + 0.75 * throttle) + (overspeed || wrongDirection ? 0.75 : 0.0);
                 gearboxDamage_ = std::min<real>(1.0, gearboxDamage_ + 0.10 * abuse);
+                // Forcing a gear whose shaft speed the synchromesh cannot match chips dog teeth:
+                // into 1st at motorway speed costs a good part of the gearbox.
+                if (overspeed || wrongDirection) {
+                    const real excess = wrongDirection ? 1.0 : std::abs(targetRpm) / spec_.redlineRpm - 1.12;
+                    gearboxDamage_ = std::min<real>(1.0, gearboxDamage_ + std::clamp(0.12 + 0.30 * excess, 0.0, 0.45));
+                }
                 grind_ = std::min<real>(1.0, abuse);
             }
             shiftTimer_ = spec_.shiftDuration * (1.0 + gearboxDamage_ * 2.0);
@@ -192,6 +198,11 @@ void Powertrain::step(const PowertrainInputs& in,
         const real raw = slip * k + 0.5 * clutchEngagement_ * netEngineTorque;
         clutchTorque = std::clamp(raw, -cap, cap);
         clutchSlipRpm_ = std::abs(radToRpm(slip));
+        // Snatching the clutch while the wheels drag the engine far up (a downshift into a much too
+        // low gear) glazes and cracks the friction plate beyond what the heat alone does. A hard
+        // launch slips the other way (engine faster) and wears through heat only.
+        if (std::abs(raw) >= cap && slip < -rpmToRad(2000.0) && clutchEngagement_ > 0.8)
+            clutchWear_ = std::min<real>(1.0, clutchWear_ + dt * 1.0 * (clutchSlipRpm_ - 2000.0) / 4000.0);
         // Ignore the small numerical creep of the stable viscous coupling.
         slipPower = std::abs(clutchTorque) * std::max<real>(0.0, std::abs(slip) - rpmToRad(120.0));
     }

@@ -54,3 +54,44 @@ TEST_CASE("a rear-ended car drives away: bodies do not hook together after the i
     CHECK(rearEndGap("meridian_sedan", "kestrel_hatch", 80.0, 97.0) > 20.0);
     CHECK(rearEndGap("kestrel_hatch", "kestrel_hatch", 50.0, 75.0) > 20.0);
 }
+
+TEST_CASE("props stand still on the ground and a car knocks them over without tearing them up") {
+    auto coast = [](bool withProp, PropKind kind, real* knocked) {
+        auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+        auto prop = buildProp(kind);
+        prop.body.translate({car.def.body.length + 6.0, 0.0, 0.3});
+        const Vec3 start = prop.body.positions()[prop.frameY];
+        World world;
+        world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+        const auto ic = world.addBody(std::move(car.body));
+        std::size_t ip = 0;
+        if (withProp) ip = world.addBody(std::move(prop.body));
+        VehicleControls c;
+        c.gear = 0;   // coasting in neutral
+        world.body(ic).setControls(c);
+        world.simulate(1.0);
+        if (withProp) CHECK(length(world.body(ip).positions()[prop.frameY] - start) < 0.03);  // upright, at rest
+        for (auto& v : world.body(ic).velocities()) v = {40.0 / 3.6, 0, 0};
+        world.simulate(3.0);
+        REQUIRE(world.stats().finite);
+        if (withProp) {
+            *knocked = length(world.body(ip).positions()[prop.frameY] - start);
+            for (const auto& beam : world.body(ip).beams()) CHECK_FALSE(beam.broken);
+        }
+        return world.body(ic).telemetry().speedKmh;
+    };
+    const real alone = coast(false, PropKind::Cone, nullptr);
+    for (const PropKind kind : {PropKind::Cone, PropKind::Barrel}) {
+        const std::string name = kind == PropKind::Cone ? "cone" : "barrel";
+        CAPTURE(name);
+        auto prop = buildProp(kind);
+        CHECK(prop.body.stabilityRatio(1.0 / 2000.0) < 0.9);
+        CHECK(prop.body.totalMass() == doctest::Approx(kind == PropKind::Cone ? 4.5 : 20.0).epsilon(0.02));
+        real knocked = 0;
+        const real speed = coast(true, kind, &knocked);
+        MESSAGE(name << " knocked " << knocked << " m, car " << speed << " km/h (alone " << alone << ")");
+        CHECK(knocked > 3.0);
+        // A light prop barely slows a 1.3 t car: momentum alone allows < 1 km/h (cone) / 2.5 km/h (drum).
+        CHECK(alone - speed < (kind == PropKind::Cone ? 2.0 : 5.0));
+    }
+}
