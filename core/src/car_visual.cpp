@@ -1271,6 +1271,52 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         vb.box("plate", {-0.020, yT - 0.145, 0.0}, {0.013, 0.046, 0.23}, bodyNodes);
     }
 
+    // Black rocker mouldings between the wheel arches, a roof spoiler over the tailgate of
+    // hatchbacks and SUVs, and roof rails on SUVs: the parts that break up a smooth painted body.
+    {
+        const real x0 = prof.xRA + prof.Ra + 0.05, x1 = prof.xFA - prof.Ra - 0.05;
+        const int segs = 4;
+        for (real side : {-1.0, 1.0}) {
+            for (int k = 0; k < segs; ++k) {
+                const real xa = x0 + (x1 - x0) * k / segs, xb = x0 + (x1 - x0) * (k + 1) / segs;
+                const real xm = 0.5 * (xa + xb);
+                const real hW = prof.halfW(xm);
+                const real yB = prof.yBottom(xm);
+                // The rocker face runs from (hW - 0.10, yB) up to (hW - 0.055, ySill = yB + 0.11).
+                const Vec3 lo{xm, yB + 0.014, side * (hW - 0.093)};
+                const Vec3 hi{xm, yB + 0.114, side * (hW - 0.052)};
+                const Vec3 up = normalize(hi - lo);
+                const Vec3 out = normalize(cross(Vec3{1, 0, 0}, up)) * side;
+                vb.bevelBox("trim", (lo + hi) * 0.5 + out * 0.014, {(xb - xa) * 0.5 + 0.004, length(hi - lo) * 0.5, 0.014}, 0.009,
+                            bodyNodes, Vec3{side, 0, 0}, up, out);
+            }
+        }
+        if (bd.style == BodyStyle::Hatchback || bd.style == BodyStyle::SUV) {
+            const auto sec = prof.section(prof.xRwTop + 0.04);
+            const real top = sec.y[10];
+            const real halfZ = sec.z[8] * 0.94;
+            const real c = std::cos(0.16), s = std::sin(0.16);
+            const Vec3 ax{-c, -s, 0}, ay{s, -c, 0};
+            vb.bevelBox("trim", {prof.xRwTop - 0.03, top + 0.006, 0}, {0.11, 0.016, halfZ}, 0.012, bodyNodes, ax, ay, {0, 0, 1});
+            for (real side : {-1.0, 1.0})
+                vb.bevelBox("trim", {prof.xRwTop - 0.02, top - 0.010, side * (halfZ - 0.012)}, {0.09, 0.022, 0.012}, 0.008,
+                            bodyNodes, ax, ay, {0, 0, 1});
+        }
+        if (bd.style == BodyStyle::SUV) {
+            const real xa = prof.xRwTop + 0.12, xb = prof.xWsTop - 0.10;
+            for (real side : {-1.0, 1.0}) {
+                const auto sa = prof.section(xa), sb = prof.section(xb);
+                const Vec3 a{xa, sa.y[10] + 0.045, side * sa.z[8] * 0.78};
+                const Vec3 b{xb, sb.y[10] + 0.045, side * sb.z[8] * 0.78};
+                vb.tube("trim", a, b, 0.014, bodyNodes, 10);
+                for (real t : {0.0, 0.5, 1.0}) {
+                    const Vec3 foot = a + (b - a) * t;
+                    vb.bevelBox("trim", foot - Vec3{0, 0.022, 0}, {0.035, 0.024, 0.016}, 0.008, bodyNodes);
+                }
+            }
+        }
+    }
+
     // Bumper reinforcement and recessed brackets stay on the chassis when the
     // painted fascia departs. Return lips give the exposed plastic shell depth.
     if (bd.detachableBumpers) {

@@ -3,8 +3,19 @@ extends Node3D
 signal completed(result: Dictionary)
 
 const C := preload("res://scripts/maps/common.gd")
-const MODES := ["Freie Fahrt", "Zeitfahren", "Drift-Challenge", "Lieferfahrt"]
-var records_path := "user://driving_records.cfg"
+const RaceField := preload("res://scripts/race_field.gd")
+const MODES := ["Freie Fahrt", "Zeitfahren", "Drift-Challenge", "Lieferfahrt", "Rennen"]
+## Race opponents are created and removed by the game scene, which owns the vehicles:
+## spawn_opponents(grid: Array[Transform3D]) -> Array (AIDriver) and release_opponents(drivers).
+var spawn_opponents: Callable
+var release_opponents: Callable
+var race_size := 2
+var place := 0
+var records_path := "user://driving_records.cfg":
+	set(value):
+		records_path = value
+		_records = ConfigFile.new()
+		_records.load(value)
 var last_result: Dictionary = {}
 var world: SBWorld
 var vehicle: SBVehicle
@@ -32,9 +43,12 @@ var _car_id := ""
 var _arming := false
 var _spawn_position := Vector3.ZERO
 var _reset_wait := 0.0
+var _race_gates := PackedVector3Array()
+var _field := RaceField.new()
 
 func configure(id: String, data: Dictionary) -> void:
 	_race_route.clear()
+	_race_gates.clear()
 	map_id = id
 	_start = data["spawns"][0]
 	var path: PackedVector3Array = data.get("activity_route", data.get("waypoints", PackedVector3Array()))
@@ -47,6 +61,17 @@ func configure(id: String, data: Dictionary) -> void:
 			distance = 0.0
 	if _race_route.size() > 2:
 		_race_route.append(_race_route[0])
+	# Races follow the AI route itself, so opponents and player pass the same gates.
+	var ai_path: PackedVector3Array = data.get("waypoints", PackedVector3Array())
+	if ai_path.size() > 3 and data.get("speeds", PackedFloat32Array()).size() == ai_path.size():
+		distance = 100.0
+		for i in ai_path.size():
+			if i > 0: distance += ai_path[i].distance_to(ai_path[i - 1])
+			if distance >= 45.0:
+				_race_gates.append(ai_path[i])
+				distance = 0.0
+		if _race_gates.size() > 2:
+			_race_gates.append(_race_gates[0])
 	_records.load(records_path)
 	_marker = Node3D.new()
 	add_child(_marker)
@@ -57,10 +82,18 @@ func configure(id: String, data: Dictionary) -> void:
 	C.box(_marker, null, Vector3(0, 4.0, 0), Vector3(5.1, 0.09, 0.09), Vector3.ZERO, material, 0.8, false, false)
 	_marker.hide()
 
+## Modes offered on this map: deliveries need the city streets, races an AI route.
+func available_modes() -> Array[int]:
+	var out: Array[int] = [0, 1, 2]
+	if map_id == "city": out.append(3)
+	if _race_gates.size() > 3: out.append(4)
+	return out
+
 func choose() -> void:
 	last_result = {}
 	cancel("")
-	mode = (mode + 1) % (4 if map_id == "city" else 3)
+	var modes := available_modes()
+	mode = modes[(modes.find(mode) + 1) % modes.size()]
 	message = "F3 Wechseln · F4 am Start aufstellen" if mode else "F3 Aktivität wählen"
 	_read_best()
 
@@ -79,6 +112,11 @@ func start() -> void:
 	var spawn := _start
 	if mode == 1 and route.size() > 2:
 		spawn = C.car_xform(route[0], route[1] - route[0])
+	elif mode == 4:
+		if _race_gates.size() < 4 or not spawn_opponents.is_valid():
+			return
+		route = _race_gates.duplicate()
+		spawn = C.car_xform(route[0], route[1] - route[0])
 	elif mode == 3:
 		# Curbside stops along existing streets, not inside the buildings.
 		route = PackedVector3Array([Vector3(4, 0, 44), Vector3(92, 0, -132), Vector3(260, 0, 220), Vector3(-4, 0, 132)])
@@ -96,6 +134,10 @@ func start() -> void:
 	_spawn_position = spawn.origin
 	vehicle.reset_to(spawn)
 	vehicle.set_input(0, 1, 0, 1)
+	place = 0
+	if mode == 4:
+		_field.setup(route, spawn_opponents.call(RaceField.grid(spawn, race_size)))
+		_field.hold(true)
 	_previous = spawn.origin + Vector3.UP * 0.6
 	_broken = int(vehicle.get_telemetry().get("broken_beams", 0))
 	_clock = float(world.get_stats()["sim_time"])
@@ -106,6 +148,14 @@ func cancel(reason: String) -> void:
 	active = false
 	message = reason
 	if _marker: _marker.hide()
+	if not _field.drivers.is_empty():
+		var drivers := _field.drivers
+		_field.drivers = []
+		if release_opponents.is_valid(): release_opponents.call(drivers)
+
+## Opponent vehicles of the running race.
+func opponents() -> Array:
+	return _field.drivers.map(func(d): return d.vehicle)
 
 func target() -> Vector3:
 	return route[gate] if active and mode != 2 and gate < route.size() else Vector3.INF
@@ -152,6 +202,7 @@ func _process(_delta: float) -> void:
 		countdown = maxf(0, countdown - dt)
 		vehicle.set_input(0, 1, 0, 1)
 		message = "Start in %d" % ceili(countdown) if countdown > 0 else "Los!"
+		if countdown <= 0: _field.hold(false)
 		_previous = position
 		return
 	elapsed += dt
@@ -198,6 +249,10 @@ func _process(_delta: float) -> void:
 			forward.y = 0
 			if crossed(_previous, position, route[gate], forward.normalized()): gate += 1
 			message = "Checkpoint %d / %d · %.2f s" % [mini(gate, route.size() - 1), route.size() - 1, elapsed]
+			if mode == 4:
+				_field.update(elapsed, crossed)
+				place = 1 + _field.finished_count() if gate >= route.size() else _field.place(position, gate, false)
+				message = "Platz %d / %d · " % [place, race_size + 1] + message
 		if gate >= route.size(): _finish()
 		else: _update_marker()
 	_previous = position
@@ -235,6 +290,10 @@ func _finish() -> void:
 		"record_saved": save_error == OK, "record_save_error": save_error,
 	}
 	var summary := ("Neue Bestleistung! " if improved else "Ziel! ") + ("%d Punkte" % score if mode == 2 else "%.2f s" % elapsed)
+	if mode == 4:
+		last_result["place"] = place
+		last_result["field"] = race_size + 1
+		summary = "Platz %d von %d · %.2f s" % [place, race_size + 1, elapsed] + (" · Bestzeit!" if improved else "")
 	if save_error != OK: summary += " · Speichern fehlgeschlagen"
 	cancel(summary)
 	completed.emit(last_result.duplicate(true))

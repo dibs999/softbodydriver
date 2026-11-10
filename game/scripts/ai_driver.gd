@@ -13,6 +13,11 @@ var others: Array = []
 ## Optional traffic signal controller with stop_distance(position, forward, speed).
 var signals: Node
 var _half_length := 2.2
+## Held on the brakes (race grid during the countdown).
+var hold := false
+## Race opponent: short following gap and overtaking around slower cars instead of queueing.
+var racing := false
+var _lane := 0.0
 
 
 func _init(v: SBVehicle, wp: PackedVector3Array, sp: PackedFloat32Array, scale := 1.0) -> void:
@@ -39,6 +44,9 @@ func _nearest() -> int:
 func update(delta: float) -> void:
 	if waypoints.is_empty() or not is_instance_valid(vehicle):
 		return
+	if hold:
+		vehicle.set_input(0.0, 1.0, 0.0, 1.0)
+		return
 	var p := vehicle.get_position_ws()
 	var n := waypoints.size()
 	# Advance along the path.
@@ -55,6 +63,20 @@ func update(delta: float) -> void:
 	var target := waypoints[(idx + look) % n]
 	var fwd := vehicle.get_forward()
 	var right := vehicle.get_right()
+	if racing:
+		# Pull out beside a slower car close ahead, back onto the line once past it.
+		var want := 0.0
+		for other in others:
+			if not is_instance_valid(other) or other == vehicle:
+				continue
+			var rel: Vector3 = other.get_position_ws() - p
+			var along := rel.dot(fwd)
+			if along > -3.0 and along < 22.0 and absf(rel.dot(right)) < 2.4 and other.get_velocity().dot(fwd) < v - 0.5:
+				want = -3.0 if rel.dot(right) >= 0.0 else 3.0
+		_lane = move_toward(_lane, want, delta * 2.5)
+		var path_dir := waypoints[(idx + look) % n] - waypoints[(idx + look - 1 + n) % n]
+		var path_right := Vector3(-path_dir.z, 0, path_dir.x).normalized()   # = dir × up, as in car_xform
+		target += path_right * _lane
 	var to := target - p
 	to.y = 0
 	var ang := atan2(to.dot(-right), to.dot(fwd))
@@ -67,11 +89,11 @@ func update(delta: float) -> void:
 			continue
 		var rel: Vector3 = other.get_position_ws() - p
 		var along := rel.dot(fwd)
-		if along <= 0.0 or along > 60.0 or absf(rel.dot(right)) > 2.6:
+		if along <= 0.0 or along > 60.0 or absf(rel.dot(right)) > (1.9 if racing else 2.6):
 			continue
 		var other_v: float = maxf(0.0, other.get_velocity().dot(fwd))
-		var free := along - 7.0
-		gap_limit = minf(gap_limit, maxf(0.0, other_v + (free - v * 1.5) * 0.35))
+		var free := along - (5.0 if racing else 7.0)
+		gap_limit = minf(gap_limit, maxf(0.0, other_v + (free - v * (0.5 if racing else 1.5)) * 0.35))
 		if free < 1.0:
 			gap_limit = 0.0
 	target_v = minf(target_v, gap_limit)

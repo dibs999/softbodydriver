@@ -615,6 +615,9 @@ func make_material_library() -> Dictionary:
 	glass.roughness = 0.04
 	glass.cull_mode = BaseMaterial3D.CULL_DISABLED
 	lib["glass"] = glass
+	var privacy := glass.duplicate() as StandardMaterial3D
+	privacy.albedo_color = Color(0.02, 0.025, 0.03, 0.74)
+	lib["glass_privacy"] = privacy
 
 	lib["chrome"] = _metal(Color(0.85, 0.86, 0.88), 1.0, 0.12)
 	lib["mirror"] = _metal(Color(0.9, 0.92, 0.95), 1.0, 0.02)

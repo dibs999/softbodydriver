@@ -151,6 +151,8 @@ func _ready() -> void:
 	add_child(activity)
 	activity.configure(Game.selected_map, map_data)
 	activity.completed.connect(_on_activity_completed)
+	activity.spawn_opponents = _spawn_opponents
+	activity.release_opponents = _release_opponents
 	hud.activity = activity
 	minimap.activity = activity
 	for v in vehicles:
@@ -534,6 +536,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("pause_physics"):
 		world.paused = not world.paused
 	elif event.is_action_pressed("switch_vehicle"):
+		activity.cancel("")   # a race's opponents leave before one of them could be picked
 		var i := (vehicles.find(player) + 1) % vehicles.size()
 		var old := player
 		_set_player(vehicles[i])
@@ -553,6 +556,53 @@ func _unhandled_input(event: InputEvent) -> void:
 			vehicles.append(v)
 			_configure_effects(v)
 			hud.toast("Hindernis-Fahrzeug abgestellt")
+
+
+## Race opponents (Rennen): AI cars on the grid, removed again when the race ends.
+func _spawn_opponents(grid: Array[Transform3D]) -> Array:
+	var pick: Array = {"offroad": ["trailhead_4x4", "basalt_suv"], "desert": ["kestrel_rally", "trailhead_4x4"]}.get(
+		Game.selected_map, ["kestrel_hatch", "aurora_sedan", "vortex_sprint"])
+	# Traffic on the grid (or about to arrive there) moves half a lap away first.
+	var start_area: Array[Vector3] = [player.get_position_ws()]
+	for xf in grid: start_area.append(xf.origin)
+	var moved := 0
+	for v: SBVehicle in ai.keys():
+		var driver = ai[v]
+		var near := start_area.any(func(p: Vector3) -> bool: return p.distance_to(v.get_position_ws()) < 40.0)
+		if near or start_area.any(func(p: Vector3) -> bool: return p.distance_to(driver.waypoints[driver.idx]) < 60.0):
+			# Distinct slots half a lap from the start, so moved cars never land on each other.
+			var n: int = driver.waypoints.size()
+			var start_idx := 0
+			for k in n:
+				if driver.waypoints[k].distance_squared_to(start_area[0]) < driver.waypoints[start_idx].distance_squared_to(start_area[0]):
+					start_idx = k
+			var j: int = (start_idx + n / 2 + moved * 12) % n
+			moved += 1
+			v.reset_to(MapBuilder.car_xform(driver.waypoints[j], driver.waypoints[(j + 1) % n] - driver.waypoints[j]))
+			driver.idx = j
+	var drivers: Array = []
+	for i in grid.size():
+		var v := Game.spawn_vehicle(world, "res://cars/%s.car.json" % pick[i % pick.size()], grid[i])
+		if v == null:
+			continue
+		vehicles.append(v)
+		_configure_effects(v)
+		var driver := AIDriver.new(v, map_data["waypoints"], map_data["speeds"], 1.0)
+		driver.racing = true
+		driver.hold = true
+		driver.others = vehicles
+		ai[v] = driver
+		drivers.append(driver)
+	return drivers
+
+
+func _release_opponents(drivers: Array) -> void:
+	for driver in drivers:
+		var v: SBVehicle = driver.vehicle
+		ai.erase(v)
+		vehicles.erase(v)
+		if is_instance_valid(v) and v != player:
+			world.remove_vehicle(v)
 
 
 func _build_pause_menu(ui: CanvasLayer) -> void:
@@ -662,10 +712,11 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 
 	var drive_page: VBoxContainer = page.call("Fahrt & Umgebung")
 	drive_page.add_child(UITheme.section("Aktivität"))
-	_pause_activity = _pause_choices(drive_page, "Fahraktivität", DrivingActivity.MODES.slice(0, 4 if Game.selected_map == "city" else 3))
+	var offered := activity.available_modes()
+	_pause_activity = _pause_choices(drive_page, "Fahraktivität", offered.map(func(m: int): return DrivingActivity.MODES[m]))
 	_pause_activity.item_selected.connect(func(index: int):
 		activity.cancel("")
-		activity.mode = index
+		activity.mode = offered[index]
 		activity._read_best()
 		activity.message = "Im Pausenmenü starten" if index else "Freie Fahrt"
 		if index: lesson.notify_interruption("Andere Aktivität gewählt")
@@ -740,7 +791,7 @@ func _toggle_pause() -> void:
 	hud.visible = not pause_menu.visible
 	minimap.visible = not pause_menu.visible and minimap._compact_visible
 	if pause_menu.visible:
-		_pause_activity.select(activity.mode)
+		_pause_activity.select(maxi(0, activity.available_modes().find(activity.mode)))
 		_pause_weather.select(weather.weather_index)
 		_pause_time.select(weather.time_index)
 		_pause_clock.set_pressed_no_signal(weather.automatic_time)
