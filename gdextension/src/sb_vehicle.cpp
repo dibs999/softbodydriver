@@ -1773,6 +1773,8 @@ Dictionary SBVehicle::get_telemetry() const {
     d["rod_broken"] = sys_.rodBroken;
     d["engine_knock"] = sys_.knock;
     d["oil_starved"] = sys_.oilStarved;
+    d["fire"] = sys_.fire;
+    d["fire_source"] = sys_.fireSource;
     d["rod_bearing_wear"] = sys_.rodBearingWear;
     d["piston_ring_damage"] = sys_.pistonRingDamage;
     d["over_rev"] = def_.engine.redlineRpm > 0 ? tel_.engineRpm / def_.engine.redlineRpm : 0.0;

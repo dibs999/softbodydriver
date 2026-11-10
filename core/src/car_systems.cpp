@@ -124,7 +124,7 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
     const real rpm = pt->engineRpm();
     if (!ignition && pt->running()) pt->setRunning(false);
     if (s.fuelL <= 0.0 && pt->running()) pt->setRunning(false);
-    if (!pt->running() && ignition && starter && !s.seized && s.fuelL > 0.0) {
+    if (!pt->running() && ignition && starter && !s.seized && s.fuelL > 0.0 && s.fire < 0.4) {
         s.crankTimer += dt;
         if (s.crankTimer > 0.7) {
             pt->setRunning(true);
@@ -244,6 +244,39 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
             s.oilPanDamage = std::max<real>(s.oilPanDamage, 0.6);  // and the oil runs out
         }
     }
+    // ------------------------------------------------------------------ fire
+    {
+        // Ignition hazards (per second). A deterministic hash stands in for chance so replays and
+        // tests stay reproducible.
+        real hazard = 0.0;
+        int source = 0;
+        const bool oilOnEngine = s.oilPanDamage > 0.3 || s.rodBroken;   // oil sprayed onto the exhaust
+        if (oilOnEngine && (s.oilTempC > 135.0 || s.coolantTempC > 125.0)) hazard = 0.02;
+        if (s.blockDamage > s.lastBlockDamage + 0.25 && s.running) s.crashWindow = 3.0;   // just crushed
+        if (s.crashWindow > 0.0) {
+            s.crashWindow -= dt;
+            hazard = std::max<real>(hazard, 0.03 * s.blockDamage);   // ~9 % for a fully crushed engine
+        }
+        if (s.fuelTankDamage > 0.15 && s.fuelL > 0.5 && s.zoneDamage[kZoneRear] > 0.25) {
+            if (0.01 > hazard) source = 1;
+            hazard = std::max<real>(hazard, 0.01);
+        }
+        s.lastBlockDamage = s.blockDamage;
+        if (s.fire <= 0.0 && hazard > 0.0) {
+            s.fireRoll = std::fmod(s.fireRoll + dt * 0.6180339887 + 0.1234 * hazard, 1.0);
+            // Bernoulli trial per step with probability hazard * dt, from the low-discrepancy roll.
+            const real u = std::fmod(s.fireRoll * 7919.0, 1.0);
+            if (u < hazard * dt) { s.fire = 0.05; s.fireSource = source; }
+        }
+        if (s.fire > 0.0) {
+            const bool fuel = s.fuelL > 0.0 || s.oilLevel > 0.05;
+            s.fire = fuel ? std::min<real>(1.0, s.fire + dt * 0.032) : std::max<real>(0.0, s.fire - dt * 0.05);
+            // It burns oil, fuel and coolant hoses; the wiring goes at ~40 %.
+            s.fuelL = std::max<real>(0.0, s.fuelL - dt * 0.05 * s.fire * (s.fireSource == 1 ? 3.0 : 1.0));
+            s.oilLevel = std::max<real>(0.0, s.oilLevel - dt * 0.004 * s.fire);
+            if (s.fire > 0.4 && pt->running()) pt->setRunning(false);
+        }
+    }
     s.wear = clamp01(s.wear);
     if (s.coolantTempC > spec_.seizeC || s.wear >= 1.0 || s.blockDamage >= 1.0) s.seized = true;
 
@@ -268,7 +301,8 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
 
     // ------------------------------------------------------------------ status text (priority order)
     if (structuralCounter_ == 0) {
-        if (s.rodBroken) s.status = "ENGINE BLOWN";
+        if (s.fire > 0.0) s.status = s.fireSource == 1 ? "FUEL FIRE" : "ENGINE FIRE";
+        else if (s.rodBroken) s.status = "ENGINE BLOWN";
         else if (s.seized) s.status = "ENGINE SEIZED";
         else if (s.fuelL <= 0.0) s.status = "OUT OF FUEL";
         else if (s.driveshaftBroken) s.status = "DRIVESHAFT BROKEN";

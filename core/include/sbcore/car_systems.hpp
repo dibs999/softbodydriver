@@ -103,6 +103,14 @@ struct CarSystemsState {
     real horizontalG = 0.0;      ///< Filtered horizontal acceleration (g)
     real accelTimer = 0.0;
     bool oilStarved = false;     ///< Oil pickup sucking air (low level + hard cornering / braking)
+    /// Vehicle fire: oil on a hot engine, a crushed running engine or a leaking tank after a rear
+    /// hit can ignite. It grows over ~30 s, burns the wiring (engine dies) and goes out when the
+    /// fuel is gone; only a repair puts the car right.
+    real fire = 0.0;             ///< 0..1 intensity
+    int fireSource = 0;          ///< 0 engine bay, 1 fuel tank
+    real fireRoll = 0.0;         ///< Deterministic ignition draw
+    real crashWindow = 0.0;      ///< s left in which a freshly crushed running engine may ignite
+    real lastBlockDamage = 0.0;
     bool seized = false;
     bool running = true;
     bool driveshaftBroken = false;
