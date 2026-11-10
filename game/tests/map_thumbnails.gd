@@ -7,8 +7,8 @@ var wait := 0
 var cam: Camera3D
 var current := ""
 const VIEW := {  # route fraction, height, distance behind
-	"proving_grounds": [0.62, 18.0, 46.0], "autobahn": [0.12, 16.0, 40.0], "city": [0.30, 22.0, 30.0],
-	"desert": [0.08, 26.0, 40.0], "hill_roads": [0.22, 12.0, 30.0], "offroad": [0.35, 10.0, 26.0],
+	"proving_grounds": [0.62, 18.0, 46.0], "autobahn": [0.12, 16.0, 40.0], "city": [0.30, 34.0, 55.0, 0.0],
+	"desert": [0.08, 26.0, 40.0], "hill_roads": [0.495, 16.0, 34.0], "offroad": [0.35, 10.0, 26.0],
 }
 
 func _initialize() -> void:
@@ -55,7 +55,7 @@ func _process(_d: float) -> bool:
 		cam.far = 4000
 		scene.add_child(cam)
 		cam.current = true
-		cam.look_at_from_position(a - dir * float(v[2]) + Vector3.UP * float(v[1]) + dir.cross(Vector3.UP) * 8.0, a + dir * 60.0, Vector3.UP)
+		cam.look_at_from_position(a - dir * float(v[2]) + Vector3.UP * float(v[1]) + dir.cross(Vector3.UP) * (float(v[3]) if v.size() > 3 else 8.0), a + dir * 60.0, Vector3.UP)
 	if wait == 14:
 		var img := root.get_viewport().get_texture().get_image()
 		img.resize(480, 270, Image.INTERPOLATE_LANCZOS)
