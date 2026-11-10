@@ -454,8 +454,12 @@ CarBuild buildCar(const CarDefinition& def) {
         hubDroop.precompression = 1.24;
         sb.push_back(car.addBeam(cn.tower, cn.hubOut, hubDroop));
         // Tie rod (hydro steering on the front axle, fixed toe link on the rear).
+        // The tie rod is the weak link of a wheel strike: it yields at ~45 kN (hard cornering and
+        // landings stay well below), so a wheel driven into a kerb knocks the toe out and the car
+        // pulls, while the wishbones only bend in real crashes.
         BeamParams tie = arm;
         tie.spring = 2.2e6;
+        tie.deform = 4.5e4;
         if (cn.front) {
             const real tieLen = length(car.positions()[cn.steerArm] - car.positions()[cn.rackEnd]);
             const real lockDelta = 0.14 * std::sin(34.0 * kPi / 180.0);
@@ -1107,6 +1111,7 @@ CarBuild buildCar(const CarDefinition& def) {
         // tread standing wave that peaked rolling loss around 145 km/h.
         ws.membranePressure = 2.0;
         ws.steered = cn.front;
+        ws.ratedLoad = std::max<real>(1500.0, (car.totalMass() + tire.totalMass()) * 9.81 * (cn.front ? def.chassis.frontWeight : 1.0 - def.chassis.frontWeight) * 0.5);
         ws.braked = true;
         ws.handbraked = !cn.front;
         ws.driven = layout == DriveLayout::AWD || (layout == DriveLayout::FWD && cn.front) ||
@@ -1199,7 +1204,11 @@ CarBuild buildCar(const CarDefinition& def) {
                 std::abs(ctr.z) > prof.hw * 0.6 &&
                 (pa.z * pb.z > 0 && pb.z * pc.z > 0) &&
                 ctr.y > prof.ySill(ctr.x) - 0.01) return;
-            Vec3 out{0.0, ctr.y - yAxis, ctr.z};
+            // Outward = away from the car's centre line, including along it near the ends: sliver
+            // triangles at the nose and tail must not face into the car, or they hold a foreign
+            // node from behind (two cars hooked together after a rear-end collision).
+            const real axisX = std::clamp(ctr.x, 0.55, L - 0.55);
+            Vec3 out{ctr.x - axisX, ctr.y - yAxis, ctr.z};
             if (ctr.x > L - 0.05) out.x += 1.0;
             if (ctr.x < 0.05) out.x -= 1.0;
             if (dot(n, out) < 0) std::swap(ub, uc);

@@ -54,22 +54,20 @@ static func _flat_quad(parent: Node3D, center: Vector3, size: Vector2, mat: Mate
 	parent.add_child(mi)
 
 
-static func _cone(parent: Node3D, pos: Vector3) -> void:
-	var mi := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = 0.03
-	cm.bottom_radius = 0.17
-	cm.height = 0.7
-	cm.radial_segments = 12
-	cm.rings = 0
-	mi.mesh = cm
-	mi.material_override = _mat(Color(1.0, 0.38, 0.05), 0.6)
-	mi.position = pos + Vector3(0, 0.35, 0)
-	parent.add_child(mi)
+## Loose props of the map being built; the game spawns them as soft bodies ("props" in the map data).
+static var props: Array = []
+
+static func _cone(_parent: Node3D, pos: Vector3, yaw := 0.0) -> void:
+	props.append({"kind": "cone", "position": Vector3(pos.x, 0.0, pos.z), "yaw": yaw})
+
+
+static func _drum(pos: Vector3, yaw := 0.0) -> void:
+	props.append({"kind": "barrel", "position": pos, "yaw": yaw})
 
 
 # =========================================================================== proving grounds
 static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
+	props.clear()
 	world.add_ground_plane(1.0)
 	var grass := C.surface_material("grass", 3.1, Color(0.50, 0.66, 0.50))
 	var asphalt := C.surface_material("asphalt", 2.0, Color.WHITE, 0.30)
@@ -231,7 +229,11 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 		car_xform(Vector3(-15, 0, -32), Vector3(1, 0, 0)),
 		car_xform(Vector3(-30, 0, -32), Vector3(1, 0, 0)),
 	]
-	return {"spawns": spawns, "waypoints": waypoints, "speeds": speeds,
+	# A drum wall at the end of the slalom lane for crash tests.
+	for row in 2:
+		for k in 4:
+			_drum(Vector3(-196.0 - row * 0.62, 0.0, -42.0 + k * 0.64 + row * 0.32))
+	return {"spawns": spawns, "waypoints": waypoints, "speeds": speeds, "props": props.duplicate(),
 		"rain_shelters": proving_shelters(), "service_approach": facilities["service_approach"], "pit_approach": facilities["pit_approach"],
 		"surface_regions": [{"rect": Rect2(-200, -150, 80, 80), "surface": "grass"}] + landscape_regions,
 		"map_paths": [C.closed_route(waypoints), C.closed_route(training), handling, facilities["service_approach"], facilities["pit_approach"]],

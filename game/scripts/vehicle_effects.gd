@@ -225,9 +225,11 @@ func update_effects(t: Dictionary, anchors: Dictionary, slip: PackedFloat32Array
 	engine_smoke.emitting = level > 0.06
 	engine_smoke.color = Color(0.85, 0.89, 0.92, level) if steam > oil_smoke else Color(0.34, 0.37, 0.40, level)
 	engine_smoke.scale_amount_max = 1.5 + level
-	var exhaust_level := 0.055 + (0.45 if bool(t["head_gasket"]) else 0.0) + oil_smoke
+	var rings := float(t.get("piston_ring_damage", 0.0))
+	var exhaust_level := 0.055 + (0.45 if bool(t["head_gasket"]) else 0.0) + oil_smoke + 0.5 * rings
 	exhaust.global_position = anchors["exhaust"]
 	exhaust.emitting = bool(t["running"])
 	exhaust.direction = -vehicle.get_forward() + Vector3.UP * 0.3
-	exhaust.color = Color(0.75, 0.79, 0.84, exhaust_level)
+	# Burnt oil from worn rings is blue-grey; steam from a head gasket white.
+	exhaust.color = Color(0.75, 0.79, 0.84, exhaust_level).lerp(Color(0.50, 0.56, 0.68, exhaust_level), clampf(rings * 2.0, 0.0, 1.0))
 	exhaust.scale_amount_max = 0.40

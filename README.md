@@ -118,7 +118,10 @@ So kommt ein eigenes Auto ins Spiel:
 | Motorblock | Verformung bei schwerem Frontcrash | Leistungsverlust und mehr Reibung, bei Totalschaden fest |
 | Motorlager / Kardanwelle | Bruch | Kraftfluss unterbrochen |
 | Kupplung | Anhaltender Schlupf erzeugt Reibungswärme | Ab 180 °C sinkt das übertragbare Drehmoment, über 230 °C entsteht dauerhafter Verschleiß; vollständig verschlissen kein Vortrieb |
-| Getriebe | Wiederholte Schaltvorgänge unter Last ohne Auskuppeln, extreme Rückschaltungen oder Richtungswechsel | Schleifgeräusch, längere Schaltunterbrechung, Leistungsverlust bis zum Ausfall; Automatik schützt vor destruktiven Gangwechseln |
+| Getriebe | Wiederholte Schaltvorgänge unter Last ohne Auskuppeln, extreme Rückschaltungen oder Richtungswechsel | Schleifgeräusch, längere Schaltunterbrechung, Leistungsverlust bis zum Ausfall; ein Gang, dessen Drehzahl weit über dem roten Bereich läge (z. B. bei 150 km/h in den 1.), kostet auf einen Schlag einen großen Teil des Getriebes; Automatik schützt vor destruktiven Gangwechseln |
+| Felgen und Reifen (Bordstein, Schlagloch) | Ein Bordstein- oder Schlaglochrand drückt einen einzelnen Laufflächenpunkt mit mehr als dem ~4,5-fachen der Radlast gegen die Felge | Felge verbogen (Wulst undicht, Reifen verliert langsam Luft, Diagnose „Felge verbogen“), bei sehr hartem Schlag Durchschlag mit schnellem Luftverlust; ein platter Reifen zieht das Auto zur Seite |
+| Spurstangen | Seitlicher Schlag aufs Rad | Spurstangen geben ab ~45 kN nach, Querlenker erst bei echten Unfällen: verstellte Spur, das Auto zieht |
+| Motor (Überdrehzahl) | Die Räder treiben den Motor über die rote Linie, meist durch zu tiefes Zurückschalten | Ab ~1,1 × Drehzahlgrenze Ventilflattern und Verschleiß, ab ~1,35 × verbogene Ventile (Leistungsverlust, unrunder Lauf), ab ~1,6 × reißt ein Pleuel: Knall, Ölverlust, Motor fest; die Kupplung nimmt beim schlagartigen Einkuppeln zusätzlich Schaden |
 | Tank | Beschädigung | Kraftstoffleck |
 | Bremsen | Scheibentemperatur | Fading ab ca. 450 °C |
 | Reifen | Rutschen erzeugt Wärme und Abrieb, Hitze erhöht den Luftdruck. Verbeulte Felge oder Flanke führt zu schleichendem Luftverlust | Weniger Grip bei kalten, überhitzten oder abgefahrenen Reifen. Platzen bei abgefahrener Lauffläche (Verschleiß 100 %) oder über 175 °C. Ein platter Reifen sackt sichtbar zusammen |
@@ -249,6 +252,13 @@ und dem Motor. Beim Kestrel Hatch können außerdem die unteren Stoßfänger vor
 hinten als eigene Bauteile abreißen. Das importierte Concept-Modell besitzt noch
 keine separat bewegliche Haube. Grenzen der Kontaktauflösung und verbleibende
 Schadensbaugruppen stehen in [PHYSICS_ACCEPTANCE.md](docs/PHYSICS_ACCEPTANCE.md).
+
+Pylonen und Ölfässer sind eigene kleine Soft-Bodies: Leitkegel (4,5 kg, biegsames PVC,
+federn zurück) auf dem Slalom und Handling-Parcours des Testgeländes und als Baustelle
+auf dem Seitenstreifen der Autobahn, 200-Liter-Stahlfässer (20 kg, verbeulen) als
+Fasswand am Testgelände und auf dem Seitenstreifen. Autos stoßen sie um, schleifen
+Pylonen unter dem Stoßfänger mit oder schleudern Fässer weg; das Pausenmenü stellt
+alle wieder auf („Pylonen und Fässer zurückstellen“).
 
 Meridian Estate und Trailhead 4x4 haben eine Heckklappe, Meridian-Limousinen und
 der Fastback einen Kofferraumdeckel: ein eigenes Bauteil mit brechbaren Scharnieren

@@ -86,6 +86,23 @@ struct CarSystemsState {
     real blockDamage = 0.0;      ///< 0..1 (structural)
     real wear = 0.0;             ///< 0..1 accumulated bearing / overheat wear
     bool headGasketBlown = false;
+    /// Over-revving (engine dragged past redline, e.g. a "money shift" into a far too low gear):
+    /// valve float wears it, bent valves misfire, a thrown connecting rod destroys the engine.
+    real overRevDamage = 0.0;    ///< 0..1
+    real peakOverRev = 0.0;      ///< Highest rpm / redline reached
+    real overRevTimer = 0.0;     ///< Seconds above the bent-valve / thrown-rod limits
+    bool valvesBent = false;
+    bool rodBroken = false;
+    /// Rod bearings: wiped by oil starvation (low pressure) and very hot, thin oil. The engine
+    /// knocks louder and louder and finally throws a rod.
+    real rodBearingWear = 0.0;   ///< 0..1
+    /// Piston rings: scuffed by overheating and over-revving: lost compression, burns oil.
+    real pistonRingDamage = 0.0; ///< 0..1
+    real knock = 0.0;            ///< Output: audible bearing knock 0..1
+    Vec3 lastVelocity{};         ///< For the horizontal acceleration that sloshes the oil away from the pickup
+    real horizontalG = 0.0;      ///< Filtered horizontal acceleration (g)
+    real accelTimer = 0.0;
+    bool oilStarved = false;     ///< Oil pickup sucking air (low level + hard cornering / braking)
     bool seized = false;
     bool running = true;
     bool driveshaftBroken = false;

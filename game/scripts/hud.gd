@@ -53,6 +53,9 @@ const STATUS := {
 	"OIL LEAK": "Ölverlust", "FUEL LEAK": "Kraftstoffverlust", "ENGINE OFF": "Motor aus · I starten",
 	"GEARBOX FAILED": "Getriebe ausgefallen · kein Vortrieb", "CLUTCH FAILED": "Kupplung verschlissen · kein Vortrieb",
 	"CLUTCH OVERHEATING": "Kupplung überhitzt · entlasten",
+	"ENGINE BLOWN": "Motorschaden · Pleuel durch den Block", "VALVES DAMAGED": "Ventile verbogen · Motor läuft unrund",
+	"OVER-REV": "Überdrehzahl · Motor nimmt Schaden",
+	"ENGINE KNOCKING": "Motor klopft · Pleuellager verschlissen", "OIL STARVATION": "Ölmangel · Pumpe saugt in Kurven Luft", "BURNING OIL": "Motor verbrennt Öl · Kolbenringe verschlissen",
 }
 
 func _ready() -> void:
@@ -451,6 +454,9 @@ func _diagnostics(canvas: Vector2) -> void:
 		var pressure := float(_t["tire_pressure"][i])
 		var wear := float(_t["tire_wear"][i])
 		var label := "PLATT" if pressure < 8 or bool(_t["wheel_burst"][i]) else "%.1f bar · %.0f °C" % [pressure * 0.0689476, _t["tire_temp"][i]]
+		var rims: Array = _t.get("rim_damage", [])
+		if i < rims.size() and float(rims[i]) > 0.08:
+			label = "Felge verbogen · " + label
 		_row(p + Vector2(320, 104 + i * 41), names[i], label, 1 - wear, RED if pressure < 19 or wear > 0.7 else ACCENT)
 	_text(p + Vector2(320, 280), "Balken: verbleibendes Reifenprofil", 11, MUTED)
 	_text(p + Vector2(22, 320), "Shift  Kupplung    Q / E  Schalten    M  Getriebemodus", 13, TEXT)

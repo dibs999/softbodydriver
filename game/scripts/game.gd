@@ -24,6 +24,7 @@ var road_marks: RoadMarks
 var world: SBWorld
 var map_data: Dictionary
 var vehicles: Array[SBVehicle] = []
+var props: Array[SBProp] = []          # loose cones and drums of the map
 var _tune_front: HSlider
 var _tune_rear: HSlider
 var _tune_bias: HSlider
@@ -80,6 +81,10 @@ func _ready() -> void:
 		_:
 			map_data = MapBuilder.build_proving_grounds(world, maproot)
 	_apply_map_environment(map_data.get("environment", {}))
+	for p: Dictionary in map_data.get("props", []):
+		var prop := Game.spawn_prop(world, String(p["kind"]), Transform3D(Basis(Vector3.UP, float(p.get("yaw", 0.0))), p["position"]))
+		if prop:
+			props.append(prop)
 	surfaces.configure(Game.selected_map, map_data)
 	road_marks = RoadMarks.new()
 	road_marks.world = world
@@ -731,6 +736,11 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 				_toggle_pause()],
 			["Heckklappe / Kofferraum öffnen / schließen", func():
 				equipment.release_tailgate()
+				_toggle_pause()],
+			["Pylonen und Fässer zurückstellen", func():
+				for p in props:
+					if is_instance_valid(p): p.reset()
+				hud.toast("Pylonen und Fässer stehen wieder an ihrem Platz" if not props.is_empty() else "Keine Pylonen oder Fässer auf dieser Karte")
 				_toggle_pause()],
 			["Scheibenwischer umschalten", func():
 				hud.toast(wipers.cycle_mode())

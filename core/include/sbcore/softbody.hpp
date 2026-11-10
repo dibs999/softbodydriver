@@ -179,7 +179,7 @@ struct VehicleTelemetry {
     real steer = 0.0;
     std::vector<real> wheelOmega;
     std::vector<bool> wheelBurst;
-    std::vector<real> wheelWear, wheelTempC, wheelPressurePsi, wheelSlip, wheelLoad;
+    std::vector<real> wheelWear, wheelTempC, wheelPressurePsi, wheelSlip, wheelLoad, wheelRimDamage;
     std::size_t deformedBeams = 0;
     std::size_t brokenBeams = 0;
     bool tcsActive = false;

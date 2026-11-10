@@ -47,6 +47,9 @@ var _gravel := 0.0
 var _cabin_l := 0.0
 var _cabin_r := 0.0
 var _grind := 0.0
+var _knock := 0.0          # rod bearing knock level 0..1
+var _knock_phase := 0.0
+var _crank_hz := 0.0
 var _flat := 0.0
 var _flat_phase := 0.0
 var _wheel_hz := 0.0
@@ -125,6 +128,9 @@ func configure(next_vehicle: SBVehicle, cylinders: int) -> void:
 			player.play()
 
 
+var _rod_broken := false
+
+
 func impact(strength: float) -> void:
 	_impact = clampf(_impact + strength, 0.0, 1.0)
 	_impact_tail = clampf(_impact_tail + strength * 0.7, 0.0, 1.0)
@@ -141,6 +147,11 @@ func _process(delta: float) -> void:
 	if paused:
 		return
 	var t := vehicle.get_telemetry()
+	# A thrown connecting rod is a loud bang from the engine bay.
+	var rod := bool(t.get("rod_broken", false))
+	if rod and not _rod_broken:
+		impact(0.85)
+	_rod_broken = rod
 	var gear: int = t["gear"]
 	var slip := 0.0
 	var grip := 0.0
@@ -160,6 +171,8 @@ func _process(delta: float) -> void:
 		grip = maxf(grip, wheel_load[i])
 	var speed := absf(float(t["speed_kmh"]))
 	_grind = float(t.get("gear_grind", 0.0))
+	_knock = float(t.get("engine_knock", 0.0))
+	_crank_hz = maxf(0.0, float(t["rpm"])) / 60.0
 	_flat = 0.0
 	for pressure: float in t["tire_pressure"]:
 		_flat = maxf(_flat, 1.0 - smoothstep(2.0, 12.0, pressure))
@@ -251,6 +264,11 @@ func _fill() -> void:
 		_flat_phase = fmod(_flat_phase + TAU * _wheel_hz / MIX_RATE, TAU)
 		var flap := pow(maxf(0.0, sin(_flat_phase)), 12.0) * _flat * (_low_noise * 0.7 + _air_noise * 0.16)
 		var grind := (noise - _air_noise) * _grind * 0.13
+		# A worn rod bearing raps once per crank revolution, louder under load.
+		var knock := 0.0
+		if _knock > 0.0:
+			_knock_phase = fmod(_knock_phase + TAU * _crank_hz / MIX_RATE, TAU)
+			knock = pow(maxf(0.0, sin(_knock_phase)), 40.0) * (_low_noise * 1.6 + noise * 0.25) * _knock * (0.35 + 0.65 * _load)
 		_impact *= 0.9989
 		_impact_tail *= 0.9998
 		_horn_level = move_toward(_horn_level, 1.0 if horn else 0.0, 1.0 / (0.012 * MIX_RATE) if horn else 1.0 / (0.07 * MIX_RATE))
@@ -259,7 +277,7 @@ func _fill() -> void:
 			_horn_p1 = fmod(_horn_p1 + TAU * 405.0 / MIX_RATE, TAU)
 			_horn_p2 = fmod(_horn_p2 + TAU * 507.0 / MIX_RATE, TAU)
 			honk = (sin(_horn_p1) + 0.33 * sin(3.0 * _horn_p1) + sin(_horn_p2) + 0.3 * sin(3.0 * _horn_p2)) * 0.15 * _horn_level
-		var common := (air + tire + flap + grind) * road_volume + hit + honk
+		var common := (air + tire + flap + grind) * road_volume + hit + honk + knock
 		var spread := (_air_noise - _low_noise) * _wind * 0.065 * road_volume
 		_cabin_l = lerpf(_cabin_l, common + spread, filter)
 		_cabin_r = lerpf(_cabin_r, common - spread, filter)

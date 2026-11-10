@@ -978,3 +978,92 @@ TEST_CASE("panels on their own rigid frame keep their shape when they swing open
     }
     CHECK(worst < 0.002);
 }
+
+TEST_CASE("a money shift into 1st at speed blows the engine and hurts gearbox and clutch; a sane downshift does not") {
+    auto shiftAt = [](real kmh, int gear) {
+        auto build = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+        World world;
+        world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+        world.addBody(std::move(build.body));
+        auto& car = world.body(0);
+        VehicleControls c;
+        c.throttle = 1.0;
+        car.setControls(c);
+        while (car.telemetry().speedKmh < kmh && world.time() < 60.0) world.simulate(0.1);
+        car.powertrain().setAutomatic(false);
+        c = {};
+        c.gear = gear;
+        car.setControls(c);
+        world.simulate(0.05);
+        c.gear = -99;
+        car.setControls(c);
+        world.simulate(2.0);
+        REQUIRE(world.stats().finite);
+        return std::make_pair(car.telemetry(), car.systems().state());
+    };
+    const auto [moneyTel, money] = shiftAt(150.0, 1);
+    CHECK(money.rodBroken);
+    CHECK(money.seized);
+    CHECK(money.status == "ENGINE BLOWN");
+    CHECK(money.peakOverRev > 1.6);
+    CHECK(moneyTel.gearboxDamage > 0.4);
+    CHECK(moneyTel.clutchWear > 0.05);
+    const auto [saneTel, sane] = shiftAt(130.0, 3);
+    CHECK_FALSE(sane.valvesBent);
+    CHECK(sane.overRevDamage < 0.01);
+    CHECK(saneTel.gearboxDamage < 0.05);
+    CHECK(sane.running);
+}
+
+TEST_CASE("an engine run without oil knocks first and then throws a rod") {
+    auto build = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+    World world;
+    world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+    world.addBody(std::move(build.body));
+    auto& car = world.body(0);
+    VehicleControls c;
+    c.throttle = 0.6;
+    car.setControls(c);
+    world.simulate(3.0);
+    car.systems().state().oilLevel = 0.05;   // sump drained
+    real firstKnock = -1.0, blown = -1.0;
+    for (int k = 0; k < 900 && blown < 0.0; ++k) {
+        world.simulate(0.1);
+        const auto& s = car.systems().state();
+        if (firstKnock < 0.0 && s.knock > 0.05) firstKnock = 0.1 * k;
+        if (s.seized) blown = 0.1 * k;
+    }
+    MESSAGE("knock after " << firstKnock << " s, engine dead after " << blown << " s");
+    CHECK(firstKnock > 2.0);
+    CHECK(blown > firstKnock + 5.0);
+    CHECK(blown < 90.0);
+}
+
+TEST_CASE("low oil and hard cornering starve the oil pump; a full sump does not") {
+    auto circle = [](real oilLevel) {
+        auto build = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+        World world;
+        world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+        world.addBody(std::move(build.body));
+        auto& car = world.body(0);
+        VehicleControls c;
+        c.throttle = 1.0;
+        car.setControls(c);
+        while (car.telemetry().speedKmh < 70.0 && world.time() < 30.0) world.simulate(0.1);
+        car.systems().state().oilLevel = oilLevel;
+        c.throttle = 0.45;
+        c.steer = 0.45;
+        car.setControls(c);
+        real starved = 0.0, peakG = 0.0;
+        for (int k = 0; k < 80; ++k) {
+            world.simulate(0.05);
+            peakG = std::max(peakG, car.systems().state().horizontalG);
+            if (car.systems().state().oilStarved) starved += 0.05;
+        }
+        MESSAGE("oil " << oilLevel << ": peak " << peakG << " g, starved " << starved << " s, pressure "
+                << car.systems().state().oilPressureBar << " bar");
+        return starved;
+    };
+    CHECK(circle(1.0) == doctest::Approx(0.0));
+    CHECK(circle(0.38) > 0.5);
+}

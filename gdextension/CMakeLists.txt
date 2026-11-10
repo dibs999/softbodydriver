@@ -27,6 +27,7 @@ add_library(softbodydriver_gd SHARED
   src/register_types.cpp
   src/sb_world.cpp
   src/sb_vehicle.cpp
+  src/sb_prop.cpp
 )
 target_link_libraries(softbodydriver_gd PRIVATE godot-cpp sbcore)
 get_target_property(GODOTCPP_SUFFIX godot-cpp GODOTCPP_SUFFIX)

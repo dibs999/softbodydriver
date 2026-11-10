@@ -1740,6 +1740,9 @@ Dictionary SBVehicle::get_telemetry() const {
     Array burst;
     for (bool b : tel_.wheelBurst) burst.push_back(b);
     d["wheel_burst"] = burst;
+    Array rims;
+    for (double v : tel_.wheelRimDamage) rims.push_back(v);
+    d["rim_damage"] = rims;
     Array wear, ttemp, press;
     for (double v : tel_.wheelWear) wear.push_back(v);
     for (double v : tel_.wheelTempC) ttemp.push_back(v);
@@ -1764,7 +1767,15 @@ Dictionary SBVehicle::get_telemetry() const {
     d["radiator_damage"] = sys_.radiatorDamage;
     d["oilpan_damage"] = sys_.oilPanDamage;
     d["fueltank_damage"] = sys_.fuelTankDamage;
-    d["engine_damage"] = std::max(sys_.blockDamage, sys_.wear);
+    d["engine_damage"] = std::max({sys_.blockDamage, sys_.wear, sys_.overRevDamage, sys_.rodBearingWear, sys_.pistonRingDamage});
+    d["over_rev_damage"] = sys_.overRevDamage;
+    d["valves_bent"] = sys_.valvesBent;
+    d["rod_broken"] = sys_.rodBroken;
+    d["engine_knock"] = sys_.knock;
+    d["oil_starved"] = sys_.oilStarved;
+    d["rod_bearing_wear"] = sys_.rodBearingWear;
+    d["piston_ring_damage"] = sys_.pistonRingDamage;
+    d["over_rev"] = def_.engine.redlineRpm > 0 ? tel_.engineRpm / def_.engine.redlineRpm : 0.0;
     d["power_kw"] = sys_.powerKw;
     d["status"] = String(sys_.status.c_str());
     if (!sys_.seized && !sys_.driveshaftBroken) {

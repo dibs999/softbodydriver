@@ -8,6 +8,7 @@
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
+#include "sb_prop.h"
 #include "sb_vehicle.h"
 #include "sbcore/car.hpp"
 
@@ -30,6 +31,9 @@ void SBWorld::_bind_methods() {
     ClassDB::bind_method(D_METHOD("spawn_car", "path", "xform"), &SBWorld::spawn_car);
     ClassDB::bind_method(D_METHOD("remove_vehicle", "vehicle"), &SBWorld::remove_vehicle);
     ClassDB::bind_method(D_METHOD("get_vehicles"), &SBWorld::get_vehicles);
+    ClassDB::bind_method(D_METHOD("spawn_prop", "kind", "xform"), &SBWorld::spawn_prop);
+    ClassDB::bind_method(D_METHOD("remove_prop", "prop"), &SBWorld::remove_prop);
+    ClassDB::bind_method(D_METHOD("get_props"), &SBWorld::get_props);
     ClassDB::bind_method(D_METHOD("get_stats"), &SBWorld::get_stats);
     ClassDB::bind_method(D_METHOD("step_blocking", "seconds"), &SBWorld::step_blocking);
     ClassDB::bind_method(D_METHOD("sync_visuals"), &SBWorld::sync_visuals);
@@ -72,6 +76,7 @@ void SBWorld::sync_visuals_with_delta(double delta) {
     {
         std::lock_guard<std::mutex> lock(mtx_);
         for (SBVehicle* v : vehicles_) v->sync_from_world();
+        for (SBProp* p : props_) p->sync_from_world();
     }
     for (SBVehicle* v : vehicles_) v->update_visual(delta);
 }
@@ -192,12 +197,63 @@ void SBWorld::remove_vehicle(SBVehicle* v) {
         auto it = std::find(vehicles_.begin(), vehicles_.end(), v);
         if (it == vehicles_.end()) return;
         const int idx = v->body_index();
-        world_.removeBody(static_cast<std::size_t>(idx));
         vehicles_.erase(it);
-        for (SBVehicle* o : vehicles_)
-            if (o->body_index() > idx) o->set_body_index(o->body_index() - 1);
+        removeBodyAt(idx);
     }
     v->queue_free();
+}
+
+void SBWorld::removeBodyAt(int idx) {
+    world_.removeBody(static_cast<std::size_t>(idx));
+    for (SBVehicle* o : vehicles_)
+        if (o->body_index() > idx) o->set_body_index(o->body_index() - 1);
+    for (SBProp* o : props_)
+        if (o->body_index() > idx) o->set_body_index(o->body_index() - 1);
+}
+
+SBProp* SBWorld::spawn_prop(const String& kind, const Transform3D& xform) {
+    sb::PropBuild build;
+    try {
+        build = sb::buildProp(sb::propKindFromString(kind.utf8().get_data()));
+    } catch (const std::exception& e) {
+        UtilityFunctions::push_error("SBWorld.spawn_prop: ", e.what());
+        return nullptr;
+    }
+    for (auto& p : build.body.positions()) {
+        const Vector3 w = xform.xform(Vector3(static_cast<real_t>(p.x), static_cast<real_t>(p.y), static_cast<real_t>(p.z)));
+        p = {w.x, w.y, w.z};
+    }
+    const std::vector<sb::Vec3> spawn = build.body.positions();
+    SBProp* prop = memnew(SBProp);
+    prop->set_name(kind);
+    add_child(prop);
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        const int idx = static_cast<int>(world_.addBody(build.body));
+        prop->setup(this, idx, build, spawn, kind);
+        props_.push_back(prop);
+        prop->sync_from_world();
+    }
+    return prop;
+}
+
+void SBWorld::remove_prop(SBProp* p) {
+    if (!p) return;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        auto it = std::find(props_.begin(), props_.end(), p);
+        if (it == props_.end()) return;
+        const int idx = p->body_index();
+        props_.erase(it);
+        removeBodyAt(idx);
+    }
+    p->queue_free();
+}
+
+TypedArray<SBProp> SBWorld::get_props() const {
+    TypedArray<SBProp> out;
+    for (SBProp* p : props_) out.push_back(p);
+    return out;
 }
 
 TypedArray<SBVehicle> SBWorld::get_vehicles() const {
