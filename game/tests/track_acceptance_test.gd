@@ -101,8 +101,8 @@ func _drive(scene: Node) -> void:
 		else: slow = 0.0
 		if OS.has_environment("TRACE") and (is_equal_approx(slow, 3.0) or int(t / STEP) % 400 == 0):
 			var tel := car.get_telemetry()
-			print("  t=%6.1f wp %3d/%d pos %s v %5.1f gear %d rpm %4.0f up %.2f slope %+.1f%% status '%s' slow %.1f" % [t, ai.idx, route.size(), p.round(), car.get_speed_kmh(), tel["gear"], tel["rpm"],
-				car.get_up().y, 100.0 * car.get_forward().y, tel["status"], slow])
+			print("  t=%6.1f wp %3d/%d pos %s v %5.1f gear %d rpm %4.0f up %.2f slope %+.1f%% status '%s' slow %.1f tyres %s rims %s" % [t, ai.idx, route.size(), p.round(), car.get_speed_kmh(), tel["gear"], tel["rpm"],
+				car.get_up().y, 100.0 * car.get_forward().y, tel["status"], slow, str(tel["tire_pressure"].map(func(x): return snappedf(x, 1))), str(tel.get("rim_damage", []).map(func(x): return snappedf(x, 0.01)))])
 		worst_slow = maxf(worst_slow, slow)
 		if OS.has_environment("TRACE"):
 			var tel2 := car.get_telemetry()

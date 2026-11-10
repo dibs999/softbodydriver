@@ -24,6 +24,7 @@ static func warning_for(t: Dictionary, info: Dictionary, controls: Dictionary = 
 	if bool(t.get("rod_broken", false)): return {"text": "MOTORSCHADEN", "urgent": true}
 	if bool(t.get("seized", false)): return {"text": "MOTOR FEST", "urgent": true}
 	if float(t.get("over_rev", 0)) > 1.1: return {"text": "DREHZAHL", "urgent": true}
+	if float(t.get("engine_knock", 0)) > 0.05: return {"text": "MOTOR KLOPFT", "urgent": true}
 	if float(t.get("fuel_l", 1)) <= 0.01: return {"text": "TANK LEER", "urgent": true}
 	if bool(t.get("running", false)) and float(t.get("oil_pressure", 3.0)) < 0.8: return {"text": "ÖLDRUCK", "urgent": true}
 	if float(t.get("coolant_temp", 20)) >= 115 or float(t.get("coolant_level", 1)) < 0.25: return {"text": "KÜHLUNG", "urgent": true}

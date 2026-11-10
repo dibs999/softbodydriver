@@ -253,6 +253,13 @@ hinten als eigene Bauteile abreißen. Das importierte Concept-Modell besitzt noc
 keine separat bewegliche Haube. Grenzen der Kontaktauflösung und verbleibende
 Schadensbaugruppen stehen in [PHYSICS_ACCEPTANCE.md](docs/PHYSICS_ACCEPTANCE.md).
 
+Pylonen und Ölfässer sind eigene kleine Soft-Bodies: Leitkegel (4,5 kg, biegsames PVC,
+federn zurück) auf dem Slalom und Handling-Parcours des Testgeländes und als Baustelle
+auf dem Seitenstreifen der Autobahn, 200-Liter-Stahlfässer (20 kg, verbeulen) als
+Fasswand am Testgelände und auf dem Seitenstreifen. Autos stoßen sie um, schleifen
+Pylonen unter dem Stoßfänger mit oder schleudern Fässer weg; das Pausenmenü stellt
+alle wieder auf („Pylonen und Fässer zurückstellen“).
+
 Meridian Estate und Trailhead 4x4 haben eine Heckklappe, Meridian-Limousinen und
 der Fastback einen Kofferraumdeckel: ein eigenes Bauteil mit brechbaren Scharnieren
 und Schloss, das an den Scharnierpunkten des Modells aufschwingt und von zwei

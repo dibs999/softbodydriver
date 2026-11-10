@@ -378,6 +378,87 @@ func car_info(path: String) -> Dictionary:
 	return {}
 
 
+static var _prop_mats := {}
+static func _prop_mat(key: String, color: Color, rough := 0.6, metallic := 0.0) -> StandardMaterial3D:
+	if not _prop_mats.has(key):
+		var m := StandardMaterial3D.new()
+		m.albedo_color = color
+		m.roughness = rough
+		m.metallic = metallic
+		_prop_mats[key] = m
+	return _prop_mats[key]
+
+
+static func _prop_part(parent: Node3D, mesh: Mesh, mat: Material, y: float) -> void:
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.material_override = mat
+	mi.position = Vector3(0, y, 0)
+	parent.add_child(mi)
+
+
+## Spawns a loose prop ("cone" = 0.75 m traffic cone, "barrel" = 200 l steel drum) standing at
+## `xform` as a physical soft body with its meshes.
+func spawn_prop(world: SBWorld, kind: String, xform: Transform3D) -> SBProp:
+	var prop := world.spawn_prop(kind, xform)
+	if prop == null:
+		return null
+	if kind == "cone":
+		var base := BoxMesh.new()
+		base.size = Vector3(0.40, 0.035, 0.40)
+		_prop_part(prop, base, _prop_mat("cone_base", Color(0.07, 0.07, 0.08), 0.9), 0.0175)
+		var body := CylinderMesh.new()
+		body.top_radius = 0.022
+		body.bottom_radius = 0.14
+		body.height = 0.70
+		body.radial_segments = 18
+		body.rings = 1
+		_prop_part(prop, body, _prop_mat("cone", Color(1.0, 0.33, 0.04), 0.55), 0.385)
+		var r := func(y: float) -> float: return 0.14 - 0.118 * (y - 0.035) / 0.70
+		for band: Vector2 in [Vector2(0.50, 0.08), Vector2(0.64, 0.06)]:
+			var ring := CylinderMesh.new()
+			ring.top_radius = float(r.call(band.x + band.y * 0.5)) + 0.004
+			ring.bottom_radius = float(r.call(band.x - band.y * 0.5)) + 0.004
+			ring.height = band.y
+			ring.radial_segments = 18
+			ring.rings = 1
+			_prop_part(prop, ring, _prop_mat("cone_band", Color(0.92, 0.93, 0.92), 0.25), band.x)
+	else:
+		var colours := [Color(0.10, 0.24, 0.55), Color(0.60, 0.11, 0.07), Color(0.86, 0.64, 0.10), Color(0.15, 0.36, 0.22)]
+		var pick := absi(int(xform.origin.x * 7.0 + xform.origin.z * 13.0)) % colours.size()
+		var paint := _prop_mat("drum%d" % pick, colours[pick], 0.45, 0.35)
+		var shell := CylinderMesh.new()
+		shell.top_radius = 0.29
+		shell.bottom_radius = 0.29
+		shell.height = 0.86
+		shell.radial_segments = 24
+		shell.rings = 1
+		_prop_part(prop, shell, paint, 0.44)
+		for y: float in [0.015, 0.30, 0.60, 0.875]:
+			var rib := TorusMesh.new()
+			rib.inner_radius = 0.282
+			rib.outer_radius = 0.302
+			rib.rings = 24
+			rib.ring_segments = 6
+			_prop_part(prop, rib, paint, y)
+		var lid := CylinderMesh.new()
+		lid.top_radius = 0.284
+		lid.bottom_radius = 0.284
+		lid.height = 0.01
+		lid.radial_segments = 24
+		_prop_part(prop, lid, _prop_mat("drum_lid", Color(0.28, 0.29, 0.30), 0.5, 0.6), 0.872)
+		var bung := CylinderMesh.new()
+		bung.top_radius = 0.03
+		bung.bottom_radius = 0.03
+		bung.height = 0.02
+		var b := MeshInstance3D.new()
+		b.mesh = bung
+		b.material_override = _prop_mat("drum_bung", Color(0.5, 0.5, 0.52), 0.4, 0.8)
+		b.position = Vector3(0.18, 0.885, 0.0)
+		prop.add_child(b)
+	return prop
+
+
 ## Spawns a car and, if its definition references a 3D model, replaces the procedural body with
 ## that model (bound to the soft-body nodes as a flexbody).
 func spawn_vehicle(world: SBWorld, path: String, xform: Transform3D) -> SBVehicle:

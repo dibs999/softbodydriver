@@ -189,6 +189,23 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	lane_b.reverse()
 	var speeds_a := C.speeds_from_curvature(lane_a_mid, 36.0, 30.0, 40.0)
 	var speeds_b := C.speeds_from_curvature(lane_b, 34.0, 30.0, 40.0)
+	# Roadworks on the far straight: a cone line on the edge of the hard shoulder (outer side of
+	# carriageway A) and a few drums parked on it.
+	var props: Array = []
+	var last := Vector3.INF
+	for i in center.size():
+		var p := center[i]
+		var q := center[(i + 1) % center.size()]
+		if absf(p.z - RADIUS) > 0.5 or absf(q.z - RADIUS) > 0.5 or minf(p.x, q.x) < 150.0 or maxf(p.x, q.x) > 420.0:
+			continue
+		var steps := maxi(1, int(p.distance_to(q) / 9.0))
+		for s in steps:
+			var c := p.lerp(q, float(s) / steps) + Vector3(0, 0, CARRIAGE_OFFSET + CARRIAGE_HALF - 2.4)
+			if last == Vector3.INF or c.distance_to(last) > 8.0:
+				props.append({"kind": "cone", "position": Vector3(c.x, 0.0, c.z)})
+				last = c
+	for d in 3:
+		props.append({"kind": "barrel", "position": Vector3(146.0 - d * 0.7, 0.0, RADIUS + CARRIAGE_OFFSET + CARRIAGE_HALF - 1.0)})
 	var spawn_i := 20
 	var truck_x := (SERVICE_START + SERVICE_END) * 0.5 + 54.0
 	var truck_access := PackedVector3Array([Vector3(truck_x - 12.0, 0, -RADIUS + 35.0),
@@ -196,7 +213,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	return {
 		"spawns": [C.car_xform(lane_a_right[spawn_i], lane_a_right[spawn_i + 1] - lane_a_right[spawn_i]),
 			C.car_xform(lane_a_right[spawn_i - 4], lane_a_right[spawn_i - 3] - lane_a_right[spawn_i - 4])],
-		"waypoints": lane_a_mid, "speeds": speeds_a,
+		"waypoints": lane_a_mid, "speeds": speeds_a, "props": props,
 		"map_paths": [C.closed_route(center), service_road, truck_access],
 		"map_places": [
 			{"name": "Raststätte Nordring", "position": Vector3((SERVICE_START + SERVICE_END) * 0.5, 0, -RADIUS + 44)},

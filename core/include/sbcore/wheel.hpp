@@ -73,6 +73,7 @@ struct PressureWheel {
     real leakPsiPerS = 0.0;                 ///< Slow puncture leak rate
     real rimDamage = 0.0;                   ///< 0..1 bent rim from kerb / pothole strikes
     real peakNodeForce = 0.0;               ///< Highest single tread node contact force since the last condition update
+    real strikeGrace = 0.5;                 ///< s after spawn / reset in which the set-down is not a rim strike
     real load = 0.0;                        ///< Estimated vertical load (N)
     real slipSpeed = 0.0;                   ///< Sliding speed of the contact patch (m/s)
     real contactAge = 1.0;
