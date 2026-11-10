@@ -207,6 +207,9 @@ struct CarVisual {
     VertexSkin steeringPivot;
     Vec3 steeringAxis{-1, 0, 0};                   ///< Points toward the driver in the build frame
     VertexSkin chaseTarget;                        ///< Look-at point for chase cameras
+    /// Number plate centres on the outer face (front, rear); the game puts the lettering there.
+    VertexSkin plateFront, plateRear;
+    bool hasPlates = false;
 };
 
 struct DoorLayout {

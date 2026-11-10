@@ -608,6 +608,10 @@ func spawn_vehicle(world: SBWorld, path: String, xform: Transform3D) -> SBVehicl
 		effects.world = world
 		effects.dirt = selected_map == "desert"
 		v.add_child(effects)
+		var plates := preload("res://scripts/vehicle_plates.gd").new()
+		plates.name = "Plates"
+		plates.vehicle = v
+		v.add_child(plates)
 	return v
 
 

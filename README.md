@@ -273,6 +273,8 @@ Autos stoßen die Requisiten um, schleifen
 Pylonen unter dem Stoßfänger mit oder schleudern Fässer weg; das Pausenmenü stellt
 alle wieder auf („Pylonen und Fässer zurückstellen“).
 
+Alle Fahrzeuge tragen vorn und hinten deutsche Kennzeichen (520 × 110 mm, blaues EU-Feld, je Fahrzeug eigene Nummer), die am Karosserie-Skinning hängen und sich mit einem eingedrückten Stoßfänger mitbewegen.
+
 Meridian Estate und Trailhead 4x4 haben eine Heckklappe, Meridian-Limousinen und
 der Fastback einen Kofferraumdeckel: ein eigenes Bauteil mit brechbaren Scharnieren
 und Schloss, das an den Scharnierpunkten des Modells aufschwingt und von zwei

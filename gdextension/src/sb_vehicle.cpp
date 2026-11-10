@@ -102,6 +102,7 @@ void SBVehicle::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_chase_target"), &SBVehicle::get_chase_target);
     ClassDB::bind_method(D_METHOD("get_driver_eye"), &SBVehicle::get_driver_eye);
     ClassDB::bind_method(D_METHOD("get_dashboard_transform"), &SBVehicle::get_dashboard_transform);
+    ClassDB::bind_method(D_METHOD("get_plate_transforms"), &SBVehicle::get_plate_transforms);
     ClassDB::bind_method(D_METHOD("get_mirror_surfaces"), &SBVehicle::get_mirror_surfaces);
     ClassDB::bind_method(D_METHOD("get_visual_basis"), &SBVehicle::get_visual_basis);
     ClassDB::bind_method(D_METHOD("get_forward"), &SBVehicle::get_forward);
@@ -1883,6 +1884,18 @@ Vector3 SBVehicle::get_driver_eye() const {
 Variant SBVehicle::get_dashboard_transform() const {
     if (!dashboardAvailable_ || frames_.empty()) return Variant();
     return Transform3D(get_visual_basis(), toG(sb::evalSkin(renderPos_, frames_, visual_.dashboard)));
+}
+
+Array SBVehicle::get_plate_transforms() const {
+    // [front, rear]; each faces outward (+z of the transform points away from the car), +x along
+    // the plate to the car's right as seen from that end, +y up.
+    Array result;
+    if (!visual_.hasPlates || renderPos_.empty() || frames_.empty()) return result;
+    const Basis car = get_visual_basis();   // columns: right, up, -forward
+    const Vector3 right = car.get_column(0), up = car.get_column(1), fwd = -car.get_column(2);
+    result.push_back(Transform3D(Basis(-right, up, fwd), toG(sb::evalSkin(renderPos_, frames_, visual_.plateFront))));
+    result.push_back(Transform3D(Basis(right, up, -fwd), toG(sb::evalSkin(renderPos_, frames_, visual_.plateRear))));
+    return result;
 }
 
 Array SBVehicle::get_mirror_surfaces() const {
