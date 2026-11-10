@@ -180,6 +180,7 @@ Details und verbleibende Release-Abnahmen: [Linux-Paketierung](docs/RELEASE_LINU
 | `R` / `Rücktaste` | Zurücksetzen / an Ort und Stelle reparieren |
 | `B` | Node-Beam-Röntgenansicht (verformte Beams gelb bis rot) |
 | `J`, `P` | Zeitlupe (×0,5 / ×0,25 / ×0,1), Physik pausieren |
+| `F5` | Wiederholung der letzten 20 Sekunden (läuft in Schleife, jede Kamera inklusive freier Kamera; `F5` beendet) |
 | `Tab` | Fahrzeug wechseln |
 | `F6` | Hindernis-Auto vor dir abstellen |
 | `F1`, `F2`, `Esc` | Hilfe, Fahrzeugdiagnose, Pausenmenü |

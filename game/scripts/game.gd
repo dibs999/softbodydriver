@@ -322,9 +322,36 @@ func _set_player(v: SBVehicle) -> void:
 		ai.erase(v)
 
 
+## Replay of the player's last 20 seconds (F5): physics pause, the car's recorded motion loops
+## at real speed, any camera can watch it (the free camera too); F5 again resumes driving.
+var _replay_frames := 0
+var _replay_time := 0.0
+var _replay_paused_before := false
+
+func toggle_replay() -> void:
+	if _replay_frames > 0:
+		player.replay_end()
+		_replay_frames = 0
+		world.paused = _replay_paused_before
+		hud.toast("Wiederholung beendet")
+		return
+	_replay_paused_before = world.paused
+	_replay_frames = player.replay_begin()
+	if _replay_frames < 2:
+		player.replay_end()
+		_replay_frames = 0
+		hud.toast("Noch keine Aufzeichnung")
+		return
+	world.paused = true
+	_replay_time = 0.0
+	hud.toast("Wiederholung · letzte %d s · F5 beendet" % int(_replay_frames / 30.0))
+
 func _process(delta: float) -> void:
 	if _loading_overlay or player == null or not is_instance_valid(player):
 		return
+	if _replay_frames > 0:
+		_replay_time = fmod(_replay_time + delta, _replay_frames / 30.0)
+		player.replay_show(int(_replay_time * 30.0))
 	if not pause_menu.visible:
 		_drive_player(delta)
 	if wipers:
@@ -495,6 +522,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_time_idx = (_time_idx + 1) % _time_scales.size()
 		world.time_scale = _time_scales[_time_idx]
 		hud.toast("Zeit x%.2f" % world.time_scale)
+	elif event.is_action_pressed("replay"):
+		toggle_replay()
 	elif event.is_action_pressed("pause_physics"):
 		world.paused = not world.paused
 	elif event.is_action_pressed("switch_vehicle"):

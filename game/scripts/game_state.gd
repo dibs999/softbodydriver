@@ -575,6 +575,7 @@ func _setup_input() -> void:
 	passenger_door_key.shift_pressed = true
 	InputMap.action_add_event("passenger_door", passenger_door_key)
 	_action("look_back"); _key("look_back", [KEY_V])
+	_action("replay"); _key("replay", [KEY_F5])
 
 
 # --------------------------------------------------------------------------- materials

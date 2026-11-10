@@ -1,6 +1,7 @@
 // SBVehicle: one soft-body car. Renders the flexbody (skinned) visual model, the wheels and an
 // optional node-beam debug view, and exposes controls + telemetry to GDScript.
 #pragma once
+#include <deque>
 
 #include <utility>
 #include <array>
@@ -69,6 +70,12 @@ public:
     Array get_glass_states() const;
     /// Bumpers: [{name ("front"/"rear"), clips (intact clip groups, 0..4), center}].
     Array get_bumper_states() const;
+    /// Replay of the last seconds: node positions are recorded at 30 Hz (20 s ring buffer).
+    /// replay_begin() freezes the visual on the recording and returns its frame count;
+    /// replay_show(i) displays frame i; replay_end() returns to the live simulation.
+    int replay_begin();
+    void replay_show(int frame);
+    void replay_end();
     bool release_bonnet(); ///< Releases latch once; hinges may subsequently break under impact.
     void repair_in_place();                   ///< Repair, keep position and heading, set upright.
 
@@ -121,6 +128,9 @@ private:
         uint32_t attrStride = 0, colorOffset = 0;
         PackedByteArray attrBuffer;
     };
+    std::deque<std::vector<float>> replay_;
+    double lastRecordTime_ = -1.0;
+    bool replaying_ = false;
     std::vector<float> nodeDamage_;   ///< per node: worst plastic strain of the beams attached to it
     bool damageDirty_ = false;
     void tearOverstretched(SurfaceGpu& g, const sb::MeshSurface& s, bool reset);
