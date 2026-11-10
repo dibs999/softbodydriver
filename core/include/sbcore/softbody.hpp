@@ -126,6 +126,9 @@ struct ColTriParams {
     real friction = 0.5;
     real dragCoef = 1.0;          ///< Aerodynamic pressure drag/lift coefficient.
     bool breakable = true;        ///< Deactivates when an underlying edge beam or breakGroup breaks.
+    /// false: skin that other bodies hit, but the car's own released panels (bonnet, doors)
+    /// pass, e.g. the nose corners a bonnet lifts past.
+    bool selfContact = true;
     std::string breakGroup;
 };
 

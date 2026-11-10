@@ -44,10 +44,16 @@ PropBuild buildCone() {
     std::vector<std::uint32_t> all = base;
     all.insert(all.end(), mid.begin(), mid.end());
     all.push_back(apex);
-    // Flexible PVC: soft, damped, never yields or breaks; it lies down and pops back.
+    // Flexible PVC: soft, damped, never yields or breaks; it lies down and pops back. A hollow
+    // cone barely resists being squashed (a car runs it flat) but does not stretch: with one
+    // stiffness for both, a cone run under the front was held at full height, stretched over the
+    // bumper with its base under a front tyre, and dragged the car down by up to 19 km/h.
     BeamParams pvc;
-    pvc.spring = 3.0e3;
+    pvc.type = BeamType::Anisotropic;
+    pvc.spring = 500.0;          // compression
+    pvc.springExpansion = 3.0e3;
     pvc.damp = 8.0;
+    pvc.dampExpansion = 8.0;
     connectAll(b, all, pvc);
     ColTriParams skin;
     skin.friction = 0.35;

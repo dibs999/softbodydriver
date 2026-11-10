@@ -1163,6 +1163,7 @@ CarBuild buildCar(const CarDefinition& def) {
         tp.dragCoef = 0.55;
         const real yAxis = 0.5 * (bd.groundClearance + bd.height);
         auto addTri = [&](std::int64_t a, std::int64_t b, std::int64_t c) {
+            ColTriParams triParams = tp;
             if (a < 0 || b < 0 || c < 0 || a == b || b == c || a == c) return;
             auto ua = static_cast<std::uint32_t>(a), ub = static_cast<std::uint32_t>(b), uc = static_cast<std::uint32_t>(c);
             const Vec3 pa = car.positions()[ua], pb = car.positions()[ub], pc = car.positions()[uc];
@@ -1175,7 +1176,12 @@ CarBuild buildCar(const CarDefinition& def) {
                 return false;
             };
             if (ctr.x > prof.xCowl + 0.025 && ctr.x < L - 0.12 &&
-                isShellTop(ua) && isShellTop(ub) && isShellTop(uc)) return;
+                isShellTop(ua) && isShellTop(ub) && isShellTop(uc)) {
+                // The bonnet replaces the top skin, but a triangle reaching the nose station closes
+                // the slot between the bonnet's front edge and the grille; only the bonnet passes it.
+                if (std::max({pa.x, pb.x, pc.x}) < L - 0.06) return;
+                triParams.selfContact = false;
+            }
             // Skin above the (flat) bonnet cage would trap a released bonnet under it: crowned and
             // boxy bonnets rise above the straight line between hinge and latch. Skin below it stays,
             // the closed bonnet rests on that.
@@ -1186,9 +1192,12 @@ CarBuild buildCar(const CarDefinition& def) {
                 const real plane = rear.y + (front.y - rear.y) * u;
                 if (ctr.x > rear.x && ctr.x < front.x && std::abs(ctr.z) < prof.halfW(ctr.x) * 0.95) {
                     if (std::min({pa.y, pb.y, pc.y}) > plane - 0.005) return;
-                    // Nose skin sloping up over a front corner (latch side) would hold it down.
+                    // Nose skin sloping up over a front corner (latch side) would hold it down. It
+                    // stays for everything else: without it the corners were open holes into the
+                    // bonnet bay, and a struck cone caught inside lifted the car's nose off its wheels.
                     const real dz = std::abs(ctr.z) - std::abs(front.z);
-                    if (front.x - ctr.x < 0.25 && dz > -0.25 && std::max({pa.y, pb.y, pc.y}) > plane + 0.01) return;
+                    if (front.x - ctr.x < 0.25 && dz > -0.25 && std::max({pa.y, pb.y, pc.y}) > plane + 0.01)
+                        triParams.selfContact = false;
                 }
             }
             // Lower outer end skins belong to the bumper, not a second fixed
@@ -1212,7 +1221,7 @@ CarBuild buildCar(const CarDefinition& def) {
             if (ctr.x > L - 0.05) out.x += 1.0;
             if (ctr.x < 0.05) out.x -= 1.0;
             if (dot(n, out) < 0) std::swap(ub, uc);
-            car.addTriangle(ua, ub, uc, tp);
+            car.addTriangle(ua, ub, uc, triParams);
         };
         auto ring = [&](std::size_t i) {
             std::vector<std::int64_t> loop;

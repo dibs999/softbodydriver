@@ -56,10 +56,10 @@ TEST_CASE("a rear-ended car drives away: bodies do not hook together after the i
 }
 
 TEST_CASE("props stand still on the ground and a car knocks them over without tearing them up") {
-    auto coast = [](bool withProp, PropKind kind, real* knocked) {
+    auto coast = [](bool withProp, PropKind kind, real* knocked, real offset = 0.3) {
         auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
         auto prop = buildProp(kind);
-        prop.body.translate({car.def.body.length + 6.0, 0.0, 0.3});
+        prop.body.translate({car.def.body.length + 6.0, 0.0, offset});
         const Vec3 start = prop.body.positions()[prop.frameY];
         World world;
         world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
@@ -93,6 +93,14 @@ TEST_CASE("props stand still on the ground and a car knocks them over without te
         CHECK(knocked > 3.0);
         // A light prop barely slows a 1.3 t car: momentum alone allows < 1 km/h (cone) / 2.5 km/h (drum).
         CHECK(alone - speed < (kind == PropKind::Cone ? 2.0 : 5.0));
+    }
+    // Struck off-centre a cone used to be caught: through holes in the nose skin, or stretched over
+    // the bumper with its base under a front tyre, it lifted the nose and cost up to 19 km/h.
+    for (const real offset : {0.45, 0.75, -0.75}) {
+        CAPTURE(offset);
+        real knocked = 0;
+        const real speed = coast(true, PropKind::Cone, &knocked, offset);
+        CHECK(alone - speed < 2.0);
     }
 }
 
