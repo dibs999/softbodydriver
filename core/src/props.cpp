@@ -343,6 +343,8 @@ PropBuild buildProp(PropKind kind) {
     PropBuild out = kind == PropKind::Log ? buildLog() : kind == PropKind::Barrier ? buildBarrier()
                   : kind == PropKind::Barrel ? buildBarrel() : kind == PropKind::Bin ? buildBin() : buildCone();
     out.body.setSleepEnabled(true);
+    // Flat-bottomed props only: on a round log the lower faces are the ones a tyre climbs over.
+    out.body.setDownFacesPassive(kind != PropKind::Log);
     // Catch other bodies' nodes only within about half the prop's thinnest section: deeper, a
     // node is resolved against the far face and the stiff little body is squeezed out and flung
     // (a log under a tyre left faster than the car pushing it).
