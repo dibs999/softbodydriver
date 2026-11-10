@@ -588,6 +588,14 @@ func make_material_library() -> Dictionary:
 	paint.clearcoat = 1.0
 	paint.clearcoat_roughness = 0.08
 	lib["paint"] = paint
+	# Generated bodies use this paint: same base and clear coat, plus crash wear from the
+	# damage mask SBVehicle writes into the vertex colour.
+	var worn := ShaderMaterial.new()
+	worn.shader = preload("res://materials/car_paint.gdshader")
+	worn.set_shader_parameter("paint_roughness", paint.roughness)
+	worn.set_shader_parameter("clearcoat_amount", paint.clearcoat)
+	worn.set_shader_parameter("clearcoat_gloss", paint.clearcoat_roughness)
+	lib["paint_damage"] = worn
 
 	var glass := StandardMaterial3D.new()
 	glass.albedo_color = Color(0.05, 0.07, 0.09, 0.42)

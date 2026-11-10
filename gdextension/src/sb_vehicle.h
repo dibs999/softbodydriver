@@ -116,7 +116,13 @@ private:
         Ref<Material> material;
         std::vector<uint8_t> torn;       // per triangle: removed because its edges overstretched
         int tornCount = 0;
+        // Paint damage mask in the vertex colour (red = 1 - damage), uploaded only when it changes.
+        bool damageMask = false;
+        uint32_t attrStride = 0, colorOffset = 0;
+        PackedByteArray attrBuffer;
     };
+    std::vector<float> nodeDamage_;   ///< per node: worst plastic strain of the beams attached to it
+    bool damageDirty_ = false;
     void tearOverstretched(SurfaceGpu& g, const sb::MeshSurface& s, bool reset);
     Ref<Material> materialFor(const std::string& name, const Dictionary& lib) const;
     void buildMeshes(const Dictionary& materials);
