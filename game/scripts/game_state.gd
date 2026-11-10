@@ -620,6 +620,12 @@ func make_material_library() -> Dictionary:
 	lib["glass_privacy"] = privacy
 
 	lib["chrome"] = _metal(Color(0.85, 0.86, 0.88), 1.0, 0.12)
+	var reflector := StandardMaterial3D.new()
+	reflector.albedo_color = Color(0.55, 0.03, 0.02)
+	reflector.metallic = 0.6
+	reflector.roughness = 0.15
+	reflector.clearcoat_enabled = true
+	lib["reflector"] = reflector
 	lib["mirror"] = _metal(Color(0.9, 0.92, 0.95), 1.0, 0.02)
 	lib["rim"] = _metal(Color(0.72, 0.73, 0.75), 0.9, 0.22)
 	lib["brake_disc"] = _metal(Color(0.42, 0.41, 0.4), 0.85, 0.45)

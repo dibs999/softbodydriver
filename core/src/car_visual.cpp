@@ -1302,6 +1302,34 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                 vb.bevelBox("trim", {prof.xRwTop - 0.02, top - 0.010, side * (halfZ - 0.012)}, {0.09, 0.022, 0.012}, 0.008,
                             bodyNodes, ax, ay, {0, 0, 1});
         }
+        if (bd.style == BodyStyle::Hatchback || bd.style == BodyStyle::SUV) {
+            // Rear wiper parked along the bottom of the tailgate glass.
+            const auto base = prof.section(prof.xRwBase + 0.02);
+            const auto upper = prof.section(prof.xRwTop - 0.02);
+            const Vec3 g0{prof.xRwBase + 0.02, base.y[8], 0.0};
+            const Vec3 g1{prof.xRwTop - 0.02, upper.y[10], 0.0};
+            const Vec3 dir = normalize(g1 - g0);
+            const Vec3 normal = normalize(cross(dir, Vec3{0, 0, 1})) * -1.0;   // out of the glass, backwards
+            const Vec3 pivot = g0 + dir * 0.05 + normal * 0.022;
+            vb.tube("trim", pivot - normal * 0.012, pivot + normal * 0.010, 0.016, bodyNodes, 12);
+            const Vec3 tip = pivot + Vec3{0, 0, -0.34} + dir * 0.04;
+            vb.tube("trim", pivot, tip, 0.006, bodyNodes, 6);
+            vb.box("trim", (pivot + tip) * 0.5 - normal * 0.006, {0.006, 0.004, 0.19}, bodyNodes, dir, normal, {0, 0, 1});
+        }
+        {
+            // Shark-fin antenna at the back of the roof.
+            const real xa = prof.xRwTop + 0.14;
+            const real top = prof.section(xa).y[10];
+            vb.bevelBox("trim", {xa, top + 0.026, 0}, {0.075, 0.026, 0.013}, 0.012, bodyNodes);
+            vb.bevelBox("trim", {xa - 0.035, top + 0.050, 0}, {0.032, 0.018, 0.010}, 0.009, bodyNodes);
+        }
+        {
+            // Red reflectors in the lower rear bumper.
+            const real y = bd.tailHeight - 0.36;
+            const real hz = prof.halfW(0.04) - 0.13;
+            for (real side : {-1.0, 1.0})
+                vb.bevelBox("reflector", {-0.004, y, side * hz}, {0.010, 0.014, 0.055}, 0.006, rearNodes);
+        }
         if (bd.style == BodyStyle::SUV) {
             const real xa = prof.xRwTop + 0.12, xb = prof.xWsTop - 0.10;
             for (real side : {-1.0, 1.0}) {

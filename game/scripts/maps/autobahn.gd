@@ -72,6 +72,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	# Outer guard rails: the colliders stay boxes, the visual is a galvanised W-beam on posts.
 	C.barrier(parent, world, outer_rail, CARRIAGE_OFFSET + CARRIAGE_HALF + 0.9, 0.75, 0.22, null, false)
 	C.barrier(parent, world, center, -(CARRIAGE_OFFSET + CARRIAGE_HALF + 0.9), 0.75, 0.22, null)
+	_backdrop_hills(parent)
 	var R := preload("res://scripts/maps/roadside.gd")
 	R.rail(parent, _offset(outer_rail, CARRIAGE_OFFSET + CARRIAGE_HALF + 1.0), -1.0)
 	var inner_rail := _offset(center, -(CARRIAGE_OFFSET + CARRIAGE_HALF + 1.0))
@@ -424,3 +425,42 @@ static func _landmarks(parent: Node3D, world: SBWorld, metal: Material) -> void:
 			var hub := p + Vector3(0, 50, -3.2)
 			C.box(parent, world, hub + direction * 9.5, Vector3(0.58, 9.5, 0.17), Vector3(0, 0, angle), white, 0.8, false)
 			C.box(parent, world, hub + direction * 20.4, Vector3(0.45, 1.4, 0.15), Vector3(0, 0, angle), red, 0.8, false)
+
+
+## Rolling, partly wooded hills on the horizon beyond the countryside: the plain used to run
+## flat to the edge of the world. Visual only; the fields and the wildlife fence end long before.
+static func _backdrop_hills(parent: Node3D) -> void:
+	var cell := 25.0
+	var ox := -3100.0
+	var oz := -2500.0
+	var nx := 249
+	var nz := 201
+	var noise := FastNoiseLite.new()
+	noise.seed = 4040
+	noise.frequency = 0.0011
+	noise.fractal_octaves = 4
+	var heights := PackedFloat32Array()
+	heights.resize(nx * nz)
+	var colors := PackedColorArray()
+	colors.resize(nx * nz)
+	var trees: Array[Vector3] = []
+	var conifers: Array[Vector3] = []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4041
+	for ix in nx:
+		for iz in nz:
+			var x := ox + ix * cell
+			var z := oz + iz * cell
+			var out := maxf(absf(z) - 990.0, absf(x) - 2300.0)
+			var rise := smoothstep(0.0, 520.0, out)
+			var n := noise.get_noise_2d(x, z) * 0.5 + 0.5
+			var h := -0.6 if out <= 0.0 else rise * (45.0 + 140.0 * n) - 0.6 * (1.0 - smoothstep(0.0, 40.0, out))
+			heights[ix * nz + iz] = h
+			var wood := smoothstep(0.52, 0.62, n) * smoothstep(40.0, 200.0, out)
+			colors[ix * nz + iz] = Color(0.66, 0.76, 0.50).lerp(Color(0.30, 0.38, 0.22), wood)
+			if wood > 0.5 and rng.randf() < 0.55:
+				var q := Vector3(x + rng.randf_range(-10, 10), h - 0.5, z + rng.randf_range(-10, 10))
+				(conifers if rng.randf() < 0.6 else trees).append(q)
+	C.terrain_tiles(parent, ox, oz, cell, nx, nz, heights, C.terrain_material("grass", 3.5, Color(0.73, 0.92, 0.66)), colors)
+	V.plant(parent, "conifer", conifers, 4042, 1.0, 1.4, false)
+	V.plant(parent, "broadleaf", trees, 4043, 1.0, 1.4, false)
