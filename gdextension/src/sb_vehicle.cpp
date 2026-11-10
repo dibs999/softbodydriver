@@ -42,6 +42,7 @@ Color fallbackColor(const std::string& n) {
     if (n == "tank") return Color(0.10, 0.10, 0.105);
     if (n == "seat_frame") return Color(0.25, 0.25, 0.26);
     if (n == "seat_insert") return Color(0.07, 0.072, 0.08);
+    if (n == "seat_belt") return Color(0.035, 0.035, 0.04);
     if (n == "spring") return Color(0.75, 0.1, 0.08);
     if (n == "caliper") return Color(0.8, 0.15, 0.1);
     if (n == "engine") return Color(0.35, 0.36, 0.38);

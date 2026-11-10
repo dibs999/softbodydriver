@@ -619,6 +619,7 @@ func make_material_library() -> Dictionary:
 	lib["heatshield"] = _metal(Color(0.62, 0.62, 0.60), 0.85, 0.45)
 	lib["tank"] = _plastic(Color(0.10, 0.10, 0.105), 0.7)
 	lib["seat_frame"] = _metal(Color(0.32, 0.32, 0.33), 0.8, 0.35)
+	lib["seat_belt"] = _textile(Color(0.035, 0.035, 0.04), 0.8, 2.0, 0.3)
 	lib["tire"] = _plastic(Color(0.035, 0.035, 0.035), 0.92)
 	lib["radiator"] = _metal(Color(0.15, 0.15, 0.16), 0.6, 0.5)
 	lib["spring"] = _plastic(Color(0.75, 0.08, 0.06), 0.35)

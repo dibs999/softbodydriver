@@ -70,7 +70,8 @@
       "arch_liner",
       "fabric",
       "seat_insert",
-      "seat_frame"
+      "seat_frame",
+      "seat_belt"
     ],
     "materialOverrides": {
       "glass": "glass",

@@ -1525,6 +1525,23 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             }, 0.04, bodyNodes, 3);
             for (real r : {-0.065, 0.065})
                 vb.tube("seat_frame", backA + backUp * (backH - 0.03) + Vec3{0, 0, r}, headC - backUp * 0.07 + Vec3{0, 0, r}, 0.0065, bodyNodes, 8);
+            // Three-point belt lying across the seat: shoulder strap from the outboard top of the
+            // backrest to the inboard buckle, lap strap across the cushion.
+            {
+                const real outboard = -inboard;
+                const Vec3 shoulder = backA + backUp * (backH - 0.06) + Vec3{0, 0, outboard * 0.17} + backFwd * 0.075;
+                const Vec3 chest = backA + backUp * (backH * 0.45) + Vec3{0, 0, inboard * 0.02} + backFwd * 0.075;
+                const Vec3 buckle{seatX - 0.13, ySeat + 0.31, zs + inboard * 0.25};
+                const Vec3 hipOut{seatX - 0.10, ySeat + 0.31, zs + outboard * 0.25};
+                auto strap = [&](const Vec3& a, const Vec3& b, const Vec3& facing) {
+                    const Vec3 along = normalize(b - a);
+                    const Vec3 width = normalize(cross(facing, along));
+                    vb.box("seat_belt", (a + b) * 0.5, {length(b - a) * 0.5, 0.0025, 0.024}, bodyNodes, along, normalize(cross(along, width)), width);
+                };
+                strap(shoulder, chest, backFwd);
+                strap(chest, buckle + Vec3{0.02, 0.0, 0.0}, normalize(backFwd + Vec3{0, 0.6, 0}));
+                strap(hipOut, buckle, Vec3{0, 1, 0});
+            }
             // Buckle on the inboard side, belt strap and retractor cover on the B pillar.
             vb.bevelBox("seat_frame", {seatX - 0.13, ySeat + 0.27, zs + inboard * 0.27}, {0.022, 0.045, 0.014}, 0.008, bodyNodes,
                         backFwd, backUp, {0, 0, 1});
