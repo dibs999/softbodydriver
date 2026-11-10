@@ -255,7 +255,13 @@ noch nicht. Im Cockpit verwenden sichtbare Außenspiegel echte planare Ansichten
 der Spielwelt. Rechte Maustaste beziehungsweise rechter Gamepad-Stick ermöglichen
 den Blick auf beide Seiten. Unsichtbare Spiegel benötigen keine eigene Aufnahme.
 
+Mit Automatik hält **Auto Hold** das Auto nach dem Anhalten mit der Bremse (und beim Start) fest,
+bis Gas gegeben wird, statt es in der Fahrstufe davonkriechen zu lassen (`auto_hold_test`).
 Das Pausenmenü bietet Aktivitäten, Wetter und Tageszeit auch ohne Funktionstasten.
+Unter **Fahrzeug → Abstimmung** lassen sich der Reifendruck je Achse (18–50 psi) und der
+Bremskraftanteil vorn (50–80 %) einstellen; „Abstimmung auf Werkswerte“ setzt beides zurück.
+Weniger Druck macht die Reifen weicher, mehr Bremskraft vorn lässt die Vorderräder früher
+blockieren (`tuning_test`).
 Auf dem Gamepad schaltet D-Pad oben das Licht, unten den Getriebemodus, links hält
 die Betankung und rechts die Reparatur; X betätigt die Kupplung. Anzeigen passen
 sich dem zuletzt verwendeten Eingabegerät an. Im Cockpit zeigen die Instrumente

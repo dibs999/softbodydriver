@@ -59,6 +59,9 @@ void SBVehicle::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_input", "throttle", "brake", "steer", "handbrake"), &SBVehicle::set_input);
     ClassDB::bind_method(D_METHOD("set_clutch", "clutch"), &SBVehicle::set_clutch);
     ClassDB::bind_method(D_METHOD("set_surface_grip", "grip"), &SBVehicle::set_surface_grip);
+    ClassDB::bind_method(D_METHOD("set_tire_pressure", "front_psi", "rear_psi"), &SBVehicle::set_tire_pressure);
+    ClassDB::bind_method(D_METHOD("set_brake_bias", "front_share"), &SBVehicle::set_brake_bias);
+    ClassDB::bind_method(D_METHOD("get_tuning"), &SBVehicle::get_tuning);
     ClassDB::bind_method(D_METHOD("set_gear", "gear"), &SBVehicle::set_gear);
     ClassDB::bind_method(D_METHOD("shift_up"), &SBVehicle::shift_up);
     ClassDB::bind_method(D_METHOD("shift_down"), &SBVehicle::shift_down);
@@ -845,6 +848,14 @@ void SBVehicle::pre_step(double dt) {
     c.clutch = phys_.clutch;
     for (std::size_t i = 0; i < body.wheels().size() && i < 4; ++i)
         body.wheels()[i].surfaceGrip = phys_.surfaceGrip[i];
+    if (phys_.tuneSerial != appliedTuneSerial_) {
+        appliedTuneSerial_ = phys_.tuneSerial;
+        for (auto& w : body.wheels()) {
+            const double psi = w.spec.steered ? phys_.tirePsiFront : phys_.tirePsiRear;
+            if (psi > 0.0 && !w.burst && w.coldPressurePsi > 0.0) w.coldPressurePsi = psi;   // no re-inflating a leak
+        }
+        if (phys_.brakeBias > 0.0 && body.hasPowertrain()) body.powertrain().spec().frontBrakeBias = phys_.brakeBias;
+    }
     c.steerRate = phys_.steerRate;
     c.gear = -99;
     c.ignition = phys_.ignition;
@@ -1198,6 +1209,29 @@ void SBVehicle::set_surface_grip(const PackedFloat32Array& grip) {
     if (grip.size() != 4) return;
     for (int i = 0; i < 4; ++i)
         if (std::isfinite(grip[i])) ctl_.surfaceGrip[static_cast<std::size_t>(i)] = std::clamp<double>(grip[i], 0.35, 1.2);
+}
+
+void SBVehicle::set_tire_pressure(double front_psi, double rear_psi) {
+    if (!std::isfinite(front_psi) || !std::isfinite(rear_psi)) return;
+    ctl_.tirePsiFront = std::clamp(front_psi, 12.0, 60.0);
+    ctl_.tirePsiRear = std::clamp(rear_psi, 12.0, 60.0);
+    ++ctl_.tuneSerial;
+}
+
+void SBVehicle::set_brake_bias(double front_share) {
+    if (!std::isfinite(front_share)) return;
+    ctl_.brakeBias = std::clamp(front_share, 0.40, 0.85);
+    ++ctl_.tuneSerial;
+}
+
+Dictionary SBVehicle::get_tuning() const {
+    Dictionary d;
+    d["front_psi"] = ctl_.tirePsiFront > 0.0 ? ctl_.tirePsiFront : def_.tires.pressurePsi;
+    d["rear_psi"] = ctl_.tirePsiRear > 0.0 ? ctl_.tirePsiRear : def_.tires.pressurePsi;
+    d["brake_bias"] = ctl_.brakeBias > 0.0 ? ctl_.brakeBias : def_.engine.frontBrakeBias;
+    d["default_psi"] = def_.tires.pressurePsi;
+    d["default_brake_bias"] = def_.engine.frontBrakeBias;
+    return d;
 }
 
 void SBVehicle::set_gear(int gear) { ctl_.gear = gear; }

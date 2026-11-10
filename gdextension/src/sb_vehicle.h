@@ -42,6 +42,10 @@ public:
     void set_input(double throttle, double brake, double steer, double handbrake);
     void set_clutch(double clutch);  ///< < 0 = automatic
     void set_surface_grip(const PackedFloat32Array& grip);
+    /// Tuning: cold tyre pressure per axle (PSI) and the front share of the service brakes.
+    void set_tire_pressure(double front_psi, double rear_psi);
+    void set_brake_bias(double front_share);
+    Dictionary get_tuning() const;
     void set_gear(int gear);         ///< -1 R, 0 N, 1.. forward (one-shot)
     void shift_up();
     void shift_down();
@@ -173,12 +177,15 @@ private:
         bool starter = false;    // one-shot: crank the engine
         bool tcs = true, abs = true;
         std::array<double, 4> surfaceGrip{1.0, 1.0, 1.0, 1.0};
+        double tirePsiFront = -1.0, tirePsiRear = -1.0, brakeBias = -1.0;  // tuning, -1 = as defined
+        int tuneSerial = 0;      // bumped by every tuning call, applied once on the physics side
         bool reset = false;      // one-shot
         int puncture = -1;
         double punctureLeak = 4.0;
         Transform3D resetXform;
     };
     Controls ctl_, phys_;
+    int appliedTuneSerial_ = 0;
     double starterTimer_ = 0.0;
     // Physical bonnet support uses hydro channel 1; state is world-mutex protected.
     bool bonnetOpenRequested_ = false;
