@@ -557,6 +557,7 @@ static func _street_life(parent: Node3D, world: SBWorld, origin: float, metal: M
 							bollards.append(Transform3D(Basis.IDENTITY, b + Vector3(dx * 0.9, 0.5, 0)))
 	var P := preload("res://scripts/maps/parked_cars.gd")
 	P.place(parent, world, parked)
+	_signage(parent, world, origin, metal)
 	var seat := BoxMesh.new()
 	seat.size = Vector3(1.8, 0.08, 0.45)
 	var back := BoxMesh.new()
@@ -590,3 +591,155 @@ static func _street_life(parent: Node3D, world: SBWorld, origin: float, metal: M
 	cover.height = 0.01
 	cover.radial_segments = 16
 	C.scatter_multimesh(parent, cover, C.noise_mat(Color(0.20, 0.19, 0.18), 0.3, 6.0, 0.5, 0.2, false), manholes, false)
+
+
+const STREET_NAMES := ["Lindenstraße", "Marktgasse", "Bahnhofstraße", "Goethestraße", "Schillerplatz", "Uferweg",
+	"Hafenstraße", "Kirchgasse", "Mühlenweg", "Parkallee", "Ringstraße"]
+
+## Street signs and city furniture: name plates at the corners, speed-limit signs, bus stops with
+## glass shelters, advertising columns and turn arrows painted before the intersections.
+static func _signage(parent: Node3D, world: SBWorld, origin: float, metal: Material) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 313
+	var unit := BoxMesh.new()
+	unit.size = Vector3.ONE
+	var poles: Array[Transform3D] = []
+	var plates: Array[Transform3D] = []
+	var discs: Array[Transform3D] = []
+	var columns: Array[Transform3D] = []
+	var arrows: Array[Transform3D] = []
+	var white := C.mat(Color(0.94, 0.94, 0.92), 0.5)
+	for i in BLOCKS + 1:
+		for j in BLOCKS + 1:
+			var c := Vector3(origin + STREET * 0.5 + i * PITCH, 0, origin + STREET * 0.5 + j * PITCH)
+			# Name plates on one corner of each intersection, for both streets.
+			var corner := c + Vector3(STREET * 0.5 + 0.7, KERB, STREET * 0.5 + 0.7)
+			poles.append(Transform3D(Basis.from_scale(Vector3(0.07, 3.0, 0.07)), corner + Vector3.UP * 1.5))
+			plates.append(Transform3D(Basis.from_scale(Vector3(0.9, 0.22, 0.02)), corner + Vector3(0.45, 2.75, 0)))
+			plates.append(Transform3D(Basis.from_scale(Vector3(0.02, 0.22, 0.9)), corner + Vector3(0, 2.5, 0.45)))
+			C.label3d(parent, STREET_NAMES[j % STREET_NAMES.size()], corner + Vector3(0.45, 2.75, -0.02), 0.0, 0.13, Color(0.05, 0.05, 0.05))
+			C.label3d(parent, STREET_NAMES[(i + 5) % STREET_NAMES.size()], corner + Vector3(-0.02, 2.5, 0.45), -PI * 0.5, 0.13, Color(0.05, 0.05, 0.05))
+			world.add_box(corner + Vector3.UP * 1.5, Vector3(0.05, 1.5, 0.05), Vector3.ZERO, 0.6)
+			# Advertising column on some corners.
+			if (i * 7 + j * 3) % 9 == 0:
+				var ac := c + Vector3(-(STREET * 0.5 + 2.2), KERB, -(STREET * 0.5 + 2.2))
+				columns.append(Transform3D(Basis.IDENTITY, ac + Vector3.UP * 1.6))
+				world.add_box(ac + Vector3.UP * 1.6, Vector3(0.55, 1.6, 0.55), Vector3.ZERO, 0.6)
+			# Turn arrows in the right-hand lanes of the four approaches.
+			for k in 4:
+				var d := [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)][k] as Vector3
+				var right := Vector3(-d.z, 0, d.x)
+				var p := c - d * (STREET * 0.5 + 12.0) + right * 6.0 + Vector3.UP * 0.02
+				arrows.append(Transform3D(Basis.looking_at(d, Vector3.UP), p))   # tip (texture top) along travel
+	# Speed-limit 50 signs at the kerb after every second intersection, and bus stops.
+	for line in range(1, BLOCKS, 2):
+		var s := origin + STREET * 0.5 + line * PITCH
+		for j in range(0, BLOCKS, 3):
+			var a0 := origin + STREET + j * PITCH
+			var sp := Vector3(a0 + 6.0, KERB, s + STREET * 0.5 + 0.6)
+			poles.append(Transform3D(Basis.from_scale(Vector3(0.06, 2.4, 0.06)), sp + Vector3.UP * 1.2))
+			discs.append(Transform3D(Basis(Vector3.UP, PI * 0.5) * Basis(Vector3.RIGHT, PI * 0.5), sp + Vector3(-0.04, 2.3, 0)))
+			C.label3d(parent, "50", sp + Vector3(-0.07, 2.3, 0), -PI * 0.5, 0.28, Color(0.02, 0.02, 0.02))
+			world.add_box(sp + Vector3.UP * 1.2, Vector3(0.04, 1.2, 0.04), Vector3.ZERO, 0.6)
+			if j % 2 == 0:
+				_bus_stop(parent, world, Vector3(a0 + 40.0, KERB, s - STREET * 0.5 - 2.2), metal, white)
+	C.scatter_multimesh(parent, unit, metal, poles, false)
+	C.scatter_multimesh(parent, unit, white, plates, false)
+	var disc := CylinderMesh.new()
+	disc.top_radius = 0.32
+	disc.bottom_radius = 0.32
+	disc.height = 0.02
+	disc.radial_segments = 20
+	var limit := StandardMaterial3D.new()
+	limit.albedo_texture = _limit_texture()
+	C.scatter_multimesh(parent, disc, limit, discs, false)
+	var column := CylinderMesh.new()
+	column.top_radius = 0.55
+	column.bottom_radius = 0.6
+	column.height = 3.2
+	column.radial_segments = 16
+	var posters := StandardMaterial3D.new()
+	posters.albedo_texture = _poster_texture()
+	posters.roughness = 0.7
+	C.scatter_multimesh(parent, column, posters, columns)
+	var cap := CylinderMesh.new()
+	cap.top_radius = 0.25
+	cap.bottom_radius = 0.66
+	cap.height = 0.35
+	cap.radial_segments = 16
+	var caps: Array[Transform3D] = []
+	for xf in columns: caps.append(xf.translated(Vector3.UP * 1.77))
+	C.scatter_multimesh(parent, cap, C.mat(Color(0.12, 0.22, 0.16), 0.5, 0.4), caps, false)
+	var arrow := PlaneMesh.new()
+	arrow.size = Vector2(1.3, 5.0)
+	var paint := StandardMaterial3D.new()
+	paint.albedo_texture = _arrow_texture()
+	paint.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	paint.alpha_scissor_threshold = 0.5
+	paint.roughness = 0.7
+	C.scatter_multimesh(parent, arrow, paint, arrows, false)
+
+
+static func _bus_stop(parent: Node3D, world: SBWorld, p: Vector3, metal: Material, white: Material) -> void:
+	var glass := C.mat(Color(0.55, 0.65, 0.7, 0.35), 0.1, 0.2)
+	glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	C.box(parent, world, p + Vector3(0, 2.45, 0), Vector3(2.0, 0.06, 0.8), Vector3.ZERO, metal, 0.6, false)
+	C.box(parent, world, p + Vector3(0, 1.2, -0.75), Vector3(2.0, 1.2, 0.02), Vector3.ZERO, glass, 0.6)
+	for x: float in [-1.95, 1.95]:
+		C.box(parent, world, p + Vector3(x, 1.2, -0.1), Vector3(0.04, 1.2, 0.68), Vector3.ZERO, glass, 0.6)
+		C.box(parent, world, p + Vector3(x, 1.22, -0.78), Vector3(0.05, 1.22, 0.05), Vector3.ZERO, metal, 0.6, false)
+	C.box(parent, world, p + Vector3(0, 0.45, -0.5), Vector3(1.5, 0.04, 0.2), Vector3.ZERO, metal, 0.6, false)
+	C.box(parent, world, p + Vector3(2.4, 1.4, 0.6), Vector3(0.04, 1.4, 0.04), Vector3.ZERO, metal, 0.6)
+	C.box(parent, world, p + Vector3(2.4, 2.6, 0.6), Vector3(0.25, 0.25, 0.02), Vector3.ZERO, C.mat(Color(0.95, 0.75, 0.1), 0.5), 0.6, false)
+	C.label3d(parent, "H", p + Vector3(2.4, 2.6, 0.63), PI, 0.3, Color(0.1, 0.45, 0.2))
+
+
+static var _tex_cache := {}
+static func _limit_texture() -> ImageTexture:
+	if _tex_cache.has("limit"): return _tex_cache["limit"]
+	var img := Image.create(64, 64, false, Image.FORMAT_RGB8)
+	for y in 64:
+		for x in 64:
+			var d := Vector2(x - 31.5, y - 31.5).length() / 32.0
+			img.set_pixel(x, y, Color(0.8, 0.06, 0.05) if d > 0.74 else Color(0.97, 0.97, 0.97))
+	img.generate_mipmaps()
+	_tex_cache["limit"] = ImageTexture.create_from_image(img)
+	return _tex_cache["limit"]
+
+
+static func _poster_texture() -> ImageTexture:
+	if _tex_cache.has("poster"): return _tex_cache["poster"]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var img := Image.create(512, 160, false, Image.FORMAT_RGB8)
+	img.fill(Color(0.80, 0.78, 0.72))
+	# A row of overlapping posters: coloured ground, a headline bar, lines of text, a picture block.
+	var x := 0
+	while x < 512:
+		var w := rng.randi_range(48, 90)
+		var top := rng.randi_range(4, 20)
+		var col := Color.from_hsv(rng.randf(), rng.randf_range(0.3, 0.85), rng.randf_range(0.55, 0.95))
+		img.fill_rect(Rect2i(x, top, w - 3, 160 - top - 6), col)
+		img.fill_rect(Rect2i(x + 5, top + 8, w - 13, 12), col.darkened(0.65) if col.get_luminance() > 0.5 else col.lightened(0.7))
+		img.fill_rect(Rect2i(x + 5, top + 30, w - 13, 50), Color.from_hsv(rng.randf(), 0.5, 0.6))
+		for line in 5:
+			img.fill_rect(Rect2i(x + 5, top + 90 + line * 9, rng.randi_range(18, w - 13), 3), col.darkened(0.5))
+		x += w
+	img.generate_mipmaps()
+	_tex_cache["poster"] = ImageTexture.create_from_image(img)
+	return _tex_cache["poster"]
+
+
+static func _arrow_texture() -> ImageTexture:
+	if _tex_cache.has("arrow"): return _tex_cache["arrow"]
+	var img := Image.create(32, 128, false, Image.FORMAT_RGBA8)
+	for y in 128:
+		for x in 32:
+			var u := (x - 15.5) / 16.0
+			var v := y / 127.0          # 0 = tip
+			var head := v < 0.35 and absf(u) < (v / 0.35) * 0.95
+			var shaft := v >= 0.35 and absf(u) < 0.28
+			img.set_pixel(x, y, Color(0.93, 0.93, 0.9, 1.0) if head or shaft else Color(0, 0, 0, 0))
+	img.generate_mipmaps()
+	_tex_cache["arrow"] = ImageTexture.create_from_image(img)
+	return _tex_cache["arrow"]
