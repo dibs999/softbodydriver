@@ -785,7 +785,7 @@ func _pause_slider(parent: VBoxContainer, caption: String, low: float, high: flo
 	var row := HBoxContainer.new()
 	var label := Label.new()
 	label.text = caption
-	label.custom_minimum_size.x = 120
+	label.custom_minimum_size.x = 170
 	row.add_child(label)
 	var slider := HSlider.new()
 	slider.min_value = low
