@@ -1,6 +1,6 @@
 # Leistung und Grafikeinstellungen
 
-Stand: 9. November 2026.
+Stand: 11. November 2026.
 
 ## Grafikeinstellungen
 
@@ -28,6 +28,24 @@ Bäume, die die Einstellung *Bäume und Büsche* weglässt, verlieren auch ihre 
 bleiben also keine unsichtbaren Hindernisse zurück.
 
 ## Optimierungen
+
+* **Fahrzeug-Meshes mit Detailstufe und auf mehreren Kernen (11. November 2026):**
+  * Der eigentliche Bremser auf schwachen PCs war nicht die Grafik, sondern die CPU: Jedes Auto
+    verformte jedes Bild alle seine Meshes neu (Meridian 140.000, Kestrel 90.000 Vertices), auch
+    Verkehrsautos 200 m entfernt oder hinter der Kamera – 10–12 ms je Auto und Bild, mit Verkehr
+    oder den Schauautos am Testgelände 40–50 ms (≈ 20 FPS hier, auf einem i5-Laptop ≈ 10 FPS,
+    unabhängig von der Grafikstufe).
+  * Jetzt wählt die Welt je Auto nach Kameraentfernung: bis 30 m jedes Bild, bis 70 m jedes 2.,
+    bis 150 m jedes 4., darüber jedes 8. Bild; außerhalb des Sichtfelds mindestens jedes 4. Dazwischen
+    werden die zuletzt verformten Meshes starr mit dem Auto mitbewegt (Lage aus den
+    Achsreferenzknoten), die Räder weiter jedes Bild gesetzt. Frischer Schaden, Zurücksetzen und
+    die Node-Beam-Ansicht verformen sofort. Gemessen: Mesh-Abstand zum Auto bei 100 m wie bei 5 m
+    höchstens 1–3 cm (111 von 147 Bildern starr).
+  * Ein stehendes Auto (geparkt, wartend, Menüvorschau) wird nicht neu verformt, solange sich kein
+    Knoten bewegt.
+  * Die Verformung der einzelnen Flächen läuft parallel auf dem Godot-WorkerThreadPool; Hochladen
+    und Reißprüfung bleiben im Hauptthread. Meridian 10,8 → 5,0 ms, Kestrel 3,7 → 1,9 ms (4 Kerne).
+  * Bildzeit ohne Rendering auf allen Karten 38–60 ms → 7,5–10 ms.
 
 * **Bäume mit Detailstufen:**
   * Jede Baumart hat neben dem Nahmodell ein Fernmodell mit ~22 % der Blattkarten

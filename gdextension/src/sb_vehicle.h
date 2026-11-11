@@ -35,6 +35,9 @@ public:
     void pre_step(double dt);       // locked, physics thread
     void sync_from_world();         // locked, main thread
     void update_visual(double delta); // main thread, not locked
+    /// Visual level of detail, set by the world from the camera: deform the meshes every n-th
+    /// frame (1 = every frame) and move the last deformed meshes rigidly in between.
+    void set_visual_interval(int frames) { visualInterval_ = frames < 1 ? 1 : frames; }
     int body_index() const { return bodyIndex_; }
     void set_body_index(int i) { bodyIndex_ = i; }
 
@@ -144,7 +147,7 @@ private:
     bool replaying_ = false;
     std::vector<float> nodeDamage_;   ///< per node: worst plastic strain of the beams attached to it
     bool damageDirty_ = false;
-    void tearOverstretched(SurfaceGpu& g, const sb::MeshSurface& s, bool reset);
+    void tearOverstretched(SurfaceGpu& g, const sb::MeshSurface& s, bool reset, const std::vector<float>& deformed);
     Ref<Material> materialFor(const std::string& name, const Dictionary& lib) const;
     void buildMeshes(const Dictionary& materials);
     void applyTransform(const Transform3D& xform);  // locked
@@ -171,6 +174,17 @@ private:
     double impactAccum_ = 0.0;
     std::size_t lastDeformed_ = 0, lastBroken_ = 0;
     bool snapshotValid_ = false;
+    struct DeformJob { bool imported; std::size_t surface; uint8_t* dst; };
+    std::vector<DeformJob> deformJobs_;
+    std::vector<std::vector<float>> jobPositions_;
+    static void deformJobEntry(void* self, uint32_t index);
+    void deformJob(uint32_t index);
+    int visualInterval_ = 1, visualCounter_ = 0;
+    bool lodFrameValid_ = false, lodMoved_ = false;
+    std::size_t lodDamageSeen_ = 0;
+    Transform3D lodFrame_, lodSteering_;
+    std::vector<sb::Vec3> lodPositions_;   ///< renderPos_ at the last deformation
+    Transform3D rigidVisualFrame() const;   ///< position and heading of renderPos_
     bool visualResetPending_ = false; // Set by physics under the world lock.
     bool visualReset_ = false;
 

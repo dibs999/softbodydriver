@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <chrono>
 
+#include <godot_cpp/classes/camera3d.hpp>
 #include <godot_cpp/classes/engine.hpp>
+#include <godot_cpp/classes/viewport.hpp>
 #include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
@@ -77,6 +79,20 @@ void SBWorld::sync_visuals_with_delta(double delta) {
         std::lock_guard<WorldMutex> lock(mtx_);
         for (SBVehicle* v : vehicles_) v->sync_from_world();
         for (SBProp* p : props_) p->sync_from_world();
+    }
+    // Visual level of detail from the camera: full mesh deformation every frame up to 30 m, then
+    // every 2nd / 4th / 8th frame; off-screen cars at least every 4th. Without a camera (tools,
+    // tests) every frame.
+    Camera3D* camera = is_inside_tree() && get_viewport() ? get_viewport()->get_camera_3d() : nullptr;
+    for (SBVehicle* v : vehicles_) {
+        int interval = 1;
+        if (camera) {
+            const Vector3 p = v->get_position_ws();
+            const double d = camera->get_global_position().distance_to(p);
+            interval = d < 30.0 ? 1 : d < 70.0 ? 2 : d < 150.0 ? 4 : 8;
+            if (d > 12.0 && !camera->is_position_in_frustum(p)) interval = std::max(interval, 4);
+        }
+        v->set_visual_interval(interval);
     }
     for (SBVehicle* v : vehicles_) v->update_visual(delta);
 }
