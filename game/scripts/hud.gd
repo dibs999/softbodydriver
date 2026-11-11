@@ -22,6 +22,7 @@ var camera_name := "Verfolger"
 var cockpit := false
 var in_dash_instruments := false
 var show_help := false
+var cruise_kmh := -1.0   ## set by the game: cruise control target (< 0 off)
 var show_diagnostics := false
 var _t: Dictionary = {}
 var _stats: Dictionary = {}
@@ -175,6 +176,12 @@ func _draw() -> void:
 			var cw := _width(line, 12) + 22
 			draw_style_box(_chip_style, Rect2(canvas.x - 16 - cw, 324.0, cw, 24))
 			_right(Vector2(canvas.x - 27, 340.0), line, 12, AMBER)
+	if cruise_kmh > 0.0:
+		var cruise := "Tempomat  %d km/h" % int(cruise_kmh)
+		var cw := _width(cruise, 13) + 22
+		var cpos := Vector2(canvas.x - 152 - cw * 0.5, canvas.y - 318)
+		draw_style_box(_chip_style, Rect2(cpos, Vector2(cw, 26)))
+		_centered(Vector2(cpos.x + cw * 0.5, cpos.y + 18), cruise, 13, ACCENT)
 	if not cockpit or not in_dash_instruments:
 		_gauge(Vector2(canvas.x - 152, canvas.y - 146))
 	_damage_app(Vector2(16, canvas.y - 276))
@@ -477,7 +484,7 @@ func _diagnostics(canvas: Vector2) -> void:
 	_text(p + Vector2(22, 387), "Physik %d Hz · %.0f %% Echtzeit · Messfenster bis 240 Bilder" % [_stats.get("physics_hz", 2000), 100 * float(_stats.get("realtime_factor", 1))], 11, MUTED)
 
 func _help(canvas: Vector2) -> void:
-	var p := _overlay(canvas, Vector2(640, 470), "STEUERUNG", "F1  Schließen")
+	var p := _overlay(canvas, Vector2(640, 500), "STEUERUNG", "F1  Schließen")
 	if DriverPrompts.using_gamepad:
 		draw_multiline_string(font, p + Vector2(24, 82), DriverPrompts.control_summary(), HORIZONTAL_ALIGNMENT_LEFT, 590, 18, -1, TEXT)
 		draw_multiline_string(font, p + Vector2(24, 368), "Start öffnet auch Aktivitäten, Wetter und Bergung.\nTanken und Reparatur: im markierten Servicebereich anhalten,\nMotor ausschalten und D-Pad halten.", HORIZONTAL_ALIGNMENT_LEFT, 590, 15, -1, MUTED)
@@ -493,6 +500,7 @@ func _help(canvas: Vector2) -> void:
 		[["J", "P", "Tab", "B"], "Zeitlupe  ·  Physikpause  ·  Fahrzeug  ·  Node-Beam-Ansicht"],
 		[["L", ",", ".", "H", "⇧H"], "Licht  ·  Blinker  ·  Warnblinker  ·  Blaulicht"],
 		[["X", "O", "⏎"], "Scheibenwischer  ·  Haube entriegeln  ·  Hupe"],
+		[["V"], "Tempomat an (ab 30 km/h) / aus, Bremse schaltet ihn ab"],
 		[["F", "G"], "Tanken / Service halten (Motor aus)"],
 		[["U", "⇧U"], "Fahrer- / Beifahrertür im Stand"],
 		[["F7", "F8"], "Wetter  ·  Tageszeit (Umschalt+F8 Zeitlauf)"],
