@@ -23,7 +23,9 @@
       "spring",
       "caliper"
     ],
-    "materialOverrides": { "Glass": "glass", "Paint 1": "paint", "Dashboard": "trim" }
+    "materialOverrides": { "Glass": "glass", "Paint 1": "paint", "Dashboard": "trim" },
+    "_textureScale": "KHR_texture_transform scales of normal-mapped materials without a base colour texture; Godot's importer drops them, which stretched the flake and leather normals into blotches.",
+    "textureScale": { "Interior 1": [200, 400], "Interior 2": [100, 100], "Interior 3": [200, 400], "Floormat": [2, 3], "Paint 2": [30, 30], "Tiretread": [1, 4] }
   },
   "body": {
     "style": "coupe", "doors": 2,
