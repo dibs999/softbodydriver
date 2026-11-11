@@ -6,6 +6,17 @@ extends RefCounted
 const START_MONEY := 2000.0
 const FUEL_PRICE := 1.85          # EUR per litre
 const RECOVERY_FEE := 150.0       # towing for an instant repair away from the service
+const STARTER_CAR := "kestrel_hatch"   # owned from the start of a career
+
+## Dealer price of a car from its game_state.cars entry: grows faster than the power, so the
+## next car is a few activities away and the supercar a long way off. 250 EUR steps.
+static func car_price(info: Dictionary) -> float:
+	var kw := maxf(float(info.get("power", 0.0)), 40.0)
+	return maxf(1000.0, roundf(4.0 * pow(kw, 1.4) / 250.0) * 250.0)
+
+## Does the career own this car (id from the car file)?
+static func owns(progress, car_id: String) -> bool:
+	return car_id == STARTER_CAR or progress.owns_car(car_id)
 
 ## Pay for a finished activity (driving_activity's last_result).
 static func payout(result: Dictionary) -> float:

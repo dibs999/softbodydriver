@@ -2,6 +2,7 @@ extends Node3D
 ## Main menu: vehicle tiles with rendered thumbnails, live soft-body preview of the selected car,
 ## vehicle card with the start actions, map tiles and a settings overlay.
 const UITheme := preload("res://scripts/ui_theme.gd")
+const Career := preload("res://scripts/career.gd")
 
 var world: SBWorld
 var preview_car: SBVehicle
@@ -13,6 +14,7 @@ var car_stats: Array[Label] = []
 var map_info: Label
 var progress_info: Label
 var car_buttons: Array[Button] = []
+var car_meta: Array[Label] = []   # detail line of each vehicle tile (price or "im Besitz" in the career)
 var map_buttons: Array[Button] = []
 var start_button: Button
 var _preview_area: Control
@@ -173,13 +175,11 @@ func _build_ui() -> void:
 	var car_group := ButtonGroup.new()
 	for i in Game.cars.size():
 		var c: Dictionary = Game.cars[i]
-		var meta := "%s · %.0f kW" % [c["layout"], c["power"]]
-		if not (c.get("visual_model", {}) as Dictionary).is_empty():
-			meta += " · Detailmodell"
-		var tile := _tile(c["name"], meta, "res://ui/cars/%s.png" % c["id"], Vector2(212, 119), car_group)
+		var tile := _tile(c["name"], _car_meta_text(c), "res://ui/cars/%s.png" % c["id"], Vector2(212, 119), car_group)
 		tile.pressed.connect(_on_car_selected.bind(i))
 		grid.add_child(tile)
 		car_buttons.append(tile)
+		car_meta.append(tile.get_child(0).get_child(2) as Label)
 
 	# Vehicle card and actions on the right.
 	var card := _panel(0.66)
@@ -392,11 +392,60 @@ func _build_settings(root: Control) -> void:
 
 func _toggle_settings() -> void:
 	_settings.visible = not _settings.visible
+	if not _settings.visible: _refresh_garage()
+
+
+## Tile detail line: layout and power, and in the career the price or that the car is owned.
+func _car_meta_text(c: Dictionary) -> String:
+	var meta := "%s · %.0f kW" % [c["layout"], c["power"]]
+	if _career_on():
+		meta += " · im Besitz" if Career.owns(Game.progress, str(c["id"])) else " · " + Career.money_text(Career.car_price(c))
+	elif not (c.get("visual_model", {}) as Dictionary).is_empty():
+		meta += " · Detailmodell"
+	return meta
+
+
+func _career_on() -> bool:
+	return bool(Game.settings.get("career", false))
+
+
+## The selected car is drivable unless the career is on and it is not bought yet.
+func _selected_owned() -> bool:
+	var c: Dictionary = Game.car_info(Game.selected_car)
+	return c.is_empty() or not _career_on() or Career.owns(Game.progress, str(c["id"]))
+
+
+## Tiles, start button and account line after a purchase or a change of the career setting.
+func _refresh_garage() -> void:
+	for i in mini(car_meta.size(), Game.cars.size()):
+		if car_meta[i]: car_meta[i].text = _car_meta_text(Game.cars[i])
+	for i in car_buttons.size():
+		if car_buttons[i].button_pressed:
+			_on_car_selected(i)
+			return
+	_update_start_button()
+
+
+func _update_start_button() -> void:
+	if not start_button: return
+	var c: Dictionary = Game.car_info(Game.selected_car)
+	if _selected_owned():
+		start_button.text = "Losfahren  →"
+		start_button.disabled = Game.cars.is_empty()
+		start_button.tooltip_text = ""
+		return
+	var price := Career.car_price(c)
+	var missing := price - Game.progress.get_money()
+	start_button.text = "Kaufen · %s" % Career.money_text(price)
+	if missing > 0.0: start_button.text += "  ·  es fehlen %s" % Career.money_text(missing)
+	start_button.disabled = missing > 0.0 or Game.progress.read_only
+	start_button.tooltip_text = "Kontostand %s" % Career.money_text(Game.progress.get_money())
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _settings and _settings.visible and event.is_action_pressed("menu"):
 		_settings.visible = false
+		_refresh_garage()
 		get_viewport().set_input_as_handled()
 
 
@@ -441,6 +490,7 @@ func _on_car_selected(i: int) -> void:
 			progress_info.text += "\nKarriere · Kontostand %s" % preload("res://scripts/career.gd").money_text(Game.progress.get_money())
 		if Game.progress.read_only:
 			progress_info.text = "Fortschritt kann nicht gespeichert werden. Das vorhandene Profil bleibt erhalten."
+	_update_start_button()
 	car_name.text = c["name"]
 	car_info.text = "%s  ·  %s  ·  %s" % [c["engine"], c["layout"], c["description"]]
 	car_stats[0].text = "%.0f kW" % c["power"]
@@ -461,6 +511,12 @@ func _on_map_selected(i: int) -> void:
 
 
 func _on_start() -> void:
+	if not _selected_owned():
+		# Career: the first press buys the car, the next one drives it.
+		var c: Dictionary = Game.car_info(Game.selected_car)
+		if Game.progress.buy_car(str(c["id"]), Career.car_price(c)):
+			_refresh_garage()
+		return
 	Game.start_lesson = false
 	Game.progress.set_selection(Game.selected_car, Game.selected_map)
 	get_tree().change_scene_to_file("res://scenes/game.tscn")

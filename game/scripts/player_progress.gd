@@ -27,6 +27,10 @@ static func _valid(data: Variant) -> bool:
 		if not career is Dictionary: return false
 		for key in ["money", "earned", "spent"]:
 			if not _number(career.get(key, 0.0)): return false
+		if career.has("owned"):
+			if not career["owned"] is Array: return false
+			for id in career["owned"]:
+				if not id is String: return false
 	var selection: Dictionary = data["selection"]
 	if not selection.get("last_car") is String or not selection.get("last_map") is String: return false
 	for car in data["braking"].values():
@@ -185,6 +189,27 @@ func change_money(amount: float) -> bool:
 	career["money"] = money + amount
 	if amount > 0.0: career["earned"] = float(career.get("earned", 0.0)) + amount
 	else: career["spent"] = float(career.get("spent", 0.0)) - amount
+	return _commit(previous)
+
+func owns_car(car_id: String) -> bool:
+	return car_id in (_career().get("owned", []) as Array)
+
+func owned_cars() -> Array:
+	return (_career().get("owned", []) as Array).duplicate()
+
+## Buy a car: the price is debited and the car added in one save, or nothing changes (not enough
+## money, already owned, or the profile cannot be saved).
+func buy_car(car_id: String, price: float) -> bool:
+	if read_only or car_id.is_empty() or owns_car(car_id) or not is_finite(price) or price < 0.0: return false
+	var career := _career()
+	var money := float(career.get("money", 0.0))
+	if money - price < -0.005: return false
+	var previous := _data.duplicate(true)
+	career["money"] = money - price
+	career["spent"] = float(career.get("spent", 0.0)) + price
+	var owned: Array = career.get("owned", []).duplicate()
+	owned.append(car_id)
+	career["owned"] = owned
 	return _commit(previous)
 
 func reset_career() -> bool:
