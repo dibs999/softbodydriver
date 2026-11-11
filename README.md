@@ -46,7 +46,8 @@ keine stabile Hochgeschwindigkeitsfahrt.
   Die Minikarte rückt im Cockpit nach oben, damit die Instrumente frei bleiben.
 - Zeitfahren, Lieferfahrten, Rennen und Crashtest vergeben **Medaillen**: Gold im Tempo der
   KI-Zielgeschwindigkeiten der Karte, Silber bis 20 %, Bronze bis 50 % langsamer; im Rennen
-  Gold und Silber für Platz 1 und 2, im Crashtest nach Sternen (5/4/3). Die beste Medaille je
+  Gold und Silber für Platz 1 und 2, im Crashtest nach Sternen (5/4/3), in der Drift-Challenge
+  ab 1.000 / 2.500 / 5.000 Punkten (aus der Punkteformel abgeleitet). Die beste Medaille je
   Karte und Aktivität bleibt gespeichert, das Hauptmenü zählt sie.
 - `F3` wählt freie Fahrt, Zeitfahren oder eine 60-Sekunden-Drift-Challenge; in der
   Stadt gibt es zusätzlich Lieferfahrten. Im **Rennen** stehen zwei KI-Gegner eine

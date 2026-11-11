@@ -31,7 +31,7 @@ func _initialize() -> void:
 	check(a.medal_for(4, {"place": 1, "field": 3}) == 3 and a.medal_for(4, {"place": 2, "field": 3}) == 2, "Race: first gold, second silver")
 	check(a.medal_for(4, {"place": 3, "field": 3}) == 0, "Race: last of three gets nothing")
 	check(a.medal_for(5, {"crash": {"stars": 5}}) == 3 and a.medal_for(5, {"crash": {"stars": 3}}) == 1 and a.medal_for(5, {"crash": {"stars": 2}}) == 0, "Crash test: by stars")
-	check(a.medal_for(2, {"score": 99999}) == 0, "Drift challenge: no medals")
+	check(a.medal_for(2, {"score": 5200.0}) == 3 and a.medal_for(2, {"score": 2600.0}) == 2 and a.medal_for(2, {"score": 1200.0}) == 1 and a.medal_for(2, {"score": 600.0}) == 0, "Drift challenge: by points")
 	# Saving keeps the best medal and the tally counts it.
 	a._records.set_value("medals", "test_map:1", 2)
 	a._records.set_value("medals", "other_map:4", 3)
