@@ -185,7 +185,7 @@
     "friction": 1.02,
     "tireMass": 11.0,
     "rimMass": 9.5,
-    "rays": 16
+    "rays": 20
   },
   "engine": {
     "name": "7.0 V8",

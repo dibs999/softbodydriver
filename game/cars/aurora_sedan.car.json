@@ -19,7 +19,7 @@
     "front": { "wheelRate": 31000, "bumpDamping": 2300, "reboundDamping": 4600, "antiRollRate": 13000, "bumpTravel": 0.08, "droopTravel": 0.10 },
     "rear":  { "wheelRate": 33000, "bumpDamping": 2400, "reboundDamping": 4800, "antiRollRate": 9000,  "bumpTravel": 0.08, "droopTravel": 0.11 }
   },
-  "tires": { "radius": 0.329, "width": 0.225, "rimRadius": 0.216, "pressurePsi": 35, "friction": 1.18, "tireMass": 10.0, "rimMass": 10.5, "rays": 16 },
+  "tires": { "radius": 0.329, "width": 0.225, "rimRadius": 0.216, "pressurePsi": 35, "friction": 1.18, "tireMass": 10.0, "rimMass": 10.5, "rays": 20 },
   "engine": {
     "name": "2.0 I4 Turbo", "layout": "RWD", "cylinders": 4,
     "torqueCurve": [[750, 160], [1350, 360], [1550, 400], [4400, 400], [5200, 360], [6300, 270], [6800, 0]],

@@ -37,7 +37,7 @@ niedrigen Geschwindigkeiten verdeckt blieben:
   und skaliert sie auf `Cd·A`. Neue optionale Felder `body.dragCoefficient` und
   `body.frontalArea` (Standard nach Karosserieform bzw. `0,84·Breite·(Höhe−Bodenfreiheit)`).
 * **Nachgiebiger Laufflächenkontakt:** Laufflächen-Nodes verwenden einen steifen
-  Feder-Dämpfer-Bodenkontakt (`NodeParams::contactStiffness`, 4,5·10⁵ N/m bei 16 Rays,
+  Feder-Dämpfer-Bodenkontakt (`NodeParams::contactStiffness`, 4,5·10⁵ N/m bei 16 Rays, skaliert mit 16/Rays,
   harter Anschlag ab 2 cm). Der Einlaufstoß wird gespeichert und am Auslauf wieder
   abgegeben. Weichere Kontakte sparen mehr, lassen die Lauffläche aber im Grenzbereich
   rattern (Hinterachs-Spurflattern); deshalb dieser Kompromiss.
@@ -196,9 +196,79 @@ je schneller er arbeitet. Getestet wurde deshalb eine Reifendämpfung, die oberh
 * Der Geradeauslauf wird schlechter, beim Vortex mit 60 % instabil.
 * Kernprüfungen und `cartest --quick` bestanden zwar, die Änderung wurde trotzdem zurückgenommen.
 
+## Sechste Iteration: 20 Laufflächen-Nodes und Hysterese-Moment
+
+Stand: 11. November 2026.
+
+**Befund.** Eine feinere Ausrollmessung (mittlere Geschwindigkeit über 0,5-s-Fenster, 3 s Messdauer)
+zeigte, dass der Rollwiderstand stark von der Geschwindigkeit abhing (Kestrel ohne Luftwiderstand):
+
+| km/h | 20 | 40 | 60 | 80 | 100 | 120 | 150 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 16 Nodes, bisher | 41 N | 92 N | 189 N | 298 N | 203 N | 489 N | 589 N |
+| entspricht c_rr | 0,003 | 0,007 | 0,015 | 0,024 | 0,016 | 0,039 | 0,047 |
+
+**Ursache.** Bei 16 Nodes auf 0,317 m Radius ist die Lauffläche ein Vieleck mit 12 cm Kantenlänge und
+6 mm Durchhang zwischen den Nodes. Jeder einlaufende Node ist ein kleiner Stoß. Die Verluste steigen
+mit v² und regen bei bestimmten Geschwindigkeiten Resonanzen an. Die 100-km/h-Messung, nach der
+bisher kalibriert wurde, lag zufällig in einem Tal.
+
+**Änderungen.**
+
+* **20 Laufflächen-Nodes für alle Autos** (`tires.rays`, Standard jetzt 20). Bei 24 Nodes ist der
+  Verlust noch flacher, aber der Vortex GT gerät mit konstanter `treadSpring` über 270 km/h in eine
+  stehende Welle. Wird sie auf gleiches EA skaliert, schwingt er unter Volllast mit ±1,5° Gierwinkel.
+  20 Nodes nutzt der Concept GT schon geprüft. Kosten: +30 % Physik-Rechenzeit je Auto (Kestrel 5,4 → 7,1 % eines
+  CPU-Kerns in Echtzeit, eigener Physik-Thread).
+* **Hysterese-Moment** `PressureWheelSpec::rollingHysteresis` (0,004). Ein Moment c·Last·R wirkt gegen
+  das Abrollen. Viskose Beam-Dämpfung verliert Energie proportional zur Frequenz; echter Gummi verliert
+  je Umdrehung ungefähr gleich viel.
+  * Das Moment folgt dem um 20 ms geglätteten Raddrehen relativ zum Radträger.
+  * Es blendet zwischen 0,05 und 0,3 m/s ein.
+  * Seine Reaktion wirkt wie eine leichte Bremse auf den Radträger (Drehimpulserhaltung).
+  * Ohne Reaktion schob es geparkte Autos; ohne Glättung rüttelte das Zittern des stehenden Rings an
+    der Karosserie (gestützte Haube sackte ab, Türen verfehlten das Schloss).
+  * 0,005 brachte den Concept-Spurwechseltest knapp ins Hinterachs-Flattern; daher 0,004.
+* **Positionshaltende Haftreibung nur noch bei gehaltener Bremse oder über 0,5 m/s.** Sie hielt bisher
+  jeden Laufflächenkontakt fest. Ein ungebremst geparktes Auto schaukelte dadurch dauerhaft ±3 cm mit
+  ~0,8 Hz vor und zurück (schon auf `main`); eine geöffnete Haube pendelte ±5° mit. Jetzt steht es
+  still (0,03 mm Restbewegung). Am Hang hält die Bremse unverändert.
+* **Längenbegrenzung für Beams** (`BeamParams::longBound`/`boundSpring`, wie BeamNGs „long bound").
+  Leitkegel dehnen sich höchstens 15 %. Vorher konnte ein zwischen Lauffläche und Straße
+  eingeklemmter Kegel-Node mit dem Reifen herumlaufen. Der Kegel zog sich dabei auf 1,5 m um das Rad
+  und bremste das Auto um bis zu 13 km/h. Das hing von der Node-Zahl ab: Mit 16 Nodes hatten die
+  Prüflagen nur zufällig gepasst, mit 18, 20 und 22 Nodes hakte jeweils eine andere Lage. Jetzt
+  liegen alle 18 Lagen bei ≤ 2,7 km/h.
+
+**Ergebnis** (Rollwiderstand ohne Luft, c_rr):
+
+| Auto | 30 km/h | 60 km/h | 80 km/h | 100 km/h | 130 km/h | Ausroll gesamt 100 km/h |
+|---|---:|---:|---:|---:|---:|---:|
+| Kestrel | 0,007 | 0,013 | 0,015 | 0,012 | 0,019 | 419 N |
+| Aurora | 0,007 | 0,012 | 0,012 | 0,011 | 0,014 | 425 N |
+| Basalt | 0,007 | 0,011 | 0,012 | 0,012 | 0,010 | 679 N |
+| Concept | 0,006 | 0,009 | 0,012 | 0,013 | 0,012 | 447 N |
+| Fastback | 0,008 | 0,014 | 0,021 | 0,013 | 0,014 | 508 N |
+| Vortex | 0,007 | 0,010 | 0,012 | 0,011 | 0,012 | 454 N |
+
+Höchstgeschwindigkeiten (Vollgas, 80 s, ohne Lenkeingabe):
+
+| Auto | vorher | jetzt | reales Vorbild |
+|---|---:|---:|---:|
+| Kestrel | 199 km/h | 208 km/h | ~216 km/h |
+| Aurora | 234 km/h | 246 km/h | ~250 km/h, abgeregelt |
+| Vortex | 282 km/h | 283 km/h | |
+| Concept | 338 km/h | 337 km/h | |
+
+Kein Fahrzeug bricht aus. Alle zwölf `cartest --quick` zeigen OK, mit unveränderten Brems- und
+Kurvenwerten (±0,1 s / ±0,01 g).
+
+Prüfungen in `core/tests/test_car.cpp`:
+
+* `rolling resistance stays like a real tyre…` (c_rr 0,005–0,02 bei 30/60/100/130 km/h)
+* `an unbraked parked car comes to rest…`
+
 ## Offen
 
-* Rollwiderstand noch ~60 % über real (213 statt ~130 N). Eine pauschal abgesenkte oder mit dem
-  Tempo fallende Beam-Dämpfung destabilisiert die Lauffläche (fünfte Iteration). Ein besserer Ansatz
-  wäre eine Verlustkraft am Latsch, die den Dämpfungsanteil ersetzt, statt ihn nur zu verringern.
+* Einzelne Resonanzbuckel: Fastback bei 80 km/h (c_rr 0,021), Kestrel bei 130 km/h (0,019).
 * Spieler mit Tastatur/Gamepad und die Fahrhilfe korrigieren kleinere Abweichungen.

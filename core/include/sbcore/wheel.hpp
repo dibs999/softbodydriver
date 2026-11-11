@@ -52,6 +52,10 @@ struct PressureWheelSpec {
     real membranePressure = 0.0;
     /// Tread rubber contact stiffness per tread node in N/m (0 = rigid contact).
     real contactStiffness = 0.0;
+    /// Rubber hysteresis as a rolling-resistance coefficient: a torque c * load * radius against
+    /// the roll. Viscous beam damping alone loses energy in proportion to the rolling frequency,
+    /// whereas a real tyre loses nearly the same energy per revolution at any speed.
+    real rollingHysteresis = 0.0;
 };
 
 struct PressureWheel {
@@ -68,6 +72,7 @@ struct PressureWheel {
     bool brakeHolding = false;
     real brakeAngle = 0.0;                  ///< Wheel angle relative to the knuckle (rad, integrated).
     real brakeAnchor = 0.0;                 ///< Angle the pads hold the disc at.
+    real rollOmegaFiltered = 0.0;  ///< Spin relative to the upright, low-passed for rolling hysteresis.
 
     // ---- tyre condition (all updated in step())
     std::vector<std::uint32_t> spokeBeams;  ///< Sidewall beams whose stiffness comes from the air pressure.

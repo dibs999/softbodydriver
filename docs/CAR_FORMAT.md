@@ -62,7 +62,7 @@ Koordinaten im Generator: `x` zeigt nach vorne (hintere Stoßstange bei 0), `y` 
   "tires": { "radius": 0.317, "width": 0.225, "rimRadius": 0.216, "pressurePsi": 34,
              // optional "widthRear": 0.35 für Mischbereifung (breitere Hinterreifen, z. B. Mittelmotor);
              // "tireMass" gilt dann für den breiteren Reifen, der schmalere ist im Verhältnis der Breiten leichter
-             "friction": 1.15, "tireMass": 9.5, "rimMass": 9.0, "rays": 16 },
+             "friction": 1.15, "tireMass": 9.5, "rimMass": 9.0, "rays": 20 },
 
   "engine": {
     "name": "1.5 I4 Turbo", "layout": "FWD", "cylinders": 4,   // FWD | RWD | AWD

@@ -240,6 +240,10 @@ std::uint32_t SoftBody::addBeam(std::uint32_t a, std::uint32_t b, const BeamPara
     bm.damp = p.damp;
     bm.springExp = p.springExpansion >= 0 ? p.springExpansion : p.spring;
     bm.dampExp = p.dampExpansion >= 0 ? p.dampExpansion : p.damp;
+    if (p.boundSpring > 0 && !std::isinf(p.longBound)) {
+        bm.longBoundFactor = 1.0 + std::max<real>(0.0, p.longBound);
+        bm.boundSpring = p.boundSpring;
+    }
     if (p.type == BeamType::Shock) bm.dampExp = p.dampRebound >= 0 ? p.dampRebound : p.damp;
     bm.baseRestLength = len * p.precompression;
     bm.restLength = bm.baseRestLength;
@@ -535,7 +539,12 @@ void SoftBody::accumulateBeamForces(real dt) {
             continue;
         }
 
-        const real f = fs + c * lenRate;  // + tension
+        real f = fs + c * lenRate;  // + tension
+        // Stretch limiter: not part of the breaking force, it only stops soft parts pulling out.
+        if (bm.boundSpring > 0) {
+            const real over = len - bm.restLength * bm.longBoundFactor;
+            if (over > 0) f += bm.boundSpring * over;
+        }
         bm.lastForce = f;
         const Vec3 fv = dir * f;
         force[bm.a] += fv;
@@ -653,6 +662,10 @@ real SoftBody::elasticEnergy() const {
         if (bm.type == BeamType::Support && ext > 0) continue;
         const real k = (bm.type == BeamType::Anisotropic && ext > 0) ? bm.springExp : bm.spring;
         e += 0.5 * k * ext * ext;
+        if (bm.boundSpring > 0) {
+            const real over = length(pos_[bm.b] - pos_[bm.a]) - bm.restLength * bm.longBoundFactor;
+            if (over > 0) e += 0.5 * bm.boundSpring * over * over;
+        }
     }
     return e;
 }

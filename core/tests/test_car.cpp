@@ -896,6 +896,65 @@ TEST_CASE("tyre tread has no standing-wave resonance below autobahn top speeds")
     CHECK(w.stats().finite);
 }
 
+TEST_CASE("rolling resistance stays like a real tyre from town to motorway speed") {
+    // 16 tread nodes made a polygon that lost energy at every node strike: c_rr 0.006 at 30 km/h
+    // but 0.039 at 120 km/h. 20 nodes plus a load-proportional hysteresis torque keep it at
+    // 0.006-0.019 (real car tyres ~0.008-0.015, rising slightly with speed).
+    for (const real kmh : {30.0, 60.0, 100.0, 130.0}) {
+        CAPTURE(kmh);
+        CarBuild cb = buildCar(loadCarDefinition(carPath("kestrel_hatch")));
+        WorldSettings settings;
+        settings.airDensity = 0.0;
+        World w(settings);
+        w.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}, 1.0));
+        w.addBody(std::move(cb.body));
+        auto& car = w.body(0);
+        VehicleControls controls;
+        controls.gear = 0;
+        controls.ignition = false;
+        car.setControls(controls);
+        w.simulate(2.0);
+        const real v = kmh / 3.6;
+        car.setVelocity({v, 0, 0});
+        for (const auto& wheel : car.wheels()) {
+            const auto center = wheel.center(car), axis = wheel.axis(car);
+            for (auto node : wheel.treadNodes)
+                car.velocities()[node] += cross(axis, car.positions()[node] - center) * (v / wheel.spec.radius);
+        }
+        w.simulate(1.5);
+        auto meanSpeed = [&]() { real sum = 0; for (int i = 0; i < 50; ++i) { w.simulate(0.01); sum += car.centerOfMassVelocity().x; } return sum / 50.0; };
+        const real v0 = meanSpeed();
+        w.simulate(2.5);
+        const real v1 = meanSpeed();
+        const real crr = (v0 - v1) / 3.0 / 9.81;
+        MESSAGE("c_rr at " << kmh << " km/h: " << crr);
+        CHECK(crr > 0.005);
+        CHECK(crr < 0.02);
+    }
+}
+
+TEST_CASE("an unbraked parked car comes to rest instead of rocking on its tyres") {
+    // Position-level static friction on every tread contact kept a free-rolling parked car
+    // rocking +-3 cm at ~0.8 Hz forever (a propped bonnet swung +-5 deg with it).
+    CarBuild cb = buildCar(loadCarDefinition(carPath("kestrel_hatch")));
+    World w = flatWorld();
+    w.addBody(std::move(cb.body));
+    auto& car = w.body(0);
+    VehicleControls controls;
+    controls.gear = 0;
+    car.setControls(controls);
+    w.simulate(3.0);
+    real lo = 1e9, hi = -1e9;
+    for (int i = 0; i < 200; ++i) {
+        w.simulate(0.01);
+        const real x = car.wheels()[0].center(car).x;
+        lo = std::min(lo, x);
+        hi = std::max(hi, x);
+    }
+    MESSAGE("front hub travel while parked: " << (hi - lo) * 1000.0 << " mm");
+    CHECK(hi - lo < 0.003);
+}
+
 TEST_CASE("tail-heavy Concept GT on staggered tyres settles into steady cornering at 150 km/h") {
     CarBuild cb = buildCar(loadCarDefinition(carPath("concept_gt")));
     CHECK(cb.def.tires.rearWidth() > cb.def.tires.width);

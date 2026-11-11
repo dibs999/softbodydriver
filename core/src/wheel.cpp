@@ -243,7 +243,28 @@ void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, rea
     } else {
         brakeHolding = false;
     }
-    const real totalTorque = driveTorque + signedBrake;
+    // Rubber hysteresis: a near-constant rolling-resistance torque from the contact load. It follows
+    // the spin low-passed over 20 ms: the raw spin of a parked wheel jitters with the tread ring's
+    // vibration, and a torque following that jitter shook the body (props sagged, doors missed
+    // their latch). It fades in between 0.05 and 0.3 m/s, so a car rocking on its tyres settles.
+    // Its reaction acts on the upright like a light brake.
+    if (dt > 0.0) rollOmegaFiltered += (relOmega - rollOmegaFiltered) * (1.0 - std::exp(-dt / 0.02));
+    real rollingTorque = 0.0;
+    if (spec.rollingHysteresis > 0.0 && load > 50.0 && !brakeHolding) {
+        const real rollSpeed = std::abs(rollOmegaFiltered) * spec.radius;
+        const real fade = std::clamp((rollSpeed - 0.05) / 0.25, 0.0, 1.0);
+        rollingTorque = -std::copysign(spec.rollingHysteresis * load * spec.radius * fade * fade * (3.0 - 2.0 * fade), rollOmegaFiltered);
+        rollingTorque = std::clamp(rollingTorque, -maxStopTorque, maxStopTorque);
+    }
+    {
+        // Position-level static friction for the tread: under a holding brake (or the car creeps
+        // down slopes) and while rolling (it helps the tyre climb objects), but not for a free
+        // wheel at a standstill, where it kept a parked car rocking +-3 cm on its tyres.
+        const std::uint8_t holdTread = brakeHolding || std::abs(rollOmegaFiltered) * spec.radius > 0.5 ? 1 : 0;
+        auto& hold = body.positionHold();
+        for (std::uint32_t idx : treadNodes) hold[idx] = holdTread;
+    }
+    const real totalTorque = driveTorque + signedBrake + rollingTorque;
     lastDriveTorque = driveTorque;
     lastBrakeTorque = signedBrake;
 
@@ -316,7 +337,7 @@ void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, rea
         force[static_cast<std::size_t>(nb)] -= f;
     };
     couple(spec.driveReactionA, spec.driveReactionB, driveTorque);
-    couple(spec.brakeReactionA, spec.brakeReactionB, signedBrake);
+    couple(spec.brakeReactionA, spec.brakeReactionB, signedBrake + rollingTorque);   // hysteresis reacts like a light brake
 }
 
 PressureWheel addPressureWheel(SoftBody& body, const PressureWheelSpec& spec) {

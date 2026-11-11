@@ -200,7 +200,7 @@
     "friction": 1.16,
     "tireMass": 10.5,
     "rimMass": 10.0,
-    "rays": 16
+    "rays": 20
   },
   "engine": {
     "name": "2.5 I4",

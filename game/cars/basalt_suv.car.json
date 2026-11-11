@@ -19,7 +19,7 @@
     "front": { "wheelRate": 33000, "bumpDamping": 2600, "reboundDamping": 5200, "antiRollRate": 14000, "bumpTravel": 0.10, "droopTravel": 0.13 },
     "rear":  { "wheelRate": 35000, "bumpDamping": 2700, "reboundDamping": 5400, "antiRollRate": 10000, "bumpTravel": 0.10, "droopTravel": 0.14 }
   },
-  "tires": { "radius": 0.381, "width": 0.255, "rimRadius": 0.241, "pressurePsi": 36, "friction": 1.1, "tireMass": 13.0, "rimMass": 12.5, "rays": 18 },
+  "tires": { "radius": 0.381, "width": 0.255, "rimRadius": 0.241, "pressurePsi": 36, "friction": 1.1, "tireMass": 13.0, "rimMass": 12.5, "rays": 20 },
   "engine": {
     "name": "3.5 V6", "layout": "AWD", "cylinders": 6,
     "torqueCurve": [[650, 200], [1500, 290], [3000, 335], [4700, 360], [5800, 345], [6600, 300], [7000, 0]],

@@ -82,6 +82,7 @@ std::size_t World::collideBody(SoftBody& b) {
     const auto& friction = b.frictions();
     const auto& collision = b.collisionFlags();
     const auto& soft = b.contactStiffnesses();
+    const auto& hold = b.positionHold();
     const real dt = settings_.dt;
     std::size_t contacts = 0;
 
@@ -143,8 +144,8 @@ std::size_t World::collideBody(SoftBody& b) {
                     vel[i] -= vt;
                     // Static friction holds the position too: the step already moved the node by
                     // vt * dt before the friction saw it, and that drift made braked cars creep
-                    // down hills at ~1.5 km/h.
-                    pos[i] -= vt * dt;
+                    // down hills at ~1.5 km/h. Only under a holding brake (see positionHold).
+                    if (hold[i]) pos[i] -= vt * dt;
                 }
                 else if (vtLen > 0) vel[i] -= vt * (maxDv / vtLen);
                 continue;

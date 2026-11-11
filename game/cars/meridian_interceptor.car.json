@@ -201,7 +201,7 @@
     "friction": 1.2,
     "tireMass": 11.0,
     "rimMass": 10.0,
-    "rays": 16
+    "rays": 20
   },
   "engine": {
     "name": "3.5 V6",
