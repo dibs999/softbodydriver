@@ -333,6 +333,19 @@ static func _farm(parent: Node3D, world: SBWorld, p: Vector3, ground: Callable) 
 	C.box(parent,world,h+Vector3(8,3.1,0),Vector3(0.18,3.1,10),Vector3.ZERO,timber)
 	for side: float in [-1,1]: C.box(parent,world,h+Vector3(0,7.1,side*5),Vector3(8.7,0.15,5.4),Vector3(side*0.19,0,0),roof,0.8,false)
 	for z: float in [-10,0,10]: C.box(parent,world,h+Vector3(-8,3.1,z),Vector3(0.18,3.1,0.18),Vector3.ZERO,timber)
+	# Gable triangles under the roof at the back wall and over the open front (the roof planes
+	# rise from 6.2 m at the eaves to 8.05 m at the ridge).
+	var gable_tri := PrismMesh.new()
+	gable_tri.size = Vector3.ONE
+	var gable_xf: Array[Transform3D] = []
+	for x: float in [-8.0, 8.0]:
+		gable_xf.append(Transform3D(Basis(Vector3.UP, PI * 0.5).scaled_local(Vector3(20.0, 1.85, 0.36)), h + Vector3(x, 6.2 + 0.925, 0)))
+	C.scatter_multimesh(parent, gable_tri, timber, gable_xf)
+	var gable_battens: Array[Transform3D] = []
+	for z in range(-9, 10):
+		var top := 6.2 + 1.85 * (1.0 - absf(z) / 10.0)
+		for x: float in [-8.2, 8.2]:
+			gable_battens.append(Transform3D(Basis.from_scale(Vector3(0.08, top - 6.2, 0.07)), h + Vector3(x, (6.2 + top) * 0.5, z)))
 	var battens: Array[Transform3D] = []
 	for x in range(-7,8):
 		for side: float in [-1,1]:
@@ -341,6 +354,29 @@ static func _farm(parent: Node3D, world: SBWorld, p: Vector3, ground: Callable) 
 		battens.append(Transform3D(Basis.from_scale(Vector3(0.08,6.1,0.07)),h+Vector3(8.20,3.1,z)))
 	var strip := BoxMesh.new()
 	strip.size = Vector3.ONE
+	battens.append_array(gable_battens)
+	# Round hay bales stacked at the back inside, white silage bales outside by the yard.
+	var bale := CylinderMesh.new()
+	bale.top_radius = 0.75
+	bale.bottom_radius = 0.75
+	bale.height = 1.2
+	bale.radial_segments = 16
+	var hay: Array[Transform3D] = []
+	var lying := Basis(Vector3.RIGHT, PI * 0.5)
+	for k in 5:
+		hay.append(Transform3D(lying, h + Vector3(6.6, 0.75, -7.5 + k * 1.35)))
+	for k in 4:
+		hay.append(Transform3D(lying, h + Vector3(6.6, 2.05, -6.8 + k * 1.35)))
+	C.scatter_multimesh(parent, bale, C.noise_mat(Color(0.78, 0.66, 0.38), 0.15, 2.0, 0.95), hay)
+	for k in 5:
+		world.add_box(h + Vector3(6.6, 1.4, -7.5 + k * 1.35), Vector3(0.75, 1.4, 0.6), Vector3.ZERO, 0.8)
+	var silage: Array[Transform3D] = []
+	for k in 4:
+		var q := h + Vector3(-12.0 - (k % 2) * 1.6, 0, 13.0 + (k / 2) * 1.7)
+		q.y = ground.call(q.x, q.z) + 0.75
+		silage.append(Transform3D(lying, q))
+		world.add_box(q, Vector3(0.75, 0.75, 0.6), Vector3.ZERO, 0.8)
+	C.scatter_multimesh(parent, bale, C.mat(Color(0.93, 0.93, 0.9), 0.35), silage)
 	C.scatter_multimesh(parent,strip,C.mat(Color("503e2c")),battens,false)
 	for z: float in [-5,5]:
 		C.box(parent,world,h+Vector3(2,0.55,z),Vector3(3.3,0.55,1.1),Vector3.ZERO,timber)
