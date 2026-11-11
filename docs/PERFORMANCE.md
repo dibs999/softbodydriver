@@ -61,6 +61,10 @@ bleiben also keine unsichtbaren Hindernisse zurück.
     seriell; daher ist das Ergebnis bitgleich zu einem Thread (Vier-Auto-Probe: gleicher
     Positions-Hash mit 1–4 Threads, 335 → 234 ms CPU je simulierter Sekunde auf 4 vCPUs; auf
     einer VM, deren Kerne Godot ohnehin auslastet, ist der Gewinn im Spiel kaum messbar).
+    Die Worker übernehmen je Auftrag das SSE-Steuerwort (Denormal-/Rundungsmodus) des
+    aufrufenden Threads: Godots Hauptthread rechnet mit einem anderen Modus als frisch
+    gestartete Threads, und mit zwei Workern fuhr der Offroad-4x4 im Test sonst eine andere,
+    bei Wegpunkt 300 hängenbleibende Linie.
   * Die Physik gibt die Weltsperre nach dem laufenden Schritt an einen wartenden Hauptthread
     ab, statt erst 16 Schritte (auf einem langsamen Laptop ~15 ms) fertigzurechnen.
   * Skripte lasen Tür-, Leuchten-, Scheiben-, Stoßfänger- und Klappenzustände und die

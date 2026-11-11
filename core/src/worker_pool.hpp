@@ -45,6 +45,7 @@ private:
     void (*fn_)(void*, std::size_t) = nullptr;
     void* ctx_ = nullptr;
     std::size_t n_ = 0;
+    unsigned int fpControl_ = 0;   ///< Caller's SSE control word (denormal / rounding mode) for the job.
     std::atomic<std::size_t> next_{0};
     std::atomic<std::size_t> acks_{0};
     std::atomic<std::uint64_t> generation_{0};

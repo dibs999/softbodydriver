@@ -6,6 +6,7 @@
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
 #include <immintrin.h>
 #define SB_PAUSE() _mm_pause()
+#define SB_HAS_CSR 1
 #else
 #define SB_PAUSE() std::this_thread::yield()
 #endif
@@ -56,6 +57,11 @@ void WorkerPool::work() {
 
 void WorkerPool::dispatch(std::size_t n) {
     n_ = n;
+#ifdef SB_HAS_CSR
+    // Workers compute exactly like the calling thread: a host may run its threads with
+    // flush-to-zero / denormals-are-zero, which changes results in the last bits.
+    fpControl_ = _mm_getcsr() & ~0x3Fu;   // control bits only, not the sticky exception flags
+#endif
     next_.store(0, std::memory_order_relaxed);
     acks_.store(0, std::memory_order_relaxed);
     generation_.fetch_add(1, std::memory_order_release);
@@ -86,6 +92,9 @@ void WorkerPool::loop() {
         }
         seen = now;
         if (stop_) return;
+#ifdef SB_HAS_CSR
+        if ((_mm_getcsr() & ~0x3Fu) != fpControl_) _mm_setcsr(fpControl_);
+#endif
         work();
         acks_.fetch_add(1, std::memory_order_release);
     }
