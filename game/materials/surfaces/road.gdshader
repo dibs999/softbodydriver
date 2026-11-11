@@ -110,7 +110,8 @@ void fragment() {
 		float has_hole = step(0.93, hash(pc + 7.0)) * (1.0 - shoulder);
 		puddle = (1.0 - smoothstep(hole_r * 0.7, hole_r, hd)) * has_hole;
 		float rim = smoothstep(hole_r * 0.8, hole_r, hd) * (1.0 - smoothstep(hole_r, hole_r * 1.3, hd)) * has_hole;
-		base = mix(base, base * 0.55, puddle);
+		// Dry, a pothole is a shallow shadowed hollow; it only turns dark once water stands in it.
+		base = mix(base, base * mix(0.8, 0.55, smoothstep(0.3, 0.7, road_wetness)), puddle);
 		base = mix(base, base * 1.15, rim * 0.5);
 	} else {
 		float u = UV.x;

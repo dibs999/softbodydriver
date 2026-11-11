@@ -21,6 +21,7 @@ var _trim: Array[Transform3D] = []
 var _doors: Array[Transform3D] = []
 var _stone: Array[Transform3D] = []
 var _chimneys: Array[Transform3D] = []
+var _gutters: Array[Transform3D] = []
 var _barn_walls: Array[Transform3D] = []
 var _barn_gables: Array[Transform3D] = []
 var _barn_doors: Array[Transform3D] = []
@@ -65,6 +66,20 @@ func house(world: SBWorld, ground: Vector3, yaw: float, length: float, width: fl
 		var tilt := Basis(Vector3.RIGHT, sgn * pitch)
 		var centre := Vector3(0, h + rise * 0.5, sgn * width * 0.25) + tilt * Vector3(0, 0.12, sgn * 0.22)
 		_roofs[roof].append(Transform3D((basis * tilt).scaled_local(Vector3(length + 0.7, 0.16, slope)), at.call(centre)))
+	# Zinc gutters along both eaves, downpipes at the ends of the front.
+	var eave := width * 0.5 / cos(pitch) + 0.45
+	for sgn: float in [-1.0, 1.0]:
+		var tilt := Basis(Vector3.RIGHT, sgn * pitch)
+		var centre := Vector3(0, h + rise * 0.5, sgn * width * 0.25) + tilt * Vector3(0, 0.12, sgn * 0.22)
+		var edge: Vector3 = centre + tilt * Vector3(0, -0.02, sgn * eave * 0.5)
+		_gutters.append(Transform3D(basis.scaled_local(Vector3(length + 0.6, 0.12, 0.13)), at.call(edge + Vector3(0, -0.12, sgn * 0.02))))
+		if not barn:
+			for end: float in [-1.0, 1.0]:
+				var top_y: float = edge.y - 0.12
+				var x := end * (length * 0.5 - 0.25)
+				var z := sgn * (width * 0.5 + 0.12)
+				_gutters.append(Transform3D(basis.scaled_local(Vector3(0.09, top_y, 0.09)), at.call(Vector3(x, top_y * 0.5, z))))
+				_gutters.append(Transform3D(basis.scaled_local(Vector3(0.09, 0.09, absf(edge.z - z) + 0.05)), at.call(Vector3(x, top_y, (edge.z + z) * 0.5))))
 	if barn:
 		# Big doors on both long sides, nothing else.
 		for sgn: float in [-1.0, 1.0]:
@@ -113,7 +128,11 @@ func build(parent: Node3D) -> void:
 		C.scatter_multimesh(parent, unit, plaster, _walls[i])
 		C.scatter_multimesh(parent, prism, plaster, _gables[i])
 	for i in ROOFS.size():
-		C.scatter_multimesh(parent, unit, C.noise_mat(ROOFS[i], 0.12, 4.0, 0.85), _roofs[i])
+		var tiles := ShaderMaterial.new()
+		tiles.shader = preload("res://materials/roof_tiles.gdshader")
+		tiles.set_shader_parameter("base_color", ROOFS[i])
+		C.scatter_multimesh(parent, unit, tiles, _roofs[i])
+	C.scatter_multimesh(parent, unit, C.mat(Color(0.58, 0.60, 0.61), 0.45, 0.55), _gutters, false)
 	for i in SHUTTERS.size():
 		C.scatter_multimesh(parent, unit, C.mat(SHUTTERS[i], 0.7), _shutters[i], false)
 	C.scatter_multimesh(parent, unit, C.mat(Color(0.10, 0.14, 0.17), 0.08, 0.4), _glass, false)
