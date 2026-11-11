@@ -42,6 +42,9 @@ private:
     std::uint32_t frameOrigin_ = 0, frameX_ = 0, frameY_ = 0;
     Basis restInverse_;
     Vector3 restOrigin_;
+    std::int64_t subOrigin_ = -1, subX_ = -1, subY_ = -1;
+    Basis subRestInverse_;
+    Vector3 subRestOrigin_;
     std::vector<sb::Vec3> spawn_;
     Vector3 spawnFrameOrigin_;
     double damage_ = 0.0;

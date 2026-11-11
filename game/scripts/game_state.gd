@@ -379,6 +379,21 @@ func car_info(path: String) -> Dictionary:
 
 
 static var _prop_mats := {}
+static var _beacon_tex: ImageTexture
+## Red and white stripes at 45 degrees, ~10 cm wide, across the panel face (triplanar on the
+## panel's own axes: z across, y up).
+static func _beacon_texture() -> ImageTexture:
+	if _beacon_tex: return _beacon_tex
+	var img := Image.create(128, 128, false, Image.FORMAT_RGB8)
+	for y in 128:
+		for x in 128:
+			var band := int(floor((x + y) / 32.0)) % 2
+			img.set_pixel(x, y, Color(0.80, 0.07, 0.06) if band == 0 else Color(0.95, 0.95, 0.94))
+	img.generate_mipmaps()
+	_beacon_tex = ImageTexture.create_from_image(img)
+	return _beacon_tex
+
+
 static func _prop_mat(key: String, color: Color, rough := 0.6, metallic := 0.0) -> StandardMaterial3D:
 	if not _prop_mats.has(key):
 		var m := StandardMaterial3D.new()
@@ -435,6 +450,48 @@ func spawn_prop(world: SBWorld, kind: String, xform: Transform3D) -> SBProp:
 		cap.bottom_radius = 0.06
 		cap.height = 0.04
 		_prop_part(prop, cap, _prop_mat("barrier_cap", Color(0.15, 0.15, 0.16), 0.6), 0.81)
+		return prop
+	if kind == "beacon":
+		# Leitbake (sign 605): black rubber foot with a socket; the panel (red/white diagonal stripes
+		# on both faces, retroreflective) is a separate part that follows its own frame ("Sub").
+		var rubber := _prop_mat("beacon_foot", Color(0.07, 0.07, 0.07), 0.9)
+		var foot := BoxMesh.new()
+		foot.size = Vector3(0.40, 0.06, 0.80)
+		var fm := MeshInstance3D.new()
+		fm.mesh = foot
+		fm.material_override = rubber
+		fm.position = Vector3(0, 0.04, 0)
+		prop.add_child(fm)
+		var socket := BoxMesh.new()
+		socket.size = Vector3(0.10, 0.07, 0.30)
+		var sm := MeshInstance3D.new()
+		sm.mesh = socket
+		sm.material_override = rubber
+		sm.position = Vector3(0, 0.10, 0)
+		prop.add_child(sm)
+		var sub := Node3D.new()
+		sub.name = "Sub"
+		prop.add_child(sub)
+		var panel := BoxMesh.new()
+		panel.size = Vector3(0.045, 1.0, 0.25)
+		var pm := MeshInstance3D.new()
+		pm.mesh = panel
+		var face := StandardMaterial3D.new()
+		face.albedo_texture = _beacon_texture()
+		face.roughness = 0.35
+		face.uv1_triplanar = true
+		face.uv1_world_triplanar = false
+		face.uv1_scale = Vector3(2.5, 2.5, 2.5)   # 10 cm bands
+		pm.material_override = face
+		pm.position = Vector3(0, 0.68, 0)
+		sub.add_child(pm)
+		var stem := BoxMesh.new()
+		stem.size = Vector3(0.035, 0.12, 0.08)
+		var st := MeshInstance3D.new()
+		st.mesh = stem
+		st.material_override = rubber
+		st.position = Vector3(0, 0.13, 0)
+		sub.add_child(st)
 		return prop
 	if kind == "bin":
 		# 240 l wheelie bin: anthracite tapered body, colour-coded lid (residual, paper, bio,

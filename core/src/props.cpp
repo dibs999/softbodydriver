@@ -26,9 +26,11 @@ PropBuild buildCone() {
     b.setName("cone");
     std::vector<std::uint32_t> base, mid;
     NodeParams heavy;  // rubber base
-    heavy.mass = 0.7875; heavy.friction = 0.55; heavy.group = "prop";
+    // PVC slides: with rubber-like friction a cone squashed between a tyre and the bumper braked
+    // the car like a chock (up to 19 km/h lost in a strike at the tyre's inner edge).
+    heavy.mass = 0.7875; heavy.friction = 0.45; heavy.group = "prop";
     NodeParams light = heavy;
-    light.mass = 0.30; light.friction = 0.4;
+    light.mass = 0.30; light.friction = 0.2;
     const real hb = 0.19;
     for (int i = 0; i < 4; ++i) {
         const real sx = (i & 1) ? hb : -hb, sz = (i & 2) ? hb : -hb;
@@ -61,7 +63,7 @@ PropBuild buildCone() {
     pvc.boundSpring = 6.0e4;
     connectAll(b, all, pvc);
     ColTriParams skin;
-    skin.friction = 0.35;
+    skin.friction = 0.2;
     skin.dragCoef = 0.6;
     const Vec3 c{0, 0.30, 0};
     // Base plate (both faces: it is what lies on the road), sides, top.
@@ -342,11 +344,82 @@ PropBuild buildBin() {
     return out;
 }
 
+PropBuild buildBeacon() {
+    PropBuild out;
+    out.kind = PropKind::Beacon;
+    SoftBody& b = out.body;
+    b.setName("beacon");
+    // Recycled-rubber foot: a low slab, 28 kg, long axis along z.
+    NodeParams foot;
+    foot.mass = 3.5;
+    foot.friction = 0.8;
+    foot.group = "prop";
+    std::vector<std::uint32_t> f;
+    for (int layer = 0; layer < 2; ++layer)
+        for (int i = 0; i < 4; ++i) {
+            const real x = (i & 1) ? 0.20 : -0.20, z = (i & 2) ? 0.40 : -0.40;
+            f.push_back(b.addNode("f" + std::to_string(layer * 4 + i), {x, layer ? 0.07 : 0.01, z}, foot));
+        }
+    BeamParams rubber;
+    rubber.spring = 2.5e5;
+    rubber.damp = 400.0;
+    connectAll(b, f, rubber);
+    // Panel: polyethylene, 1.0 m x 0.25 m, a few centimetres thick, on a short stem in the foot.
+    // Four nodes at the bottom edge and four at the top edge give it thickness and bending.
+    NodeParams panel;
+    panel.mass = 0.38;
+    panel.friction = 0.2;   // polyethylene slides: wedged under a car it must not act as a brake shoe
+    panel.group = "prop";
+    std::vector<std::uint32_t> p;
+    for (int layer = 0; layer < 2; ++layer)
+        for (int i = 0; i < 4; ++i) {
+            const real x = (i & 1) ? 0.03 : -0.03, z = (i & 2) ? 0.125 : -0.125;
+            p.push_back(b.addNode("p" + std::to_string(layer * 4 + i), {x, layer ? 1.18 : 0.18, z}, panel));
+        }
+    BeamParams pe;
+    pe.type = BeamType::Anisotropic;
+    pe.spring = 2.0e4;
+    pe.springExpansion = 2.0e4;
+    pe.damp = 25.0;
+    pe.longBound = 0.10;
+    pe.boundSpring = 8.0e4;
+    connectAll(b, p, pe);
+    // Stem: plugged into the foot; it lets go under a strike instead of dragging the foot under a
+    // wheel (the earlier fixed versions jammed under the front tyre and were dragged along).
+    BeamParams stem;
+    stem.spring = 6.0e4;
+    stem.damp = 120.0;
+    stem.strength = 700.0;   // just plugged in: a bumper pushes it out instead of shoving the foot
+    for (int i = 0; i < 4; ++i)
+        for (int j = 4; j < 8; ++j)
+            b.addBeam(p[static_cast<std::size_t>(i)], f[static_cast<std::size_t>(j)], stem);
+    ColTriParams skin;
+    skin.friction = 0.25;
+    skin.dragCoef = 1.1;
+    const int faces[6][4] = {{0, 1, 3, 2}, {4, 6, 7, 5}, {0, 4, 5, 1}, {2, 3, 7, 6}, {0, 2, 6, 4}, {1, 5, 7, 3}};
+    for (const auto& q : faces) {
+        outwardTri(b, f[static_cast<std::size_t>(q[0])], f[static_cast<std::size_t>(q[1])], f[static_cast<std::size_t>(q[2])], {0, 0.04, 0}, skin);
+        outwardTri(b, f[static_cast<std::size_t>(q[0])], f[static_cast<std::size_t>(q[2])], f[static_cast<std::size_t>(q[3])], {0, 0.04, 0}, skin);
+        outwardTri(b, p[static_cast<std::size_t>(q[0])], p[static_cast<std::size_t>(q[1])], p[static_cast<std::size_t>(q[2])], {0, 0.68, 0}, skin);
+        outwardTri(b, p[static_cast<std::size_t>(q[0])], p[static_cast<std::size_t>(q[2])], p[static_cast<std::size_t>(q[3])], {0, 0.68, 0}, skin);
+    }
+    // Main frame on the foot, the panel as a separate part.
+    out.frameOrigin = f[0];
+    out.frameX = f[1];
+    out.frameY = f[4];
+    out.subFrameOrigin = p[0];
+    out.subFrameX = p[1];
+    out.subFrameY = p[4];
+    out.restPositions = b.positions();
+    return out;
+}
+
 }  // namespace
 
 PropBuild buildProp(PropKind kind) {
     PropBuild out = kind == PropKind::Log ? buildLog() : kind == PropKind::Barrier ? buildBarrier()
-                  : kind == PropKind::Barrel ? buildBarrel() : kind == PropKind::Bin ? buildBin() : buildCone();
+                  : kind == PropKind::Barrel ? buildBarrel() : kind == PropKind::Bin ? buildBin()
+                  : kind == PropKind::Beacon ? buildBeacon() : buildCone();
     out.body.setSleepEnabled(true);
     // Flat-bottomed props only: on a round log the lower faces are the ones a tyre climbs over.
     out.body.setDownFacesPassive(kind != PropKind::Log);
@@ -359,6 +432,7 @@ PropBuild buildProp(PropKind kind) {
         case PropKind::Barrier: out.body.setContactThickness(0.10); break;
         case PropKind::Log: out.body.setContactThickness(0.07); break;
         case PropKind::Bin: out.body.setContactThickness(0.12); break;
+        case PropKind::Beacon: out.body.setContactThickness(0.03); break;   // thin foot and panel
     }
     return out;
 }
@@ -369,6 +443,7 @@ PropKind propKindFromString(const std::string& name) {
     if (name == "barrier") return PropKind::Barrier;
     if (name == "log") return PropKind::Log;
     if (name == "bin") return PropKind::Bin;
+    if (name == "beacon") return PropKind::Beacon;
     throw std::invalid_argument("unknown prop kind '" + name + "'");
 }
 
