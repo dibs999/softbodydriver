@@ -1046,11 +1046,11 @@ static func _hill_village(world: SBWorld, parent: Node3D, road: PackedVector3Arr
 	var cs: Vector3 = f0[1]
 	var cyaw := atan2(-cs.z, cs.x)
 	var nave := road[VILLAGE_AT] - cs * (half_w + 26.0)
-	village.house(world, floor_at.call(nave, cyaw, 18.0, 9.5), cyaw, 18.0, 9.5, 2, rng)
 	var tower := road[VILLAGE_AT] - cs * (half_w + 14.0)
 	tower.y = height.call(tower.x, tower.z) - 0.5
 	var plaster := C.noise_mat(Color(0.90, 0.87, 0.80), 0.05, 2.5, 0.92)
 	var slate := C.noise_mat(Color(0.26, 0.26, 0.29), 0.1, 3.0, 0.8)
+	_church_nave(parent, world, floor_at.call(nave, cyaw, 18.0, 9.5), cyaw, plaster, slate)
 	C.box(parent, world, tower + Vector3.UP * 11.5, Vector3(2.6, 11.5, 2.6), Vector3(0, cyaw, 0), plaster, 0.8)
 	var spire := MeshInstance3D.new()
 	var cone := CylinderMesh.new()
@@ -1227,6 +1227,100 @@ static func proving_shelters() -> Array[Dictionary]:
 	for x: float in [32, 47, 62]:
 		shelters.append({"center": Vector3(x, 1.455, -65), "half_extents": Vector3(5.8, 1.455, 3.3)})
 	return shelters
+
+
+## Village church nave (18 x 9.5 m, long axis along the yaw's x): a tall single space on a stone
+## plinth, steep slate roof, plastered gables, four tall round-arched windows a side with
+## buttresses between them, and a semicircular apse with a half-cone roof at the far end (-x; the
+## tower stands against the +x end, towards the road). It used to be a two-storey house with
+## shutters.
+static func _church_nave(parent: Node3D, world: SBWorld, ground: Vector3, yaw: float, plaster: Material, slate: Material) -> void:
+	const L := 18.0
+	const W := 9.5
+	const H := 8.0
+	var root := Node3D.new()
+	root.position = ground
+	root.rotation.y = yaw
+	parent.add_child(root)
+	var stone := C.noise_mat(Color(0.55, 0.52, 0.47), 0.12, 3.0, 0.9)
+	var glass := C.mat(Color(0.16, 0.19, 0.24), 0.15, 0.4)
+	var sandstone := C.noise_mat(Color(0.74, 0.66, 0.55), 0.08, 3.0, 0.85)
+	var add := func(mesh: Mesh, at: Vector3, mat: Material, rot := Vector3.ZERO) -> void:
+		var mi := MeshInstance3D.new()
+		mi.mesh = mesh
+		mi.material_override = mat
+		mi.position = at
+		mi.rotation = rot
+		root.add_child(mi)
+	var box := func(size: Vector3) -> BoxMesh:
+		var b := BoxMesh.new()
+		b.size = size
+		return b
+	if world:
+		world.add_box(ground + Basis(Vector3.UP, yaw) * Vector3(0, H * 0.5, 0), Vector3(L, H, W) * 0.5, Vector3(0, yaw, 0), 0.8)
+	add.call(box.call(Vector3(L + 0.3, 0.9, W + 0.3)), Vector3(0, 0.45, 0), stone)      # plinth
+	add.call(box.call(Vector3(L, H, W)), Vector3(0, H * 0.5, 0), plaster)               # walls
+	add.call(box.call(Vector3(L + 0.25, 0.3, W + 0.25)), Vector3(0, H - 0.15, 0), plaster)   # eaves cornice
+	# Steep roof (50 deg) and the two gables.
+	var pitch := deg_to_rad(50.0)
+	var rise := W * 0.5 * tan(pitch)
+	var slope := W * 0.5 / cos(pitch) + 0.5
+	for sgn: float in [-1.0, 1.0]:
+		var tilt := Basis(Vector3.RIGHT, sgn * pitch)
+		var centre := Vector3(0, H + rise * 0.5, sgn * W * 0.25) + tilt * Vector3(0, 0.14, sgn * 0.25)
+		var slab := MeshInstance3D.new()
+		slab.mesh = box.call(Vector3(L + 0.6, 0.18, slope))
+		slab.material_override = slate
+		slab.transform = Transform3D(tilt, centre)
+		root.add_child(slab)
+	var prism := PrismMesh.new()
+	prism.size = Vector3(W, rise, 0.3)
+	for end: float in [-1.0, 1.0]:
+		add.call(prism, Vector3(end * (L * 0.5 - 0.15), H + rise * 0.5, 0), plaster, Vector3(0, PI * 0.5, 0))
+	# Round-arched windows (sandstone surround, dark leaded glass) and buttresses between them.
+	var arch := CylinderMesh.new()
+	arch.top_radius = 0.6
+	arch.bottom_radius = 0.6
+	arch.height = 0.12
+	arch.radial_segments = 16
+	var arch_frame := CylinderMesh.new()
+	arch_frame.top_radius = 0.78
+	arch_frame.bottom_radius = 0.78
+	arch_frame.height = 0.1
+	arch_frame.radial_segments = 16
+	for side: float in [-1.0, 1.0]:
+		var z := side * (W * 0.5 + 0.02)
+		for k in 4:
+			var x := -L * 0.5 + 3.0 + k * 4.0
+			add.call(box.call(Vector3(1.56, 3.2, 0.1)), Vector3(x, 3.9, z), sandstone)
+			add.call(arch_frame, Vector3(x, 5.5, z), sandstone, Vector3(PI * 0.5, 0, 0))
+			add.call(box.call(Vector3(1.2, 3.0, 0.14)), Vector3(x, 3.9, z + side * 0.02), glass)
+			add.call(arch, Vector3(x, 5.5, z + side * 0.02), glass, Vector3(PI * 0.5, 0, 0))
+			add.call(box.call(Vector3(1.4, 0.16, 0.3)), Vector3(x, 2.3, z + side * 0.1), sandstone)   # sill
+		for k in 5:
+			var x := -L * 0.5 + 1.0 + k * 4.0
+			if k == 0: x = -L * 0.5 + 0.6
+			add.call(box.call(Vector3(0.7, 5.2, 0.7)), Vector3(x, 2.6, side * (W * 0.5 + 0.35)), stone)     # buttress
+			add.call(box.call(Vector3(0.7, 0.9, 0.5)), Vector3(x, 5.5, side * (W * 0.5 + 0.25)), stone, Vector3(side * -0.5, 0, 0))   # sloped cap
+	# Apse: a half cylinder at the east end with a half-cone roof.
+	var apse := CylinderMesh.new()
+	apse.top_radius = 3.6
+	apse.bottom_radius = 3.6
+	apse.height = 6.4
+	apse.radial_segments = 20
+	add.call(apse, Vector3(-L * 0.5, 3.2, 0), plaster)
+	var apse_roof := CylinderMesh.new()
+	apse_roof.top_radius = 0.05
+	apse_roof.bottom_radius = 3.9
+	apse_roof.height = 3.0
+	apse_roof.radial_segments = 20
+	add.call(apse_roof, Vector3(-L * 0.5, 6.4 + 1.5, 0), slate)
+	if world:
+		world.add_box(ground + Basis(Vector3.UP, yaw) * Vector3(-L * 0.5 - 1.8, 3.2, 0), Vector3(1.8, 3.2, 3.0), Vector3(0, yaw, 0), 0.8)
+	# Two narrow round-arched windows in the apse.
+	for a: float in [-0.6, 0.6]:
+		var at := Vector3(-L * 0.5 - cos(a) * 3.62, 3.8, sin(a) * 3.62)
+		add.call(box.call(Vector3(0.1, 2.4, 0.8)), at, glass, Vector3(0, a, 0))
 
 
 ## Village church tower: stone plinth, slit windows, clock faces, louvred belfry openings, cornice
