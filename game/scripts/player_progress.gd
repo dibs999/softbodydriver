@@ -9,7 +9,8 @@ var read_only := false
 var _data: Dictionary = _defaults()
 
 static func _defaults() -> Dictionary:
-	return {"version": VERSION, "milestones": {}, "braking": {}, "selection": {"last_car": "", "last_map": ""}}
+	return {"version": VERSION, "milestones": {}, "braking": {}, "selection": {"last_car": "", "last_map": ""},
+		"career": {"money": 2000.0, "earned": 0.0, "spent": 0.0}}
 
 static func _number(value: Variant) -> bool:
 	return (value is float or value is int) and is_finite(float(value))
@@ -20,6 +21,12 @@ static func _valid(data: Variant) -> bool:
 	if not data.get("milestones") is Dictionary or not data.get("braking") is Dictionary or not data.get("selection") is Dictionary: return false
 	for value in data["milestones"].values():
 		if not value is bool: return false
+	# Career section (added later): optional, but when present it must hold finite numbers.
+	if data.has("career"):
+		var career: Variant = data["career"]
+		if not career is Dictionary: return false
+		for key in ["money", "earned", "spent"]:
+			if not _number(career.get(key, 0.0)): return false
 	var selection: Dictionary = data["selection"]
 	if not selection.get("last_car") is String or not selection.get("last_map") is String: return false
 	for car in data["braking"].values():
@@ -155,4 +162,33 @@ func reset_lesson() -> bool:
 	if read_only: return false
 	var previous := _data.duplicate(true)
 	_data["milestones"] = {}
+	return _commit(previous)
+
+
+# ------------------------------------------------------------------------------- career
+func _career() -> Dictionary:
+	if not _data.has("career"):
+		_data["career"] = {"money": 2000.0, "earned": 0.0, "spent": 0.0}
+	return _data["career"]
+
+func get_money() -> float:
+	return float(_career().get("money", 0.0))
+
+## Credit (positive) or debit (negative) the career balance. A debit larger than the balance is
+## refused and changes nothing; so is any change while the profile cannot be saved.
+func change_money(amount: float) -> bool:
+	if read_only or not is_finite(amount): return false
+	var career := _career()
+	var money := float(career.get("money", 0.0))
+	if amount < 0.0 and money + amount < -0.005: return false
+	var previous := _data.duplicate(true)
+	career["money"] = money + amount
+	if amount > 0.0: career["earned"] = float(career.get("earned", 0.0)) + amount
+	else: career["spent"] = float(career.get("spent", 0.0)) - amount
+	return _commit(previous)
+
+func reset_career() -> bool:
+	if read_only: return false
+	var previous := _data.duplicate(true)
+	_data["career"] = {"money": 2000.0, "earned": 0.0, "spent": 0.0}
 	return _commit(previous)

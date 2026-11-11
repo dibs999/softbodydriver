@@ -164,6 +164,11 @@ func _draw() -> void:
 		var y := 264.0
 		draw_style_box(_chip_style, Rect2(canvas.x - 16 - w, y, w, 24))
 		_right(Vector2(canvas.x - 27, y + 16), status, 12, MUTED)
+	if Game.settings.get("career", false):
+		var money := "Konto  " + preload("res://scripts/career.gd").money_text(Game.progress.get_money())
+		var mw := _width(money, 12) + 22
+		draw_style_box(_chip_style, Rect2(canvas.x - 16 - mw, 294.0, mw, 24))
+		_right(Vector2(canvas.x - 27, 310.0), money, 12, TEXT)
 	if not cockpit or not in_dash_instruments:
 		_gauge(Vector2(canvas.x - 152, canvas.y - 146))
 	_damage_app(Vector2(16, canvas.y - 276))

@@ -382,7 +382,8 @@ func _build_settings(root: Control) -> void:
 	graphics.add_child(Game.make_graphics_options())
 	var driving: VBoxContainer = page.call("Fahrhilfen")
 	for key in [["tcs", "Traktionskontrolle"], ["abs", "ABS"], ["automatic", "Automatikgetriebe"],
-			["steering_assist", "Lenkhilfe (glättet Tastatur und begrenzt Lenkeinschlag bei Tempo)"], ["traffic", "KI-Verkehr"]]:
+			["steering_assist", "Lenkhilfe (glättet Tastatur und begrenzt Lenkeinschlag bei Tempo)"], ["traffic", "KI-Verkehr"],
+			["career", "Karriere: Aktivitäten bringen Geld, Tanken und Reparaturen kosten"]]:
 		driving.add_child(Game.make_driving_option(key[0], key[1]))
 	driving.add_child(Game.make_driving_help_option())
 	var audio: VBoxContainer = page.call("Audio")
@@ -436,6 +437,8 @@ func _on_car_selected(i: int) -> void:
 		var tally: Array[int] = preload("res://scripts/driving_activity.gd").medal_tally()
 		if tally[0] + tally[1] + tally[2] > 0:
 			progress_info.text += "\nMedaillen: %d Gold · %d Silber · %d Bronze" % [tally[2], tally[1], tally[0]]
+		if Game.settings.get("career", false):
+			progress_info.text += "\nKarriere · Kontostand %s" % preload("res://scripts/career.gd").money_text(Game.progress.get_money())
 		if Game.progress.read_only:
 			progress_info.text = "Fortschritt kann nicht gespeichert werden. Das vorhandene Profil bleibt erhalten."
 	car_name.text = c["name"]

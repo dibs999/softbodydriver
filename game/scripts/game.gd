@@ -1,5 +1,6 @@
 extends Node3D
 ## Gameplay scene: map, vehicles (player + AI traffic), cameras, HUD, audio, input and pause menu.
+const Career := preload("res://scripts/career.gd")
 const UITheme := preload("res://scripts/ui_theme.gd")
 
 const MapBuilder := preload("res://scripts/map_builder.gd")
@@ -195,7 +196,23 @@ func _ready() -> void:
 	world.paused = false
 
 
+## Career: charge `amount` for `what`; false (with a message) if the balance does not cover it.
+## Outside the career everything is free.
+func career_charge(amount: float, what: String) -> bool:
+	if not Game.settings.get("career", false) or amount <= 0.0:
+		return true
+	if Game.progress.change_money(-amount):
+		hud.toast("%s: −%s · Konto %s" % [what, Career.money_text(amount), Career.money_text(Game.progress.get_money())])
+		return true
+	hud.toast("%s kostet %s · Konto %s reicht nicht" % [what, Career.money_text(amount), Career.money_text(Game.progress.get_money())])
+	return false
+
+
 func _on_activity_completed(result: Dictionary) -> void:
+	if Game.settings.get("career", false):
+		var pay := Career.payout(result)
+		if pay > 0.0 and Game.progress.change_money(pay):
+			hud.toast("Verdient: +%s · Konto %s" % [Career.money_text(pay), Career.money_text(Game.progress.get_money())])
 	if int(result.get("mode", 0)) == 1:
 		if not Game.progress.complete_milestone("time_trial_complete"):
 			hud.toast("Zeitfahren beendet · Fortschritt konnte nicht gespeichert werden")
@@ -515,6 +532,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		cam.snap()
 		hud.toast("Fahrzeug zurückgesetzt")
 	elif event.is_action_pressed("repair_vehicle"):
+		# In the career an instant repair is towing plus the workshop bill.
+		var bill := Career.repair_cost(player.get_telemetry())
+		if Game.settings.get("career", false) and bill > 0.0 and not career_charge(bill + Career.RECOVERY_FEE, "Abschleppen und Reparatur"):
+			return
 		_reverse_hold = 0.0
 		lesson.notify_interruption("Sofortreparatur verwendet")
 		activity.cancel("Lauf abgebrochen: Reparatur")
