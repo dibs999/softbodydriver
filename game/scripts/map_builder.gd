@@ -517,9 +517,15 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 		elev = e2
 	for i in n_road:
 		road[i].y = elev[i]
-	# Carve the road into the terrain.
+	# District road across the valley: a T-junction past Lindenau, another between the Waldhof and
+	# the lookout, so the map is a small network instead of a single loop.
+	var chord := _valley_road(road, CHORD_FROM, CHORD_TO, heights, nx, nz, ox, oz, cell)
+	var net := road.duplicate()
+	net.append_array(chord)
+	# Carve the roads into the terrain.
 	var half_w := 4.5
 	C.carve_path(heights, nx, nz, ox, oz, cell, road, half_w + 0.75, 13.0, 0.05)
+	C.carve_path(heights, nx, nz, ox, oz, cell, chord, CHORD_HALF_W + 0.75, 11.0, 0.05, false)
 	world.add_heightfield(ox, oz, cell, nx, nz, heights, 1.0)
 	var grass := C.terrain_material("grass", 3.4)
 	var colors := PackedColorArray()
@@ -571,6 +577,10 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 		return C.sample(heights, nx, nz, ox, oz, cell, x, z)
 	parent.add_child(C.road_mesh(road, half_w, C.road_material(2, half_w * 2.0, 12.0, "rural"), true, 0.05, 12.0, ground_height))
 	parent.add_child(C.verge_mesh(road, half_w, 1.3, C.verge_material(1.3), true, 0.05, 12.0, ground_height))
+	# The district road sits a few millimetres below the main road, so the main road's surface and
+	# edge line run on across the junction mouth as they do on a priority road.
+	parent.add_child(C.road_mesh(chord, CHORD_HALF_W, C.road_material(2, CHORD_HALF_W * 2.0, 12.0, "rural"), false, 0.044, 12.0, ground_height))
+	parent.add_child(C.verge_mesh(chord, CHORD_HALF_W, 1.1, C.verge_material(1.1), false, 0.044, 12.0, ground_height))
 	var markers: Array[Transform3D] = []
 	for i in range(3, n_road, 8):
 		var heading := (road[(i + 1) % n_road] - road[i - 1]).normalized()
@@ -594,6 +604,9 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 				return false
 		if Vector2(p.x - road[VILLAGE_AT].x, p.z - road[VILLAGE_AT].z).length() < 110.0:
 			return false
+		for j in range(0, chord.size(), 2):
+			if Vector2(p.x - chord[j].x, p.z - chord[j].z).length() < 9.0:
+				return false
 		return Vector2(p.x - road[0].x, p.z - road[0].z).length() > 30.0
 	R.utility_line(parent, world, road, -(half_w + 6.0), ground_height, true, 44.0, keep_clear)
 	var bale_rng := RandomNumberGenerator.new()
@@ -618,8 +631,8 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	while rocks.size() < 160:
 		var p := Vector3(rock_rng.randf_range(-620, 620), 0, rock_rng.randf_range(-620, 620))
 		var near := false
-		for j in range(0, n_road, 4):
-			if Vector2(p.x - road[j].x, p.z - road[j].z).length() < 9.5:
+		for j in range(0, net.size(), 4):
+			if Vector2(p.x - net[j].x, p.z - net[j].z).length() < 9.5:
 				near = true
 				break
 		if near or not keep_clear.call(p):
@@ -641,8 +654,8 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 		if p.distance_to(Vector2(road[12].x, road[12].z)) < 42.0 or p.distance_to(Vector2(road[VILLAGE_AT].x, road[VILLAGE_AT].z)) < 120.0:
 			continue
 		var near := false
-		for j in range(0, n_road, 6):
-			if p.distance_to(Vector2(road[j].x, road[j].z)) < 14.0:
+		for j in range(0, net.size(), 6):
+			if p.distance_to(Vector2(net[j].x, net[j].z)) < 14.0:
 				near = true
 				break
 		if near:
@@ -672,16 +685,16 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 			under.append(b)
 	# Road proximity through a coarse cell lookup, then an exact check against every road point.
 	var road_cells := {}
-	for j in n_road:
-		var rc := Vector2i(floori(road[j].x / 16.0), floori(road[j].z / 16.0))
+	for j in net.size():
+		var rc := Vector2i(floori(net[j].x / 16.0), floori(net[j].z / 16.0))
 		for dx in range(-1, 2):
 			for dz in range(-1, 2):
 				road_cells[rc + Vector2i(dx, dz)] = true
 	var near_road := func(p: Vector2, d: float) -> bool:
 		if not road_cells.has(Vector2i(floori(p.x / 16.0), floori(p.y / 16.0))):
 			return false
-		for j in n_road:
-			if p.distance_squared_to(Vector2(road[j].x, road[j].z)) < d * d:
+		for j in net.size():
+			if p.distance_squared_to(Vector2(net[j].x, net[j].z)) < d * d:
 				return true
 		return false
 	# Trees were only visual: their trunks now collide (except the few right at the verge, which
@@ -706,6 +719,20 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 			(conifers if noise.get_noise_2d(p.x * 0.7 + 400.0, p.y * 0.7) > -0.15 else broadleaf).append(q)
 			if Vector2(p.x, p.y).length() < 600.0:
 				world.add_box(q + Vector3.UP * 1.8, Vector3(0.22, 1.8, 0.22), Vector3.ZERO, 0.7)
+	# Nothing grows on the district road: the forest corridors and hedges follow the loop only.
+	var off_chord := func(list: Array[Vector3], clear: float) -> Array[Vector3]:
+		var out: Array[Vector3] = []
+		for p in list:
+			var free := true
+			for j in range(0, chord.size(), 2):
+				if Vector2(p.x - chord[j].x, p.z - chord[j].z).length() < clear:
+					free = false
+					break
+			if free: out.append(p)
+		return out
+	broadleaf = off_chord.call(broadleaf, 9.5)   # as far as the tree colliders keep off roads
+	conifers = off_chord.call(conifers, 9.5)
+	under = off_chord.call(under, CHORD_HALF_W + 3.0)
 	V.plant(parent, "broadleaf", broadleaf, 31, 0.75, 1.25, false)
 	V.plant(parent, "conifer", conifers, 32, 0.6, 1.0, false)
 	V.plant(parent, "bush", under, 35, 0.7, 1.6, false)
@@ -719,8 +746,20 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 			if p.distance_to(road[0]) < 20.0:
 				continue   # keep the start and the service bay beside it clear
 			hedges.append(p)
-	V.plant(parent, "bush", hedges, 33, 0.8, 2.0, false)
-	V.roadside_grass(parent, road, true, half_w + 0.7, half_w + 16.0, 6.0, 34, ground_height)
+	V.plant(parent, "bush", off_chord.call(hedges, CHORD_HALF_W + 3.0), 33, 0.8, 2.0, false)
+	V.roadside_grass(parent, road, true, half_w + 0.7, half_w + 16.0, 6.0, 34, ground_height,
+		func(p: Vector3) -> bool:
+			for j in range(0, mini(chord.size(), 12)):
+				if Vector2(p.x - chord[j].x, p.z - chord[j].z).length() < CHORD_HALF_W + 9.0: return true
+			for j in range(maxi(0, chord.size() - 12), chord.size()):
+				if Vector2(p.x - chord[j].x, p.z - chord[j].z).length() < CHORD_HALF_W + 9.0: return true
+			return false)
+	V.roadside_grass(parent, chord, false, CHORD_HALF_W + 0.6, CHORD_HALF_W + 14.0, 6.0, 36, ground_height,
+		func(p: Vector3) -> bool:
+			for j in range(0, n_road, 3):
+				if Vector2(p.x - road[j].x, p.z - road[j].z).length() < half_w + 1.5: return true
+			return false)
+	_junction_dressing(parent, world, road, chord, half_w, ground_height)
 	_hill_landmarks(world, parent, road, ground_height)
 	_hill_village(world, parent, road, half_w, ground_height)
 	# Roadworks before Lindenau: a cone line along the right edge and two drums at its end.
@@ -749,7 +788,7 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	var s1 := road[1]
 	return {"props": props.duplicate(), "spawns": [car_xform(s0, s1 - s0), car_xform(road[n_road - 6], road[n_road - 5] - road[n_road - 6])],
 		"waypoints": road, "speeds": speeds,
-		"map_paths": [C.closed_route(road), lookout],
+		"map_paths": [C.closed_route(road), chord, lookout],
 		"map_places": [{"name": "Waldhof", "position": road[12]}, {"name": "Lindenau", "position": road[VILLAGE_AT]}, {"name": "Aussichtspunkt", "position": lookout[4]},
 			{"name": "Bergweide", "position": road[194]}, {"name": "Talblick", "position": road[410]}],
 		"ai_spawns": [car_xform(road[144], road[145] - road[144]), car_xform(road[320], road[321] - road[320])],
@@ -758,6 +797,173 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 
 
 const VILLAGE_AT := 300
+const CHORD_FROM := 335
+const CHORD_TO := 45
+const CHORD_HALF_W := 3.25   # 6.5 m district road
+
+
+## District road between two loop points: leaves each at right angles towards the valley, a gentle
+## S through the middle, elevation from the terrain smoothed for drivable grades and pinned to the
+## loop's at both junctions. Starts and ends just inside the loop's asphalt.
+static func _valley_road(road: PackedVector3Array, from: int, to: int, heights: PackedFloat32Array,
+		nx: int, nz: int, ox: float, oz: float, cell: float) -> PackedVector3Array:
+	var n := road.size()
+	var ends: Array[Vector3] = []
+	var dirs: Array[Vector3] = []
+	for i: int in [from, to]:
+		var t := road[(i + 1) % n] - road[(i - 1 + n) % n]
+		var inward := Vector3(-t.z, 0, t.x).normalized()
+		if inward.dot(-Vector3(road[i].x, 0, road[i].z)) < 0.0:
+			inward = -inward
+		ends.append(road[i] + inward * 3.6)
+		dirs.append(inward)
+	var p0 := ends[0]
+	var p3 := ends[1]
+	var reach := p0.distance_to(p3) * 0.38
+	var p1 := p0 + dirs[0] * reach
+	var p2 := p3 + dirs[1] * reach
+	var length := p0.distance_to(p3) * 1.15
+	var count := maxi(20, int(length / 4.0))
+	var pts := PackedVector3Array()
+	for k in count + 1:
+		var t := float(k) / count
+		var u := 1.0 - t
+		var p := p0 * u * u * u + p1 * 3.0 * u * u * t + p2 * 3.0 * u * t * t + p3 * t * t * t
+		# A gentle S across the valley floor.
+		var d := (p2 - p1).normalized()
+		p += Vector3(-d.z, 0, d.x) * sin(t * TAU) * 38.0 * sin(t * PI)
+		pts.append(p)
+	var elev := PackedFloat32Array()
+	elev.resize(pts.size())
+	for k in pts.size():
+		elev[k] = C.sample(heights, nx, nz, ox, oz, cell, pts[k].x, pts[k].z)
+	for _iter in 40:
+		var e2 := elev.duplicate()
+		for k in range(1, pts.size() - 1):
+			e2[k] = (elev[maxi(k - 2, 0)] + elev[k - 1] + elev[k] * 2.0 + elev[k + 1] + elev[mini(k + 2, pts.size() - 1)]) / 6.0
+		e2[0] = road[from].y
+		e2[pts.size() - 1] = road[to].y
+		elev = e2
+	# Level with the main road over the junction mouths.
+	for k in pts.size():
+		var w0 := 1.0 - smoothstep(0.0, 28.0, pts[k].distance_to(p0))
+		var w1 := 1.0 - smoothstep(0.0, 28.0, pts[k].distance_to(p3))
+		elev[k] = lerpf(lerpf(elev[k], road[from].y, w0), road[to].y, w1)
+	# At most 7 % anywhere: where the valley side rises faster the carve cuts the road in (or banks
+	# it up). Sweeps from both junctions, the second keeping within reach of the first.
+	const GRADE := 0.07
+	for _pass in 3:
+		for k in range(1, pts.size()):
+			var run := Vector2(pts[k].x - pts[k - 1].x, pts[k].z - pts[k - 1].z).length() * GRADE
+			elev[k] = clampf(elev[k], elev[k - 1] - run, elev[k - 1] + run)
+		elev[pts.size() - 1] = road[to].y
+		for k in range(pts.size() - 2, -1, -1):
+			var run := Vector2(pts[k].x - pts[k + 1].x, pts[k].z - pts[k + 1].z).length() * GRADE
+			elev[k] = clampf(elev[k], elev[k + 1] - run, elev[k + 1] + run)
+		elev[0] = road[from].y
+	# Round off the kinks the limiter leaves (crests and dips).
+	for _iter in 6:
+		var e2 := elev.duplicate()
+		for k in range(1, pts.size() - 1):
+			e2[k] = (elev[k - 1] + elev[k] * 2.0 + elev[k + 1]) * 0.25
+		elev = e2
+	for k in pts.size():
+		pts[k].y = elev[k]
+	return pts
+
+
+## Junction furniture: a "give way" sign (Vorfahrt achten) and a stop line on the district road at
+## each mouth, delineator posts along it.
+static func _junction_dressing(parent: Node3D, world: SBWorld, road: PackedVector3Array, chord: PackedVector3Array,
+		half_w: float, height: Callable) -> void:
+	var white := C.mat(Color(0.92, 0.92, 0.9), 0.6)
+	var post := C.mat(Color(0.55, 0.57, 0.6), 0.4, 0.6)
+	var n := chord.size()
+	for end in 2:
+		var k := 1 if end == 0 else n - 2   # ~3 m beyond the main road's edge
+		var out := (chord[k - 1 if end == 0 else k + 1] - chord[k]).normalized()   # towards the main road
+		out.y = 0.0
+		out = out.normalized()
+		var right := out.cross(Vector3.UP)
+		var mouth := chord[k] + out * 1.5
+		# Broken give-way line across the approach lane (right-hand traffic: right half).
+		for m in 5:
+			var c := mouth + right * (0.35 + m * 0.6)
+			C.box(parent, null, Vector3(c.x, float(height.call(c.x, c.z)) + 0.05, c.z), Vector3(0.25, 0.004, 0.12), Vector3(0, atan2(out.x, out.z), 0), white, 0.6, false, false)
+		# Inverted triangle sign on a post at the right verge.
+		var sp := mouth + right * (CHORD_HALF_W + 1.4)
+		var ground := float(height.call(sp.x, sp.z))
+		C.box(parent, world, Vector3(sp.x, ground + 1.1, sp.z), Vector3(0.04, 1.1, 0.04), Vector3.ZERO, post, 0.6, true, false)
+		var tri := MeshInstance3D.new()
+		var prism := PrismMesh.new()
+		prism.size = Vector3(0.9, 0.78, 0.03)
+		tri.mesh = prism
+		var face := StandardMaterial3D.new()
+		face.albedo_texture = _give_way_texture()
+		tri.material_override = face
+		tri.position = Vector3(sp.x, ground + 2.05, sp.z)
+		tri.rotation = Vector3(PI, atan2(out.x, out.z), 0)   # point down, face the approaching driver
+		parent.add_child(tri)
+	# Corner fillets: asphalt quarter circles (R 9 m) between the district road's edges and the main
+	# road's edge, so the mouth is a real junction instead of two strips meeting at right angles.
+	var asphalt := C.surface_material("asphalt", 2.0, Color.WHITE, 0.3)
+	var nr := road.size()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	const R := 9.0
+	for i: int in [CHORD_FROM, CHORD_TO]:
+		var t := road[(i + 1) % nr] - road[(i - 1 + nr) % nr]
+		t.y = 0.0
+		t = t.normalized()
+		var inward := Vector3(-t.z, 0, t.x)
+		if inward.dot(-Vector3(road[i].x, 0, road[i].z)) < 0.0:
+			inward = -inward
+		var edge := road[i] + inward * half_w
+		for side: float in [-1.0, 1.0]:
+			var along := t * side
+			var corner := edge + along * CHORD_HALF_W
+			var centre := edge + along * (CHORD_HALF_W + R) + inward * R
+			var arc: Array[Vector3] = []
+			for k in 9:
+				var a := PI * 0.5 * k / 8.0
+				arc.append(centre - inward * R * cos(a) - along * R * sin(a))
+			for k in 8:
+				# Both windings: the fan's orientation flips with the side.
+				for q: Vector3 in [corner, arc[k], arc[k + 1], corner, arc[k + 1], arc[k]]:
+					st.set_normal(Vector3.UP)
+					st.add_vertex(Vector3(q.x, float(height.call(q.x, q.z)) + 0.042, q.z))
+	var fillets := MeshInstance3D.new()
+	fillets.mesh = st.commit()
+	fillets.material_override = asphalt
+	fillets.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(fillets)
+	# Delineator posts every ~50 m on both sides, as on the main road.
+	var markers: Array[Transform3D] = []
+	for k in range(6, n - 6, 12):
+		var d := (chord[k + 1] - chord[k - 1])
+		d.y = 0.0
+		d = d.normalized()
+		var side := Vector3(-d.z, 0, d.x)
+		for sgn: float in [-1.0, 1.0]:
+			var q := chord[k] + side * sgn * (CHORD_HALF_W + 0.8)
+			q.y = float(height.call(q.x, q.z))
+			markers.append(Transform3D(Basis(Vector3.UP, atan2(-d.z, d.x)), q))
+	C.roadside_markers(parent, markers)
+
+
+static var _give_way: ImageTexture
+static func _give_way_texture() -> ImageTexture:
+	if _give_way: return _give_way
+	var img := Image.create(64, 64, false, Image.FORMAT_RGB8)
+	img.fill(Color(0.82, 0.08, 0.07))
+	for y in 64:
+		for x in 64:
+			# Prism faces map the whole texture; a white inner area with a red rim.
+			if x > 9 and x < 54 and y > 9 and y < 54:
+				img.set_pixel(x, y, Color(0.96, 0.96, 0.95))
+	img.generate_mipmaps()
+	_give_way = ImageTexture.create_from_image(img)
+	return _give_way
 
 ## Lindenau: a street village on both sides of the hill road with a church behind the houses and
 ## town signs at both ends. Houses sit at the lowest corner of their footprint (cut into the slope).
