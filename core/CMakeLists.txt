@@ -17,6 +17,7 @@ set(SBCORE_SOURCES
   src/vehicle.cpp
   src/wheel.cpp
   src/world.cpp
+  src/worker_pool.cpp
 )
 
 add_library(sbcore STATIC ${SBCORE_SOURCES})
@@ -27,14 +28,15 @@ target_include_directories(sbcore
 )
 # nlohmann/json is an implementation detail (not exposed in public headers).
 target_include_directories(sbcore SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/third_party)
-target_link_libraries(sbcore PRIVATE sb_warnings)
+find_package(Threads REQUIRED)
+target_link_libraries(sbcore PRIVATE sb_warnings PUBLIC Threads::Threads)
 set_target_properties(sbcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # Shared library for Godot 4 (GDExtension / FFI) and Python ctypes on Win/Mac/Linux.
 add_library(sbcore_shared SHARED ${SBCORE_SOURCES})
 target_include_directories(sbcore_shared PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(sbcore_shared SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/third_party)
-target_link_libraries(sbcore_shared PRIVATE sb_warnings)
+target_link_libraries(sbcore_shared PRIVATE sb_warnings PUBLIC Threads::Threads)
 set_target_properties(sbcore_shared PROPERTIES OUTPUT_NAME "sbcore")
 # On Windows the DLL's import library would otherwise be called sbcore.lib too and overwrite
 # the static library of the same name.

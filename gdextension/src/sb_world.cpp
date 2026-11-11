@@ -137,12 +137,17 @@ void SBWorld::threadMain() {
             continue;
         }
         while (steps > 0 && running_) {
-            const int chunk = std::min(steps, 16);
+            int chunk = 0;
             {
                 std::lock_guard<WorldMutex> lock(mtx_);
-                for (int i = 0; i < chunk; ++i) {
+                // Up to 16 steps per lock, but hand over as soon as the main thread waits: on a
+                // slow CPU 16 steps take ~15 ms, and every script call that needs the lock would
+                // otherwise stall the frame that long.
+                const int limit = std::min(steps, 16);
+                while (chunk < limit && (chunk == 0 || !mtx_.contended())) {
                     for (SBVehicle* v : vehicles_) v->pre_step(dt);
                     world_.step();
+                    ++chunk;
                 }
             }
             steps -= chunk;

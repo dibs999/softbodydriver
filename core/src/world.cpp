@@ -1,5 +1,7 @@
 #include "sbcore/world.hpp"
 
+#include "worker_pool.hpp"
+
 #include <algorithm>
 #include <cmath>
 
@@ -73,7 +75,7 @@ void World::integrateBody(SoftBody& b) {
     }
 }
 
-std::size_t World::collideBody(SoftBody& b) {
+std::size_t World::collideBody(SoftBody& b, std::vector<const StaticCollider*>& candidates_) {
     b.clearContacts();
     if (colliders_.empty()) return 0;
     auto& pos = b.positions();
@@ -360,10 +362,18 @@ std::size_t World::collideBodies() {
 
 void World::step() {
     const Vec3 g = settings_.gravity;
-    std::size_t contacts = 0;
     lastSelfContacts_ = lastSelfContactCandidates_ = 0;
-    for (SoftBody& b : bodies_) {
-        if (b.asleep()) continue;
+    // Bodies only interact through collideBodies(): forces, integration, self-contact and the
+    // static colliders of each body are independent and run in parallel. Every body is computed
+    // exactly as in a serial step, so the result does not depend on the thread count.
+    awakeStep_.clear();
+    for (std::size_t i = 0; i < bodies_.size(); ++i)
+        if (!bodies_[i].asleep()) awakeStep_.push_back(i);
+    if (scratch_.size() < bodies_.size()) scratch_.resize(bodies_.size());
+    auto dynamics = [&](std::size_t k) {
+        const std::size_t bi = awakeStep_[k];
+        SoftBody& b = bodies_[bi];
+        BodyScratch& sc = scratch_[bi];
         auto& force = b.forces();
         const auto& mass = b.masses();
         const auto& invMass = b.invMasses();
@@ -372,19 +382,36 @@ void World::step() {
         accumulateAerodynamicForces(b);
         const bool selfContact = std::any_of(b.selfCollisionPanels().begin(), b.selfCollisionPanels().end(),
                                             [&](const SelfCollisionPanel& p) { return b.selfCollisionActive(p); });
-        if (selfContact) selfContactPrevious_ = b.positions();
+        if (selfContact) sc.selfContactPrevious = b.positions();
         integrateBody(b);
-        if (selfContact) lastSelfContacts_ += collideSelfPanels(b, selfContactPrevious_);
+        sc.selfContacts = sc.selfCandidates = 0;
+        if (selfContact) sc.selfContacts = collideSelfPanels(b, sc.selfContactPrevious, sc.selfCandidates);
+    };
+    detail::WorkerPool::instance().run(awakeStep_.size(), dynamics);
+    for (std::size_t bi : awakeStep_) {
+        lastSelfContacts_ += scratch_[bi].selfContacts;
+        lastSelfContactCandidates_ += scratch_[bi].selfCandidates;
     }
     lastBodyContacts_ = collideBodies();
-    for (SoftBody& b : bodies_) {
-        if (b.asleep()) continue;
-        contacts += collideBody(b);
+    // Bodies woken by a contact in collideBodies() take part from here on.
+    awakeStep_.clear();
+    for (std::size_t i = 0; i < bodies_.size(); ++i)
+        if (!bodies_[i].asleep()) awakeStep_.push_back(i);
+    auto statics = [&](std::size_t k) {
+        const std::size_t bi = awakeStep_[k];
+        SoftBody& b = bodies_[bi];
+        scratch_[bi].contacts = collideBody(b, scratch_[bi].candidates);
         b.updateSleep(settings_.dt);
-    }
+    };
+    // Static collision is cheap per body; a second hand-off to the workers costs more than it saves.
+    for (std::size_t k = 0; k < awakeStep_.size(); ++k) statics(k);
+    std::size_t contacts = 0;
+    for (std::size_t bi : awakeStep_) contacts += scratch_[bi].contacts;
     lastContacts_ = contacts;
     ++steps_;
 }
+
+void shutdownPhysicsThreads() { detail::WorkerPool::shutdown(); }
 
 std::uint64_t World::simulate(real seconds) {
     const auto n = static_cast<std::uint64_t>(std::llround(seconds / settings_.dt));
