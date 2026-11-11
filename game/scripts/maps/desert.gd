@@ -36,8 +36,23 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			var h := (dunes.get_noise_2d(x, z) * 0.5 + 0.5) * 19.0 + ridges.get_noise_2d(x, z) * 3.0
 			var plateau := 1.0 - smoothstep(95.0, 300.0, Vector2(x + 260.0, z - 290.0).length())
 			var m := mesa.get_noise_2d(x, z) + plateau * 0.58
-			if m > 0.38:
-				h += 46.0 * smoothstep(0.38, 0.49, m)
+			# Away from the rally loop (and the shortcut and mine road beside it) the rock rises as
+			# buttes: a talus apron, a near-vertical cap-rock wall and a flat top. A soft ramp over
+			# the whole range made every small outcrop a striped cone. Near the loop the old, gentler
+			# profile keeps the graded track as it was. The loop is r(a) in polar coordinates, so the
+			# radial distance to it is cheap.
+			var a := atan2(z / 0.90, x)
+			var loop_r := 596.0 + 106.0 * sin(2.0 * a + 0.4) + 46.0 * cos(5.0 * a)
+			# The loop itself only samples the terrain along its centre line (then carves a 15 m
+			# corridor); the shortcut to the mine swings up to 78 m out between loop points 23 and 96.
+			var a_pos := fposmod(a, TAU)
+			var near_shortcut := a_pos > 0.15 and a_pos < 0.9
+			var keep_from := 110.0 if near_shortcut else 18.0
+			var off_track := smoothstep(keep_from, keep_from + (80.0 if near_shortcut else 14.0), absf(Vector2(x, z / 0.90).length() - loop_r))
+			if m > 0.33:
+				var soft := 46.0 * smoothstep(0.38, 0.49, m)
+				var butte := 11.0 * smoothstep(0.33, 0.40, m) + 35.0 * smoothstep(0.40, 0.415, m) + 3.0 * smoothstep(0.415, 0.6, m)
+				h += lerpf(soft, butte, off_track)
 			h += 65.0 * smoothstep(790.0, 950.0, maxf(absf(x), absf(z))) * (0.7 + 0.3 * ridges.get_noise_2d(x, z))
 			heights[ix * nz + iz] = h
 
