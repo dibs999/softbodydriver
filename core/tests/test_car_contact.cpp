@@ -117,8 +117,11 @@ TEST_CASE("props stand still on the ground and a car knocks them over without te
                 ++strikes;
             }
         MESSAGE(name << ": mean loss " << sum / strikes << " km/h, worst " << worst << ", " << bad << " of " << strikes << " over 2 km/h");
-        CHECK(sum / strikes < 2.0);
-        CHECK(bad <= 5);   // at most 5 of 18 (the chaotic tail), on average well under 2 km/h
+        CHECK(sum / strikes < (kind == PropKind::Cone ? 0.8 : 2.0));
+        // A cone the rear tyre dragged up into the arch used to self-lock between tread and body
+        // (up to 10-13 km/h, 2 of 18 strikes); with the geometric-mean contact friction at most one
+        // strike of the chaotic tail may exceed 2 km/h.
+        CHECK(bad <= (kind == PropKind::Cone ? 1 : 5));
     }
 }
 
@@ -190,15 +193,20 @@ TEST_CASE("a felled log is shoved or climbed, never flung faster than the car") 
     VehicleControls c;
     c.throttle = 0.6;
     world.body(ic).setControls(c);
+    // Compared with the car's top speed over the last second: a shoved log may roll on for a
+    // moment while the car slows to climb it; squeezed out under a tread it leaves far faster.
     real worstExcess = 0.0;
+    std::vector<real> recent;
     for (int k = 0; k < 400; ++k) {
         world.simulate(0.02);
         const real logSpeed = length(world.body(ip).centerOfMassVelocity());
-        const real carSpeed = length(world.body(ic).centerOfMassVelocity());
+        recent.push_back(length(world.body(ic).centerOfMassVelocity()));
+        if (recent.size() > 50) recent.erase(recent.begin());
+        const real carSpeed = *std::max_element(recent.begin(), recent.end());
         worstExcess = std::max(worstExcess, logSpeed - carSpeed);
     }
     REQUIRE(world.stats().finite);
-    MESSAGE("log faster than the car by at most " << worstExcess << " m/s");
+    MESSAGE("log faster than the car (its top speed over the last second) by at most " << worstExcess << " m/s");
     CHECK(worstExcess < 1.5);
 }
 
