@@ -69,6 +69,39 @@ static func _amount(v: Variant) -> float:
 		return 1.0 if v else 0.0
 	return 0.0
 
+## Contracts: each map offers one at a time, an activity on that map with a minimum medal and a
+## bonus on top of the normal pay. The bonus grows with the contracts already done (up to double).
+const CONTRACT_BASE := {1: 260.0, 2: 240.0, 3: 300.0, 4: 380.0, 5: 220.0, 6: 420.0}
+const MODE_NAMES := ["Freie Fahrt", "Zeitfahren", "Drift-Challenge", "Lieferfahrt", "Rennen", "Crashtest", "Verfolgungsjagd"]
+const MEDAL_NAMES := ["", "Bronze", "Silber", "Gold"]
+
+## A new contract for a map from the modes it offers (free driving excluded). `serial` counts the
+## contracts issued on this map, `done` those finished anywhere; both feed the seed so the next one
+## differs from the last.
+static func make_contract(map_id: String, modes: Array, serial: int, done: int) -> Dictionary:
+	var pool: Array[int] = []
+	for m in modes:
+		if int(m) > 0 and CONTRACT_BASE.has(int(m)): pool.append(int(m))
+	if pool.is_empty(): return {}
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(map_id) + serial * 7919 + done * 104729
+	var mode: int = pool[rng.randi() % pool.size()]
+	# Early contracts ask for bronze or silver; gold appears once a few are done.
+	var top := 2 if done < 3 else 3
+	var medal := rng.randi_range(1, top)
+	var bonus := float(CONTRACT_BASE[mode]) * (0.7 + 0.45 * medal) * minf(1.0 + 0.1 * done, 2.0)
+	return {"mode": mode, "medal": medal, "bonus": roundf(bonus / 10.0) * 10.0, "serial": serial}
+
+static func contract_text(c: Dictionary) -> String:
+	if c.is_empty(): return ""
+	var mode := int(c.get("mode", 0))
+	var medal := int(c.get("medal", 1))
+	return "%s mit mindestens %s · Prämie %s" % [MODE_NAMES[clampi(mode, 0, MODE_NAMES.size() - 1)], MEDAL_NAMES[clampi(medal, 1, 3)], money_text(float(c.get("bonus", 0.0)))]
+
+## Does a finished activity (driving_activity's last_result) fulfil the contract?
+static func fulfils(c: Dictionary, result: Dictionary) -> bool:
+	return not c.is_empty() and int(result.get("mode", -1)) == int(c.get("mode", -2)) and int(result.get("medal", 0)) >= int(c.get("medal", 9))
+
 static func money_text(amount: float) -> String:
 	var whole := roundi(amount)
 	var digits := str(absi(whole))
