@@ -19,7 +19,7 @@
     "front": { "wheelRate": 42000, "bumpDamping": 2900, "reboundDamping": 5600, "antiRollRate": 22000, "bumpTravel": 0.07, "droopTravel": 0.09 },
     "rear":  { "wheelRate": 40000, "bumpDamping": 2800, "reboundDamping": 5400, "antiRollRate": 14000, "bumpTravel": 0.07, "droopTravel": 0.09 }
   },
-  "tires": { "radius": 0.351, "width": 0.265, "rimRadius": 0.241, "pressurePsi": 36, "friction": 1.28, "tireMass": 12.0, "rimMass": 11.5, "rays": 18 },
+  "tires": { "radius": 0.351, "width": 0.265, "rimRadius": 0.241, "pressurePsi": 36, "friction": 1.28, "tireMass": 12.0, "rimMass": 11.5, "rays": 20 },
   "engine": {
     "name": "5.0 V8", "layout": "RWD", "cylinders": 8,
     "torqueCurve": [[700, 280], [1500, 400], [3000, 480], [4250, 530], [5500, 510], [7000, 440], [7600, 0]],

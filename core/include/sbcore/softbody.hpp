@@ -64,6 +64,10 @@ struct BeamParams {
     // Anisotropic only: values used while the beam is longer than rest length.
     real springExpansion = -1.0;  ///< <0 -> same as `spring`.
     real dampExpansion = -1.0;    ///< <0 -> same as `damp`.
+    /// Stretch limiter (BeamNG's long bound): beyond (1 + longBound) * rest length an extra
+    /// `boundSpring` acts, so a soft beam can bend and squash but not be pulled out like a rope.
+    real longBound = kInf;
+    real boundSpring = 0.0;       ///< N/m beyond the bound.
     // Hydro only: restLength = base * (1 + hydroRatio * input[hydroInput]).
     int hydroInput = -1;
     real hydroRatio = 0.0;
@@ -108,6 +112,8 @@ struct Beam {
     real hardening = 0;
     real strength = kInf;
     real minRest = 0, maxRest = kInf;
+    real longBoundFactor = kInf;  ///< Stretch limit as a multiple of the current rest length.
+    real boundSpring = 0;
     real hydroRatio = 0;
     real hydroOffset = 0;     ///< Plastic offset preserved while hydro input changes rest length.
 
@@ -349,6 +355,10 @@ public:
     void addContact(std::size_t i, const Vec3& impulse) { contactImpulse_[i] += impulse; }
     const std::vector<std::uint8_t>& collisionFlags() const { return collision_; }
     const std::vector<real>& contactStiffnesses() const { return contactStiffness_; }
+    /// Nodes whose static ground friction also holds their position (tread of a wheel whose brake is
+    /// holding it). Elsewhere velocity-level friction alone: holding every tread contact kept an
+    /// unbraked parked car rocking +-3 cm on its tyres indefinitely.
+    std::vector<std::uint8_t>& positionHold() { if (positionHold_.size() != pos_.size()) positionHold_.assign(pos_.size(), 0); return positionHold_; }
     const std::vector<std::string>& nodeIds() const { return nodeIds_; }
     const NodeParams& nodeParams(std::uint32_t i) const { return nodeParams_[i]; }
     std::vector<Beam>& beams() { return beams_; }
@@ -400,6 +410,7 @@ private:
     bool sleepEnabled_ = false, asleep_ = false, downFacesPassive_ = false;
     real restTime_ = 0.0, maxSpeedSq_ = 0.0;
     std::vector<Vec3> prevPos_;
+    std::vector<std::uint8_t> positionHold_;
     std::vector<Beam> beams_;
     std::vector<BeamParams> beamParams_;
     std::vector<ColTri> triangles_;

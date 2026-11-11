@@ -19,7 +19,7 @@
     "front": { "wheelRate": 28000, "bumpDamping": 2000, "reboundDamping": 4000, "antiRollRate": 9000,  "bumpTravel": 0.085, "droopTravel": 0.10 },
     "rear":  { "wheelRate": 25000, "bumpDamping": 1800, "reboundDamping": 3600, "antiRollRate": 6000,  "bumpTravel": 0.090, "droopTravel": 0.11 }
   },
-  "tires": { "radius": 0.317, "width": 0.225, "rimRadius": 0.216, "pressurePsi": 34, "friction": 1.15, "tireMass": 9.5, "rimMass": 9.0, "rays": 16 },
+  "tires": { "radius": 0.317, "width": 0.225, "rimRadius": 0.216, "pressurePsi": 34, "friction": 1.15, "tireMass": 9.5, "rimMass": 9.0, "rays": 20 },
   "engine": {
     "name": "1.5 I4 Turbo", "layout": "FWD", "cylinders": 4,
     "torqueCurve": [[700, 120], [1300, 215], [1600, 250], [3500, 250], [5000, 228], [6000, 190], [6500, 0]],

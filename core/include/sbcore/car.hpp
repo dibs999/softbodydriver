@@ -116,7 +116,7 @@ struct TireDef {
     real friction = 1.15;
     real tireMass = 9.5;
     real rimMass = 9.0;
-    int rays = 16;
+    int rays = 20;
 };
 
 struct EngineDef {

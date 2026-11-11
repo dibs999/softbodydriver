@@ -21,7 +21,7 @@ Soft-Body-Fahrzeugsimulation als **native Desktop-App für Windows, macOS und Li
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Warum nicht mehr im Browser?** Die Physik läuft jetzt nativ in C++ auf einem eigenen Thread statt in JavaScript. Dadurch reicht die Leistung für detailliertere Autos und mehrere Fahrzeuge gleichzeitig: 3 Autos brauchen etwa 15 % eines CPU-Kerns. Godot übernimmt Rendering, Eingabe, Audio und den Export als `.exe` (Windows) und `.app` (macOS, Universal).
+**Warum nicht mehr im Browser?** Die Physik läuft jetzt nativ in C++ auf einem eigenen Thread statt in JavaScript. Dadurch reicht die Leistung für detailliertere Autos und mehrere Fahrzeuge gleichzeitig: 3 Autos brauchen etwa 20 % eines CPU-Kerns. Godot übernimmt Rendering, Eingabe, Audio und den Export als `.exe` (Windows) und `.app` (macOS, Universal).
 
 ## Fahrzeuge
 
@@ -73,6 +73,10 @@ keine stabile Hochgeschwindigkeitsfahrt.
 - `F2` zeigt Fahrzeugzustand, mittlere/P95-Bildzeit, Zeichenaufrufe und Physiktempo.
   Kleine Kartenobjekte werden räumlich gruppiert und in großer Entfernung ausgeblendet;
   ihre Kollisionen bleiben aktiv. Partikel und Bremsspuren haben feste Speicherbudgets.
+- Reifen rollen mit realistischem Widerstand: Der Rollwiderstandsbeiwert liegt von 30 bis 130 km/h
+  bei 0,007–0,019 (vorher bis 0,047 bei 150 km/h). Dafür hat jeder Reifen 20 Laufflächen-Nodes, und
+  ein lastabhängiges Hysterese-Moment wirkt gegen das Abrollen. Ein ungebremst geparktes Auto kommt
+  zur Ruhe. Details: [Fahrwiderstand](docs/DRIVING_RESISTANCE.md).
 - Schleift die Karosserie über den Boden (Aufsetzen, Bordstein, eine hängende Stoßstange,
   ein Auto auf dem Dach), meldet die Physik Kontaktkraft und Gleitgeschwindigkeit der
   Karosserie-Nodes. Daraus entstehen ein metallisches Kratzgeräusch und ein Funkenfächer an

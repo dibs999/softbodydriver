@@ -18,7 +18,7 @@
     "front": { "wheelRate": 26500, "bumpDamping": 2050, "reboundDamping": 3900, "antiRollRate": 11500, "bumpTravel": 0.08, "droopTravel": 0.095 },
     "rear": { "wheelRate": 25500, "bumpDamping": 1950, "reboundDamping": 3750, "antiRollRate": 7700, "bumpTravel": 0.085, "droopTravel": 0.10 }
   },
-  "tires": { "radius": 0.311, "width": 0.205, "rimRadius": 0.205, "pressurePsi": 33, "friction": 1.24, "tireMass": 8.5, "rimMass": 8.0, "rays": 16 },
+  "tires": { "radius": 0.311, "width": 0.205, "rimRadius": 0.205, "pressurePsi": 33, "friction": 1.24, "tireMass": 8.5, "rimMass": 8.0, "rays": 20 },
   "engine": {
     "name": "2.4 I4", "layout": "RWD", "cylinders": 4,
     "torqueCurve": [[750, 105], [2200, 177], [3900, 216], [5200, 232], [6900, 215], [7700, 192], [8250, 0]],

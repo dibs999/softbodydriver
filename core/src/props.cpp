@@ -54,6 +54,11 @@ PropBuild buildCone() {
     pvc.springExpansion = 3.0e3;
     pvc.damp = 8.0;
     pvc.dampExpansion = 8.0;
+    // PVC hardly stretches: beyond 15 % a stiff limiter. Without it a cone node caught between
+    // tread and road was carried round the tyre while the base stayed on the road, the cone was
+    // drawn out to 1.5 m around the wheel and braked the car by up to 13 km/h.
+    pvc.longBound = 0.15;
+    pvc.boundSpring = 6.0e4;
     connectAll(b, all, pvc);
     ColTriParams skin;
     skin.friction = 0.35;

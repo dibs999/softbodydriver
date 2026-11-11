@@ -1111,6 +1111,10 @@ CarBuild buildCar(const CarDefinition& def) {
         // belt's bending stiffness, which the skip-two chord beams only partly provide. Removes the
         // tread standing wave that peaked rolling loss around 145 km/h.
         ws.membranePressure = 2.0;
+        // Speed-independent share of the rolling resistance. With it and 20 tread nodes
+        // (c_rr 0.004 here) the coast-down rolling coefficient stays at ~0.007-0.014 from 30 to 130 km/h instead of
+        // rising to 0.04 from the polygon impacts of 16 nodes.
+        ws.rollingHysteresis = 0.004;
         ws.steered = cn.front;
         ws.ratedLoad = std::max<real>(1500.0, (car.totalMass() + tire.totalMass()) * 9.81 * (cn.front ? def.chassis.frontWeight : 1.0 - def.chassis.frontWeight) * 0.5);
         ws.braked = true;
