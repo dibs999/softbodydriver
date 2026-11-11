@@ -797,9 +797,13 @@ CarBuild buildCar(const CarDefinition& def) {
         lidLatch.inputChannel = 6;
         lidLatch.stroke = 1.4;
         lidLatch.catchTolerance = 0.06;
+        // Hinges and latch are rated for an 18 kg hatch lid; a heavier lid (the Trailhead's 40 kg
+        // with its spare wheel) gets proportionally stronger ones, or its own inertia pops the
+        // latch in a 50 km/h frontal impact (real latches hold well over 30 g).
+        const real lidRating = std::max<real>(1.0, mass / 18.0);
         for (int corner = 0; corner < 4; ++corner) {
             const auto n = lid[static_cast<std::size_t>(corner)];
-            BeamParams mount = makeBeam(1.0e5, 55.0, 8.0e3, corner < 2 ? 1.2e4 : 5.0e3);
+            BeamParams mount = makeBeam(1.0e5, 55.0, 8.0e3, (corner < 2 ? 1.2e4 : 5.0e3) * lidRating);
             mount.breakGroup = corner < 2 ? "tailgate_hinge" : "tailgate_latch";
             for (auto a : nearestNodes(car, rig.bodyNodes, car.positions()[n], 3))
                 (corner < 2 ? lidLatch.hingeBeams : lidLatch.latchBeams).push_back(car.addBeam(n, a, mount));
