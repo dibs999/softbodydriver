@@ -37,14 +37,14 @@ func configure(scene: Node3D, spawn: Transform3D) -> void:
 	marker.scale.y = 0.04
 	marker.material_override = material(Color(0.16, 0.76, 0.62), true)
 	add_child(marker)
-	var pump := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = Vector3(0.7, 1.5, 0.5)
-	pump.mesh = box
+	var pump := _build_pump()
 	pump.position = bay + spawn.basis.z.normalized() * 4.0 + Vector3(0, 0.75, 0)
-	pump.material_override = material(Color(0.16, 0.55, 0.48), false)
+	# The displays face the bay.
+	var to_bay := -spawn.basis.z
+	to_bay.y = 0.0
+	if to_bay.length() > 0.01: pump.rotation.y = atan2(to_bay.x, to_bay.z)
 	add_child(pump)
-	game.world.add_box(pump.position, box.size * 0.5, Vector3.ZERO, 0.8)
+	game.world.add_box(pump.position, Vector3(0.35, 0.75, 0.25), Vector3(0, pump.rotation.y, 0), 0.8)
 	var sign := Label3D.new()
 	_service_sign = sign
 	_refresh_service_sign()
@@ -60,6 +60,47 @@ func configure(scene: Node3D, spawn: Transform3D) -> void:
 func _refresh_service_sign() -> void:
 	if not is_instance_valid(_service_sign): return
 	_service_sign.text = "SERVICE\n%s Tanken · %s Reparatur (halten)\nAnhalten · %s Motor aus" % [DriverPrompts.hint("refuel"), DriverPrompts.hint("service_repair"), DriverPrompts.hint("ignition")]
+
+## Service fuel dispenser (origin at half height, displays towards local +z): concrete plinth,
+## grey cabinet, white body with the service colour as band and cap, lit price displays front and
+## back, nozzles in holsters on both ends with hoses down to the cabinet.
+func _build_pump() -> Node3D:
+	var root := Node3D.new()
+	var part := func(size: Vector3, at: Vector3, mat: Material) -> void:
+		var mi := MeshInstance3D.new()
+		var b := BoxMesh.new()
+		b.size = size
+		mi.mesh = b
+		mi.position = at
+		mi.material_override = mat
+		root.add_child(mi)
+	var concrete := _flat(Color(0.58, 0.57, 0.55), 0.9)
+	var grey := _flat(Color(0.40, 0.41, 0.43), 0.55)
+	var white := _flat(Color(0.92, 0.92, 0.9), 0.5)
+	var teal := material(Color(0.16, 0.55, 0.48), false)
+	var dark := _flat(Color(0.07, 0.07, 0.08), 0.6)
+	var display := material(Color(0.25, 0.85, 0.6), true)
+	display.albedo_color = Color(0.04, 0.08, 0.06)
+	display.emission_energy_multiplier = 0.5
+	part.call(Vector3(1.3, 0.18, 0.9), Vector3(0, -0.66, 0), concrete)
+	part.call(Vector3(0.7, 0.5, 0.45), Vector3(0, -0.32, 0), grey)
+	part.call(Vector3(0.7, 0.9, 0.42), Vector3(0, 0.38, 0), white)
+	part.call(Vector3(0.71, 0.12, 0.43), Vector3(0, 0.02, 0), teal)
+	part.call(Vector3(0.76, 0.1, 0.48), Vector3(0, 0.88, 0), teal)
+	for f: float in [-1.0, 1.0]:
+		part.call(Vector3(0.42, 0.2, 0.01), Vector3(0, 0.56, f * 0.215), display)
+		part.call(Vector3(0.5, 0.06, 0.01), Vector3(0, 0.28, f * 0.215), dark)   # card slot / keypad strip
+	for e: float in [-1.0, 1.0]:
+		part.call(Vector3(0.05, 0.16, 0.1), Vector3(e * 0.375, 0.2, 0), dark)        # holster
+		part.call(Vector3(0.04, 0.04, 0.14), Vector3(e * 0.4, 0.29, 0), dark)        # nozzle grip
+		part.call(Vector3(0.022, 0.5, 0.022), Vector3(e * 0.385, -0.15, 0.05), dark) # hose
+	return root
+
+func _flat(color: Color, rough: float) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.roughness = rough
+	return mat
 
 func material(color: Color, lit: bool) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
