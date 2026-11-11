@@ -301,7 +301,11 @@ std::size_t World::collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody)
             const real jn = -(1.0 + kRestitution) * vn / wTotal;
             const Vec3 vt = vRel - n * vn;
             const real vtLen = length(vt);
-            const real mu = 0.5 * (nFric[i] + c.friction);
+            // Geometric mean of the two surfaces (rubber 1.0 on PVC 0.2 -> 0.45, paint on paint
+            // unchanged). The arithmetic mean gave rubber on a PVC cone 0.6: a cone the rear tyre
+            // dragged up into the wheel arch self-locked between tread and body and braked the car
+            // by up to 10 km/h (2 of 30 strike positions); now at most ~2 km/h, mean 0.9 -> 0.1.
+            const real mu = std::sqrt(std::max<real>(0.0, nFric[i] * c.friction));
             const real jt = vtLen > 1e-9 ? std::min(mu * jn, vtLen / wTotal) : 0.0;
             const Vec3 vtDir = vtLen > 1e-9 ? (vt / vtLen) : Vec3{};
             const Vec3 impulse = n * jn - vtDir * jt;
