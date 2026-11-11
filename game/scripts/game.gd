@@ -758,7 +758,7 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 				_toggle_pause()],
 			["Einführung ausblenden", func(): lesson.skip(); _toggle_pause()],
 			["Hauptmenü", func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn")],
-			["Beenden", func(): get_tree().quit()]]:
+			["Beenden", func(): Game.quit_cleanly()]]:
 		var b := Button.new()
 		b.text = entry[0]
 		b.theme_type_variation = &"SideButton"

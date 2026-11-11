@@ -139,7 +139,7 @@ func _build_ui() -> void:
 	tagline.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tagline.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	top.add_child(tagline)
-	for entry in [["Einstellungen", _toggle_settings], ["Quellen & Lizenzen", _show_credits], ["Beenden", func(): get_tree().quit()]]:
+	for entry in [["Einstellungen", _toggle_settings], ["Quellen & Lizenzen", _show_credits], ["Beenden", func(): Game.quit_cleanly()]]:
 		var b := Button.new()
 		b.text = entry[0]
 		b.pressed.connect(entry[1])
