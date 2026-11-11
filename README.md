@@ -72,6 +72,10 @@ keine stabile Hochgeschwindigkeitsfahrt.
   `F4` startet einen neuen Versuch. Der erste Abschluss erscheint nach einem
   Neustart auch im Hauptmenü. Bei einem Schreibfehler bleibt das Ergebnis für
   diese Sitzung sichtbar und wird ausdrücklich als nicht gespeichert bezeichnet.
+- Im Hügelland verbindet eine Kreisstraße quer durchs Tal die Ringstraße hinter Lindenau mit
+  dem Abschnitt zwischen Waldhof und Aussichtspunkt. An den T-Einmündungen gibt es ausgerundete
+  Ecken, Wartelinie und „Vorfahrt achten“-Schild. Durch Einschnitte und Dämme steigt sie höchstens
+  7 % an.
 - Die Stadt enthält befahrbare Werkstatthöfe, eine Altstadtgasse und eine Hochstraße
   mit Unterführung, zusätzlich zu Parkdeck, Markt und Frachtterminal. Auf dem
   Testgelände gibt es eine markierte 100-m-Bremsbahn und eine milde Bodenwellenreihe.
@@ -385,6 +389,8 @@ godot --headless --path game -s res://tests/equipment_test.gd    # Beleuchtung, 
 godot --headless --path game -s res://tests/weather_test.gd      # Tageszeit, Regen und Nasshaftung
 godot --headless --path game -s res://tests/weather_audio_test.gd # Regenklang, Dämpfung und AudioServer-Aufnahme
 godot --headless --path game -s res://tests/body_scrape_test.gd  # Schleifkontakt: still beim Fahren, aktiv beim Aufsetzen
+godot --headless --path game -s res://tests/district_road_test.gd # Kreisstraße im Hügelland: Einmündungen, Steigung, Befahrbarkeit
+godot --headless --path game -s res://tests/pursuit_test.gd       # Verfolgungsjagd: Festnahme, Flucht, Medaillen
 godot --headless --path game -s res://tests/weather_door_test.gd # Offene Tür, Regenabschirmung und Akustik
 godot --headless --path game -s res://tests/door_controls_test.gd # Öffnen, Schließen, Scharniere und Reparatur
 godot --headless --path game -s res://tests/mirror_test.gd       # Optische Flächen, Projektion und Kamerawechsel
