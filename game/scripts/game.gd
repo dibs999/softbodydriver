@@ -105,7 +105,8 @@ func _ready() -> void:
 			for sp in map_data.get("ai_spawns", []):
 				routes.append({"waypoints": map_data["waypoints"], "speeds": map_data["speeds"], "spawn": sp})
 		for i in mini(routes.size(), others.size()):
-			var v := Game.spawn_vehicle(world, others[i]["path"], routes[i]["spawn"])
+			# A route may name its car (a 4x4 on the trails); otherwise traffic takes the next one.
+			var v := Game.spawn_vehicle(world, routes[i].get("car", others[i]["path"]), routes[i]["spawn"])
 			if v:
 				vehicles.append(v)
 				ai[v] = AIDriver.new(v, routes[i]["waypoints"], routes[i]["speeds"], 0.9)

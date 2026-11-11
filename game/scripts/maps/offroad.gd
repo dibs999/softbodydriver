@@ -123,9 +123,14 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var props := _loose_logs(paths, ground, timber)
 	var length_m := 0.0
 	for i in loop.size(): length_m += loop[i].distance_to(loop[(i+1)%loop.size()])
+	var loop_speeds := C.speeds_from_curvature(loop, 12.0, 6.0, 35)
+	var half := loop.size() / 2
 	return {"spawns": [C.car_xform(loop[0], loop[1]-loop[0]), C.car_xform(loop[-3], loop[-2]-loop[-3])],
-		"props": props, "waypoints": loop, "speeds": C.speeds_from_curvature(loop, 12.0, 6.0, 35),
-		"activity_route": loop, "map_paths": paths, "ai_spawns": [],
+		"props": props, "waypoints": loop, "speeds": loop_speeds,
+		"activity_route": loop, "map_paths": paths,
+		# One 4x4 works its way round the trail loop (no road cars on the trails).
+		"ai_routes": [{"waypoints": loop, "speeds": loop_speeds, "spawn": C.car_xform(loop[half], loop[half + 1] - loop[half]),
+			"car": "res://cars/trailhead_4x4.car.json"}],
 		"map_path_color": Color("b6a27b"),
 		"surface_regions": [{"rect": Rect2(farm.x-17,farm.z-17,34,34),"surface":"gravel"}],
 		"map_places": [{"name":"Hof & Start", "position":farm}, {"name":"Holzlager", "position":timber},
