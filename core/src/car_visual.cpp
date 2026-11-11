@@ -1251,23 +1251,35 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
     {
         const real xf = L;
         const real hwF = prof.halfW(L - 0.04);
-        const real yH = bd.noseHeight - 0.075;
-        const real lightW = std::min<real>(0.20, 0.30 * hwF);
         const bool sport = bd.style == BodyStyle::Coupe;
+        // Headlight units: a narrow dark bezel round a chrome reflector, two projectors with lit
+        // lenses and an L-shaped daytime running light along the lower and outer edge. 17 cm tall
+        // (12 on coupes) and set a little higher on the face; they used to be 12 cm dark slots
+        // with a thin bright strip, which read as air vents rather than lamps.
+        const real housingH = sport ? 0.06 : 0.085;
+        // The top stays just under the nose line: above it the face already curves back into the
+        // bonnet and the paint would cover the unit's upper corners.
+        const real yH = bd.noseHeight - 0.012 - housingH;
+        const real lightW = std::min<real>(0.23, 0.33 * hwF);
         for (int side = 0; side < 2; ++side) {
             const real sg = side ? 1.0 : -1.0;
-            const real zc = sg * (hwF - lightW - 0.05);
-            // Lens slightly yawed to follow the rounded corner.
+            // Outer end kept clear of the rounded corner, where the body surface curves back.
+            const real zc = sg * (hwF - lightW - 0.085);
+            // Lens yawed to follow the rounded corner.
             const Vec3 ax = normalize(Vec3{1.0, 0.0, sg * 0.35});
             const Vec3 az = normalize(cross(ax, Vec3{0, 1, 0})) * -1.0;
-            const real housing = sport ? 0.045 : 0.058;
-            vb.box("grille", {xf - 0.035, yH, zc}, {0.030, housing, lightW + 0.015}, bodyNodes, ax, {0, 1, 0}, az);
-            vb.box("headlight", {xf + 0.002, yH + housing * 0.60, zc}, {0.016, 0.009, lightW}, bodyNodes, ax, {0, 1, 0}, az);
-            for (real lens : {-0.48, 0.40}) {
-                const Vec3 center = Vec3{xf + 0.006, yH - 0.012, zc} + az * (lens * lightW);
-                vb.tube("chrome", center - ax * 0.008, center + ax * 0.014, housing * 0.45, bodyNodes, 20);
-                vb.tube("grille", center + ax * 0.014, center + ax * 0.017, housing * 0.35, bodyNodes, 20);
-                vb.tube("headlight", center + ax * 0.018, center + ax * 0.021, housing * 0.24, bodyNodes, 20);
+            const real housing = housingH;
+            const Vec3 c0{xf - 0.035, yH, zc};
+            vb.box("grille", c0, {0.030, housing, lightW + 0.015}, bodyNodes, ax, {0, 1, 0}, az);                       // bezel
+            vb.box("chrome", c0 + ax * 0.026, {0.008, housing - 0.012, lightW - 0.006}, bodyNodes, ax, {0, 1, 0}, az);  // reflector
+            // Daytime running light: along the bottom and up the outer end.
+            vb.box("headlight", c0 + ax * 0.036 + Vec3{0, -housing + 0.018, 0}, {0.006, 0.008, lightW - 0.02}, bodyNodes, ax, {0, 1, 0}, az);
+            vb.box("headlight", c0 + ax * 0.036 + az * (-sg * (lightW - 0.02)) + Vec3{0, -0.006, 0}, {0.006, housing - 0.03, 0.008}, bodyNodes, ax, {0, 1, 0}, az);
+            for (real lens : {-0.42, 0.36}) {
+                const Vec3 center = c0 + ax * 0.034 + az * (lens * lightW) + Vec3{0, 0.012, 0};
+                vb.tube("grille", center - ax * 0.004, center + ax * 0.006, housing * 0.52, bodyNodes, 20);
+                vb.tube("chrome", center + ax * 0.006, center + ax * 0.012, housing * 0.44, bodyNodes, 20);
+                vb.tube("headlight", center + ax * 0.012, center + ax * 0.018, housing * 0.30, bodyNodes, 20);
             }
         }
         // Grille between the headlights.
@@ -1299,9 +1311,15 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             const real zc = sg * (hwR - tw - 0.04);
             const Vec3 ax = normalize(Vec3{1.0, 0.0, -sg * 0.3});
             const Vec3 az = normalize(cross(ax, Vec3{0, 1, 0})) * -1.0;
-            vb.box("grille", {0.009, yT, zc}, {0.023, sport ? 0.034 : 0.048, tw + 0.015}, yT > lidLatchY ? lidNodes : bodyNodes, ax, {0, 1, 0}, az);
+            // Tail lamp: dark housing, a red lens over most of it with a lighter brake-light band
+            // and a white reversing lamp at the inner end (it was two thin red strips).
+            const auto& tailNodes = yT > lidLatchY ? lidNodes : bodyNodes;
+            const real th = sport ? 0.042 : 0.062;
+            vb.box("grille", {0.009, yT, zc}, {0.023, th, tw + 0.015}, tailNodes, ax, {0, 1, 0}, az);
+            vb.box("taillight", Vec3{0.009, yT, zc} - ax * 0.026, {0.006, th - 0.01, tw - 0.004}, tailNodes, ax, {0, 1, 0}, az);
+            vb.box("headlight", Vec3{0.009, yT - th * 0.35, zc} - ax * 0.031 + az * (sg * (tw - 0.05)), {0.004, th * 0.4, 0.04}, tailNodes, ax, {0, 1, 0}, az);
             for (real stripe : {-0.015, 0.017})
-                vb.box("taillight", {-0.011, yT + stripe, zc}, {0.010, 0.009, tw}, yT > lidLatchY ? lidNodes : bodyNodes, ax, {0, 1, 0}, az);
+                vb.box("taillight", Vec3{0.009, yT + stripe, zc} - ax * 0.032, {0.004, 0.006, tw - 0.012}, tailNodes, ax, {0, 1, 0}, az);
         }
         vb.box("plate", {-0.020, yT - 0.145, 0.0}, {0.013, 0.046, 0.23}, yT - 0.145 > lidLatchY ? lidNodes : bodyNodes);
         // Lettering anchors: the rear plate's outer face, the front plate region's centre.
