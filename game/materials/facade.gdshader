@@ -63,14 +63,33 @@ void fragment() {
 		float bay = usable / bays;
 		float uu = u - 0.8;
 		float bay_i = floor(uu / bay);
-		float floor_i = floor(y / fh);
-		float floors = floor((box_size.y - 1.1) / fh);
-		vec2 cell = vec2(fract(uu / bay), fract(y / fh));
-		bool in_grid = uu > 0.0 && uu < usable && floor_i < floors;
+		// Town buildings over 12 m have a shop ground floor (4.3 m storey with shop windows, some
+		// glass doors and a fascia per shop unit of two bays); the upper storeys start above it.
+		bool shops = box_size.y > 12.0;
+		float ground_h = shops ? 4.3 : 0.0;
+		float yg = shops ? y - ground_h + fh : y;
+		float floor_i = floor(yg / fh);
+		float floors = floor((box_size.y - 1.1 - ground_h) / fh) + (shops ? 1.0 : 0.0);
+		vec2 cell = vec2(fract(uu / bay), fract(yg / fh));
+		bool in_grid = uu > 0.0 && uu < usable && floor_i < floors && (!shops || floor_i >= 1.0);
 		float ww = window_width;
 		float wh = window_height;
 		float sill = 0.3;
 		if (style == 2) { ww = 0.94; wh = 0.78; sill = 0.12; }
+		float cell_h = fh;
+		bool shop_zone = shops && y < ground_h;
+		float shop_rand = hash(vec2(floor(bay_i / 2.0), 5.7) + box_origin.xz * 0.031 + n.xz * 3.0);
+		bool door = shop_zone && hash(vec2(bay_i, 1.3) + box_origin.xz * 0.017 + n.xz) < 0.3;
+		if (shop_zone) {
+			cell = vec2(fract(uu / bay), y / ground_h);
+			cell_h = ground_h;
+			floor_i = -1.0;
+			in_grid = uu > 0.0 && uu < usable;
+			ww = 0.86;
+			float bottom = door ? 0.04 : 0.6;
+			wh = (3.2 - bottom) / ground_h;
+			sill = bottom / ground_h;
+		}
 		// Wall detailing: brick courses, floor bands and a darker plinth.
 		if (style == 1) {
 			vec2 brick = vec2(u / 0.24, y / 0.075);
@@ -86,6 +105,33 @@ void fragment() {
 			base = mix(vec3(0.07, 0.08, 0.09), base * 0.4, 0.3);
 		}
 		base *= mix(0.72, 1.0, step(0.75, y));
+		// Shop fascia: a sign band in the shop's colour across its two bays.
+		vec3 fascia_col = vec3(0.0);
+		float sign_glow = 0.0;
+		{
+			float k = fract(shop_rand * 9.1);
+			fascia_col = k < 0.2 ? vec3(0.12, 0.2, 0.32) : (k < 0.4 ? vec3(0.42, 0.1, 0.09) : (k < 0.55 ? vec3(0.1, 0.26, 0.17)
+				: (k < 0.7 ? vec3(0.78, 0.74, 0.66) : (k < 0.85 ? vec3(0.1, 0.1, 0.11) : vec3(0.62, 0.46, 0.14)))));
+		}
+		float fascia = shops && y > 3.4 && y < 4.05 && uu > 0.0 && uu < usable ? 1.0 : 0.0;
+		base = mix(base, fascia_col, fascia);
+		// Lettering: a centred row of glyph blocks in a contrasting tone on each shop's sign.
+		{
+			float unit_w = bay * 2.0;
+			float su = fract(uu / unit_w) * unit_w - unit_w * 0.5;      // metres from the sign centre
+			float sv = y - 3.725;
+			float text_w = unit_w * mix(0.35, 0.7, fract(shop_rand * 4.3));
+			float gi = floor(su / 0.24);
+			float gx = fract(su / 0.24);
+			float glyph = step(abs(su), text_w * 0.5) * step(abs(sv), 0.16) * step(0.12, gx) * step(gx, 0.86)
+				* step(0.18, hash(vec2(gi, floor(shop_rand * 50.0))));
+			// Glyph shapes: knock out a random notch so the blocks read as letters, not bars.
+			float notch = step(0.5, hash(vec2(gi, 2.0 + floor(shop_rand * 50.0)))) * step(abs(gx - 0.5), 0.14) * step(abs(sv - 0.05), 0.06);
+			glyph *= 1.0 - notch;
+			vec3 ink = dot(fascia_col, vec3(0.333)) > 0.45 ? vec3(0.1, 0.1, 0.12) : vec3(0.93, 0.92, 0.88);
+			base = mix(base, ink, glyph * fascia);
+			sign_glow = glyph * fascia * step(0.5, dot(ink, vec3(0.333))) * step(0.3, fract(shop_rand * 6.1));
+		}
 		float parapet = step(box_size.y - 0.5, y);
 		base = mix(base, base * 0.82, parapet);
 		// Everything below is evaluated for every fragment (no derivatives in divergent branches)
@@ -93,13 +139,13 @@ void fragment() {
 		float g = in_grid ? 1.0 : 0.0;
 		vec2 pc = vec2(uu, y);
 		vec2 fw = max(fwidth(pc), vec2(1e-4));
-		vec2 local = vec2((cell.x - 0.5) * bay, cell.y * fh);              // metres in the cell
-		vec2 half_w = vec2(ww * bay, wh * fh) * 0.5;
-		vec2 center = vec2(0.0, (sill + wh * 0.5) * fh);
+		vec2 local = vec2((cell.x - 0.5) * bay, cell.y * cell_h);          // metres in the cell
+		vec2 half_w = vec2(ww * bay, wh * cell_h) * 0.5;
+		vec2 center = vec2(0.0, (sill + wh * 0.5) * cell_h);
 		vec2 d = abs(local - center);
 		float outer = box_cov(d, half_w + 0.07, fw) * g;
 		float open = box_cov(d, half_w, fw) * g;
-		float sill_m = style == 2 ? 0.0 : box_cov(abs(local - vec2(0.0, center.y - half_w.y - 0.1)), vec2(half_w.x + 0.15, 0.06), fw) * (1.0 - outer) * g;
+		float sill_m = (style == 2 || shop_zone) ? 0.0 : box_cov(abs(local - vec2(0.0, center.y - half_w.y - 0.1)), vec2(half_w.x + 0.15, 0.06), fw) * (1.0 - outer) * g;
 		vec3 view = normalize(CAMERA_POSITION_WORLD - world_pos);
 		vec3 vt = vec3(dot(view, t), view.y, max(dot(view, n), 0.05));
 		// Point on the recessed glass plane seen through this fragment.
@@ -110,7 +156,7 @@ void fragment() {
 		// Interior mapping into a room of the bay's size and 4 m depth.
 		float room_rand = hash(vec2(bay_i, floor_i) + box_origin.xz * 0.013 + n.xz * 7.0);
 		vec3 room_min = vec3(-bay * 0.5, 0.0, -4.0);
-		vec3 room_max = vec3(bay * 0.5, fh, 0.0);
+		vec3 room_max = vec3(bay * 0.5, cell_h, 0.0);
 		// Keep the ray inside the room and its direction non-zero: masked-out fragments must not
 		// produce NaNs, which a zero coverage weight would not cancel.
 		vec3 o = vec3(clamp(glass, room_min.xy + 0.01, room_max.xy - 0.01), 0.0);
@@ -119,7 +165,7 @@ void fragment() {
 		vec3 interior;
 		// About a quarter of the rooms lit at night, each with its own lamp: brightness varies and
 		// most are warm bulbs, some neutral, a few cool (LED, a television).
-		float lit = step(0.72, room_rand);
+		float lit = shop_zone ? step(0.2, room_rand) : step(0.72, room_rand);
 		float lamp = mix(0.45, 1.4, fract(room_rand * 7.7));
 		float tone = fract(room_rand * 11.3);
 		vec3 tint = tone < 0.6 ? vec3(1.0, 0.76, 0.5) : (tone < 0.88 ? vec3(1.0, 0.9, 0.78) : vec3(0.72, 0.82, 1.0));
@@ -129,8 +175,23 @@ void fragment() {
 			vec3 tx = (mix(room_min, room_max, step(0.0, dir)) - o) / dir;
 			float hit = min(min(tx.x, tx.y), tx.z);
 			p = o + dir * hit;
-			if (hit == tx.z) {
-				interior = wall_in * 0.9 * mix(0.45, 1.0, step(0.9, p.y));   // furniture along the back wall
+			if (hit == tx.z || (shop_zone && hit == tx.x)) {
+				interior = hit == tx.z ? wall_in * 0.9 * mix(0.45, 1.0, step(0.9, p.y)) : wall_in * 0.75;   // furniture along the back wall
+				if (shop_zone) {
+					// Shelves along the back and side walls (side walls index the goods by depth).
+					float wall_u = hit == tx.z ? p.x : p.z;
+					// Shelves of goods: coloured rows between pale shelf boards.
+					float row = floor(p.y / 0.38);
+					float item = floor(wall_u * 7.0 + row * 0.37);
+					vec3 goods = vec3(hash(vec2(row, item)), hash(vec2(item, row + 3.0)), hash(vec2(row + 7.0, item + 1.0)));
+					goods = mix(goods, vec3(0.55), 0.45) * mix(0.75, 1.05, hash(vec2(item * 0.3, row)));
+					// Items stand on the boards with a little air above them.
+					float on_board = step(fract(p.y / 0.38), 0.78);
+					vec3 shelf = mix(wall_in * 0.55, goods, on_board);
+					shelf = mix(shelf, vec3(0.85, 0.84, 0.8), step(0.9, fract(p.y / 0.38)));
+					float rack = step(0.15, p.y) * step(p.y, 2.4);
+					interior = mix(hit == tx.z ? wall_in : wall_in * 0.8, shelf * (hit == tx.z ? 1.0 : 0.85), rack);
+				}
 			} else if (hit == tx.y) {
 				interior = dir.y < 0.0 ? vec3(0.32, 0.26, 0.2) * mix(0.7, 1.1, room_rand) : vec3(0.85, 0.85, 0.82);
 			} else {
@@ -141,12 +202,13 @@ void fragment() {
 		}
 		interior *= 1.0 - clamp(-p.z / 8.0, 0.0, 0.4);   // deeper is darker
 		// Blinds lowered to different heights.
-		float blind = fract(room_rand * 17.3) * 0.7;
+		float blind = shop_zone ? 0.0 : fract(room_rand * 17.3) * 0.7;
 		float glass_v = (glass.y - (center.y - half_w.y)) / (half_w.y * 2.0);
 		float blinds_m = clamp((glass_v - (1.0 - blind)) / (gfw.y / (half_w.y * 2.0)) + 0.5, 0.0, 1.0) * step(0.08, blind);
 		vec3 blind_col = mix(vec3(0.78, 0.76, 0.7), vec3(0.45, 0.47, 0.5), step(0.5, fract(room_rand * 3.1)));
 		interior = mix(interior, blind_col, blinds_m);
 		float light = mix(0.035 + 0.13 * lit, 0.02 + 1.25 * lamp * lit, city_night) * (style == 2 ? 0.45 : 1.0);
+		if (shop_zone) light = mix(0.22, 1.1, city_night) * lit;   // shops are lit inside by day, too
 		light *= mix(1.0, 0.4, blinds_m * lit);   // a lowered blind only glows
 		float fresnel = 0.04 + 0.96 * pow(1.0 - vt.z, 5.0);
 		float mullion = style == 2 ? 0.0 : clamp((0.03 - abs(glass.x - center.x)) / gfw.x + 0.5, 0.0, 1.0) * (1.0 - blinds_m);
@@ -158,6 +220,7 @@ void fragment() {
 		albedo = mix(albedo, frame_col, outer - open);
 		ALBEDO = mix(albedo, inner, open);
 		EMISSION = interior * light * (1.0 - fresnel) * mix(vec3(1.0), tint, lit) * open * glass_m * (1.0 - mullion);
+		EMISSION += vec3(1.0, 0.97, 0.9) * sign_glow * city_night * 1.6;   // back-lit shop lettering
 		float inner_rough = mix(0.8, mix(0.04, 0.5, mullion), glass_m);
 		ROUGHNESS = mix(mix(0.85, 0.5, outer - open), inner_rough, open);
 		SPECULAR = mix(0.35, 0.5, open * glass_m);

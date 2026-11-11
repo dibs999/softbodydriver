@@ -199,7 +199,10 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 					facade.append(Transform3D(Basis.from_scale(half * 2.0), pos))
 					world.add_box(pos, half, Vector3.ZERO, 0.7)
 					# Plinth, floor bands every two storeys and a cornice with parapet instead of a bare box.
-					plinths.append(Transform3D(Basis.from_scale(Vector3(half.x * 2.0 + 0.16, 0.9, half.z * 2.0 + 0.16)), Vector3(bxc, KERB + 0.45, bzc)))
+					# Buildings over 12 m have a shop ground floor (facade shader) and no stone plinth
+					# in front of its shop windows and glass doors.
+					if hgt <= 12.0:
+						plinths.append(Transform3D(Basis.from_scale(Vector3(half.x * 2.0 + 0.16, 0.9, half.z * 2.0 + 0.16)), Vector3(bxc, KERB + 0.45, bzc)))
 					var band := 6.4
 					while band < hgt - 2.0:
 						bands.append(Transform3D(Basis.from_scale(Vector3(half.x * 2.0 + 0.12, 0.16, half.z * 2.0 + 0.12)), Vector3(bxc, KERB + band, bzc)))
@@ -227,10 +230,10 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 							tanks.append(Transform3D(Basis.IDENTITY, Vector3(bxc - half.x * 0.4, KERB + hgt + 2.4, bzc + half.z * 0.35)))
 						if hgt > 30.0 and rng.randf() < 0.5:
 							antennas.append(Transform3D(Basis.from_scale(Vector3(0.12, 9.0, 0.12)), Vector3(bxc - half.x * 0.2, KERB + hgt + 5.0, bzc - half.z * 0.2)))
-					if sz == 0:
+					if sz == 0 and hgt <= 12.0:
 						shopfronts.append(Transform3D(Basis(), Vector3(bxc, KERB + 1.4, bzc - half.z - 0.06)))
 						awnings.append(Transform3D(Basis(), Vector3(bxc, KERB + 2.9, bzc - half.z - 0.55)))
-					if sx == 0:
+					if sx == 0 and hgt <= 12.0:
 						var facing := Basis(Vector3.UP, PI * 0.5)
 						shopfronts.append(Transform3D(facing, Vector3(bxc - half.x - 0.06, KERB + 1.4, bzc)))
 						awnings.append(Transform3D(facing, Vector3(bxc - half.x - 0.55, KERB + 2.9, bzc)))
