@@ -47,7 +47,16 @@ void fragment() {
 	float pd = length(fract(pc) - jitter);
 	float pr = 0.08 + 0.17 * hash(cell_id + 5.0);
 	float pebble = (1.0 - smoothstep(pr - 0.06, pr, pd)) * step(0.35, hash(cell_id + 9.0));
-	earth = mix(earth, earth * (hash(cell_id + 3.0) > 0.5 ? 1.45 : 0.55), pebble * 0.5);
+	earth = mix(earth, earth * (hash(cell_id + 3.0) > 0.5 ? 1.3 : 0.5), pebble * 0.7);
+	// Sparse larger stones (fist size) with a lit and a shadowed side, so they read as raised.
+	vec2 sc = wp / 0.45;
+	vec2 sid = floor(sc);
+	vec2 sv = fract(sc) - vec2(hash(sid + 2.0), hash(sid + 6.0)) * 0.5 - 0.25;
+	float sr = 0.10 + 0.08 * hash(sid + 1.0);
+	float stone = (1.0 - smoothstep(sr * 0.75, sr, length(sv * vec2(1.0, 1.3)))) * step(0.82, hash(sid + 13.0));
+	float lit = clamp(0.75 - dot(normalize(sv + 1e-4), vec2(0.6, 0.8)) * 0.6 * length(sv) / sr, 0.35, 1.35);
+	vec3 rock = earth * vec3(0.82, 0.84, 0.90) * (0.72 + 0.3 * hash(sid + 4.0)) * mix(1.0, lit, 0.45);
+	float stone_shadow = (1.0 - smoothstep(sr, sr * 1.5, length(sv - vec2(0.03, 0.04)))) * step(0.82, hash(sid + 13.0)) * (1.0 - stone);
 	// Dry, pale dust and dark damp earth in patches along the track.
 	earth = mix(earth * vec3(1.18, 1.12, 1.02), earth * vec3(0.62, 0.58, 0.55), smoothstep(0.4, 0.75, macro));
 	earth *= 0.88 + 0.24 * vnoise(wp * 0.9);
@@ -62,7 +71,14 @@ void fragment() {
 	// Ragged edges: grass creeps in by up to a metre.
 	float edge_noise = (fbm(wp * 0.35) - 0.5) * 1.6;
 	float shoulder = smoothstep(width * 0.30 + edge_noise * 0.4, width * 0.5 + edge_noise * 0.3, abs(across));
-	vec3 col = mix(earth * mix(1.0, 0.76, worn), plants, clamp(max(center, shoulder * 0.9), 0.0, 1.0));
+	// Compacted ruts: darker, with fine tyre grooves running along them; lighter lips of pushed-up
+	// soil on both sides of each rut.
+	float grooves = 0.95 + 0.05 * sin(across * 70.0 + vnoise(vec2(UV.y * 8.0, across * 4.0)) * 6.0) * (0.4 + 0.6 * vnoise(wp * 2.0));
+	float lip = smoothstep(0.30, 0.42, rut) * (1.0 - smoothstep(0.42, 0.62, rut));
+	vec3 track_earth = earth * mix(1.0, 0.74 * grooves, worn) * (1.0 + 0.16 * lip);
+	track_earth = mix(track_earth, track_earth * 0.6, stone_shadow * 0.6 * (1.0 - worn));
+	track_earth = mix(track_earth, rock, stone * (1.0 - worn * 0.8));
+	vec3 col = mix(track_earth, plants, clamp(max(center, shoulder * 0.9), 0.0, 1.0));
 	// Puddles in the ruts.
 	float wet = clamp(road_wetness, 0.0, 1.0);
 	float pool_n = fbm(wp * 0.22 + vec2(3.0, 9.0)) * 0.75 + vnoise(wp * 1.4) * 0.25;
