@@ -36,6 +36,15 @@ func _run(scene: Node) -> void:
 	var world: SBWorld = scene.world
 	world.time_scale = 0.0
 	scene.set_process(false)
+	# The saved profile is applied after _initialize, so the map's own traffic 4x4 may be out on the
+	# loop. With the game paused it would keep rolling on its last inputs and could end up across
+	# the trail in front of the test car, depending on how long loading took: take it off the map.
+	for v: SBVehicle in scene.vehicles.duplicate():
+		if v != scene.player:
+			world.remove_vehicle(v)
+			scene.vehicles.erase(v)
+			scene.ai.erase(v)
+			v.queue_free()
 	var routes: Array = scene.map_data.get("ai_routes", [])
 	check(routes.size() == 1 and String(routes[0].get("car", "")).contains("trailhead"), "Offroad traffic is a 4x4 on the trail loop")
 	if routes.size() < 1:
