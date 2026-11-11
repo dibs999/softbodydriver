@@ -271,4 +271,10 @@ Prüfungen in `core/tests/test_car.cpp`:
 ## Offen
 
 * Einzelne Resonanzbuckel: Fastback bei 80 km/h (c_rr 0,021), Kestrel bei 130 km/h (0,019).
+  * Beim Fastback ist der Buckel schmal: 75 km/h 0,014, 80 km/h 0,021, 85 km/h 0,016, 90 km/h 0,012.
+  * Kein Radflattern (Achsresonanz): Die senkrechte Nabenbewegung wird von der
+    Node-Durchlauffrequenz (20 × Raddrehzahl, 180–235 Hz) bestimmt. Bei 80 km/h zeigt sie kein
+    Maximum (0,022 m/s gegenüber 0,044 bei 70 km/h).
+  * Wahrscheinlich eine Eigenform des Laufflächenrings. Dafür ist eine Modalanalyse des Reifens
+    nötig.
 * Spieler mit Tastatur/Gamepad und die Fahrhilfe korrigieren kleinere Abweichungen.
