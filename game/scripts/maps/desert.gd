@@ -533,7 +533,6 @@ static func _trading_post(parent: Node3D, world: SBWorld, track: PackedVector3Ar
 	var side := Vector3(-heading.z, 0, heading.x) * _post_side
 	var yaw := atan2(-heading.z, heading.x)
 	var rot := Vector3(0, yaw, 0)
-	var label_yaw := yaw + PI * 0.5 * _post_side
 	var basis := Basis(Vector3.UP, yaw)
 	var stucco := C.noise_mat(Color(0.83, 0.70, 0.55), 0.08, 2.0, 0.9)
 	var trim := C.mat(Color(0.55, 0.20, 0.14), 0.7)
@@ -545,6 +544,15 @@ static func _trading_post(parent: Node3D, world: SBWorld, track: PackedVector3Ar
 	var y := point.y
 	var at := func(along: float, across: float, up: float) -> Vector3:
 		return Vector3(point.x, y + up, point.z) + heading * along + side * across
+	# Label3D yaw that makes text read from `dir` (the label faces along its local +z).
+	var face := func(dir: Vector3) -> float: return atan2(dir.x, dir.z)
+	var lit_panel := StandardMaterial3D.new()
+	lit_panel.albedo_color = Color(0.05, 0.08, 0.06)
+	lit_panel.emission_enabled = true
+	lit_panel.emission = Color(0.35, 0.95, 0.55)
+	lit_panel.emission_energy_multiplier = 0.3
+	var yellow := C.mat(Color(0.86, 0.68, 0.12), 0.6)
+	var hose_mat := C.mat(Color(0.06, 0.06, 0.06), 0.7)
 	# Level pad from the verge outwards (its body reaches down into the sand).
 	C.box(parent, world, at.call(0.0, 30.0, -1.48), Vector3(34.0, 1.5, 20.0), rot, gravel, 0.9)
 	# Petrol canopy with two pump islands.
@@ -553,11 +561,28 @@ static func _trading_post(parent: Node3D, world: SBWorld, track: PackedVector3Ar
 			C.box(parent, world, at.call(a, c, 2.6), Vector3(0.22, 2.6, 0.22), rot, steel, 0.6)
 	C.box(parent, world, at.call(0.0, 21.0, 5.35), Vector3(9.0, 0.25, 7.0), rot, white, 0.8, false)
 	C.box(parent, world, at.call(0.0, 21.0, 5.0), Vector3(9.05, 0.45, 7.05), rot, trim, 0.8, false)
+	# Canopy fascia lettering on both long sides.
+	for sgn: float in [-1.0, 1.0]:
+		C.label3d(parent, "COYOTE  FUEL", at.call(0.0, 21.0 + sgn * 7.12, 5.0), face.call(side * sgn), 0.62, Color(0.96, 0.93, 0.86))
 	for c: float in [18.5, 23.5]:
 		C.box(parent, world, at.call(0.0, c, 0.12), Vector3(3.2, 0.12, 0.6), rot, C.mat(Color(0.6, 0.6, 0.58)), 0.8)
+		# Yellow crash bollards at both island ends.
+		for a: float in [-3.5, 3.5]:
+			C.box(parent, world, at.call(a, c, 0.6), Vector3(0.1, 0.6, 0.1), rot, yellow, 0.6)
 		for a: float in [-1.8, 1.8]:
-			C.box(parent, world, at.call(a, c, 0.95), Vector3(0.35, 0.75, 0.28), rot, trim, 0.6)
-			C.box(parent, world, at.call(a, c, 1.35), Vector3(0.30, 0.16, 0.30), rot, glass, 0.6, false)
+			# Dispenser: grey cabinet, white body with a red band, lit price displays on both
+			# faces, nozzles in holsters at the ends with hoses down to the cabinet.
+			C.box(parent, world, at.call(a, c, 0.6), Vector3(0.42, 0.36, 0.26), rot, C.mat(Color(0.42, 0.43, 0.44), 0.6, 0.3), 0.6)
+			C.box(parent, null, at.call(a, c, 1.45), Vector3(0.40, 0.5, 0.24), rot, white, 0.6, false)
+			C.box(parent, null, at.call(a, c, 1.1), Vector3(0.405, 0.07, 0.245), rot, trim, 0.6, false)
+			C.box(parent, null, at.call(a, c, 2.02), Vector3(0.42, 0.08, 0.26), rot, trim, 0.6, false)
+			for f: float in [-1.0, 1.0]:
+				C.box(parent, null, at.call(a, c + f * 0.245, 1.55), Vector3(0.24, 0.13, 0.01), rot, lit_panel, 0.6, false)
+				C.label3d(parent, "3.49", at.call(a, c + f * 0.26, 1.55), face.call(side * f), 0.16, Color(0.6, 1.0, 0.7))
+			for e: float in [-1.0, 1.0]:
+				C.box(parent, null, at.call(a + e * 0.44, c, 1.35), Vector3(0.04, 0.14, 0.07), rot, dark, 0.6, false)
+				C.box(parent, null, at.call(a + e * 0.47, c, 1.42), Vector3(0.03, 0.03, 0.10), rot, dark, 0.6, false)
+				C.box(parent, null, at.call(a + e * 0.46, c, 0.95), Vector3(0.018, 0.42, 0.018), rot, hose_mat, 0.6, false)
 	# A cluster of oil drums on the pad by the diner's end wall (where the pad is clear of dunes).
 	for k in 5:
 		var d: Vector3 = at.call(-31.0 + (k % 3) * 0.62, 31.5 + (k / 3) * 0.62, 0.03)
@@ -568,13 +593,56 @@ static func _trading_post(parent: Node3D, world: SBWorld, track: PackedVector3Ar
 	var diner: Vector3 = at.call(-20.0, 34.0, 2.2)
 	C.box(parent, world, diner, Vector3(8.0, 2.2, 5.0), rot, stucco, 0.8)
 	C.box(parent, world, diner + Vector3.UP * 2.35, Vector3(8.2, 0.25, 5.2), rot, trim, 0.8, false)
-	C.box(parent, world, diner + side * -5.02 + Vector3.UP * 0.2, Vector3(6.4, 0.75, 0.05), rot, glass, 0.6, false)
-	C.box(parent, world, diner + side * -5.03 + heading * 6.8 + Vector3.UP * -0.9, Vector3(0.6, 1.1, 0.05), rot, dark, 0.6, false)
+	# Window band towards the road: glass with aluminium mullions, sill and header, a striped
+	# awning over it, a glass door with a push bar.
+	var front := diner - side * 5.0
+	var alu := C.mat(Color(0.78, 0.79, 0.8), 0.35, 0.8)
+	var diner_glass := C.mat(Color(0.16, 0.22, 0.25), 0.06, 0.5)
+	C.box(parent, null, front - side * 0.02 + Vector3.UP * 0.2, Vector3(6.4, 0.75, 0.03), rot, diner_glass, 0.6, false)
+	for k in 9:
+		C.box(parent, null, front - side * 0.05 + heading * (-6.4 + k * 1.6) + Vector3.UP * 0.2, Vector3(0.04, 0.78, 0.03), rot, alu, 0.6, false)
+	C.box(parent, null, front - side * 0.1 + Vector3.UP * -0.6, Vector3(6.5, 0.06, 0.12), rot, alu, 0.6, false)
+	C.box(parent, null, front - side * 0.06 + Vector3.UP * 0.98, Vector3(6.45, 0.05, 0.06), rot, alu, 0.6, false)
+	var stripe_a := C.mat(Color(0.62, 0.16, 0.12), 0.8)
+	var stripe_b := C.mat(Color(0.93, 0.91, 0.86), 0.8)
+	for k in 16:
+		var along := -6.6 + k * 0.88 + 0.44
+		C.box(parent, null, front - side * 0.62 + heading * along + Vector3.UP * 1.25, Vector3(0.44, 0.04, 0.66), rot, stripe_a if k % 2 == 0 else stripe_b, 0.8, false)
+	C.box(parent, null, front - side * 1.28 + Vector3.UP * 1.1, Vector3(7.05, 0.16, 0.02), rot, stripe_a, 0.8, false)
+	var door_c := front + heading * 6.8 + Vector3.UP * -0.9
+	C.box(parent, null, door_c - side * 0.03, Vector3(0.6, 1.1, 0.03), rot, diner_glass, 0.6, false)
+	for e: float in [-1.0, 1.0]:
+		C.box(parent, null, door_c - side * 0.05 + heading * e * 0.6, Vector3(0.04, 1.12, 0.04), rot, alu, 0.6, false)
+	C.box(parent, null, door_c - side * 0.05 + Vector3.UP * 1.12, Vector3(0.64, 0.04, 0.04), rot, alu, 0.6, false)
+	C.box(parent, null, door_c - side * 0.1, Vector3(0.45, 0.025, 0.025), rot, alu, 0.6, false)
+	# Roof sign, air-conditioning units and a vent stack.
+	# (on posts, clear of the roof edge when seen from the pad)
+	C.box(parent, null, diner + Vector3.UP * 3.75 - side * 3.0, Vector3(2.6, 0.6, 0.06), rot, trim, 0.8, false)
+	for f: float in [-1.0, 1.0]:
+		C.label3d(parent, "DINER", diner + Vector3.UP * 3.75 - side * (3.0 + f * 0.08), face.call(-side * f), 0.95, Color(1.0, 0.95, 0.82))
+	for e: float in [-1.0, 1.0]:
+		C.box(parent, null, diner + Vector3.UP * 2.9 - side * 3.0 + heading * e * 2.2, Vector3(0.05, 0.3, 0.05), rot, steel, 0.6, false)
+	for k in 2:
+		C.box(parent, null, diner + Vector3.UP * 2.95 + heading * (-3.5 + k * 2.4) + side * 2.0, Vector3(0.7, 0.45, 0.55), rot, steel, 0.6, false)
+	C.box(parent, null, diner + Vector3.UP * 3.1 + heading * 4.5 + side * 2.5, Vector3(0.12, 0.6, 0.12), rot, dark, 0.6, false)
+	# Vending machine and a bench by the door.
+	var vend := front - side * 0.45 + heading * 7.9 + Vector3.UP * -1.25
+	C.box(parent, world, vend, Vector3(0.45, 0.95, 0.4), rot, trim, 0.6)
+	C.box(parent, null, vend - side * 0.41 + Vector3.UP * 0.25, Vector3(0.3, 0.5, 0.01), rot, lit_panel, 0.6, false)
+	var bench := front - side * 0.55 + heading * 3.0 + Vector3.UP * -1.75
+	C.box(parent, world, bench, Vector3(1.0, 0.04, 0.22), rot, C.mat(Color(0.45, 0.3, 0.18), 0.8), 0.6)
+	for e: float in [-1.0, 1.0]:
+		C.box(parent, null, bench + heading * e * 0.85 + Vector3.UP * -0.22, Vector3(0.04, 0.22, 0.2), rot, dark, 0.6, false)
 	var pole: Vector3 = at.call(-12.0, 12.5, 4.0)
 	C.box(parent, world, pole, Vector3(0.18, 4.0, 0.18), rot, steel, 0.6)
 	C.box(parent, world, pole + Vector3.UP * 4.6, Vector3(0.25, 1.1, 2.6), rot, trim, 0.8, false)
-	C.label3d(parent, "COYOTE FLATS", pole + Vector3.UP * 4.9 - side * 0.27, label_yaw, 0.55, Color(1.0, 0.92, 0.75))
-	C.label3d(parent, "DINER  ·  GAS  ·  MOTEL", pole + Vector3.UP * 4.2 - side * 0.27, label_yaw, 0.32, Color(1.0, 0.92, 0.75))
+	# Lettering on both faces of the board (they face along the road) and a fuel price board below.
+	for f: float in [-1.0, 1.0]:
+		C.label3d(parent, "COYOTE FLATS", pole + Vector3.UP * 4.95 + heading * f * 0.27, face.call(heading * f), 0.55, Color(1.0, 0.92, 0.75))
+		C.label3d(parent, "DINER  ·  GAS  ·  MOTEL", pole + Vector3.UP * 4.25 + heading * f * 0.27, face.call(heading * f), 0.32, Color(1.0, 0.92, 0.75))
+	C.box(parent, null, pole + Vector3.UP * 2.9, Vector3(0.12, 0.5, 1.6), rot, white, 0.8, false)
+	for f: float in [-1.0, 1.0]:
+		C.label3d(parent, "REGULAR  3.49\nDIESEL      3.89", pole + Vector3.UP * 2.9 + heading * f * 0.13, face.call(heading * f), 0.22, Color(0.12, 0.12, 0.14))
 	# Motel row with numbered doors under a covered walkway.
 	var motel: Vector3 = at.call(14.0, 42.0, 1.6)
 	C.box(parent, world, motel, Vector3(16.0, 1.6, 3.5), rot, stucco, 0.8)
@@ -584,7 +652,7 @@ static func _trading_post(parent: Node3D, world: SBWorld, track: PackedVector3Ar
 		var door: Vector3 = motel + heading * a - side * 3.52 + Vector3.UP * -0.5
 		C.box(parent, world, door, Vector3(0.5, 1.05, 0.04), rot, C.mat(Color(0.25, 0.38, 0.42), 0.6), 0.6, false)
 		C.box(parent, world, door + heading * 1.3 + Vector3.UP * 0.6, Vector3(0.65, 0.4, 0.04), rot, glass, 0.6, false)
-		C.label3d(parent, str(k + 1), door + Vector3.UP * 1.35 - side * 0.05, label_yaw, 0.22)
+		C.label3d(parent, str(k + 1), door + Vector3.UP * 1.35 - side * 0.05, face.call(-side), 0.22)
 		if k % 2 == 0:
 			C.box(parent, world, motel + heading * (a + 2.0) - side * 6.0 + Vector3.UP * 0.0, Vector3(0.10, 1.7, 0.10), rot, steel, 0.6, false)
 	# Water tower behind the buildings.

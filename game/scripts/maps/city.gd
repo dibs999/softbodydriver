@@ -62,8 +62,6 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		_facade_material(Color(0.78, 0.74, 0.66), Color(0.25, 0.27, 0.3), 0),
 	]
 	var roof_mat := C.mat(Color(0.25, 0.25, 0.26), 0.8)
-	var shopfronts: Array[Transform3D] = []
-	var awnings: Array[Transform3D] = []
 	var pavements: Array[Transform3D] = []
 	var street_trees: Array[Vector3] = []
 	var grates: Array[Transform3D] = []
@@ -230,13 +228,6 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 							tanks.append(Transform3D(Basis.IDENTITY, Vector3(bxc - half.x * 0.4, KERB + hgt + 2.4, bzc + half.z * 0.35)))
 						if hgt > 30.0 and rng.randf() < 0.5:
 							antennas.append(Transform3D(Basis.from_scale(Vector3(0.12, 9.0, 0.12)), Vector3(bxc - half.x * 0.2, KERB + hgt + 5.0, bzc - half.z * 0.2)))
-					if sz == 0 and hgt <= 12.0:
-						shopfronts.append(Transform3D(Basis(), Vector3(bxc, KERB + 1.4, bzc - half.z - 0.06)))
-						awnings.append(Transform3D(Basis(), Vector3(bxc, KERB + 2.9, bzc - half.z - 0.55)))
-					if sx == 0 and hgt <= 12.0:
-						var facing := Basis(Vector3.UP, PI * 0.5)
-						shopfronts.append(Transform3D(facing, Vector3(bxc - half.x - 0.06, KERB + 1.4, bzc)))
-						awnings.append(Transform3D(facing, Vector3(bxc - half.x - 0.55, KERB + 2.9, bzc)))
 	C.scatter_multimesh(parent, box_mesh, pavement, pavements, false)
 	C.scatter_multimesh(parent, box_mesh, roof_mat, roofs, false)
 	C.scatter_multimesh(parent, box_mesh, metal, rooftop_units, false)
@@ -262,12 +253,6 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	C.scatter_multimesh(parent, box_mesh, C.mat(Color(0.12, 0.12, 0.12), 0.7), dumpster_lids, false)
 	for i in buildings.size():
 		C.scatter_multimesh(parent, box_mesh, facades[i], buildings[i])
-	var window := BoxMesh.new()
-	window.size = Vector3(5.0, 2.65, 0.11)
-	C.scatter_multimesh(parent, window, C.mat(Color(0.15, 0.26, 0.33), 0.32), shopfronts, false)
-	var awning := BoxMesh.new()
-	awning.size = Vector3(5.5, 0.22, 1.25)
-	C.scatter_multimesh(parent, awning, C.mat(Color(0.24, 0.43, 0.39)), awnings, false)
 
 	# Lane markings along every street (centre line + lane dashes, instanced).
 	var dash := PlaneMesh.new()
