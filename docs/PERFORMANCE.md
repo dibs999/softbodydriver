@@ -63,6 +63,14 @@ bleiben also keine unsichtbaren Hindernisse zurück.
     einer VM, deren Kerne Godot ohnehin auslastet, ist der Gewinn im Spiel kaum messbar).
   * Die Physik gibt die Weltsperre nach dem laufenden Schritt an einen wartenden Hauptthread
     ab, statt erst 16 Schritte (auf einem langsamen Laptop ~15 ms) fertigzurechnen.
+  * Skripte lasen Tür-, Leuchten-, Scheiben-, Stoßfänger- und Klappenzustände und die
+    Weltstatistik mehrmals je Bild, jedes Mal unter der Weltsperre: ~30 % der Stichproben im
+    Hauptthread warteten auf der Autobahn auf einen Physikschritt. Die Zustände werden jetzt
+    einmal je Bild beim Abgleich erneuert (nur die im letzten Bild gelesenen Arten), ändernde
+    Aufrufe verwerfen sie, und `get_stats()` liest veröffentlichte Werte: 2 von 30 Stichproben.
+  * Die Telemetrie zählte beschädigte Beams über `stats()`, das je Auto und Bild auch kinetische
+    und elastische Energie über alle Knoten und Beams summierte – unter der Sperre; sie zählt
+    jetzt nur noch.
 
 * **Bäume mit Detailstufen:**
   * Jede Baumart hat neben dem Nahmodell ein Fernmodell mit ~22 % der Blattkarten
