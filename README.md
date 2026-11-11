@@ -46,7 +46,8 @@ keine stabile Hochgeschwindigkeitsfahrt.
   Die Minikarte rückt im Cockpit nach oben, damit die Instrumente frei bleiben.
 - Zeitfahren, Lieferfahrten, Rennen und Crashtest vergeben **Medaillen**: Gold im Tempo der
   KI-Zielgeschwindigkeiten der Karte, Silber bis 20 %, Bronze bis 50 % langsamer; im Rennen
-  Gold und Silber für Platz 1 und 2, im Crashtest nach Sternen (5/4/3). Die beste Medaille je
+  Gold und Silber für Platz 1 und 2, im Crashtest nach Sternen (5/4/3), in der Drift-Challenge
+  ab 1.000 / 2.500 / 5.000 Punkten (aus der Punkteformel abgeleitet). Die beste Medaille je
   Karte und Aktivität bleibt gespeichert, das Hauptmenü zählt sie.
 - `F3` wählt freie Fahrt, Zeitfahren oder eine 60-Sekunden-Drift-Challenge; in der
   Stadt gibt es zusätzlich Lieferfahrten. Im **Rennen** stehen zwei KI-Gegner eine
@@ -72,6 +73,11 @@ keine stabile Hochgeschwindigkeitsfahrt.
 - `F2` zeigt Fahrzeugzustand, mittlere/P95-Bildzeit, Zeichenaufrufe und Physiktempo.
   Kleine Kartenobjekte werden räumlich gruppiert und in großer Entfernung ausgeblendet;
   ihre Kollisionen bleiben aktiv. Partikel und Bremsspuren haben feste Speicherbudgets.
+- Schleift die Karosserie über den Boden (Aufsetzen, Bordstein, eine hängende Stoßstange,
+  ein Auto auf dem Dach), meldet die Physik Kontaktkraft und Gleitgeschwindigkeit der
+  Karosserie-Nodes. Daraus entstehen ein metallisches Kratzgeräusch und ein Funkenfächer an
+  der Kontaktstelle: weißglühende Streifen, die orange auskühlen und hinter dem Auto
+  zurückbleiben. Auf Sand, Kies und Gras gibt es keine Funken, das Geräusch wird gedämpft.
 - Jeder Motorsound verwendet jetzt eine zusammenhängende Fahrzeugaufnahme mit
   getrennten Last-/Ruhebereichen. Der Vierzylinder besitzt echte Ausrollsegmente.
   Die V6-Aufnahme deckt hohe Drehzahlen nicht direkt ab; diese werden transponiert.
@@ -368,6 +374,7 @@ godot --headless --path game -s res://tests/actions_test.gd      # Gameplay-Eing
 godot --headless --path game -s res://tests/equipment_test.gd    # Beleuchtung, Blinker und Tanken
 godot --headless --path game -s res://tests/weather_test.gd      # Tageszeit, Regen und Nasshaftung
 godot --headless --path game -s res://tests/weather_audio_test.gd # Regenklang, Dämpfung und AudioServer-Aufnahme
+godot --headless --path game -s res://tests/body_scrape_test.gd  # Schleifkontakt: still beim Fahren, aktiv beim Aufsetzen
 godot --headless --path game -s res://tests/weather_door_test.gd # Offene Tür, Regenabschirmung und Akustik
 godot --headless --path game -s res://tests/door_controls_test.gd # Öffnen, Schließen, Scharniere und Reparatur
 godot --headless --path game -s res://tests/mirror_test.gd       # Optische Flächen, Projektion und Kamerawechsel

@@ -916,6 +916,31 @@ void SBVehicle::sync_from_world() {
     pos_ = body.positions();
     vel_ = body.velocities();
     {
+        // Body scraping on the ground: non-tread nodes pressed onto a static collider while
+        // sliding (a bottomed-out sump, a dragging bumper, a rim on a flat tyre, a car on its roof).
+        // Force-weighted contact point and sliding speed drive the grinding sound and sparks.
+        const auto& impulses = body.contactImpulses();
+        const auto& soft = body.contactStiffnesses();
+        const double dt = world_->world().settings().dt;
+        double force = 0.0, speed = 0.0;
+        sb::Vec3 at{0, 0, 0};
+        for (std::size_t i = 0; i < impulses.size() && i < vel_.size(); ++i) {
+            if (i < soft.size() && soft[i] > 0.0) continue;   // tyre tread
+            const double jn = sb::length(impulses[i]);
+            if (jn <= 0.0) continue;
+            const sb::Vec3 n = impulses[i] * (1.0 / jn);
+            const sb::Vec3 vt = vel_[i] - n * sb::dot(vel_[i], n);
+            const double slide = sb::length(vt);
+            if (slide < 0.8) continue;
+            const double f = jn / dt;
+            force += f;
+            speed += slide * f;
+            at += pos_[i] * f;
+        }
+        scrape_ = force > 0.0 ? std::clamp(force / 6000.0, 0.0, 1.0) * std::clamp(speed / force / 8.0, 0.0, 1.0) : 0.0;
+        if (force > 0.0) scrapePoint_ = toG(at * (1.0 / force));
+    }
+    {
         const double now = world_->world().time();
         if (now < lastRecordTime_) replay_.clear();   // world restarted
         if (lastRecordTime_ < 0.0 || now - lastRecordTime_ >= 1.0 / 30.0) {
@@ -1732,6 +1757,8 @@ void SBVehicle::set_body_visible(bool on) {
 Dictionary SBVehicle::get_telemetry() const {
     Dictionary d;
     d["speed_kmh"] = tel_.speedKmh;
+    d["scrape"] = scrape_;
+    d["scrape_point"] = scrapePoint_;
     d["rpm"] = tel_.engineRpm;
     d["gear"] = tel_.gear;
     d["clutch"] = tel_.clutch;

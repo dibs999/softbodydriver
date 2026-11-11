@@ -18,6 +18,7 @@ var _mark_timer := 0.0
 var _effect_time := 0.0
 var tires: Array[CPUParticles3D] = []
 var sparks: Array[CPUParticles3D] = []
+var body_sparks: CPUParticles3D   # bodywork or a rim grinding on the road
 var engine_smoke: CPUParticles3D
 var exhaust: CPUParticles3D
 var flames: CPUParticles3D        # vehicle fire (engine bay or fuel tank)
@@ -26,6 +27,7 @@ var _previous_position := Vector3.INF
 var _levels := PackedFloat32Array([0, 0, 0, 0])
 static var _smoke_mesh: QuadMesh
 static var _spark_mesh: SphereMesh
+static var _streak_mesh: BoxMesh
 
 
 func _ready() -> void:
@@ -34,6 +36,29 @@ func _ready() -> void:
 	for i in 4:
 		tires.append(_emitter(48, 2.8, false))
 		sparks.append(_emitter(10, 0.35, true))
+	body_sparks = _emitter(96, 0.42, true)
+	# Grinding steel throws white-hot streaks that cool to orange: thin rods stretched along their
+	# flight path, added onto the scene (they are light, not matter).
+	body_sparks.mesh = _streak_mesh
+	body_sparks.particle_flag_align_y = true
+	body_sparks.spread = 28.0
+	body_sparks.flatness = 0.55
+	body_sparks.gravity = Vector3(0, -9.8, 0)
+	body_sparks.initial_velocity_min = 3.0
+	body_sparks.initial_velocity_max = 9.0
+	body_sparks.angular_velocity_min = 0.0
+	body_sparks.angular_velocity_max = 0.0
+	body_sparks.scale_amount_min = 0.6
+	body_sparks.scale_amount_max = 1.4
+	body_sparks.emission_sphere_radius = 0.05
+	var hot := Gradient.new()
+	hot.offsets = PackedFloat32Array([0.0, 0.25, 0.7, 1.0])
+	hot.colors = PackedColorArray([Color(1, 1, 0.9, 1), Color(1, 0.85, 0.5, 1), Color(1, 0.45, 0.1, 0.8), Color(0.7, 0.15, 0.02, 0)])
+	body_sparks.color_ramp = hot
+	var shrink := Curve.new()
+	shrink.add_point(Vector2(0, 1.0))
+	shrink.add_point(Vector2(1, 0.45))
+	body_sparks.scale_amount_curve = shrink
 	engine_smoke = _emitter(64, 3.8, false)
 	exhaust = _emitter(18, 0.8, false)
 	flames = _emitter(90, 0.5, false)
@@ -95,6 +120,15 @@ void fragment() {
 	_spark_mesh.radial_segments = 4
 	_spark_mesh.rings = 2
 	_spark_mesh.material = spark_mat
+	var streak_mat := StandardMaterial3D.new()
+	streak_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	streak_mat.vertex_color_use_as_albedo = true
+	streak_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	streak_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	streak_mat.albedo_color = Color(2.2, 2.0, 1.6)   # over-bright so glow picks the streaks up
+	_streak_mesh = BoxMesh.new()
+	_streak_mesh.size = Vector3(0.009, 0.13, 0.009)
+	_streak_mesh.material = streak_mat
 
 
 func _emitter(count: int, duration: float, spark: bool) -> CPUParticles3D:
@@ -237,6 +271,20 @@ func update_effects(t: Dictionary, anchors: Dictionary, slip: PackedFloat32Array
 		spark.emitting = not loose and bool(t["wheel_burst"][i]) and float(t["tire_wear"][i]) > 0.9 and speed > 18.0 and contact > 0.35
 		if wheel_surfaces[i] == "gravel":
 			spark.emitting = contact > 0.3 and (speed > 28 or sliding > 4)
+	# Bodywork scraping the road: a fan of sparks thrown back from the contact on hard ground.
+	var scrape := float(t.get("scrape", 0.0))
+	var loose_wheels := 0
+	for surface in wheel_surfaces:
+		if surface in ["sand", "gravel", "grass"]: loose_wheels += 1
+	body_sparks.emitting = scrape > 0.04 and loose_wheels < 2 and speed > 8.0
+	if body_sparks.emitting:
+		body_sparks.global_position = t.get("scrape_point", vehicle.get_position_ws())
+		# Abraded steel leaves with part of the body's own velocity and bounces off the road,
+		# so the fan trails just behind the contact instead of shooting backwards.
+		var throw := vehicle.get_velocity() * 0.3 + Vector3.UP * 1.6
+		body_sparks.direction = throw.normalized()
+		body_sparks.initial_velocity_min = throw.length() * 0.55
+		body_sparks.initial_velocity_max = throw.length() * 1.05 + 2.0
 	var steam := smoothstep(104.0, 130.0, float(t["coolant_temp"])) * maxf(float(t["radiator_damage"]), 1.0 - float(t["coolant_level"]))
 	var oil_smoke := float(t["engine_damage"]) * (0.4 if bool(t["running"]) else 0.18)
 	oil_smoke *= smoothstep(50.0, 100.0, float(t["oil_temp"]))

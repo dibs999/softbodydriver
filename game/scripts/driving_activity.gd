@@ -365,9 +365,15 @@ func reference_time(points: PackedVector3Array, run_mode: int) -> float:
 
 ## Medal for a result: 0 none, 1 bronze, 2 silver, 3 gold. Timed runs against the reference
 ## pace (gold at it, silver within 20 %, bronze within 50 %), races by place, the crash test by
-## stars. The drift challenge has no fixed scale and awards none.
+## stars, the 60 s drift challenge by points. Drift thresholds follow the scoring: clean drifting
+## at 70 km/h and 35 deg earns ~32 points/s at x1, chains build the combo to x4 within 12 s;
+## bronze is half a minute of plain drifting, gold needs long chains (estimated, not playtested).
+const DRIFT_MEDAL_POINTS := [1000.0, 2500.0, 5000.0]
 func medal_for(run_mode: int, result: Dictionary) -> int:
 	match run_mode:
+		2:
+			var points := float(result.get("score", 0.0))
+			return 3 if points >= DRIFT_MEDAL_POINTS[2] else (2 if points >= DRIFT_MEDAL_POINTS[1] else (1 if points >= DRIFT_MEDAL_POINTS[0] else 0))
 		1, 3:
 			var ref := reference_time(route, run_mode)
 			var t := float(result.get("elapsed", INF))

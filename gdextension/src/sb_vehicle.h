@@ -234,6 +234,8 @@ private:
     bool importedTailgate_ = false;
     bool importedBonnet_ = false;  ///< imported bonnet follows the physical bonnet
     bool dashboardAvailable_ = true;
+    double scrape_ = 0.0;          ///< 0..1 body grinding on the ground (force x sliding speed)
+    Vector3 scrapePoint_;
     /// Beams around each lamp corner (head left/right, tail left/right), collected on first use.
     mutable std::vector<std::vector<std::uint32_t>> lampBeams_;
     struct GlassPane { std::size_t surface; std::vector<std::uint32_t> beams, nodes; std::vector<bool> bonded; };
