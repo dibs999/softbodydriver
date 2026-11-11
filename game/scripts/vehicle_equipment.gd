@@ -20,6 +20,7 @@ var game: Node3D
 var states: Dictionary = {}
 var bay := Vector3.ZERO
 var refueling := false
+var _fuel_unpaid := 0.0   # litres delivered but not yet billed (career)
 var clock := 0.0
 
 func configure(scene: Node3D, spawn: Transform3D) -> void:
@@ -546,6 +547,7 @@ func update_service(sim_delta: float, repair_held: bool, fuel_held: bool) -> voi
 		service_progress = 0.0
 		_repair_latched = false
 	if not fuel_held:
+		if _fuel_session: _settle_fuel()
 		_fuel_session = false
 		_fuel_completed = false
 	# Repair and fueling are mutually exclusive; repair takes priority.
@@ -554,7 +556,10 @@ func update_service(sim_delta: float, repair_held: bool, fuel_held: bool) -> voi
 		if _repair_latched: return
 		service_progress = minf(1.0, service_progress + maxf(0.0, sim_delta) / REPAIR_SECONDS)
 		if service_progress >= 1.0:
-			if game.player.service_repair():
+			# Career: the workshop bill is due before the car is handed back.
+			var bill: float = preload("res://scripts/career.gd").repair_cost(game.player.get_telemetry())
+			var paid: bool = not game.has_method("career_charge") or game.career_charge(bill, "Werkstatt")
+			if paid and game.player.service_repair():
 				service_completed.emit("repair")
 			_repair_latched = true
 			service_progress = 0.0
@@ -563,7 +568,15 @@ func update_service(sim_delta: float, repair_held: bool, fuel_held: bool) -> voi
 			refuel_delivered_litres = 0.0
 			_fuel_completed = false
 			_fuel_session = true
+		# Career: pay per litre as it flows (in half-litre steps); an empty account stops the pump.
+		var Career := preload("res://scripts/career.gd")
+		if Game.settings.get("career", false) and _fuel_unpaid >= 0.5:
+			if not Game.progress.change_money(-_fuel_unpaid * Career.FUEL_PRICE):
+				if game.has_method("career_charge"): game.career_charge(_fuel_unpaid * Career.FUEL_PRICE, "Tanken")
+				return
+			_fuel_unpaid = 0.0
 		var added: float = game.player.refuel(maxf(0.0, sim_delta) * FUEL_RATE_LPS)
+		_fuel_unpaid += added
 		refueling = added > 0.0
 		if added > 0.0:
 			refuel_delivered_litres += added
@@ -574,12 +587,22 @@ func update_service(sim_delta: float, repair_held: bool, fuel_held: bool) -> voi
 				service_completed.emit("refuel")
 
 func cancel_service() -> void:
+	_settle_fuel()
 	service_progress = 0.0
 	refueling = false
 	_repair_latched = false
 	_fuel_session = false
 	_fuel_completed = false
 	_service_vehicle = null
+
+## Career: bill the fuel delivered since the last half-litre step when the nozzle is put back.
+func _settle_fuel() -> void:
+	if _fuel_unpaid > 0.0 and Game.settings.get("career", false):
+		var amount := _fuel_unpaid * preload("res://scripts/career.gd").FUEL_PRICE
+		Game.progress.change_money(-minf(amount, Game.progress.get_money()))
+		if game and game.get("hud"): game.hud.toast("Getankt %.1f l · Konto %s" % [refuel_delivered_litres, preload("res://scripts/career.gd").money_text(Game.progress.get_money())])
+	_fuel_unpaid = 0.0
+
 
 ## Towing only relocates the existing damaged car. It does not repair/refill it.
 func recover_to_service() -> bool:

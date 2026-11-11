@@ -72,6 +72,20 @@ keine stabile Hochgeschwindigkeitsfahrt.
   `F4` startet einen neuen Versuch. Der erste Abschluss erscheint nach einem
   Neustart auch im Hauptmenü. Bei einem Schreibfehler bleibt das Ergebnis für
   diese Sitzung sichtbar und wird ausdrücklich als nicht gespeichert bezeichnet.
+- **Karriere** (optional, Einstellungen → Fahrhilfen; ohne sie bleibt alles kostenlos):
+  - Aktivitäten bringen Geld:
+    - Zeitfahren 120 € plus 140 € je Medaillenstufe;
+    - Lieferfahrten 90 € je Stopp;
+    - Rennen 700 / 380 / 180 € für die Plätze 1–3;
+    - Drift 8 € je 100 Punkte;
+    - Crashtest 60 € je Stern;
+    - gelungene Flucht ab 350 €.
+  - Tanken kostet 1,85 € je Liter, abgerechnet beim Zapfen. Ist das Konto leer, stoppt die Pumpe.
+  - Die Werkstatt rechnet nach Schaden ab: Arbeit je gebrochenem und verbogenem Beam, dazu Teile
+    für Motor, Kühler, Getriebe, Fahrwerk, Felgen, Tank und Lack.
+  - Die Sofortreparatur unterwegs kostet zusätzlich 150 € Abschleppen und wird abgelehnt, wenn
+    das Konto nicht reicht.
+  - Der Kontostand (Start 2.000 €) steht im Profil, im HUD und im Hauptmenü.
 - Im Hügelland verbindet eine Kreisstraße quer durchs Tal die Ringstraße hinter Lindenau mit
   dem Abschnitt zwischen Waldhof und Aussichtspunkt. An den T-Einmündungen gibt es ausgerundete
   Ecken, Wartelinie und „Vorfahrt achten“-Schild. Durch Einschnitte und Dämme steigt sie höchstens
@@ -395,6 +409,7 @@ godot --headless --path game -s res://tests/drift_medal_test.gd   # Drift-Medail
 godot --headless --path game -s res://tests/siren_test.gd         # Martinshorn: Tonfolge, AudioServer-Aufnahme, Abschalten
 godot --headless --path game -s res://tests/desert_traffic_test.gd # Wüstenverkehr über die Abkürzung
 godot --headless --path game -s res://tests/offroad_traffic_test.gd # Ein 4x4 auf der Feldwegrunde
+godot --headless --path game -s res://tests/career_test.gd        # Karriere: Lohn, Werkstattrechnung, Tanken, Konto
 godot --headless --path game -s res://tests/weather_door_test.gd # Offene Tür, Regenabschirmung und Akustik
 godot --headless --path game -s res://tests/door_controls_test.gd # Öffnen, Schließen, Scharniere und Reparatur
 godot --headless --path game -s res://tests/mirror_test.gd       # Optische Flächen, Projektion und Kamerawechsel
