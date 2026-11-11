@@ -23,6 +23,7 @@ Pausenmenü → Einstellungen). Die Voreinstellungen *Sehr niedrig*, *Niedrig*, 
 | Spiegel | Aus, Niedrig, Hoch | Auflösung und Bildrate der Spiegel |
 | Partikel und Regen | Reduziert, Voll | Partikelbudget |
 | Bildrate begrenzen, VSync | | |
+| Renderer | Standard (Forward+), Leistung (Mobile) | Gilt beim nächsten Start (`user://renderer.cfg` über `application/config/project_settings_override`). Mobile ist auf Onboard-Grafik (Intel HD/UHD) deutlich schneller und sieht tagsüber gleich aus; FSR entfällt (bilinear skaliert), nachts wirken weniger Lichter je Objekt, Autos unter Straßenlaternen sind dunkler |
 
 Bäume, die die Einstellung *Bäume und Büsche* weglässt, verlieren auch ihre Stamm-Kollision. Es
 bleiben also keine unsichtbaren Hindernisse zurück.
