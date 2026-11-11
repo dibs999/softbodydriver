@@ -1768,9 +1768,15 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         }
         // Pedal box: brake and throttle, clutch for a manual gearbox.
         {
-            const real xHeel = seatX + 0.52, xFire = dashX + 0.06;
-            const real padX = xHeel + 0.20;
-            const real padY = yFloor + 0.10 + 0.24 * (padX - xHeel) / std::max<real>(0.05, xFire - xHeel);
+            // Heel point ahead of the seat, pads 20 cm further on but always short of the bulkhead,
+            // and their height from where they sit along the sloping footwell. With the seat close
+            // to the dashboard (the Aurora) the slope ratio blew up and the pads stood ~1 m above
+            // the floor, sticking up through the dashboard in front of the driver.
+            const real xFire = dashX + 0.06;
+            const real xHeel = std::min(seatX + 0.52, xFire - 0.30);
+            const real padX = std::min(xHeel + 0.20, xFire - 0.10);
+            const real slope = std::clamp((padX - xHeel) / std::max<real>(0.05, xFire - xHeel), 0.0, 1.0);
+            const real padY = yFloor + 0.10 + 0.24 * slope;
             const Vec3 pivotY{0, beltY - 0.22, 0};
             struct Pedal { real z, hw, hh; };
             std::vector<Pedal> pedals{{-0.31, 0.040, 0.030}, {-0.20, 0.022, 0.055}};
