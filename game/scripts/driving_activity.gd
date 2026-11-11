@@ -4,7 +4,14 @@ signal completed(result: Dictionary)
 
 const C := preload("res://scripts/maps/common.gd")
 const RaceField := preload("res://scripts/race_field.gd")
-const MODES := ["Freie Fahrt", "Zeitfahren", "Drift-Challenge", "Lieferfahrt", "Rennen", "Crashtest"]
+const MODES := ["Freie Fahrt", "Zeitfahren", "Drift-Challenge", "Lieferfahrt", "Rennen", "Crashtest", "Verfolgungsjagd"]
+## Pursuit: escape by opening a gap of ESCAPE_GAP metres and holding it ESCAPE_HOLD seconds, or by
+## staying free until PURSUIT_TIME; caught after CAUGHT_HOLD s at walking pace next to the police.
+const ESCAPE_GAP := 300.0
+const ESCAPE_HOLD := 8.0
+const CAUGHT_GAP := 8.0
+const CAUGHT_HOLD := 3.0
+const PURSUIT_TIME := 180.0
 ## Crash test (proving ground): run-up on the crash lane into the concrete wall at >= 50 km/h.
 const CRASH_START := Vector3(60.0, 0.0, -34.0)
 const CRASH_WALL_X := 224.0
@@ -13,6 +20,12 @@ const CRASH_MIN_KMH := 50.0
 ## spawn_opponents(grid: Array[Transform3D]) -> Array (AIDriver) and release_opponents(drivers).
 var spawn_opponents: Callable
 var release_opponents: Callable
+## spawn_police(xform: Transform3D, fugitive: SBVehicle) -> AIDriver for the pursuit.
+var spawn_police: Callable
+var police = null             # AIDriver of the pursuing car
+var escaped := false
+var _escape_t := 0.0
+var _ai_path := PackedVector3Array()
 var race_size := 2
 var place := 0
 var records_path := "user://driving_records.cfg":
@@ -74,6 +87,7 @@ func configure(id: String, data: Dictionary) -> void:
 		_race_route.append(_race_route[0])
 	# Races follow the AI route itself, so opponents and player pass the same gates.
 	var ai_path: PackedVector3Array = data.get("waypoints", PackedVector3Array())
+	_ai_path = ai_path
 	if ai_path.size() > 3 and data.get("speeds", PackedFloat32Array()).size() == ai_path.size():
 		distance = 100.0
 		for i in ai_path.size():
@@ -104,6 +118,7 @@ func available_modes() -> Array[int]:
 	if map_id == "city": out.append(3)
 	if _race_gates.size() > 3: out.append(4)
 	if map_id == "proving_grounds": out.append(5)
+	if _ai_path.size() > 10 and spawn_police.is_valid(): out.append(6)
 	return out
 
 func choose() -> void:
@@ -142,6 +157,12 @@ func start() -> void:
 		_crash_settle = -1.0
 		_last_velocity = Vector3.ZERO
 		report = {}
+	elif mode == 6:
+		if not spawn_police.is_valid() or _ai_path.size() < 10:
+			return
+		route = PackedVector3Array([spawn.origin])
+		escaped = false
+		_escape_t = 0.0
 	elif mode == 3:
 		# Curbside stops along existing streets, not inside the buildings.
 		route = PackedVector3Array([Vector3(4, 0, 44), Vector3(92, 0, -132), Vector3(260, 0, 220), Vector3(-4, 0, 132)])
@@ -163,6 +184,9 @@ func start() -> void:
 	if mode == 4:
 		_field.setup(route, spawn_opponents.call(RaceField.grid(spawn, race_size)))
 		_field.hold(true)
+	if mode == 6:
+		police = spawn_police.call(police_start(spawn.origin, spawn), vehicle)
+		if police: police.hold = true
 	_previous = spawn.origin + Vector3.UP * 0.6
 	_broken = int(vehicle.get_telemetry().get("broken_beams", 0))
 	_clock = float(world.get_stats()["sim_time"])
@@ -173,6 +197,10 @@ func cancel(reason: String) -> void:
 	active = false
 	message = reason
 	if _marker: _marker.hide()
+	if police != null:
+		var p = police
+		police = null
+		if release_opponents.is_valid(): release_opponents.call([p])
 	if not _field.drivers.is_empty():
 		var drivers := _field.drivers
 		_field.drivers = []
@@ -183,7 +211,7 @@ func opponents() -> Array:
 	return _field.drivers.map(func(d): return d.vehicle)
 
 func target() -> Vector3:
-	return route[gate] if active and mode != 2 and mode != 5 and gate < route.size() else Vector3.INF
+	return route[gate] if active and mode != 2 and mode != 5 and mode != 6 and gate < route.size() else Vector3.INF
 
 func on_impact(strength: float) -> void:
 	if active and mode == 2 and strength > 35.0:
@@ -227,13 +255,19 @@ func _process(_delta: float) -> void:
 		countdown = maxf(0, countdown - dt)
 		vehicle.set_input(0, 1, 0, 1)
 		message = "Start in %d" % ceili(countdown) if countdown > 0 else "Los!"
-		if countdown <= 0: _field.hold(false)
+		if countdown <= 0:
+			_field.hold(false)
+			if police != null: police.hold = false
 		_previous = position
 		return
 	elapsed += dt
 	var t := vehicle.get_telemetry()
 	if mode == 5:
 		_crash_test(dt, t)
+		_previous = position
+		return
+	if mode == 6:
+		_pursuit(dt, t, position)
 		_previous = position
 		return
 	if mode == 2:
@@ -285,6 +319,49 @@ func _process(_delta: float) -> void:
 		if gate >= route.size(): _finish()
 		else: _update_marker()
 	_previous = position
+
+## Police 50 m behind the start along the AI route, facing the start. Where the start is off the
+## route (city), 45 m behind it on the same street instead.
+func police_start(at: Vector3, start := Transform3D.IDENTITY) -> Transform3D:
+	var n := _ai_path.size()
+	var near := 0
+	for i in n:
+		if _ai_path[i].distance_squared_to(at) < _ai_path[near].distance_squared_to(at): near = i
+	if _ai_path[near].distance_to(at) > 30.0 and start != Transform3D.IDENTITY:
+		var forward := start.basis.x   # car_xform: x is the heading
+		return C.car_xform(at - forward * 45.0, forward)
+	var k := near
+	var back := 0.0
+	while back < 50.0:
+		var j := posmod(k - 1, n)
+		back += _ai_path[j].distance_to(_ai_path[k])
+		k = j
+	return C.car_xform(_ai_path[k], _ai_path[posmod(k + 1, n)] - _ai_path[k])
+
+
+func _pursuit(dt: float, t: Dictionary, position: Vector3) -> void:
+	if police == null or not is_instance_valid(police.vehicle):
+		cancel("Verfolgung abgebrochen")
+		return
+	var gap := position.distance_to(police.vehicle.get_position_ws())
+	var slow := absf(float(t["speed_kmh"])) < 10.0
+	_hold = _hold + dt if gap < CAUGHT_GAP and slow else 0.0
+	_escape_t = _escape_t + dt if gap > ESCAPE_GAP else 0.0
+	if _hold >= CAUGHT_HOLD:
+		escaped = false
+		_finish()
+		return
+	if _escape_t >= ESCAPE_HOLD or elapsed >= PURSUIT_TIME:
+		escaped = true
+		_finish()
+		return
+	if _hold > 0.0:
+		message = "Angehalten! Festnahme in %.1f s" % (CAUGHT_HOLD - _hold)
+	elif _escape_t > 0.0:
+		message = "Abstand %d m · abgehängt in %.0f s" % [gap, ESCAPE_HOLD - _escape_t]
+	else:
+		message = "Polizei %d m hinter dir · noch %.0f s" % [gap, maxf(0.0, PURSUIT_TIME - elapsed)]
+
 
 func _crash_test(dt: float, t: Dictionary) -> void:
 	var velocity := vehicle.get_velocity()
@@ -344,7 +421,7 @@ func _crash_report(t: Dictionary) -> void:
 	_finish()
 
 func navigation_hint() -> String:
-	if not active or mode == 2 or mode == 5 or gate >= route.size() or not is_instance_valid(vehicle): return ""
+	if not active or mode == 2 or mode == 5 or mode == 6 or gate >= route.size() or not is_instance_valid(vehicle): return ""
 	var distance := Vector2(vehicle.get_position_ws().x - route[gate].x, vehicle.get_position_ws().z - route[gate].z).length()
 	var instruction := "Ziel" if gate == route.size() - 1 else "Geradeaus"
 	if gate + 1 < route.size():
@@ -385,6 +462,10 @@ func medal_for(run_mode: int, result: Dictionary) -> int:
 		5:
 			var stars := int(result.get("crash", {}).get("stars", 0))
 			return 3 if stars >= 5 else (2 if stars == 4 else (1 if stars == 3 else 0))
+		6:
+			if not bool(result.get("escaped", false)): return 0
+			var t := float(result.get("elapsed", INF))
+			return 3 if t <= 60.0 else (2 if t <= 100.0 else 1)
 	return 0
 
 ## Best medal won so far on this map in a mode (any car).
@@ -407,6 +488,8 @@ func _finish() -> void:
 	var value := score if higher_is_better else elapsed
 	var previous_best := best
 	var improved := best == 0 or (value > best if higher_is_better else value < best)
+	if mode == 6 and not escaped:
+		improved = false   # an arrest is no record
 	var save_error := OK
 	if improved:
 		_records.set_value(map_id + ":" + _car_id, str(mode), value)
@@ -428,6 +511,9 @@ func _finish() -> void:
 		summary = "Crashtest: %d von 5 Sternen · %.0f km/h · %.0f g · Front %d %% · Fahrgastzelle %d %% · %s" % [
 			int(report["stars"]), report["speed"], report["peak_g"], roundi(100 * float(report["front"])), roundi(100 * float(report["cabin"])), report["engine"]]
 		if improved: summary += " · Bestwert!"
+	if mode == 6:
+		last_result["escaped"] = escaped
+		summary = ("Entkommen nach %.1f s" % elapsed if escaped else "Festgenommen nach %.1f s" % elapsed) + (" · Bestzeit!" if improved else "")
 	if mode == 4:
 		last_result["place"] = place
 		last_result["field"] = race_size + 1

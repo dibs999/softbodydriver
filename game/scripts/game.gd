@@ -165,6 +165,7 @@ func _ready() -> void:
 	activity.completed.connect(_on_activity_completed)
 	activity.spawn_opponents = _spawn_opponents
 	activity.release_opponents = _release_opponents
+	activity.spawn_police = _spawn_police
 	hud.activity = activity
 	minimap.activity = activity
 	for v in vehicles:
@@ -470,6 +471,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("menu"):
 		_toggle_pause()
 		return
+	if event.is_action_pressed("siren"):
+		var beacons := player.get_node_or_null("Beacons")
+		if beacons:
+			beacons.active = not beacons.active
+			hud.toast("Sondersignal an" if beacons.active else "Sondersignal aus")
+		return
 	if event.is_action_pressed("toggle_help"):
 		Game.set_driving_help(not hud.show_help)
 		if hud.show_help:
@@ -626,6 +633,21 @@ func _spawn_opponents(grid: Array[Transform3D]) -> Array:
 		ai[v] = driver
 		drivers.append(driver)
 	return drivers
+
+
+func _spawn_police(xf: Transform3D, fugitive: SBVehicle):
+	var v := Game.spawn_vehicle(world, "res://cars/meridian_interceptor.car.json", xf)
+	if v == null:
+		return null
+	vehicles.append(v)
+	_configure_effects(v)
+	var driver := AIDriver.new(v, map_data["waypoints"], map_data["speeds"], 1.0)
+	driver.pursue = fugitive
+	driver.others = vehicles
+	ai[v] = driver
+	var beacons := v.get_node_or_null("Beacons")
+	if beacons: beacons.active = true
+	return driver
 
 
 func _release_opponents(drivers: Array) -> void:
