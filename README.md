@@ -72,6 +72,10 @@ keine stabile Hochgeschwindigkeitsfahrt.
   `F4` startet einen neuen Versuch. Der erste Abschluss erscheint nach einem
   Neustart auch im Hauptmenü. Bei einem Schreibfehler bleibt das Ergebnis für
   diese Sitzung sichtbar und wird ausdrücklich als nicht gespeichert bezeichnet.
+- **Lack**: Auf der Fahrzeugkarte im Hauptmenü wählt man je Auto den Werkslack oder einen von neun
+  Farbtönen (Signalrot, Alpinweiß, Schwarz, Silber, Nachtblau, Racinggrün, Gelb, Orange, Violett).
+  Die Vorschau wird sofort umlackiert, die Wahl steht im Profil und gilt für prozedurale wie
+  importierte Karosserien, samt Kratzer- und Schmutzschicht des Lackshaders.
 - **Karriere** (optional, Einstellungen → Fahrhilfen; ohne sie bleibt alles kostenlos):
   - Aktivitäten bringen Geld:
     - Zeitfahren 120 € plus 140 € je Medaillenstufe;
@@ -425,6 +429,7 @@ godot --headless --path game -s res://tests/career_test.gd        # Karriere: Lo
 godot --headless --path game -s res://tests/career_garage_test.gd # Karriere: Autopreise, Kauf, Kaufknopf im Menü
 godot --headless --path game -s res://tests/career_contract_test.gd # Karriere: Aufträge je Karte, Prämie, nächster Auftrag
 godot --headless --path game -s res://tests/career_maps_test.gd   # Karriere: Kartenfreischaltung über Aufträge
+godot --headless --path game -s res://tests/paint_test.gd         # Lackwahl im Menü, Vorschau und Spielerauto
 godot --headless --path game -s res://tests/weather_door_test.gd # Offene Tür, Regenabschirmung und Akustik
 godot --headless --path game -s res://tests/door_controls_test.gd # Öffnen, Schließen, Scharniere und Reparatur
 godot --headless --path game -s res://tests/mirror_test.gd       # Optische Flächen, Projektion und Kamerawechsel

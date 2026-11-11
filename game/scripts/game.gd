@@ -103,6 +103,7 @@ func _ready() -> void:
 		push_error("Failed to spawn %s" % Game.selected_car)
 		get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 		return
+	Game.apply_chosen_paint(player)
 	vehicles.append(player)
 	_apply_settings(player)
 	if Game.settings["traffic"]:

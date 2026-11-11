@@ -14,7 +14,8 @@ var car_stats: Array[Label] = []
 var map_info: Label
 var progress_info: Label
 var car_buttons: Array[Button] = []
-var car_meta: Array[Label] = []   # detail line of each vehicle tile (price or "im Besitz" in the career)
+var car_meta: Array[Label] = []
+var paint_buttons: Array[Button] = []   # detail line of each vehicle tile (price or "im Besitz" in the career)
 var map_buttons: Array[Button] = []
 var start_button: Button
 var _preview_area: Control
@@ -221,6 +222,25 @@ func _build_ui() -> void:
 	map_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	map_info.custom_minimum_size.x = 396
 	cv.add_child(map_info)
+	# Paint: factory colour or one of the shades, per car, saved in the profile.
+	var paint_row := HBoxContainer.new()
+	paint_row.add_theme_constant_override("separation", 6)
+	cv.add_child(paint_row)
+	paint_row.add_child(UITheme.label("Lack", 13, UITheme.MUTED))
+	for i in Game.PAINTS.size():
+		var entry: Array = Game.PAINTS[i]
+		var swatch := Button.new()
+		swatch.custom_minimum_size = Vector2(26, 26)
+		swatch.toggle_mode = true
+		swatch.tooltip_text = entry[0]
+		var col: Color = entry[1] if entry[1] is Color else Color(0.3, 0.3, 0.32)
+		for state in ["normal", "hover", "pressed", "hover_pressed"]:
+			var box := UITheme.box(col, 4, 0, UITheme.ACCENT if state.contains("pressed") else Color(1, 1, 1, 0.25), 2 if state.contains("pressed") else 1)
+			swatch.add_theme_stylebox_override(state, box)
+		if entry[1] == null: swatch.text = "W"
+		swatch.pressed.connect(_on_paint.bind(i))
+		paint_row.add_child(swatch)
+		paint_buttons.append(swatch)
 	start_button = Button.new()
 	start_button.text = "Losfahren  →"
 	start_button.theme_type_variation = &"PrimaryButton"
@@ -515,6 +535,8 @@ func _on_car_selected(i: int) -> void:
 		preview_car = null
 	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(-30)), Vector3.ZERO)
 	preview_car = Game.spawn_vehicle(world, c["path"], xf)
+	Game.apply_chosen_paint(preview_car)
+	_mark_paint(str(c["id"]))
 	if preview_car:
 		preview_car.set_input(0, 1, 0, 1)
 
@@ -523,6 +545,27 @@ func _on_map_selected(i: int) -> void:
 	Game.selected_map = Game.MAPS[i]["id"]
 	map_info.text = "KARTE: %s\n%s" % [Game.MAPS[i]["name"], Game.MAPS[i]["description"]]
 	if _career_on(): _refresh_garage()   # contract line, lock state and start button for this map
+
+
+func _on_paint(index: int) -> void:
+	var c: Dictionary = Game.car_info(Game.selected_car)
+	if c.is_empty(): return
+	var color: Variant = Game.PAINTS[index][1]
+	Game.progress.set_paint(str(c["id"]), color)
+	if color is Color:
+		if is_instance_valid(preview_car): Game.paint_vehicle(preview_car, color)
+		_mark_paint(str(c["id"]))
+	else:
+		# Factory colour: spawn the preview afresh (it reads body.paint from the car file).
+		for i in Game.cars.size():
+			if Game.cars[i]["path"] == Game.selected_car: _on_car_selected(i)
+
+
+func _mark_paint(car_id: String) -> void:
+	var chosen: Variant = Game.progress.get_paint(car_id)
+	for i in paint_buttons.size():
+		var value: Variant = Game.PAINTS[i][1]
+		paint_buttons[i].set_pressed_no_signal(value == null if chosen == null else (value is Color and (value as Color).is_equal_approx(chosen)))
 
 
 func _on_start() -> void:
