@@ -151,9 +151,9 @@ void fragment() {
 		vec2 mq = q / 3.0;
 		vec2 mc = floor(mq);
 		vec2 mf = fract(mq) - 0.5;
-		float mr = 0.11 + 0.08 * hash(mc);
+		float mr = 0.07 + 0.05 * hash(mc);
 		float mole = (1.0 - smoothstep(mr * 0.6, mr, length(mf) + 0.05 * (vnoise(mq * 8.0) - 0.5))) * step(0.97, hash(mc + 2.2));
-		col = mix(col, vec3(0.30, 0.24, 0.17) * (0.85 + 0.3 * vnoise(q * 9.0)), mole * level);
+		col = mix(col, vec3(0.13, 0.10, 0.07) * (0.85 + 0.3 * vnoise(q * 9.0)), mole * level);
 	}
 	float fine = vnoise(world_pos.xz * 1.7);
 	float wet = clamp(road_wetness * wet_response, 0.0, 1.0);

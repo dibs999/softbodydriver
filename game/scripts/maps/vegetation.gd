@@ -218,7 +218,7 @@ static func _conifer(rng: RandomNumberGenerator, detail := 1.0) -> ArrayMesh:
 	while y < height - 0.6:
 		var f := (height - y) / height
 		var length := base_r * pow(f, 0.9) + 0.35
-		var count := (6 if f > 0.3 else 4) if detail >= 1.0 else 3
+		var count := (8 if f > 0.3 else 6) if detail >= 1.0 else 3
 		var phase := rng.randf() * TAU
 		for i in count:
 			var a := phase + TAU * i / count + rng.randf_range(-0.25, 0.25)
@@ -233,11 +233,14 @@ static func _conifer(rng: RandomNumberGenerator, detail := 1.0) -> ArrayMesh:
 			var face_up := side.cross(axis).normalized()
 			if face_up.y < 0: face_up = -face_up
 			var spray := 1.0 if detail >= 1.0 else 1.7
-			_card(leaves, center, face_up, axis, Vector2(length * 0.62 * spray, length * 1.08 * spray), lit, ao, rng.randf())
+			_card(leaves, center, face_up, axis, Vector2(length * 0.75 * spray, length * 1.1 * spray), lit, ao, rng.randf())
 			if detail >= 1.0:
 				var tilted := (face_up + side * 0.9).normalized()
-				_card(leaves, center - Vector3(0, 0.12, 0), tilted, axis, Vector2(length * 0.42, length), lit, ao * 0.9, rng.randf())
-		y += rng.randf_range(0.55, 0.8) * (0.7 + 0.3 * (1.0 - float(whorl) / 30.0)) * (1.0 if detail >= 1.0 else 2.6)
+				_card(leaves, center - Vector3(0, 0.12, 0), tilted, axis, Vector2(length * 0.5, length), lit, ao * 0.9, rng.randf())
+				# Dense, shaded inner foliage around the trunk: a spruce crown is opaque near the stem.
+				var inner := Vector3(0, y + 0.15, 0) + out * length * 0.22
+				_card(leaves, inner, (out + Vector3(0, 0.4, 0)).normalized(), Vector3.UP, Vector2(length * 0.55, length * 0.7), lit, ao * 0.55, rng.randf())
+		y += rng.randf_range(0.45, 0.65) * (0.7 + 0.3 * (1.0 - float(whorl) / 30.0)) * (1.0 if detail >= 1.0 else 3.2)
 		whorl += 1
 	# Leader shoot.
 	_card(leaves, Vector3(0, height - 0.2, 0), Vector3(1, 0, 0), Vector3.UP, Vector2(0.7, 1.4), Vector3.UP, 1.0, 0.5)
@@ -410,9 +413,14 @@ static func grass(parent: Node3D, ground: Array[Vector3], seed := 1, dry := fals
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
 	var xforms: Array[Transform3D] = []
+	# Each point grows a small clump of 2-4 tufts of different size instead of one identical plug,
+	# so the cover reads as patches of grass rather than evenly planted bunches.
 	for p in ground:
 		var s := rng.randf_range(min_scale, max_scale)
-		xforms.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.8, 1.25), s)), p))
+		for k in rng.randi_range(2, 4):
+			var off := Vector3(rng.randfn(), 0, rng.randfn()) * 0.28 * s if k > 0 else Vector3.ZERO
+			var ks := s * (0.95 if k == 0 else rng.randf_range(0.45, 0.8))
+			xforms.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(ks, ks * rng.randf_range(0.75, 1.3), ks)), p + off - Vector3.UP * 0.02))
 	var tuft := _tuft_mesh(dry)
 	var chunks: Dictionary = {}
 	for xf in xforms:
