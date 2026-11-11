@@ -20,6 +20,7 @@ uniform bool shoulder_high_u = true;
 uniform float inner_strip_m = 0.0;
 uniform float edge_line_m = 0.12;
 uniform float wear = 1.0;          // 0 = fresh surface, 1 = typical public road
+uniform bool markings = true;      // false: unmarked (village streets)
 global uniform float road_wetness;  // set by the weather (darker, glossier)
 
 varying vec3 world_pos;
@@ -178,6 +179,7 @@ void fragment() {
 		float dash_pixel = max(fwidth(dash_v) * 0.6, 0.0002);
 		float half_dash = dash_fraction * 0.5;
 		divider *= (1.0 - smoothstep(half_dash - dash_pixel, half_dash + dash_pixel, dash_distance)) * step(0.10, u) * step(u, 0.90);
+		if (!markings) { divider = 0.0; edge = 0.0; }
 		float paint_wear = mix(1.0, smoothstep(0.25, 0.65, fine), 0.35 * wear);
 		base = mix(base, divider_color.rgb, divider * 0.92 * paint_wear);
 		base = mix(base, vec3(0.84, 0.83, 0.78), edge * 0.92 * paint_wear);
