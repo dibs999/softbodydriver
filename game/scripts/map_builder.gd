@@ -164,6 +164,29 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 		_box(parent, world, p + Vector3(0, 5.4, 0), Vector3(7.4, 0.18, 4.9), Vector3.ZERO, blue, 0.8, true)
 		_box(parent, world, p + Vector3(0, 2.7, -4.8), Vector3(7.0, 2.7, 0.13), Vector3.ZERO, concrete)
 	C.label3d(parent, "FAHRDYNAMIK   /   BOXEN", workshop + Vector3(7.45, 5.27, -15), PI * 0.5, 0.56)
+	# Back of the box row (towards the office walkway): per box a steel staff door with frame,
+	# canopy and box number, a band of high windows, a wall lamp, and downpipes at the joints
+	# (before, a 40 m blank wall).
+	var back_x := workshop.x - 7.24
+	var door_mat := _mat(Color(0.30, 0.36, 0.40), 0.5, 0.5)
+	var frame_mat := _mat(Color(0.72, 0.73, 0.74), 0.4, 0.6)
+	var band_glass := _mat(Color(0.12, 0.19, 0.23), 0.12, 0.6)
+	var lamp_lens := _mat(Color(0.95, 0.95, 0.9), 0.3)
+	for i in 4:
+		var z := workshop.z - i * 10.0
+		_box(parent, null, Vector3(back_x - 0.03, 1.05, z + 2.4), Vector3(0.03, 1.05, 0.5), Vector3.ZERO, door_mat, 1, false)
+		_box(parent, null, Vector3(back_x - 0.05, 1.1, z + 2.4), Vector3(0.025, 1.12, 0.56), Vector3.ZERO, frame_mat, 1, false)
+		_box(parent, null, Vector3(back_x - 0.07, 1.05, z + 2.4), Vector3(0.02, 1.0, 0.46), Vector3.ZERO, door_mat, 1, false)
+		_box(parent, null, Vector3(back_x - 0.1, 1.0, z + 2.05), Vector3(0.05, 0.02, 0.1), Vector3.ZERO, frame_mat, 1, false)   # handle
+		_box(parent, null, Vector3(back_x - 0.45, 2.45, z + 2.4), Vector3(0.45, 0.05, 0.8), Vector3.ZERO, blue, 1, false)          # canopy
+		C.label3d(parent, "BOX  %d" % (i + 1), Vector3(back_x - 0.03, 2.8, z + 2.4), -PI * 0.5, 0.3)
+		_box(parent, null, Vector3(back_x - 0.06, 2.75, z + 3.6), Vector3(0.06, 0.08, 0.14), Vector3.ZERO, lamp_lens, 1, false)
+		_box(parent, null, Vector3(back_x - 0.02, 4.1, z - 1.2), Vector3(0.02, 0.42, 2.9), Vector3.ZERO, band_glass, 1, false)
+		_box(parent, null, Vector3(back_x - 0.04, 4.1, z - 1.2), Vector3(0.02, 0.46, 2.95), Vector3.ZERO, frame_mat, 1, false)
+		_box(parent, null, Vector3(back_x - 0.05, 4.1, z - 1.2), Vector3(0.02, 0.42, 2.9), Vector3.ZERO, band_glass, 1, false)
+		for k in 5:
+			_box(parent, null, Vector3(back_x - 0.06, 4.1, z - 4.1 + k * 1.45), Vector3(0.02, 0.44, 0.03), Vector3.ZERO, frame_mat, 1, false)
+		_box(parent, null, Vector3(back_x - 0.08, 2.7, z - 4.9), Vector3(0.05, 2.7, 0.05), Vector3.ZERO, frame_mat, 1, false)          # downpipe
 	for z: float in [-57.2, -50.8]:
 		_box(parent, world, Vector3(24, 1.0, z), Vector3(0.12, 1.0, 0.12), Vector3.ZERO, steel)
 	_box(parent, world, Vector3(24, 2.05, -54), Vector3(0.10, 0.48, 3.7), Vector3.ZERO, blue, 0.8, false)
@@ -1197,19 +1220,14 @@ static func _service_campus(world: SBWorld, parent: Node3D) -> void:
 	var pavement := C.surface_material("pavement", 1.6, Color(0.84, 0.84, 0.80))
 	var wall := _mat(Color(0.54, 0.51, 0.46))
 	var trim := _mat(Color(0.12, 0.17, 0.20), 0.4, 0.55)
-	var glass := _mat(Color(0.10, 0.20, 0.25), 0.18, 0.65)
 	var soil := _mat(Color(0.17, 0.12, 0.08))
 	var timber := _mat(Color(0.38, 0.23, 0.12))
 	_box(campus, world, Vector3(158, 0.09, -89), Vector3(12, 0.09, 23), Vector3.ZERO, pavement)
-	_box(campus, world, Vector3(151, 2.7, -89), Vector3(6, 2.7, 12), Vector3.ZERO, wall)
+	# Glass office (the city facade shader: curtain wall with rooms behind it on all four sides,
+	# lit at night; before, only the front had windows and the rest was a bare block).
+	var city := preload("res://scripts/maps/city.gd")
+	city._facade_box(campus, world, Vector3(151, 2.7, -89), Vector3(6, 2.7, 12), city._facade_material(wall.albedo_color, Color(0.75, 0.76, 0.77), 2))
 	_box(campus, world, Vector3(151, 5.48, -89), Vector3(6.4, 0.08, 12.4), Vector3.ZERO, trim)
-	# Six recessed window bays separated by frame mullions.
-	for i in 6:
-		var z := -99.0 + i * 4.0
-		_box(campus, world, Vector3(157.03, 2.9, z), Vector3(0.04, 1.3, 1.55), Vector3.ZERO, glass, 1, false)
-		for dz: float in [-1.60, 0, 1.60]:
-			_box(campus, world, Vector3(157.10, 2.9, z + dz), Vector3(0.07, 1.36, 0.045), Vector3.ZERO, trim, 1, false)
-		_box(campus, world, Vector3(157.14, 1.56, z), Vector3(0.18, 0.055, 1.7), Vector3.ZERO, pavement, 1, false)
 	C.label3d(campus, "VEHICLE DEVELOPMENT  /  01", Vector3(157.2, 4.8, -89), PI * 0.5, 0.40)
 	# Raised planting islands edge the walkway; openings remain wide enough for vehicles.
 	for z: float in [-107, -71]:
