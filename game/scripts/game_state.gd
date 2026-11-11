@@ -33,7 +33,7 @@ const GRAPHICS_OPTIONS := [
 ]
 
 const GRAPHICS_PRESETS := [
-	{"name": "Sehr niedrig", "hint": "Für schwache Laptops: 50 % Auflösung, ohne Schatten, Gras und Spiegel",
+	{"name": "Sehr niedrig", "hint": "Für schwache Laptops: 50 % Auflösung, ohne Schatten, Gras und Spiegel; bei Onboard-Grafik zusätzlich Renderer „Leistung“ wählen",
 		"values": {"render_scale": 0.5, "upscaler": 1, "aa": 0, "shadows": 0, "ssao": false, "glow": false, "view_distance": 600.0,
 			"vegetation": 0.3, "grass": 0.0, "facades": 0, "mirrors": 0, "effects": 0, "fps_limit": 60, "vsync": true}},
 	{"name": "Niedrig", "hint": "67 % Auflösung mit FSR, einfache Schatten, wenig Vegetation",
@@ -196,8 +196,16 @@ func make_graphics_options() -> VBoxContainer:
 		var values: Array = option["values"]
 		row.item_selected.connect(func(index: int): set_graphics_option(key, values[index]))
 		rows.append(row)
+	# Renderer: Forward+ or the much lighter Mobile renderer for onboard graphics. Godot picks it at
+	# start-up, so the choice goes into user://renderer.cfg (project_settings_override) and applies
+	# from the next start.
+	var renderer := _option_row(box, "Renderer **")
+	renderer.add_item("Standard (Forward+)")
+	renderer.add_item("Leistung (Mobile, für Onboard-Grafik)")
+	renderer.select(1 if saved_renderer() == "mobile" else 0)
+	renderer.item_selected.connect(func(index: int): set_renderer("mobile" if index == 1 else "forward_plus"))
 	var note := Label.new()
-	note.text = "* gilt beim nächsten Laden der Karte"
+	note.text = "* gilt beim nächsten Laden der Karte   ** gilt beim nächsten Start"
 	note.add_theme_font_size_override("font_size", 12)
 	note.modulate = Color(1, 1, 1, 0.6)
 	box.add_child(note)
@@ -205,6 +213,26 @@ func make_graphics_options() -> VBoxContainer:
 	graphics_preset_changed.connect(sync)
 	box.tree_exiting.connect(func(): graphics_preset_changed.disconnect(sync), CONNECT_ONE_SHOT)
 	return box
+
+
+const RENDERER_FILE := "user://renderer.cfg"
+
+## Renderer chosen for the next start ("forward_plus" or "mobile").
+func saved_renderer() -> String:
+	var cfg := ConfigFile.new()
+	if cfg.load(RENDERER_FILE) != OK: return "forward_plus"
+	return str(cfg.get_value("rendering", "renderer/rendering_method", "forward_plus"))
+
+## Choose the renderer for the next start. Forward+ removes the override file.
+func set_renderer(method: String) -> bool:
+	if method == "mobile":
+		var cfg := ConfigFile.new()
+		cfg.set_value("rendering", "renderer/rendering_method", "mobile")
+		cfg.set_value("rendering", "renderer/rendering_method.mobile", "mobile")
+		return cfg.save(RENDERER_FILE) == OK
+	if FileAccess.file_exists(RENDERER_FILE):
+		return DirAccess.remove_absolute(ProjectSettings.globalize_path(RENDERER_FILE)) == OK
+	return true
 
 
 func _option_row(parent: Container, caption: String) -> OptionButton:
@@ -301,9 +329,11 @@ func _save_display_settings() -> void:
 
 func _apply_viewport_graphics() -> void:
 	var viewport := get_viewport()
-	var advanced := RenderingServer.get_current_rendering_method() != "gl_compatibility"
+	var method := RenderingServer.get_current_rendering_method()
+	var advanced := method != "gl_compatibility"
 	var scale := clampf(float(graphics["render_scale"]), 0.25, 1.0)
-	var upscaler := int(graphics["upscaler"]) if advanced else 0
+	# FSR 1 and 2 exist only in Forward+: the Mobile renderer scales bilinearly.
+	var upscaler := int(graphics["upscaler"]) if method == "forward_plus" else 0
 	if scale >= 0.999 and upscaler == 1: upscaler = 0
 	viewport.scaling_3d_mode = [Viewport.SCALING_3D_MODE_BILINEAR, Viewport.SCALING_3D_MODE_FSR, Viewport.SCALING_3D_MODE_FSR2][upscaler]
 	viewport.scaling_3d_scale = scale
@@ -951,7 +981,7 @@ func _setup_input() -> void:
 	siren_key.shift_pressed = true
 	InputMap.action_add_event("siren", siren_key)
 	_action("horn"); _key("horn", [KEY_ENTER, KEY_KP_ENTER]); _joy_button("horn", JOY_BUTTON_LEFT_STICK)
-	_action("cruise_control"); _key("cruise_control", [KEY_V])
+	_action("cruise_control"); _key("cruise_control", [KEY_V]); _joy_button("cruise_control", JOY_BUTTON_RIGHT_STICK)
 	_action("refuel"); _key("refuel", [KEY_F]); _joy_button("refuel", JOY_BUTTON_DPAD_LEFT)
 	_action("service_repair"); _key("service_repair", [KEY_G]); _joy_button("service_repair", JOY_BUTTON_DPAD_RIGHT)
 	_action("driver_door"); _key("driver_door", [KEY_U])

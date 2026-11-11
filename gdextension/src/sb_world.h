@@ -101,6 +101,12 @@ private:
     std::atomic<bool> running_{false};
     std::atomic<double> timeScale_{1.0};
     std::atomic<bool> paused_{false};
+    // Simulated seconds since the last rendered frame. Once frames drive the world, the
+    // physics thread may not run further ahead than kMaxSimPerFrame between two of them:
+    // below ~10 FPS the game slows down instead of AI and player input lagging behind.
+    std::atomic<double> simSinceFrame_{0.0};
+    std::atomic<bool> frameLocked_{false};
+    static constexpr double kMaxSimPerFrame = 0.1;
     std::vector<SBVehicle*> vehicles_;
     std::vector<SBProp*> props_;
     void removeBodyAt(int idx);

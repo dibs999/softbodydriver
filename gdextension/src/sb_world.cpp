@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <chrono>
 
+#include <godot_cpp/classes/camera3d.hpp>
 #include <godot_cpp/classes/engine.hpp>
+#include <godot_cpp/classes/viewport.hpp>
 #include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
@@ -64,6 +66,8 @@ void SBWorld::_exit_tree() {
 
 void SBWorld::_process(double delta) {
     if (Engine::get_singleton()->is_editor_hint()) return;
+    frameLocked_ = true;
+    simSinceFrame_ = 0.0;
     sync_visuals_with_delta(delta);
 }
 
@@ -77,6 +81,20 @@ void SBWorld::sync_visuals_with_delta(double delta) {
         std::lock_guard<WorldMutex> lock(mtx_);
         for (SBVehicle* v : vehicles_) v->sync_from_world();
         for (SBProp* p : props_) p->sync_from_world();
+    }
+    // Visual level of detail from the camera: full mesh deformation every frame up to 30 m, then
+    // every 2nd / 4th / 8th frame; off-screen cars at least every 4th. Without a camera (tools,
+    // tests) every frame.
+    Camera3D* camera = is_inside_tree() && get_viewport() ? get_viewport()->get_camera_3d() : nullptr;
+    for (SBVehicle* v : vehicles_) {
+        int interval = 1;
+        if (camera) {
+            const Vector3 p = v->get_position_ws();
+            const double d = camera->get_global_position().distance_to(p);
+            interval = d < 30.0 ? 1 : d < 70.0 ? 2 : d < 150.0 ? 4 : 8;
+            if (d > 12.0 && !camera->is_position_in_frustum(p)) interval = std::max(interval, 4);
+        }
+        v->set_visual_interval(interval);
     }
     for (SBVehicle* v : vehicles_) v->update_visual(delta);
 }
@@ -109,6 +127,11 @@ void SBWorld::threadMain() {
         // Never try to catch up more than 100 ms: the game slows down instead of spiralling.
         debt = std::min(debt, 0.1);
         int steps = static_cast<int>(debt / dt);
+        if (frameLocked_) {
+            const double room = kMaxSimPerFrame - simSinceFrame_.load();
+            if (room < dt) debt = 0.0;  // wait for the next frame; that time is not owed
+            steps = std::min(steps, std::max(0, static_cast<int>(room / dt)));
+        }
         if (steps <= 0) {
             std::this_thread::sleep_for(std::chrono::microseconds(300));
             continue;
@@ -126,6 +149,7 @@ void SBWorld::threadMain() {
             debt -= chunk * dt;
             statSteps += static_cast<std::uint64_t>(chunk);
             statSim += chunk * dt;
+            simSinceFrame_ = simSinceFrame_.load() + chunk * dt;
             // Hand the lock to a waiting main thread before the next chunk.
             for (int spin = 0; mtx_.contended() && running_; ++spin) {
                 if (spin < 64) std::this_thread::yield();

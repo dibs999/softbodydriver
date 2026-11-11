@@ -72,7 +72,7 @@ keine stabile Hochgeschwindigkeitsfahrt.
   `F4` startet einen neuen Versuch. Der erste Abschluss erscheint nach einem
   Neustart auch im Hauptmenü. Bei einem Schreibfehler bleibt das Ergebnis für
   diese Sitzung sichtbar und wird ausdrücklich als nicht gespeichert bezeichnet.
-- **Tempomat** (`V`): ab 30 km/h hält er die aktuelle Geschwindigkeit; mehr Gas überholt, danach
+- **Tempomat** (`V`, Gamepad R3): ab 30 km/h hält er die aktuelle Geschwindigkeit; mehr Gas überholt, danach
   regelt er zurück. Bremse, Rückwärtsgang, Kupplung oder abgewürgter Motor schalten ihn ab, `V`
   ebenso. Im HUD steht die Sollgeschwindigkeit über dem Tacho.
 - **Lack**: Auf der Fahrzeugkarte im Hauptmenü wählt man je Auto den Werkslack oder einen von neun

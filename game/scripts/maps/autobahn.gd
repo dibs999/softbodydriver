@@ -270,6 +270,15 @@ static func _service_area(parent: Node3D, world: SBWorld, concrete: Material, me
 	C.box(parent, world, Vector3(mid, 2.2, z + 63), Vector3(11, 2.2, 4.5), Vector3.ZERO, concrete)
 	C.box(parent, world, Vector3(mid, 4.5, z + 62), Vector3(11.5, 0.22, 6.4), Vector3.ZERO, navy, 0.8, false)
 	var glass := C.mat(Color(0.14, 0.30, 0.39), 0.26, 0.35)
+	# The rest area is open all night: the glass front glows warm after dark (driven like a lamp
+	# lens by a light-less street_lighting node).
+	glass.emission_enabled = true
+	glass.emission = Color(0.30, 0.24, 0.15)
+	glass.emission_energy_multiplier = 0.0
+	var shop_light := preload("res://scripts/maps/street_lighting.gd").new()
+	shop_light.name = "RestAreaWindows"
+	parent.add_child(shop_light)
+	shop_light.setup(PackedVector3Array(), glass)
 	for x: float in [-7.0, -2.5, 2.5, 7.0]:
 		C.box(parent, world, Vector3(mid + x, 1.9, z + 58.48), Vector3(1.85, 0.92, 0.06), Vector3.ZERO, glass, 0.8, false)
 	C.label3d(parent, "RASTSTÄTTE   NORDRING", Vector3(mid, 3.67, z + 58.38), PI, 0.68)
@@ -293,6 +302,22 @@ static func _service_area(parent: Node3D, world: SBWorld, concrete: Material, me
 			_parked_truck(parent, world, Vector3(x + 2.5, 0, truck_box.z + 6.0), trailer_colors[slot / 3 % 3], cab_colors[slot / 3 % 3], metal)
 	_service_details(parent, world, z, mid, asphalt, concrete, metal, navy, glass)
 	return road
+
+
+## Lamp lenses (one shared material that glows at night) and pooled spot lights for them.
+static func _street_lights(parent: Node3D, lenses: Array[Transform3D], lights: PackedVector3Array, size: Vector3, node_name: String) -> void:
+	var lens := StandardMaterial3D.new()
+	lens.albedo_color = Color(0.9, 0.88, 0.8)
+	lens.emission_enabled = true
+	lens.emission = Color(1.0, 0.85, 0.62)
+	lens.emission_energy_multiplier = 0.0
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	C.scatter_multimesh(parent, mesh, lens, lenses, false)
+	var lighting := preload("res://scripts/maps/street_lighting.gd").new()
+	lighting.name = node_name
+	parent.add_child(lighting)
+	lighting.setup(lights, lens)
 
 
 ## A parked articulated lorry pointing -z (towards the exit): cab with windscreen, mirrors and
@@ -357,10 +382,14 @@ static func _service_details(parent: Node3D, world: SBWorld, z: float, mid: floa
 		C.box(parent, null, Vector3(px, 0.47, z + 56.4), Vector3(1.3, 0.03, 0.8), Vector3.ZERO, soil, 0.8, false)
 		trees.append(Vector3(px, 0.5, z + 56.4))
 	V.plant(parent, "broadleaf", trees, 4711, 0.55, 0.75, false)
+	var lot_lenses: Array[Transform3D] = []
+	var lot_lights := PackedVector3Array()
 	for k in 5:
 		var lx := mid - 40.0 + k * 20.0
 		C.box(parent, world, Vector3(lx, 4.0, z + 40.0), Vector3(0.09, 4.0, 0.09), Vector3.ZERO, metal, 0.6)
 		C.box(parent, null, Vector3(lx, 8.0, z + 40.6), Vector3(0.18, 0.08, 0.7), Vector3.ZERO, metal, 0.6, false)
+		lot_lenses.append(Transform3D(Basis.IDENTITY, Vector3(lx, 7.9, z + 40.8)))
+		lot_lights.append(Vector3(lx, 7.75, z + 40.8))
 	# Petrol station north of the entry road.
 	var fx := SERVICE_START + 64.0
 	var fz := z + 37.0   # posts clear of the entry road, which rises to z + 27 here
@@ -372,6 +401,11 @@ static func _service_details(parent: Node3D, world: SBWorld, z: float, mid: floa
 	C.box(parent, null, Vector3(fx, 5.35, fz), Vector3(12.5, 0.25, 5.5), Vector3.ZERO, white, 0.8, false)
 	C.box(parent, null, Vector3(fx, 5.0, fz), Vector3(12.55, 0.4, 5.55), Vector3.ZERO, navy, 0.8, false)
 	C.label3d(parent, "TANKSTELLE", Vector3(fx, 5.0, fz - 5.57), PI, 0.7, Color(0.95, 0.95, 0.92))
+	for lx: float in [-8.0, -3.0, 3.0, 8.0]:
+		for lz: float in [-2.5, 2.5]:
+			lot_lenses.append(Transform3D(Basis.IDENTITY, Vector3(fx + lx, 5.08, fz + lz)))
+			lot_lights.append(Vector3(fx + lx, 4.95, fz + lz))
+	_street_lights(parent, lot_lenses, lot_lights, Vector3(0.6, 0.03, 0.4), "RestAreaLighting")
 	var pump_body := C.mat(Color(0.92, 0.92, 0.9), 0.5)
 	var display := C.mat(Color(0.05, 0.09, 0.07), 0.4)
 	for ix: float in [-5.5, 5.5]:
@@ -623,6 +657,13 @@ static func _village(parent: Node3D, world: SBWorld, trees: Array[Vector3], rng:
 	var head := BoxMesh.new()
 	head.size = Vector3(0.32, 0.16, 1.1)
 	C.scatter_multimesh(parent, head, C.mat(Color(0.25, 0.26, 0.27), 0.5, 0.5), heads, false)
+	# Lens under each head, lit at night with pooled spot lights (street_lighting.gd).
+	var lenses: Array[Transform3D] = []
+	var light_at := PackedVector3Array()
+	for h in heads:
+		lenses.append(Transform3D(h.basis, h.origin - Vector3.UP * 0.09))
+		light_at.append(h.origin - Vector3.UP * 0.2)
+	_street_lights(parent, lenses, light_at, Vector3(0.24, 0.03, 0.8), "VillageLighting")
 	village.build(parent)
 
 

@@ -1,4 +1,5 @@
 #include "sb_vehicle.h"
+#include <godot_cpp/classes/worker_thread_pool.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -1012,7 +1013,7 @@ void SBVehicle::sync_from_world() {
 // Sheet metal tears where the nodes it is bound to have been ripped apart: triangles whose edges
 // stretch to more than 2.2x their rest length (and by more than 6 cm) are removed instead of being
 // drawn as long slivers between a torn-off node and the body. Repair restores them.
-void SBVehicle::tearOverstretched(SurfaceGpu& g, const sb::MeshSurface& s, bool reset) {
+void SBVehicle::tearOverstretched(SurfaceGpu& g, const sb::MeshSurface& s, bool reset, const std::vector<float>& deformed) {
     if (g.torn.empty() || g.arrays.is_empty()) return;
     bool changed = false;
     if (reset) {
@@ -1029,8 +1030,8 @@ void SBVehicle::tearOverstretched(SurfaceGpu& g, const sb::MeshSurface& s, bool 
                 const std::uint32_t a = s.indices[t * 3 + static_cast<std::size_t>(e)], b = s.indices[t * 3 + static_cast<std::size_t>((e + 1) % 3)];
                 const float rx = s.positions[a * 3] - s.positions[b * 3], ry = s.positions[a * 3 + 1] - s.positions[b * 3 + 1],
                             rz = s.positions[a * 3 + 2] - s.positions[b * 3 + 2];
-                const float cx = tmpPos_[a * 3] - tmpPos_[b * 3], cy = tmpPos_[a * 3 + 1] - tmpPos_[b * 3 + 1],
-                            cz = tmpPos_[a * 3 + 2] - tmpPos_[b * 3 + 2];
+                const float cx = deformed[a * 3] - deformed[b * 3], cy = deformed[a * 3 + 1] - deformed[b * 3 + 1],
+                            cz = deformed[a * 3 + 2] - deformed[b * 3 + 2];
                 const float rest = std::sqrt(rx * rx + ry * ry + rz * rz), now = std::sqrt(cx * cx + cy * cy + cz * cz);
                 if (now > 2.2f * rest && now - rest > 0.06f) {
                     g.torn[t] = 1;
@@ -1060,7 +1061,59 @@ void SBVehicle::tearOverstretched(SurfaceGpu& g, const sb::MeshSurface& s, bool 
     if (g.material.is_valid()) g.mesh->surface_set_material(0, g.material);
 }
 
+void SBVehicle::deformJobEntry(void* self, uint32_t index) { static_cast<SBVehicle*>(self)->deformJob(index); }
+
+// One surface: skin it into this job's position buffer and pack positions, normals (and tangents of
+// imported meshes) into the surface's vertex buffer. Runs on a worker thread; touches only its own
+// surface buffer and job buffers.
+void SBVehicle::deformJob(uint32_t index) {
+    const DeformJob& job = deformJobs_[index];
+    const sb::MeshSurface& s = job.imported ? importedSurf_[job.surface] : visual_.skinned[job.surface];
+    SurfaceGpu& g = job.imported ? importedGpu_[job.surface] : surfaces_[job.surface];
+    std::vector<float>& outPos = jobPositions_[index];
+    thread_local std::vector<float> outNrm;
+    if (job.imported || s.material == "paint" || s.material == "glass" || s.material == "interior" || s.material == "trim")
+        sb::deformSurfaceBlended(renderPos_, frames_, s, outPos, outNrm);
+    else sb::deformSurface(renderPos_, frames_, s, outPos, outNrm);
+    const std::size_t nv = s.skin.size();
+    uint8_t* dst = job.dst;
+    const bool tangents = job.imported && g.restTangents.size() == static_cast<int64_t>(nv * 4) && g.normalStride >= 8;
+    for (std::size_t i = 0; i < nv; ++i) {
+        float* pv = reinterpret_cast<float*>(dst + i * g.vertexStride);
+        pv[0] = outPos[i * 3];
+        pv[1] = outPos[i * 3 + 1];
+        pv[2] = outPos[i * 3 + 2];
+        const Vector3 normal(outNrm[i * 3], outNrm[i * 3 + 1], outNrm[i * 3 + 2]);
+        const Vector2 oct = normal.octahedron_encode();
+        uint16_t enc[2] = {static_cast<uint16_t>(std::clamp(oct.x * 65535.0f, 0.0f, 65535.0f)),
+                           static_cast<uint16_t>(std::clamp(oct.y * 65535.0f, 0.0f, 65535.0f))};
+        std::memcpy(dst + g.normalOffset + i * g.normalStride, enc, 4);
+        if (tangents) {
+            const Vector3 rest(g.restTangents[i * 4], g.restTangents[i * 4 + 1], g.restTangents[i * 4 + 2]);
+            const float* F = sb::skinFrame(frames_, renderPos_.size(), s.skin[i].part);
+            Vector3 tangent(F[0] * rest.x + F[1] * rest.y + F[2] * rest.z,
+                            F[3] * rest.x + F[4] * rest.y + F[5] * rest.z,
+                            F[6] * rest.x + F[7] * rest.y + F[8] * rest.z);
+            tangent = (tangent - normal * tangent.dot(normal)).normalized();
+            const Vector2 octT = tangent.octahedron_tangent_encode(g.restTangents[i * 4 + 3]);
+            const uint16_t packed[2] = {static_cast<uint16_t>(std::clamp(octT.x * 65535.0f, 0.0f, 65535.0f)),
+                                        static_cast<uint16_t>(std::clamp(octT.y * 65535.0f, 0.0f, 65535.0f))};
+            std::memcpy(dst + g.normalOffset + i * g.normalStride + 4, packed, 4);
+        }
+    }
+}
+
+Transform3D SBVehicle::rigidVisualFrame() const {
+    const sb::Vec3 fl = renderPos_[layout_.refFL], fr = renderPos_[layout_.refFR], rl = renderPos_[layout_.refRL], rr = renderPos_[layout_.refRR];
+    const Vector3 x = toG((fl + fr) - (rl + rr)).normalized();
+    Vector3 z = toG((fr + rr) - (fl + rl));
+    z = (z - x * z.dot(x)).normalized();
+    const Vector3 y = z.cross(x);
+    return Transform3D(Basis(x, y, z), toG((fl + fr + rl + rr) * 0.25));
+}
+
 void SBVehicle::update_visual(double delta) {
+
     if (!snapshotValid_ || pos_.empty()) return;
     const sb::Vec3 reference = (pos_[layout_.refFL] + pos_[layout_.refFR] + pos_[layout_.refRL] + pos_[layout_.refRR]) * 0.25;
     const sb::Vec3 movement = reference - renderReference_;
@@ -1099,6 +1152,50 @@ void SBVehicle::update_visual(double delta) {
     }
     const AABB box(lo - Vector3(0.5, 0.5, 0.5), (hi - lo) + Vector3(1, 1, 1));
 
+    // Level of detail: deform every visualInterval_-th frame; in between move the meshes as they
+    // were last deformed rigidly with the car (a distant or off-screen car costs a fraction).
+    // Fresh damage, a reset and the beam view always deform at once.
+    const Transform3D rigidNow = rigidVisualFrame();
+    const std::size_t damageNow = tel_.deformedBeams + tel_.brokenBeams;
+    bool full = snap || visualInterval_ <= 1 || !lodFrameValid_ || damageDirty_ || debugView_ || damageNow != lodDamageSeen_;
+    if (!full && ++visualCounter_ >= visualInterval_) full = true;
+    // A car at rest (parked, waiting, the menu preview) is not deformed again until a node moves.
+    if (full && !snap && !damageDirty_ && !debugView_ && lodFrameValid_ && damageNow == lodDamageSeen_ &&
+        lodPositions_.size() == renderPos_.size()) {
+        bool still = true;
+        for (std::size_t i = 0; i < renderPos_.size() && still; ++i) still = sb::lengthSq(renderPos_[i] - lodPositions_[i]) < 2.5e-7;
+        if (still) {
+            visualCounter_ = 0;
+            return;
+        }
+    }
+    if (full) {
+        lodPositions_ = renderPos_;
+        visualCounter_ = 0;
+        lodFrame_ = rigidNow;
+        lodSteering_ = steeringTransform;
+        lodFrameValid_ = true;
+        lodDamageSeen_ = damageNow;
+    }
+    const Transform3D lodDelta = full ? Transform3D() : rigidNow * lodFrame_.affine_inverse();
+    if (!full) {
+        lodMoved_ = true;
+        const std::size_t generated = std::min(surfaces_.size(), visual_.skinned.size());
+        for (std::size_t si = 0; si < generated + std::min(importedGpu_.size(), importedSurf_.size()); ++si) {
+            SurfaceGpu& g = si < generated ? surfaces_[si] : importedGpu_[si - generated];
+            const sb::MeshSurface& s = si < generated ? visual_.skinned[si] : importedSurf_[si - generated];
+            if (g.instance) g.instance->set_transform(s.steeringWheel ? lodDelta * lodSteering_ : lodDelta);
+        }
+    } else if (lodMoved_) {
+        lodMoved_ = false;
+        const std::size_t generated = std::min(surfaces_.size(), visual_.skinned.size());
+        for (std::size_t si = 0; si < generated + std::min(importedGpu_.size(), importedSurf_.size()); ++si) {
+            SurfaceGpu& g = si < generated ? surfaces_[si] : importedGpu_[si - generated];
+            const sb::MeshSurface& s = si < generated ? visual_.skinned[si] : importedSurf_[si - generated];
+            if (g.instance && !s.steeringWheel) g.instance->set_transform(Transform3D());
+        }
+    }
+
     if (damageDirty_ && !nodeDamage_.empty()) {
         damageDirty_ = false;
         const std::size_t generated = std::min(surfaces_.size(), visual_.skinned.size());
@@ -1120,30 +1217,39 @@ void SBVehicle::update_visual(double delta) {
             g.mesh->surface_update_attribute_region(0, 0, g.attrBuffer);
         }
     }
-    for (std::size_t si = 0; si < surfaces_.size() && si < visual_.skinned.size(); ++si) {
-        SurfaceGpu& g = surfaces_[si];
-        if (!g.instance->is_visible()) continue;
-        const sb::MeshSurface& s = visual_.skinned[si];
-        if (s.steeringWheel) g.instance->set_transform(steeringTransform);
-        if (s.material == "paint" || s.material == "glass" || s.material == "interior" || s.material == "trim")
-            sb::deformSurfaceBlended(renderPos_, frames_, s, tmpPos_, tmpNrm_);
-        else sb::deformSurface(renderPos_, frames_, s, tmpPos_, tmpNrm_);
-        const std::size_t nv = s.skin.size();
-        uint8_t* dst = g.buffer.ptrw();
-        for (std::size_t i = 0; i < nv; ++i) {
-            float* pv = reinterpret_cast<float*>(dst + i * g.vertexStride);
-            pv[0] = tmpPos_[i * 3];
-            pv[1] = tmpPos_[i * 3 + 1];
-            pv[2] = tmpPos_[i * 3 + 2];
-            const Vector2 oct = Vector3(tmpNrm_[i * 3], tmpNrm_[i * 3 + 1], tmpNrm_[i * 3 + 2]).octahedron_encode();
-            uint16_t enc[2] = {static_cast<uint16_t>(std::clamp(oct.x * 65535.0f, 0.0f, 65535.0f)),
-                               static_cast<uint16_t>(std::clamp(oct.y * 65535.0f, 0.0f, 65535.0f))};
-            std::memcpy(dst + g.normalOffset + i * g.normalStride, enc, 4);
+    // Deform the generated and imported surfaces in parallel (one job per surface, positions and
+    // normals into the surface's own vertex buffer); GPU uploads and tearing stay on this thread.
+    deformJobs_.clear();
+    if (full) {
+        for (std::size_t si = 0; si < surfaces_.size() && si < visual_.skinned.size(); ++si) {
+            SurfaceGpu& g = surfaces_[si];
+            if (!g.instance->is_visible()) continue;
+            if (visual_.skinned[si].steeringWheel) g.instance->set_transform(steeringTransform);
+            deformJobs_.push_back({false, si, g.buffer.ptrw()});
         }
-        g.mesh->surface_update_vertex_region(0, 0, g.buffer);
-        g.mesh->set_custom_aabb(box);
+        for (std::size_t si = 0; si < importedGpu_.size() && si < importedSurf_.size(); ++si) {
+            SurfaceGpu& g = importedGpu_[si];
+            if (importedSurf_[si].steeringWheel) g.instance->set_transform(steeringTransform);
+            deformJobs_.push_back({true, si, g.buffer.ptrw()});
+        }
+        if (jobPositions_.size() < deformJobs_.size()) jobPositions_.resize(deformJobs_.size());
+        if (deformJobs_.size() > 1) {
+            WorkerThreadPool* pool = WorkerThreadPool::get_singleton();
+            const auto group = pool->add_native_group_task(&SBVehicle::deformJobEntry, this, static_cast<int>(deformJobs_.size()), -1, true, "sbvehicle_deform");
+            pool->wait_for_group_task_completion(group);
+        } else if (!deformJobs_.empty()) {
+            deformJob(0);
+        }
+        for (std::size_t j = 0; j < deformJobs_.size(); ++j) {
+            const DeformJob& job = deformJobs_[j];
+            SurfaceGpu& g = job.imported ? importedGpu_[job.surface] : surfaces_[job.surface];
+            if (job.imported && (snap || (tearCheckCounter_ % 8) == 0))
+                tearOverstretched(g, importedSurf_[job.surface], snap && tel_.brokenBeams == 0, jobPositions_[j]);
+            if (g.mesh->get_surface_count() > 0) g.mesh->surface_update_vertex_region(0, 0, g.buffer);
+            g.mesh->set_custom_aabb(box);
+        }
+        ++tearCheckCounter_;
     }
-
     // Wheels: origin at the spindle centre, Z = outward axle. Fit the spin phase to both tread rings.
     const double tireRetention = snap ? 0.0 : std::exp(-36.0 * delta);
     for (WheelGpu& w : wheels_) {
@@ -1176,42 +1282,7 @@ void SBVehicle::update_visual(double delta) {
         bs.set_column(1, toG(sb::cross(renderOut, renderRx)));
         bs.set_column(2, toG(renderOut));
         w.node->set_transform(Transform3D(bs, toG((hubL + hubR) * 0.5)));
-        updateWheelMeshes(w, c, rx, ry, out, tireRetention);
-    }
-
-    for (std::size_t si = 0; si < importedGpu_.size(); ++si) {
-        SurfaceGpu& g = importedGpu_[si];
-        const sb::MeshSurface& s = importedSurf_[si];
-        if (s.steeringWheel) g.instance->set_transform(steeringTransform);
-        sb::deformSurfaceBlended(renderPos_, frames_, s, tmpPos_, tmpNrm_);
-        if (snap || (++tearCheckCounter_ % 8) == 0) tearOverstretched(g, s, snap && tel_.brokenBeams == 0);
-        const std::size_t nv = s.skin.size();
-        uint8_t* dst = g.buffer.ptrw();
-        for (std::size_t i = 0; i < nv; ++i) {
-            float* pv = reinterpret_cast<float*>(dst + i * g.vertexStride);
-            pv[0] = tmpPos_[i * 3];
-            pv[1] = tmpPos_[i * 3 + 1];
-            pv[2] = tmpPos_[i * 3 + 2];
-            const Vector2 oct = Vector3(tmpNrm_[i * 3], tmpNrm_[i * 3 + 1], tmpNrm_[i * 3 + 2]).octahedron_encode();
-            uint16_t enc[2] = {static_cast<uint16_t>(std::clamp(oct.x * 65535.0f, 0.0f, 65535.0f)),
-                               static_cast<uint16_t>(std::clamp(oct.y * 65535.0f, 0.0f, 65535.0f))};
-            std::memcpy(dst + g.normalOffset + i * g.normalStride, enc, 4);
-            if (g.restTangents.size() == static_cast<int64_t>(nv * 4) && g.normalStride >= 8) {
-                const Vector3 rest(g.restTangents[i * 4], g.restTangents[i * 4 + 1], g.restTangents[i * 4 + 2]);
-                const float* F = sb::skinFrame(frames_, renderPos_.size(), s.skin[i].part);
-                Vector3 tangent(F[0] * rest.x + F[1] * rest.y + F[2] * rest.z,
-                                F[3] * rest.x + F[4] * rest.y + F[5] * rest.z,
-                                F[6] * rest.x + F[7] * rest.y + F[8] * rest.z);
-                const Vector3 normal(tmpNrm_[i * 3], tmpNrm_[i * 3 + 1], tmpNrm_[i * 3 + 2]);
-                tangent = (tangent - normal * tangent.dot(normal)).normalized();
-                const Vector2 octT = tangent.octahedron_tangent_encode(g.restTangents[i * 4 + 3]);
-                const uint16_t packed[2] = {static_cast<uint16_t>(std::clamp(octT.x * 65535.0f, 0.0f, 65535.0f)),
-                                            static_cast<uint16_t>(std::clamp(octT.y * 65535.0f, 0.0f, 65535.0f))};
-                std::memcpy(dst + g.normalOffset + i * g.normalStride + 4, packed, 4);
-            }
-        }
-        if (g.mesh->get_surface_count() > 0) g.mesh->surface_update_vertex_region(0, 0, g.buffer);
-        g.mesh->set_custom_aabb(box);
+        if (full) updateWheelMeshes(w, c, rx, ry, out, tireRetention);
     }
 
     if (debugView_ && debugMesh_.is_valid()) {

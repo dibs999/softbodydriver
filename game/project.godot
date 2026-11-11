@@ -5,6 +5,8 @@ config_version=5
 
 [application]
 
+config/project_settings_override="user://renderer.cfg"
+
 config/name="SoftBodyDriver"
 config/description="Soft-body vehicle simulator: node-beam physics at 2000 Hz, real deformation, cooling and engine damage."
 config/version="0.4.0"
