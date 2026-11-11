@@ -41,6 +41,9 @@ var _pause_first_button: Button
 var pause_menu: Control
 var _loading_overlay: CanvasLayer
 var _reverse_hold := 0.0
+## Cruise control: target speed in km/h (< 0 off) and the speed controller's integral term.
+var cruise_kmh := -1.0
+var _cruise_i := 0.0
 ## Auto Hold (automatic gearbox): after braking to a stop, and at the start, the brakes hold the car
 ## until the driver accelerates, instead of it creeping away in gear.
 var _auto_hold := true
@@ -497,9 +500,41 @@ func _drive_player(delta: float) -> void:
 	# automatic). A recovered or switched-off car otherwise rolled away on the slightest slope.
 	if not bool(t["running"]) and absf(kmh) < 3.0 and thr < 0.1:
 		hb = 1.0
+	thr = _cruise_throttle(thr, brk, kmh, gear, delta)
 	player.set_input(thr, brk, steer, hb)
 	cam.look_back = Input.is_action_pressed("look_back")
 	if audio: audio.horn = Input.is_action_pressed("horn")
+
+
+## Cruise control: holds the set speed with the throttle (PI on the speed error); more throttle
+## from the driver overtakes and the speed comes back down afterwards. The brake, reverse, the
+## manual clutch or a stalled engine switch it off.
+func _cruise_throttle(thr: float, brk: float, kmh: float, gear: int, delta: float) -> float:
+	if cruise_kmh < 0.0: return thr
+	if brk > 0.1 or gear < 0 or Input.is_action_pressed("clutch") or not bool(player.get_telemetry()["running"]):
+		set_cruise(false)
+		return thr
+	var err := cruise_kmh - kmh
+	_cruise_i = clampf(_cruise_i + err * delta * 0.03, 0.0, 0.8)
+	var hold := clampf(0.12 * err + _cruise_i, 0.0, 1.0)
+	return maxf(thr, hold)
+
+## Switch cruise control on at the current speed (from 30 km/h) or off. Returns whether it is on.
+func set_cruise(on: bool) -> bool:
+	var kmh := float(player.get_telemetry()["speed_kmh"]) if player else 0.0
+	if on and kmh < 30.0:
+		hud.toast("Tempomat ab 30 km/h")
+		on = false
+	var was := cruise_kmh > 0.0
+	if on:
+		cruise_kmh = roundf(kmh)
+		_cruise_i = 0.25
+		hud.toast("Tempomat %d km/h" % int(cruise_kmh))
+	else:
+		cruise_kmh = -1.0
+		if was: hud.toast("Tempomat aus")
+	hud.cruise_kmh = cruise_kmh
+	return cruise_kmh > 0.0
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -513,6 +548,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("menu"):
 		_toggle_pause()
+		return
+	if event.is_action_pressed("cruise_control"):
+		set_cruise(cruise_kmh < 0.0)
 		return
 	if event.is_action_pressed("siren"):
 		var beacons := player.get_node_or_null("Beacons")
@@ -550,6 +588,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		hud.toast("Kamera: " + hud.camera_name)
 	elif event.is_action_pressed("reset_vehicle"):
 		_reverse_hold = 0.0
+		set_cruise(false)
 		lesson.notify_interruption("Fahrzeug zurückgesetzt")
 		activity.cancel("Lauf abgebrochen: Zurücksetzen")
 		player.reset_to(map_data["spawns"][0])
