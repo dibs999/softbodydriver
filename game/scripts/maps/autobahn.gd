@@ -282,16 +282,109 @@ static func _service_area(parent: Node3D, world: SBWorld, concrete: Material, me
 	var paint := PlaneMesh.new()
 	paint.size = Vector2.ONE
 	C.scatter_multimesh(parent, paint, C.mat(Color(0.85, 0.85, 0.8)), marks, false)
-	var truck_color := C.mat(Color(0.49, 0.57, 0.63))
 	var truck_box := Vector3(mid + 54, 0, z + 73)
 	C.quad(parent, truck_box + Vector3.UP * 0.011, Vector2(55, 36), asphalt)
+	var trailer_colors := [C.mat(Color(0.82, 0.83, 0.84), 0.6), C.mat(Color(0.55, 0.12, 0.10), 0.6), C.mat(Color(0.20, 0.32, 0.52), 0.6)]
+	var cab_colors := [C.mat(Color(0.88, 0.88, 0.86), 0.4, 0.3), C.mat(Color(0.12, 0.25, 0.45), 0.4, 0.3), C.mat(Color(0.65, 0.10, 0.08), 0.4, 0.3)]
 	for slot in 8:
 		var x := truck_box.x - 22 + 6.0 * slot
 		C.quad(parent, Vector3(x, 0.026, truck_box.z + 6), Vector2(0.14, 18), concrete)
 		if slot % 3 == 0:
-			C.box(parent, world, Vector3(x + 2.5, 2.35, truck_box.z + 5.0), Vector3(1.35, 1.35, 6.4), Vector3.ZERO, truck_color, 0.7)
-			C.box(parent, world, Vector3(x + 2.5, 0.49, truck_box.z + 9.0), Vector3(1.35, 0.49, 1.28), Vector3.ZERO, metal)
+			_parked_truck(parent, world, Vector3(x + 2.5, 0, truck_box.z + 6.0), trailer_colors[slot / 3 % 3], cab_colors[slot / 3 % 3], metal)
+	_service_details(parent, world, z, mid, asphalt, concrete, metal, navy, glass)
 	return road
+
+
+## A parked articulated lorry pointing -z (towards the exit): cab with windscreen, mirrors and
+## bumper, a 13.6 m box trailer, wheels on both. One solid collider per part.
+static func _parked_truck(parent: Node3D, world: SBWorld, at: Vector3, trailer: Material, cab: Material, metal: Material) -> void:
+	var dark := C.mat(Color(0.07, 0.08, 0.09), 0.3, 0.2)
+	var tyre := C.mat(Color(0.05, 0.05, 0.05), 0.9)
+	# Trailer: box on a chassis, 1.2 m off the ground.
+	C.box(parent, world, at + Vector3(0, 2.55, 2.2), Vector3(1.27, 1.35, 6.8), Vector3.ZERO, trailer, 0.7)
+	C.box(parent, null, at + Vector3(0, 1.08, 2.2), Vector3(1.0, 0.12, 6.6), Vector3.ZERO, metal, 0.7, false)
+	# Tractor: cab over the front axle, chassis and fuel tank.
+	C.box(parent, world, at + Vector3(0, 2.15, -5.9), Vector3(1.25, 1.45, 1.15), Vector3.ZERO, cab, 0.7)
+	C.box(parent, null, at + Vector3(0, 2.6, -7.07), Vector3(1.1, 0.55, 0.03), Vector3.ZERO, dark, 0.7, false)      # windscreen
+	C.box(parent, null, at + Vector3(0, 0.85, -7.1), Vector3(1.25, 0.25, 0.08), Vector3.ZERO, metal, 0.7, false)     # bumper
+	C.box(parent, null, at + Vector3(0, 1.35, -7.08), Vector3(0.8, 0.28, 0.02), Vector3.ZERO, dark, 0.7, false)      # grille
+	for sx: float in [-1.0, 1.0]:
+		C.box(parent, null, at + Vector3(sx * 1.38, 2.7, -6.9), Vector3(0.04, 0.3, 0.1), Vector3.ZERO, dark, 0.7, false)   # mirrors
+	C.box(parent, null, at + Vector3(0, 0.95, -3.8), Vector3(0.9, 0.15, 1.6), Vector3.ZERO, metal, 0.7, false)       # chassis
+	C.box(parent, null, at + Vector3(1.05, 0.9, -4.3), Vector3(0.25, 0.3, 0.6), Vector3.ZERO, metal, 0.7, false)     # fuel tank
+	var wheel := CylinderMesh.new()
+	wheel.top_radius = 0.52
+	wheel.bottom_radius = 0.52
+	wheel.height = 0.32
+	wheel.radial_segments = 14
+	var wheels: Array[Transform3D] = []
+	for wz: float in [-6.0, -3.4, 5.4, 6.7, 8.0]:
+		for sx: float in [-1.0, 1.0]:
+			wheels.append(Transform3D(Basis(Vector3(0, 0, 1), PI * 0.5), at + Vector3(sx * 1.05, 0.52, wz)))
+	C.scatter_multimesh(parent, wheel, tyre, wheels)
+
+
+## Rest area details: glass front with mullions and an entrance canopy, terrace with benches and
+## bins, planters with trees round the car park, lamp posts, and a petrol station on its own
+## forecourt beside the entry road with a canopy and two pump islands.
+static func _service_details(parent: Node3D, world: SBWorld, z: float, mid: float, asphalt: Material, concrete: Material,
+		metal: Material, navy: Material, glass: Material) -> void:
+	var white := C.mat(Color(0.92, 0.92, 0.9), 0.6)
+	var alu := C.mat(Color(0.78, 0.79, 0.8), 0.35, 0.8)
+	var wood := C.mat(Color(0.45, 0.30, 0.18), 0.8)
+	var soil := C.mat(Color(0.20, 0.15, 0.10), 0.95)
+	# Mullions over the glass front and an entrance canopy on two posts.
+	for k in 9:
+		C.box(parent, null, Vector3(mid - 9.0 + k * 2.25, 1.9, z + 58.42), Vector3(0.05, 0.95, 0.04), Vector3.ZERO, alu, 0.6, false)
+	C.box(parent, null, Vector3(mid, 2.88, z + 58.42), Vector3(9.1, 0.05, 0.05), Vector3.ZERO, alu, 0.6, false)
+	C.box(parent, null, Vector3(mid, 3.05, z + 56.6), Vector3(3.2, 0.12, 1.9), Vector3.ZERO, navy, 0.8, false)
+	for sx: float in [-1.0, 1.0]:
+		C.box(parent, world, Vector3(mid + sx * 3.0, 1.5, z + 54.9), Vector3(0.08, 1.5, 0.08), Vector3.ZERO, alu, 0.6)
+	# Terrace: benches with tables and litter bins either side of the entrance.
+	for sx: float in [-1.0, 1.0]:
+		for k in 2:
+			var t := Vector3(mid + sx * (5.5 + k * 3.2), 0, z + 55.5)
+			C.box(parent, world, t + Vector3(0, 0.75, 0), Vector3(0.9, 0.04, 0.4), Vector3.ZERO, wood, 0.6)
+			C.box(parent, null, t + Vector3(0, 0.37, 0), Vector3(0.06, 0.37, 0.06), Vector3.ZERO, metal, 0.6, false)
+			for bz: float in [-0.75, 0.75]:
+				C.box(parent, world, t + Vector3(0, 0.45, bz), Vector3(0.9, 0.03, 0.17), Vector3.ZERO, wood, 0.6)
+		C.box(parent, world, Vector3(mid + sx * 3.8, 0.45, z + 55.0), Vector3(0.22, 0.45, 0.22), Vector3.ZERO, C.mat(Color(0.15, 0.32, 0.20), 0.6), 0.6)
+	# Planters with trees between the parking rows and the building, lamp posts along the lot.
+	var trees: Array[Vector3] = []
+	for k in 6:
+		var px := mid - 45.0 + k * 18.0
+		C.box(parent, world, Vector3(px, 0.25, z + 56.4), Vector3(1.4, 0.25, 0.9), Vector3.ZERO, concrete, 0.8)
+		C.box(parent, null, Vector3(px, 0.47, z + 56.4), Vector3(1.3, 0.03, 0.8), Vector3.ZERO, soil, 0.8, false)
+		trees.append(Vector3(px, 0.5, z + 56.4))
+	V.plant(parent, "broadleaf", trees, 4711, 0.55, 0.75, false)
+	for k in 5:
+		var lx := mid - 40.0 + k * 20.0
+		C.box(parent, world, Vector3(lx, 4.0, z + 40.0), Vector3(0.09, 4.0, 0.09), Vector3.ZERO, metal, 0.6)
+		C.box(parent, null, Vector3(lx, 8.0, z + 40.6), Vector3(0.18, 0.08, 0.7), Vector3.ZERO, metal, 0.6, false)
+	# Petrol station north of the entry road.
+	var fx := SERVICE_START + 64.0
+	var fz := z + 37.0   # posts clear of the entry road, which rises to z + 27 here
+	# Forecourt from the entry road's edge (about z + 21) to behind the canopy.
+	C.quad(parent, Vector3(fx, 0.014, fz - 4.0), Vector2(34, 22), asphalt)
+	for px: float in [-11.0, 11.0]:
+		for pz: float in [-4.0, 4.0]:
+			C.box(parent, world, Vector3(fx + px, 2.6, fz + pz), Vector3(0.2, 2.6, 0.2), Vector3.ZERO, white, 0.6)
+	C.box(parent, null, Vector3(fx, 5.35, fz), Vector3(12.5, 0.25, 5.5), Vector3.ZERO, white, 0.8, false)
+	C.box(parent, null, Vector3(fx, 5.0, fz), Vector3(12.55, 0.4, 5.55), Vector3.ZERO, navy, 0.8, false)
+	C.label3d(parent, "TANKSTELLE", Vector3(fx, 5.0, fz - 5.57), PI, 0.7, Color(0.95, 0.95, 0.92))
+	var pump_body := C.mat(Color(0.92, 0.92, 0.9), 0.5)
+	var display := C.mat(Color(0.05, 0.09, 0.07), 0.4)
+	for ix: float in [-5.5, 5.5]:
+		C.box(parent, world, Vector3(fx + ix, 0.12, fz), Vector3(3.0, 0.12, 0.6), Vector3.ZERO, concrete, 0.8)
+		for px: float in [-1.4, 1.4]:
+			var at := Vector3(fx + ix + px, 0, fz)
+			C.box(parent, world, at + Vector3(0, 0.55, 0), Vector3(0.38, 0.3, 0.25), Vector3.ZERO, metal, 0.6)
+			C.box(parent, null, at + Vector3(0, 1.35, 0), Vector3(0.36, 0.5, 0.23), Vector3.ZERO, pump_body, 0.6, false)
+			C.box(parent, null, at + Vector3(0, 1.88, 0), Vector3(0.38, 0.06, 0.25), Vector3.ZERO, navy, 0.6, false)
+			for f: float in [-1.0, 1.0]:
+				C.box(parent, null, at + Vector3(0, 1.5, f * 0.235), Vector3(0.22, 0.12, 0.01), Vector3.ZERO, display, 0.6, false)
+		for ex: float in [-3.3, 3.3]:
+			C.box(parent, world, Vector3(fx + ix + ex, 0.6, fz), Vector3(0.1, 0.6, 0.1), Vector3.ZERO, C.mat(Color(0.86, 0.68, 0.12), 0.6), 0.6)
 
 
 ## Distance of a point from the loop's centre line.
