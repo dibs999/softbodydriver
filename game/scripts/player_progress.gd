@@ -37,6 +37,12 @@ static func _valid(data: Variant) -> bool:
 			if not career["owned"] is Array: return false
 			for id in career["owned"]:
 				if not id is String: return false
+	if data.has("paint"):
+		if not data["paint"] is Dictionary: return false
+		for rgb in data["paint"].values():
+			if not rgb is Array or rgb.size() != 3: return false
+			for c in rgb:
+				if not _number(c): return false
 	var selection: Dictionary = data["selection"]
 	if not selection.get("last_car") is String or not selection.get("last_map") is String: return false
 	for car in data["braking"].values():
@@ -157,6 +163,21 @@ func get_best_braking(car_id: String) -> Dictionary:
 	var car: Dictionary = _data["braking"].get(car_id, {})
 	if car.is_empty(): return {}
 	return car["buckets"][car["selected_bucket"]].duplicate(true)
+
+## Paint chosen for a car (car id from the car file), or null for the factory colour.
+func get_paint(car_id: String) -> Variant:
+	var rgb: Variant = (_data.get("paint", {}) as Dictionary).get(car_id)
+	return Color(float(rgb[0]), float(rgb[1]), float(rgb[2])) if rgb is Array else null
+
+## Store a paint colour for a car; null goes back to the factory colour.
+func set_paint(car_id: String, color: Variant) -> bool:
+	if read_only: return false
+	var previous := _data.duplicate(true)
+	var all: Dictionary = (_data.get("paint", {}) as Dictionary).duplicate()
+	if color is Color: all[car_id] = [color.r, color.g, color.b]
+	else: all.erase(car_id)
+	_data["paint"] = all
+	return _commit(previous)
 
 func set_selection(car_path: String, map_id: String) -> bool:
 	if read_only or car_path.is_empty() or map_id.is_empty(): return false

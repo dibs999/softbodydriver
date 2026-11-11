@@ -391,6 +391,42 @@ func scan_cars() -> void:
 	print("SoftBodyDriver: %d vehicles found in %s" % [cars.size(), CARS_DIR])
 
 
+## Paint shades offered in the main menu (the factory colour comes first, without a value).
+const PAINTS := [
+	["Werkslack", null], ["Signalrot", Color(0.62, 0.05, 0.04)], ["Alpinweiß", Color(0.86, 0.86, 0.84)],
+	["Schwarz", Color(0.03, 0.03, 0.035)], ["Silber", Color(0.55, 0.56, 0.58)], ["Nachtblau", Color(0.05, 0.09, 0.25)],
+	["Racinggrün", Color(0.04, 0.20, 0.10)], ["Gelb", Color(0.85, 0.62, 0.05)], ["Orange", Color(0.85, 0.30, 0.04)],
+	["Violett", Color(0.25, 0.08, 0.40)],
+]
+
+## Repaint a vehicle: every body-paint material (the crash-wear paint shader, generated or imported
+## bodies) gets the colour. Returns how many materials changed.
+func paint_vehicle(vehicle: Node, color: Color) -> int:
+	var changed := 0
+	var seen := {}
+	for mi in vehicle.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		var mats: Array[Material] = [m.material_override]
+		if m.mesh:
+			for i in m.mesh.get_surface_count():
+				mats.append(m.get_surface_override_material(i))
+				mats.append(m.mesh.surface_get_material(i))
+		for mat in mats:
+			if mat is ShaderMaterial and not seen.has(mat):
+				seen[mat] = true
+				var sh := (mat as ShaderMaterial).shader
+				if sh and sh.resource_path.ends_with("car_paint.gdshader"):
+					(mat as ShaderMaterial).set_shader_parameter("paint", color)
+					changed += 1
+	return changed
+
+## Apply the paint the player chose for this car, if any.
+func apply_chosen_paint(vehicle: SBVehicle) -> void:
+	if not is_instance_valid(vehicle): return
+	var chosen: Variant = progress.get_paint(str(vehicle.get_info().get("id", "")))
+	if chosen is Color: paint_vehicle(vehicle, chosen)
+
+
 func car_info(path: String) -> Dictionary:
 	for c in cars:
 		if c["path"] == path:
