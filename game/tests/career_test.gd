@@ -71,6 +71,28 @@ func _press(scene: Node, action: String) -> void:
 	ev.pressed = true
 	scene._unhandled_input(ev)
 
+## Full throttle into the wall ahead, then a couple of metres back and stop: a repair in place
+## against the wall would put the restored nose into it and bend it again.
+func _crash(car: SBVehicle, world: SBWorld) -> void:
+	car.set_ignition(true)
+	car.start_engine()
+	world.step_blocking(1.5)
+	car.set_gear(1)
+	car.set_input(1, 0, 0, 0)
+	world.step_blocking(5.0)
+	world.sync_visuals()
+	var crash_pos := car.get_position_ws()
+	for i in 120:
+		car.set_gear(-1)   # asked again until the gearbox takes it (refused while still pushing)
+		car.set_input(0.3, 0, 0, 0)
+		world.step_blocking(0.05)
+		world.sync_visuals()
+		if car.get_position_ws().distance_to(crash_pos) > 2.5: break
+	car.set_input(0, 1, 0, 0)
+	world.step_blocking(1.0)
+	car.set_input(0, 0, 0, 0)
+	world.sync_visuals()
+
 func _run(scene: Node) -> void:
 	var game := root.get_node("Game")
 	var world: SBWorld = scene.world
@@ -81,10 +103,12 @@ func _run(scene: Node) -> void:
 	check(game.progress.get_money() > start, "A finished activity pays into the account")
 	# Damage the car against a wall, then repair it on the spot.
 	var car: SBVehicle = scene.player
-	world.add_box(car.get_position_ws() + car.get_forward() * 30.0 + Vector3.UP, Vector3(1, 1, 4), Vector3.ZERO, 0.8)
-	car.set_input(1, 0, 0, 0)
-	world.step_blocking(5.0)
-	world.sync_visuals()
+	var start_xf: Transform3D = scene.map_data["spawns"][0]   # what the reset key uses
+	# A wall across the road (half extents: wide across the heading, thin along it).
+	var fwd := car.get_forward()
+	var across := Vector3(1, 1, 4) if absf(fwd.x) > absf(fwd.z) else Vector3(4, 1, 1)
+	world.add_box(car.get_position_ws() + fwd * 30.0 + Vector3.UP, across, Vector3.ZERO, 0.8)
+	_crash(car, world)
 	var bill := Career.repair_cost(car.get_telemetry())
 	print("  bill after the wall: %s" % Career.money_text(bill))
 	check(bill > 0.0, "Hitting a wall makes a repair bill")
@@ -95,11 +119,9 @@ func _run(scene: Node) -> void:
 	check(is_equal_approx(game.progress.get_money(), before - bill - Career.RECOVERY_FEE), "An instant repair charges towing plus the bill")
 	check(Career.repair_cost(car.get_telemetry()) == 0.0, "and the car is repaired")
 	# Broke: the repair is refused.
-	car.reset_to(Transform3D(car.get_visual_basis(), car.get_position_ws()))
+	car.reset_to(start_xf)
 	world.step_blocking(0.5)
-	car.set_input(1, 0, 0, 0)
-	world.step_blocking(5.0)
-	world.sync_visuals()
+	_crash(car, world)
 	game.progress.change_money(-game.progress.get_money())
 	var damaged := Career.repair_cost(car.get_telemetry())
 	_press(scene, "repair_vehicle")
@@ -124,13 +146,15 @@ func _run(scene: Node) -> void:
 	var paid := money_before - float(game.progress.get_money())
 	print("  fuelled %.1f l, paid %s" % [litres, Career.money_text(paid)])
 	check(litres > 1.0 and absf(paid - litres * Career.FUEL_PRICE) < 0.6 * Career.FUEL_PRICE + 0.01, "Fuel is billed by the litre")
-	# Career off: free again (damage the car first, so a repair would cost something).
-	car.set_input(1, 0, 0, 0)
-	world.step_blocking(4.0)
-	world.sync_visuals()
+	# Career off: drive into the wall again, then the instant repair must not cost anything.
+	car.reset_to(start_xf)
+	world.step_blocking(0.5)
+	_crash(car, world)
+	var wreck := Career.repair_cost(car.get_telemetry())
 	game.settings["career"] = false
 	var balance: float = game.progress.get_money()
 	_press(scene, "repair_vehicle")
 	world.step_blocking(0.2)
 	world.sync_visuals()
-	check(Career.repair_cost(car.get_telemetry()) == 0.0 and is_equal_approx(game.progress.get_money(), balance), "Outside the career repairs are free")
+	print("  career off: damage worth %s repaired" % Career.money_text(wreck))
+	check(wreck > 0.0 and Career.repair_cost(car.get_telemetry()) == 0.0 and is_equal_approx(game.progress.get_money(), balance), "Outside the career an expensive repair is free")
