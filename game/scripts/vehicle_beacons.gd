@@ -17,6 +17,7 @@ var active := false:
 const BLUE := Color(0.12, 0.35, 1.0)
 const TONES := [440.0, 585.0]   # Hz, each held 0.65 s
 const TONE_TIME := 0.65
+const RATE := 22050.0
 
 var _lamps: Array[MeshInstance3D] = []
 var _lights: Array[OmniLight3D] = []
@@ -62,7 +63,7 @@ func _ready() -> void:
 		_lights.append(light)
 	_player = AudioStreamPlayer3D.new()
 	var stream := AudioStreamGenerator.new()
-	stream.mix_rate = 22050.0
+	stream.mix_rate = RATE
 	stream.buffer_length = 0.25
 	_player.stream = stream
 	_player.unit_size = 18.0
@@ -115,14 +116,20 @@ func _apply(t: float) -> void:
 func _fill_siren() -> void:
 	if _playback == null:
 		return
-	var rate := 22050.0
-	var frames := _playback.get_frames_available()
+	_playback.push_buffer(render_siren(_playback.get_frames_available()))
+
+
+## Next `frames` samples of the two-tone horn at RATE (state carries on between calls).
+func render_siren(frames: int) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	out.resize(frames)
 	for i in frames:
-		_sample_t += 1.0 / rate
+		_sample_t += 1.0 / RATE
 		var tone: float = TONES[int(_sample_t / TONE_TIME) % 2]
-		_phase = fmod(_phase + tone / rate, 1.0)
+		_phase = fmod(_phase + tone / RATE, 1.0)
 		# Horn timbre: odd harmonics of a soft square wave, slightly compressed.
 		var x := TAU * _phase
-		var s := sin(x) + 0.33 * sin(3.0 * x) + 0.18 * sin(5.0 * x) + 0.09 * sin(7.0 * x)
-		s = tanh(s * 1.4) * 0.5
-		_playback.push_frame(Vector2(s, s))
+		var v := sin(x) + 0.33 * sin(3.0 * x) + 0.18 * sin(5.0 * x) + 0.09 * sin(7.0 * x)
+		v = tanh(v * 1.4) * 0.5
+		out[i] = Vector2(v, v)
+	return out

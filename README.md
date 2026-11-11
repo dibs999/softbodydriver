@@ -392,6 +392,7 @@ godot --headless --path game -s res://tests/body_scrape_test.gd  # Schleifkontak
 godot --headless --path game -s res://tests/district_road_test.gd # Kreisstraße im Hügelland: Einmündungen, Steigung, Befahrbarkeit
 godot --headless --path game -s res://tests/pursuit_test.gd       # Verfolgungsjagd: Festnahme, Flucht, Medaillen
 godot --headless --path game -s res://tests/drift_medal_test.gd   # Drift-Medaillen gegen einen skriptgesteuerten Drifter
+godot --headless --path game -s res://tests/siren_test.gd         # Martinshorn: Tonfolge, AudioServer-Aufnahme, Abschalten
 godot --headless --path game -s res://tests/weather_door_test.gd # Offene Tür, Regenabschirmung und Akustik
 godot --headless --path game -s res://tests/door_controls_test.gd # Öffnen, Schließen, Scharniere und Reparatur
 godot --headless --path game -s res://tests/mirror_test.gd       # Optische Flächen, Projektion und Kamerawechsel
