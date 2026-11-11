@@ -7,7 +7,7 @@
 namespace sb {
 
 void SoftBody::addSelfCollisionPanel(const std::string& panelGroup, const std::vector<std::string>& targetGroups,
-                                     const std::vector<std::string>& releaseGroups, real skin) {
+                                     const std::vector<std::string>& releaseGroups, real skin, bool releaseOnDisabled) {
     const int panelId = findGroup(panelGroup);
     if (panelId < 0 || !(skin > 0.0) || !std::isfinite(skin))
         throw std::invalid_argument("invalid self-contact panel group or skin");
@@ -22,6 +22,7 @@ void SoftBody::addSelfCollisionPanel(const std::string& panelGroup, const std::v
     };
     SelfCollisionPanel panel;
     panel.skin = skin;
+    panel.releaseOnDisabled = releaseOnDisabled;
     for (std::uint32_t n = 0; n < pos_.size(); ++n)
         if (nodeGroup_[n] == panelId) {
             panel.nodes.push_back(n);
@@ -68,7 +69,7 @@ void SoftBody::addSelfCollisionPanel(const std::string& panelGroup, const std::v
 
 bool SoftBody::selfCollisionActive(const SelfCollisionPanel& panel) const {
     return panel.releaseBeams.empty() || std::any_of(panel.releaseBeams.begin(), panel.releaseBeams.end(),
-                                                    [&](std::uint32_t i) { return beams_[i].broken || beams_[i].disabled; });
+                                                    [&](std::uint32_t i) { return beams_[i].broken || (panel.releaseOnDisabled && beams_[i].disabled); });
 }
 
 namespace {

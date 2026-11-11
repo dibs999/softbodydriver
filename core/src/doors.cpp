@@ -83,7 +83,7 @@ void SoftBody::updateDoors(real dt) {
                 const bool still = length(vel_[beam.a] - vel_[beam.b]) < 0.15;
                 aligned &= error < door.latchTolerance && still;
                 // A slammed lid is caught on its way down, it does not have to come to rest first.
-                near &= error < door.catchTolerance;
+                near &= error < door.catchTolerance && length(vel_[beam.a] - vel_[beam.b]) < door.catchMaxSpeed;
             }
             if (aligned) {
                 for (auto index : door.latchBeams) beams_[index].disabled = false;

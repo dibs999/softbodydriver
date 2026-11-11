@@ -282,3 +282,31 @@ TEST_CASE("a tyre rolls over a low heavy object lying on the road instead of sho
     CHECK(world.body(ic).telemetry().speedKmh > 35.0);
     CHECK(length(world.body(ib).centerOfMass() - rest) < 1.0);   // run over, not bulldozed
 }
+
+TEST_CASE("a heavy tailgate stays latched in a 50 km/h frontal impact") {
+    // The Trailhead's 40 kg tailgate (spare wheel on it) used to pop its latch from its own
+    // inertia when the car hit a wall head-on; hinges and latch now scale with the lid's mass.
+    auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/trailhead_4x4.car.json"));
+    const real L = car.def.body.length;
+    World world;
+    world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+    world.addCollider(StaticCollider::box({L + 1.5, 1.0, 0.0}, {0.5, 1.0, 3.0}, {0, 0, 0}, 0.8));
+    const auto ic = world.addBody(std::move(car.body));
+    world.simulate(1.0);
+    for (auto& v : world.body(ic).velocities()) v = {50.0 / 3.6, 0, 0};
+    VehicleControls c;
+    c.gear = 0;
+    world.body(ic).setControls(c);
+    world.simulate(2.0);
+    REQUIRE(world.stats().finite);
+    const SoftBody& body = world.body(ic);
+    int frontDamage = 0, lidBroken = 0;
+    for (const Beam& b : body.beams()) {
+        const std::string group = b.breakGroup >= 0 ? body.breakGroupNames()[static_cast<std::size_t>(b.breakGroup)] : "";
+        if (b.broken && (group == "tailgate_latch" || group == "tailgate_hinge")) ++lidBroken;
+        if (std::abs(b.restLength - b.baseRestLength) > 0.01 * b.baseRestLength) ++frontDamage;
+    }
+    MESSAGE("bent beams " << frontDamage << ", broken tailgate mounts " << lidBroken);
+    CHECK(frontDamage > 50);   // it really was a hard frontal crash
+    CHECK(lidBroken == 0);
+}
