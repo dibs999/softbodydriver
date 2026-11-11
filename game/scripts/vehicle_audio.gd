@@ -36,6 +36,9 @@ var _shift_player: AudioStreamPlayer
 var _shift_up_sound: AudioStreamWAV
 var _shift_down_sound: AudioStreamWAV
 var _scrub := 0.0
+var _body_scrape := 0.0   # bodywork grinding on the road (telemetry "scrape")
+var _grind_p1 := 0.0
+var _grind_p2 := 0.0
 var _rolling := 0.0
 var _wind := 0.0
 var _impact := 0.0
@@ -183,6 +186,9 @@ func _process(delta: float) -> void:
 	_wheel_hz = speed / 3.6 / 2.0
 	var blend := 1.0 - exp(-delta * 12.0)
 	_scrub = lerpf(_scrub, slip, blend)
+	# Fast attack, slower release: a scrape is heard as soon as metal touches.
+	var scrape_now := float(t.get("scrape", 0.0)) * smoothstep(5.0, 25.0, speed)
+	_body_scrape = lerpf(_body_scrape, scrape_now, 1.0 - exp(-delta * (30.0 if scrape_now > _body_scrape else 6.0)))
 	_rolling = lerpf(_rolling, smoothstep(1.0, 115.0, speed) * grip, blend)
 	_wind = lerpf(_wind, smoothstep(18.0, 220.0, speed), blend)
 	var volume: float = Game.settings["master_volume"]
@@ -286,7 +292,14 @@ func _fill() -> void:
 			if absf(noise) < 0.0009 * _fire: _crackle = _rng.randf_range(-1.0, 1.0)
 			_crackle *= 0.985
 			burn = (_low_noise * 0.9 + _air_noise * 0.25) * _fire * 0.35 + _crackle * 0.5 * _fire
-		var common := (air + tire + flap + grind) * road_volume + hit + honk + knock + burn
+		# Metal on the road: two jittering resonances over harsh noise; duller on loose ground.
+		var scrape := 0.0
+		if _body_scrape > 0.002:
+			_grind_p1 = fmod(_grind_p1 + TAU * (1900.0 + 260.0 * _air_noise) / MIX_RATE, TAU)
+			_grind_p2 = fmod(_grind_p2 + TAU * (3100.0 + 420.0 * _low_noise) / MIX_RATE, TAU)
+			var metal := (sin(_grind_p1) * 0.16 + sin(_grind_p2) * 0.10) * (0.45 + absf(_low_noise) * 2.2)
+			scrape = (metal * (1.0 - 0.75 * _loose_road) + (noise * 0.7 + _air_noise * 0.3) * 0.22) * _body_scrape
+		var common := (air + tire + flap + grind + scrape) * road_volume + hit + honk + knock + burn
 		var spread := (_air_noise - _low_noise) * _wind * 0.065 * road_volume
 		_cabin_l = lerpf(_cabin_l, common + spread, filter)
 		_cabin_r = lerpf(_cabin_r, common - spread, filter)
