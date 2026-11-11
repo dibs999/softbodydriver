@@ -11,7 +11,7 @@
     "trackFront": 1.64, "trackRear": 1.65, "groundClearance": 0.21,
     "noseHeight": 0.94, "hoodHeight": 1.18, "beltHeight": 1.20, "tailHeight": 1.17,
     "hoodLength": 1.30, "windshieldRun": 0.68, "roofLength": 2.25, "rearWindowRun": 0.40,
-    "roofWidthRatio": 0.84, "cornerRadiusFront": 0.28, "cornerRadiusRear": 0.20,
+    "roofWidthRatio": 0.84, "cornerRadiusFront": 0.18, "cornerRadiusRear": 0.20,
     "paint": [0.22, 0.27, 0.25], "paintMetallic": 0.6
   },
   "chassis": { "curbMass": 2050, "frontWeight": 0.55, "bodyStiffness": 1.15, "bodyStrength": 1.2 },
