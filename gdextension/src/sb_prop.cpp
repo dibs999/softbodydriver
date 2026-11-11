@@ -37,6 +37,14 @@ void SBProp::setup(SBWorld* world, int bodyIndex, const sb::PropBuild& build, co
     restOrigin_ = toG(r[frameOrigin_]);
     spawn_ = spawn;
     spawnFrameOrigin_ = toG(spawn[frameOrigin_]);
+    subOrigin_ = build.subFrameOrigin;
+    subX_ = build.subFrameX;
+    subY_ = build.subFrameY;
+    if (subOrigin_ >= 0) {
+        const auto so = static_cast<std::size_t>(subOrigin_);
+        subRestInverse_ = frameBasis(toG(r[so]), toG(r[static_cast<std::size_t>(subX_)]), toG(r[static_cast<std::size_t>(subY_)])).transposed();
+        subRestOrigin_ = toG(r[so]);
+    }
 }
 
 void SBProp::sync_from_world() {
@@ -45,7 +53,16 @@ void SBProp::sync_from_world() {
     const auto& p = body.positions();
     const Vector3 o = toG(p[frameOrigin_]);
     const Basis b = frameBasis(o, toG(p[frameX_]), toG(p[frameY_])) * restInverse_;
-    set_transform(Transform3D(b, o - b.xform(restOrigin_)));
+    const Transform3D main(b, o - b.xform(restOrigin_));
+    set_transform(main);
+    // A second rigid part (a beacon's panel): its "Sub" child follows that part's own frame.
+    if (subOrigin_ >= 0) {
+        if (Node3D* sub = Object::cast_to<Node3D>(get_node_or_null(NodePath("Sub")))) {
+            const Vector3 so = toG(p[static_cast<std::size_t>(subOrigin_)]);
+            const Basis sb = frameBasis(so, toG(p[static_cast<std::size_t>(subX_)]), toG(p[static_cast<std::size_t>(subY_)])) * subRestInverse_;
+            sub->set_transform(main.affine_inverse() * Transform3D(sb, so - sb.xform(subRestOrigin_)));
+        }
+    }
     std::size_t deformed = 0;
     for (const auto& beam : body.beams()) deformed += beam.plasticStrain() > 0.01 ? 1 : 0;
     damage_ = body.beamCount() ? std::min(1.0, 3.0 * static_cast<double>(deformed) / static_cast<double>(body.beamCount())) : 0.0;

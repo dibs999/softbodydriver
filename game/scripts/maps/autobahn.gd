@@ -200,8 +200,8 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	lane_b.reverse()
 	var speeds_a := C.speeds_from_curvature(lane_a_mid, 36.0, 30.0, 40.0)
 	var speeds_b := C.speeds_from_curvature(lane_b, 34.0, 30.0, 40.0)
-	# Roadworks on the far straight: a cone line on the edge of the hard shoulder (outer side of
-	# carriageway A) and a few drums parked on it.
+	# Roadworks on the far straight: a line of Leitbaken (sign 605, panels facing the traffic) on
+	# the edge of the hard shoulder (outer side of carriageway A) and a few drums parked on it.
 	var props: Array = []
 	var last := Vector3.INF
 	for i in center.size():
@@ -213,7 +213,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		for s in steps:
 			var c := p.lerp(q, float(s) / steps) + Vector3(0, 0, CARRIAGE_OFFSET + CARRIAGE_HALF - 2.4)
 			if last == Vector3.INF or c.distance_to(last) > 8.0:
-				props.append({"kind": "cone", "position": Vector3(c.x, 0.0, c.z)})
+				props.append({"kind": "beacon", "position": Vector3(c.x, 0.0, c.z)})
 				last = c
 	for d in 3:
 		props.append({"kind": "barrel", "position": Vector3(146.0 - d * 0.7, 0.0, RADIUS + CARRIAGE_OFFSET + CARRIAGE_HALF - 1.0)})
