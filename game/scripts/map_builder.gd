@@ -570,6 +570,7 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	var ground_height := func(x: float, z: float) -> float:
 		return C.sample(heights, nx, nz, ox, oz, cell, x, z)
 	parent.add_child(C.road_mesh(road, half_w, C.road_material(2, half_w * 2.0, 12.0, "rural"), true, 0.05, 12.0, ground_height))
+	parent.add_child(C.verge_mesh(road, half_w, 1.3, C.verge_material(1.3), true, 0.05, 12.0, ground_height))
 	var markers: Array[Transform3D] = []
 	for i in range(3, n_road, 8):
 		var heading := (road[(i + 1) % n_road] - road[i - 1]).normalized()

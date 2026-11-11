@@ -27,6 +27,8 @@ uniform bool has_strata = false;
 uniform float strata_spacing = 1.4;
 uniform vec4 strata_light : source_color = vec4(0.92, 0.70, 0.52, 1.0);
 uniform vec4 strata_dark : source_color = vec4(0.52, 0.30, 0.21, 1.0);
+// Grass terrain: mid-scale lush/dry patches, clover clumps, wildflower clusters and molehills.
+uniform bool meadow = false;
 global uniform float road_wetness;
 
 varying vec3 world_pos;
@@ -124,6 +126,35 @@ void fragment() {
 	float patches = smoothstep(0.48, 0.68, fbm(mp * 0.61 + vec2(17.0, 3.0)));
 	col *= mix(1.0 - macro_strength, 1.0 + macro_strength, macro);
 	col = mix(col, col * macro_tint.rgb * 1.6, patches * macro_tint_amount);
+	if (meadow) {
+		vec2 q = world_pos.xz;
+		float level = smoothstep(0.86, 0.96, n.y);
+		// Lush (darker, bluer green) and dry (yellower) patches of a few metres.
+		float mid = fbm(q * 0.16 + vec2(31.0, 4.0));
+		col *= mix(vec3(0.80, 0.92, 0.76), vec3(1.17, 1.08, 0.80), smoothstep(0.3, 0.75, mid));
+		// Dense clover / sedge clumps.
+		float clump = smoothstep(0.62, 0.82, vnoise(q * 1.3 + 7.0));
+		col *= 1.0 - clump * 0.16;
+		// Wildflowers in clusters; beyond the distance a flower is a few pixels they become a tint.
+		float px = length(fwidth(q));
+		float near = 1.0 - smoothstep(0.015, 0.05, px);
+		float cluster = smoothstep(0.5, 0.85, fbm(q * 0.33 + vec2(3.0, 8.0)));
+		vec2 fp = q * 6.5;
+		vec2 fc = floor(fp);
+		vec2 ff = fract(fp) - vec2(hash(fc), hash(fc + 1.7)) * 0.6 - 0.2;
+		float flower = (1.0 - smoothstep(0.13, 0.22, length(ff))) * step(0.94 - cluster * 0.4, hash(fc + 4.4));
+		float sort = hash(fc + 9.1);
+		vec3 petal = sort < 0.45 ? vec3(0.92, 0.92, 0.86) : (sort < 0.8 ? vec3(0.93, 0.80, 0.18) : vec3(0.58, 0.45, 0.82));
+		col = mix(col, petal * 0.85, flower * near * level);
+		col = mix(col, col * vec3(1.16, 1.10, 0.78), cluster * (1.0 - near) * 0.5 * level);
+		// Molehills and bare spots.
+		vec2 mq = q / 3.0;
+		vec2 mc = floor(mq);
+		vec2 mf = fract(mq) - 0.5;
+		float mr = 0.11 + 0.08 * hash(mc);
+		float mole = (1.0 - smoothstep(mr * 0.6, mr, length(mf) + 0.05 * (vnoise(mq * 8.0) - 0.5))) * step(0.97, hash(mc + 2.2));
+		col = mix(col, vec3(0.30, 0.24, 0.17) * (0.85 + 0.3 * vnoise(q * 9.0)), mole * level);
+	}
 	float fine = vnoise(world_pos.xz * 1.7);
 	float wet = clamp(road_wetness * wet_response, 0.0, 1.0);
 	col *= mix(1.0, 0.66, wet);
