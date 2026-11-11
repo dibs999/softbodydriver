@@ -830,6 +830,7 @@ static func _hill_village(world: SBWorld, parent: Node3D, road: PackedVector3Arr
 	spire.position = tower + Vector3.UP * 28.0
 	spire.rotation.y = cyaw + PI * 0.25
 	parent.add_child(spire)
+	_church_tower_details(parent, tower, cyaw, plaster)
 	village.build(parent)
 	V.plant(parent, "broadleaf", trees, 3002, 0.7, 1.0, false)
 	for t in trees:
@@ -993,3 +994,77 @@ static func proving_shelters() -> Array[Dictionary]:
 	for x: float in [32, 47, 62]:
 		shelters.append({"center": Vector3(x, 1.455, -65), "half_extents": Vector3(5.8, 1.455, 3.3)})
 	return shelters
+
+
+## Village church tower: stone plinth, slit windows, clock faces, louvred belfry openings, cornice
+## and a ball and cross with a weathercock on the spire (the tower was a plain white block).
+static func _church_tower_details(parent: Node3D, base: Vector3, yaw: float, plaster: Material) -> void:
+	var root := Node3D.new()
+	root.position = base
+	root.rotation.y = yaw
+	parent.add_child(root)
+	var stone := C.noise_mat(Color(0.55, 0.52, 0.47), 0.12, 3.0, 0.9)
+	var dark := C.mat(Color(0.07, 0.07, 0.08), 0.9)
+	var louvre := C.mat(Color(0.32, 0.26, 0.2), 0.8)
+	var dial := C.mat(Color(0.95, 0.94, 0.9), 0.5)
+	var gold := C.mat(Color(0.83, 0.66, 0.25), 0.35, 0.9)
+	var add := func(mesh: Mesh, at: Vector3, mat: Material, rot := Vector3.ZERO) -> void:
+		var mi := MeshInstance3D.new()
+		mi.mesh = mesh
+		mi.material_override = mat
+		mi.position = at
+		mi.rotation = rot
+		root.add_child(mi)
+	var box := func(size: Vector3) -> BoxMesh:
+		var b := BoxMesh.new()
+		b.size = size
+		return b
+	add.call(box.call(Vector3(5.5, 1.1, 5.5)), Vector3(0, 0.85, 0), stone)            # plinth
+	add.call(box.call(Vector3(5.6, 0.35, 5.6)), Vector3(0, 23.05, 0), plaster)         # cornice
+	add.call(box.call(Vector3(5.45, 0.22, 5.45)), Vector3(0, 13.6, 0), plaster)        # string course
+	for face in 4:
+		var ang := face * PI * 0.5
+		var out := Vector3(sin(ang), 0, cos(ang))
+		var along := Vector3(cos(ang), 0, -sin(ang))
+		var rot := Vector3(0, ang, 0)
+		var at := func(h: float, side: float, depth: float) -> Vector3:
+			return out * (2.6 + depth) + along * side + Vector3.UP * h
+		# Slit windows on two storeys.
+		for h: float in [6.0, 10.5]:
+			add.call(box.call(Vector3(0.32, 1.3, 0.08)), at.call(h, 0.0, 0.0), dark, rot)
+		# Clock face with hands at ten past ten.
+		var disc := CylinderMesh.new()
+		disc.top_radius = 0.95
+		disc.bottom_radius = 0.95
+		disc.height = 0.06
+		disc.radial_segments = 24
+		var rim := CylinderMesh.new()
+		rim.top_radius = 1.05
+		rim.bottom_radius = 1.05
+		rim.height = 0.04
+		rim.radial_segments = 24
+		add.call(rim, at.call(16.0, 0.0, 0.02), gold, Vector3(PI * 0.5, ang, 0))
+		add.call(disc, at.call(16.0, 0.0, 0.05), dial, Vector3(PI * 0.5, ang, 0))
+		for hand: Vector2 in [Vector2(0.62, deg_to_rad(60.0)), Vector2(0.82, deg_to_rad(-60.0))]:
+			var hm: BoxMesh = box.call(Vector3(0.07, hand.x, 0.02))
+			var dir := Vector3(sin(hand.y), cos(hand.y), 0)
+			var hub: Vector3 = at.call(16.0, 0.0, 0.09)
+			var mi := MeshInstance3D.new()
+			mi.mesh = hm
+			mi.material_override = dark
+			mi.position = hub + (along * dir.x + Vector3.UP * dir.y) * hand.x * 0.5
+			mi.basis = Basis(Vector3.UP, ang) * Basis(Vector3(0, 0, 1), -hand.y)
+			root.add_child(mi)
+		# Two louvred belfry openings under the cornice.
+		for side: float in [-1.0, 1.0]:
+			add.call(box.call(Vector3(0.85, 2.3, 0.1)), at.call(20.4, side * 0.85, -0.02), dark, rot)
+			for k in 5:
+				add.call(box.call(Vector3(0.82, 0.07, 0.16)), at.call(19.5 + k * 0.42, side * 0.85, 0.0), louvre, rot + Vector3(0.5, 0, 0))
+	# Ball, cross and weathercock on the spire tip.
+	var ball := SphereMesh.new()
+	ball.radius = 0.32
+	ball.height = 0.64
+	add.call(ball, Vector3(0, 33.25, 0), gold)
+	add.call(box.call(Vector3(0.12, 1.7, 0.12)), Vector3(0, 34.3, 0), gold)
+	add.call(box.call(Vector3(0.9, 0.12, 0.12)), Vector3(0, 34.6, 0), gold)
+	add.call(box.call(Vector3(0.55, 0.32, 0.05)), Vector3(0.1, 35.35, 0), gold)
