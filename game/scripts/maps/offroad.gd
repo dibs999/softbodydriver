@@ -146,6 +146,96 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			"fog":Color(0.66,0.74,0.78),"fog_density":0.00065,"sun":Vector3(-36,-32,0),
 			"sun_energy":1.25,"sun_color":Color(1.0,0.97,0.90)}}
 
+## Static farm tractor facing -x (out of the shed): big lugged rear wheels, small front ones,
+## bonnet, cab with glass and exhaust stack. One collision box for the body.
+static func _tractor(parent: Node3D, world: SBWorld, p: Vector3) -> void:
+	var paint := C.mat(Color(0.62, 0.12, 0.08), 0.45)
+	var dark := C.mat(Color(0.08, 0.08, 0.08), 0.9)
+	var rubber := C.mat(Color(0.05, 0.05, 0.05), 0.95)
+	var steel := C.mat(Color(0.55, 0.55, 0.52), 0.4, 0.8)
+	var glass := C.mat(Color(0.25, 0.32, 0.35, 0.35), 0.05)
+	glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	var wheel := func(c: Vector3, r: float, w: float) -> void:
+		var tyre := CylinderMesh.new()
+		tyre.top_radius = r
+		tyre.bottom_radius = r
+		tyre.height = w
+		tyre.radial_segments = 24
+		var mi := MeshInstance3D.new()
+		mi.mesh = tyre
+		mi.material_override = rubber
+		mi.position = c
+		mi.rotation = Vector3(PI * 0.5, 0, 0)
+		parent.add_child(mi)
+		# Lugs: chevron bars across the tread.
+		var lugs: Array[Transform3D] = []
+		for k in 18:
+			var a := TAU * k / 18.0
+			var b := Basis(Vector3.BACK, a) * Basis(Vector3.UP, 0.5 * (1 if k % 2 == 0 else -1))
+			lugs.append(Transform3D(b.scaled_local(Vector3(0.07, 0.06, w * 0.55)), c + Basis(Vector3.BACK, a) * Vector3(0, r + 0.01, w * 0.2 * (1 if k % 2 == 0 else -1))))
+		var lug := BoxMesh.new()
+		lug.size = Vector3.ONE
+		C.scatter_multimesh(parent, lug, rubber, lugs, false)
+		var hub := CylinderMesh.new()
+		hub.top_radius = r * 0.55
+		hub.bottom_radius = r * 0.55
+		hub.height = w + 0.02
+		var hm := MeshInstance3D.new()
+		hm.mesh = hub
+		hm.material_override = C.mat(Color(0.85, 0.72, 0.15), 0.5)
+		hm.position = c
+		hm.rotation = Vector3(PI * 0.5, 0, 0)
+		parent.add_child(hm)
+	for side: float in [-1, 1]:
+		wheel.call(p + Vector3(1.1, 0.78, side * 0.95), 0.78, 0.45)
+		wheel.call(p + Vector3(-1.4, 0.45, side * 0.8), 0.45, 0.28)
+		# Rear mudguards.
+		C.box(parent, world, p + Vector3(1.1, 1.62, side * 0.95), Vector3(0.6, 0.03, 0.27), Vector3.ZERO, paint, 0.8, false)
+	C.box(parent, world, p + Vector3(-0.9, 1.05, 0), Vector3(1.1, 0.38, 0.38), Vector3.ZERO, paint, 0.8, false)  # bonnet
+	C.box(parent, world, p + Vector3(-2.02, 0.95, 0), Vector3(0.04, 0.3, 0.34), Vector3.ZERO, dark, 0.8, false)  # grille
+	C.box(parent, world, p + Vector3(-0.4, 0.62, 0), Vector3(1.4, 0.16, 0.3), Vector3.ZERO, dark, 0.8, false)  # frame
+	C.box(parent, world, p + Vector3(-1.4, 0.45, 0), Vector3(0.08, 0.08, 0.75), Vector3.ZERO, steel, 0.8, false)  # front axle
+	C.box(parent, world, p + Vector3(1.1, 0.78, 0), Vector3(0.12, 0.12, 0.75), Vector3.ZERO, steel, 0.8, false)  # rear axle
+	C.box(parent, world, p + Vector3(1.0, 1.3, 0), Vector3(0.5, 0.25, 0.45), Vector3.ZERO, dark, 0.8, false)  # gearbox, floor
+	# Cab: four posts, roof, glass all round.
+	for x: float in [0.45, 1.55]:
+		for z: float in [-0.62, 0.62]:
+			C.box(parent, world, p + Vector3(x, 2.25, z), Vector3(0.035, 0.7, 0.035), Vector3.ZERO, dark, 0.8, false)
+	C.box(parent, world, p + Vector3(1.0, 2.98, 0), Vector3(0.68, 0.05, 0.72), Vector3.ZERO, paint, 0.8, false)
+	for z: float in [-0.62, 0.62]:
+		C.box(parent, world, p + Vector3(1.0, 2.25, z), Vector3(0.53, 0.68, 0.01), Vector3.ZERO, glass, 0.8, false, false)
+	for x: float in [0.45, 1.55]:
+		C.box(parent, world, p + Vector3(x, 2.25, 0), Vector3(0.01, 0.68, 0.59), Vector3.ZERO, glass, 0.8, false, false)
+	C.box(parent, world, p + Vector3(1.2, 1.75, 0), Vector3(0.22, 0.2, 0.25), Vector3.ZERO, dark, 0.8, false)  # seat
+	C.box(parent, world, p + Vector3(0.75, 1.95, 0), Vector3(0.03, 0.2, 0.03), Vector3(0, 0, 0.4), dark, 0.8, false)  # steering column
+	C.box(parent, world, p + Vector3(-0.3, 2.0, 0.3), Vector3(0.04, 0.55, 0.04), Vector3.ZERO, steel, 0.8, false)  # exhaust
+	world.add_box(p + Vector3(-0.2, 1.3, 0), Vector3(1.9, 1.3, 1.2), Vector3.ZERO, 0.8)
+
+## Two-axle tipping trailer with timber sides, drawbar towards -x.
+static func _trailer(parent: Node3D, world: SBWorld, p: Vector3, boards: Material) -> void:
+	var steel := C.mat(Color(0.2, 0.3, 0.22), 0.6, 0.3)
+	var rubber := C.mat(Color(0.05, 0.05, 0.05), 0.95)
+	C.box(parent, world, p + Vector3(0, 0.95, 0), Vector3(2.4, 0.06, 1.1), Vector3.ZERO, steel, 0.8, false)  # bed
+	for side: float in [-1, 1]:
+		C.box(parent, world, p + Vector3(0, 1.3, side * 1.08), Vector3(2.4, 0.3, 0.03), Vector3.ZERO, boards, 0.8, false)
+		for x: float in [-0.7, 0.7]:
+			var tyre := CylinderMesh.new()
+			tyre.top_radius = 0.42
+			tyre.bottom_radius = 0.42
+			tyre.height = 0.3
+			var mi := MeshInstance3D.new()
+			mi.mesh = tyre
+			mi.material_override = rubber
+			mi.position = p + Vector3(x, 0.42, side * 0.85)
+			mi.rotation = Vector3(PI * 0.5, 0, 0)
+			parent.add_child(mi)
+	for x: float in [-2.38, 2.38]:
+		C.box(parent, world, p + Vector3(x, 1.3, 0), Vector3(0.03, 0.3, 1.1), Vector3.ZERO, boards, 0.8, false)
+	C.box(parent, world, p + Vector3(0, 0.75, 0), Vector3(2.2, 0.08, 0.5), Vector3.ZERO, steel, 0.8, false)  # chassis
+	C.box(parent, world, p + Vector3(-3.1, 0.7, 0), Vector3(0.75, 0.05, 0.05), Vector3.ZERO, steel, 0.8, false)  # drawbar
+	C.box(parent, world, p + Vector3(-3.6, 0.35, 0), Vector3(0.04, 0.35, 0.04), Vector3.ZERO, steel, 0.8, false)  # jockey leg
+	world.add_box(p + Vector3(0, 0.95, 0), Vector3(2.4, 0.65, 1.1), Vector3.ZERO, 0.8)
+
 static func _path_length(path: PackedVector3Array) -> float:
 	var length := 0.0
 	for i in path.size() - 1:
@@ -337,13 +427,32 @@ static func _vegetation(parent: Node3D, world: SBWorld, paths: Array[PackedVecto
 	C.scatter_multimesh(parent,mesh,fence,bars,false)
 
 static func _farm(parent: Node3D, world: SBWorld, p: Vector3, ground: Callable) -> void:
-	var timber := C.noise_mat(Color("6c4931"),0.13,1.5)
+	var timber := ShaderMaterial.new()
+	timber.shader = preload("res://materials/wood_boards.gdshader")
+	var beam_wood := ShaderMaterial.new()
+	beam_wood.shader = timber.shader
+	beam_wood.set_shader_parameter("base_color", Color(0.36, 0.25, 0.16))
+	beam_wood.set_shader_parameter("board_width", 0.6)
 	var roof := C.mat(Color("3e4543"),0.9)
 	var h := p + Vector3(7,0,0)
 	for z: float in [-10,10]: C.box(parent,world,h+Vector3(0,3.1,z),Vector3(8,3.1,0.18),Vector3.ZERO,timber)
 	C.box(parent,world,h+Vector3(8,3.1,0),Vector3(0.18,3.1,10),Vector3.ZERO,timber)
-	for side: float in [-1,1]: C.box(parent,world,h+Vector3(0,7.1,side*5),Vector3(8.7,0.15,5.4),Vector3(side*0.19,0,0),roof,0.8,false)
-	for z: float in [-10,0,10]: C.box(parent,world,h+Vector3(-8,3.1,z),Vector3(0.18,3.1,0.18),Vector3.ZERO,timber)
+	for side: float in [-1,1]:
+		var tilt := Basis(Vector3.RIGHT, side * 0.19)
+		var c := h + Vector3(0, 7.1, side * 5)
+		C.box(parent,world,c,Vector3(8.7,0.15,5.4),Vector3(side*0.19,0,0),roof,0.8,false)
+		# Boarded underside, rafters at every bay and purlins across them, seen from inside.
+		C.box(parent,world,c+tilt*Vector3(0,-0.17,0),Vector3(8.6,0.02,5.35),Vector3(side*0.19,0,0),timber,0.8,false,false)
+		for x in range(-8, 9, 2):
+			C.box(parent,world,c+tilt*Vector3(x,-0.33,0),Vector3(0.07,0.14,5.3),Vector3(side*0.19,0,0),beam_wood,0.8,false,false)
+		for t: float in [-4.2, -1.6, 1.0, 3.6]:
+			C.box(parent,world,c+tilt*Vector3(0,-0.25,t),Vector3(8.4,0.06,0.07),Vector3(side*0.19,0,0),beam_wood,0.8,false,false)
+	# Tie beams across the shed at the eaves, one per bay.
+	for x in range(-8, 9, 4):
+		C.box(parent,world,h+Vector3(x,6.05,0),Vector3(0.09,0.14,10.0),Vector3.ZERO,beam_wood,0.8,false)
+	for z: float in [-10,0,10]: C.box(parent,world,h+Vector3(-8,3.1,z),Vector3(0.18,3.1,0.18),Vector3.ZERO,beam_wood)
+	# Head beam over the open front.
+	C.box(parent,world,h+Vector3(-8,6.0,0),Vector3(0.2,0.2,10.1),Vector3.ZERO,beam_wood,0.8,false)
 	# Gable triangles under the roof at the back wall and over the open front (the roof planes
 	# rise from 6.2 m at the eaves to 8.05 m at the ridge).
 	var gable_tri := PrismMesh.new()
@@ -389,8 +498,9 @@ static func _farm(parent: Node3D, world: SBWorld, p: Vector3, ground: Callable) 
 		world.add_box(q, Vector3(0.75, 0.75, 0.6), Vector3.ZERO, 0.8)
 	C.scatter_multimesh(parent, bale, C.mat(Color(0.93, 0.93, 0.9), 0.35), silage)
 	C.scatter_multimesh(parent,strip,C.mat(Color("503e2c")),battens,false)
-	for z: float in [-5,5]:
-		C.box(parent,world,h+Vector3(2,0.55,z),Vector3(3.3,0.55,1.1),Vector3.ZERO,timber)
+	# A tractor parked nose-out in one bay, a tipping trailer in the other.
+	_tractor(parent, world, h + Vector3(0.5, 0, 5))
+	_trailer(parent, world, h + Vector3(1.5, 0, -4.5), timber)
 	# Farmhouse behind the machine shed, cut into the ground at its lowest corner.
 	var village := preload("res://scripts/maps/village.gd").new()
 	var rng := RandomNumberGenerator.new()
