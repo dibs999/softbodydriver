@@ -85,10 +85,15 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	C.terrain_tiles(parent, ORIGIN, ORIGIN, CELL, COUNT, COUNT, heights, C.terrain_material("grass", 3.8), colors)
 	var widths := [3.2, 2.5, 2.5, 4.0, 2.15]
 	for i in paths.size():
-		parent.add_child(C.road_mesh(paths[i], widths[i], _track_material(widths[i] * 2, 0.75 if i != 4 else 0.25), false, 0.055, 9.0, ground))
+		var track := _track_material(widths[i] * 2, 0.75 if i != 4 else 0.25)
+		if i > 0:   # branches and dead ends fade out instead of stopping at a hard edge
+			track.set_shader_parameter("length_uv", _path_length(paths[i]) / 9.0)
+		parent.add_child(C.road_mesh(paths[i], widths[i], track, false, 0.055, 9.0, ground))
 	# A ground-following apron instead of a floating horizontal yard slab.
 	var yard := PackedVector3Array([farm - forward * 15, farm + forward * 15])
-	parent.add_child(C.road_mesh(yard, 15, _track_material(30, 0), false, 0.06, 9.0, ground))
+	var apron := _track_material(30, 0)
+	apron.set_shader_parameter("length_uv", 30.0 / 9.0)
+	parent.add_child(C.road_mesh(yard, 15, apron, false, 0.06, 9.0, ground))
 	for i in paths.size():
 		V.roadside_grass(parent, paths[i], false, widths[i] + 0.3, widths[i] + 12.0, 4.5, 77 + i, ground,
 			func(p: Vector3) -> bool: return _near_paths(Vector2(p.x, p.z), paths, 3.2) or p.distance_to(yard[0]) < 30.0)
@@ -140,6 +145,12 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		"environment": {"sky_top":Color(0.27,0.47,0.73),"horizon":Color(0.70,0.79,0.84),
 			"fog":Color(0.66,0.74,0.78),"fog_density":0.00065,"sun":Vector3(-36,-32,0),
 			"sun_energy":1.25,"sun_color":Color(1.0,0.97,0.90)}}
+
+static func _path_length(path: PackedVector3Array) -> float:
+	var length := 0.0
+	for i in path.size() - 1:
+		length += path[i].distance_to(path[i + 1])
+	return length
 
 static func _track_material(width: float, greenery: float) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
