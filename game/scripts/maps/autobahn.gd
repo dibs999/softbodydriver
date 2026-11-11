@@ -5,6 +5,11 @@ const C := preload("res://scripts/maps/common.gd")
 const V := preload("res://scripts/maps/vegetation.gd")
 const STRAIGHT := 2600.0
 const RADIUS := 520.0
+## Church tower of the village beyond the north-east bend, and the village's extent around it
+## (kept clear of the field patchwork).
+const VILLAGE := Vector3(STRAIGHT / 2 + RADIUS + 260.0, 0, -160.0)
+const VILLAGE_MIN := Vector2(-175.0, -130.0)
+const VILLAGE_MAX := Vector2(185.0, 130.0)
 const CARRIAGE_OFFSET := 7.6   # centre of a carriageway from the median
 const CARRIAGE_HALF := 6.9
 const SHOULDER_HIGH_U_A := true   # which UV side of carriageway A is its outer edge (checked in renders)
@@ -170,7 +175,12 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			dist = absf(Vector2(q.x, p.z).length() - RADIUS)
 		if dist < 45.0 or (p.x > SERVICE_START and p.x < SERVICE_END and p.z < -RADIUS + 87.0):
 			continue
-		(conifers if rng.randf() < 0.35 else trees).append(p)
+		var conifer := rng.randf() < 0.35
+		# The village plants its own garden trees (checked after the draw: same sequence as before).
+		if p.x > VILLAGE.x + VILLAGE_MIN.x - 10.0 and p.x < VILLAGE.x + VILLAGE_MAX.x + 10.0 \
+				and p.z > VILLAGE.z + VILLAGE_MIN.y - 10.0 and p.z < VILLAGE.z + VILLAGE_MAX.y + 10.0:
+			continue
+		(conifers if conifer else trees).append(p)
 	_countryside(parent, world, center, trees, rng)
 	# Solid trunks for the countryside trees (behind the fence, but a car can break through).
 	# Some field-edge trees landed on the motorway: drop those, and give the rest solid trunks
@@ -314,7 +324,9 @@ static func _countryside(parent: Node3D, world: SBWorld, center: PackedVector3Ar
 			var size := cell - Vector2(rng.randf_range(6, 16), rng.randf_range(6, 14))
 			var reach := size.length() * 0.5
 			# Fields run up to the wildlife fence; the raised carriageways and verges cover their inner edge.
-			if _loop_distance(c.x, c.y) > reach * 0.35 + 30.0 and not (c.x > SERVICE_START - 150 and c.x < SERVICE_END + 150 and absf(c.y + RADIUS) < 220):
+			var in_village := c.x > VILLAGE.x + VILLAGE_MIN.x - size.x * 0.4 and c.x < VILLAGE.x + VILLAGE_MAX.x + size.x * 0.4 \
+					and c.y > VILLAGE.z + VILLAGE_MIN.y - size.y * 0.4 and c.y < VILLAGE.z + VILLAGE_MAX.y + size.y * 0.4
+			if not in_village and _loop_distance(c.x, c.y) > reach * 0.35 + 30.0 and not (c.x > SERVICE_START - 150 and c.x < SERVICE_END + 150 and absf(c.y + RADIUS) < 220):
 				var r := rng.randf()
 				var pick := 0
 				var acc := 0.0
@@ -333,42 +345,191 @@ static func _countryside(parent: Node3D, world: SBWorld, center: PackedVector3Ar
 						trees.append(Vector3(c.x + size.x * 0.5 + 3.0, 0, c.y - size.y * 0.5 + size.y * t / 3.0))
 			z += cell.y
 		x += cell.x
-	# Village beyond the north-east bend: houses round a church.
+	_village(parent, world, trees, rng)
+
+
+## Street village beyond the north-east bend: a main street past the church (the tower portal
+## opens onto it) and a cross street, houses along both with front gardens, some farms with a
+## barn behind, a walled churchyard with gravestones and field tracks out into the farmland.
+static func _village(parent: Node3D, world: SBWorld, trees: Array[Vector3], rng: RandomNumberGenerator) -> void:
 	var village := preload("res://scripts/maps/village.gd").new()
 	var plaster := C.noise_mat(Color(0.88, 0.85, 0.78), 0.05, 2.5, 0.92)
 	var slate := C.noise_mat(Color(0.26, 0.26, 0.29), 0.1, 3.0, 0.8)
-	var vc := Vector3(STRAIGHT / 2 + RADIUS + 260.0, 0, -160.0)
+	var vc := VILLAGE
 	# Church: nave with arched windows, buttresses and apse (as in Lindenau), west tower with a
 	# four-sided spire.
 	preload("res://scripts/map_builder.gd")._church_nave(parent, world, vc + Vector3(0, 0, 10.5), PI * 0.5, plaster, slate)
-	C.box(parent, world, vc + Vector3(0, 11, 0), Vector3(2.6, 11, 2.6), Vector3.ZERO, plaster, 0.8)
-	C.box(parent, null, vc + Vector3(0, 22.3, 0), Vector3(2.75, 0.3, 2.75), Vector3.ZERO, slate, 0.8, false)
+	# Tower in Lindenau's proportions (23 m to the cornice, 10 m spire) so it takes the same
+	# details: plinth, slit windows, clocks, louvred belfry, cornice, ball, cross and weathercock.
+	var builder := preload("res://scripts/map_builder.gd")
+	C.box(parent, world, vc + Vector3(0, 11.5, 0), Vector3(2.6, 11.5, 2.6), Vector3.ZERO, plaster, 0.8)
 	var spire := MeshInstance3D.new()
 	var cone := CylinderMesh.new()
 	cone.top_radius = 0.05
 	cone.bottom_radius = 3.6
-	cone.height = 9.0
+	cone.height = 10.0
 	cone.radial_segments = 4
 	spire.mesh = cone
 	spire.material_override = slate
-	spire.position = vc + Vector3(0, 27.1, 0)
+	spire.position = vc + Vector3(0, 28.0, 0)
 	spire.rotation.y = PI * 0.25
 	parent.add_child(spire)
-	for face in 4:
-		var d := Basis(Vector3.UP, face * PI * 0.5) * Vector3(0, 0, 2.62)
-		C.box(parent, null, vc + Vector3(0, 18.5, 0) + d, Vector3(0.9 if face % 2 == 0 else 0.05, 0.9, 0.05 if face % 2 == 0 else 0.9), Vector3.ZERO,
-			C.mat(Color(0.9, 0.88, 0.8)), 0.8, false)
-	var placed: Array[Vector3] = [vc, vc + Vector3(0, 0, 10.0)]
-	for i in 40:
-		var a := rng.randf() * TAU
-		var d := rng.randf_range(24, 110)
-		var p := vc + Vector3(cos(a) * d, 0, sin(a) * d)
-		if _loop_distance(p.x, p.z) < 70.0: continue
-		if placed.any(func(q: Vector3) -> bool: return q.distance_to(p) < 17.0): continue
-		var yaw := snappedf(atan2(vc.x - p.x, vc.z - p.z), PI * 0.5) + rng.randf_range(-0.15, 0.15)
-		village.house(world, p, yaw, rng.randf_range(9.0, 13.0), rng.randf_range(7.5, 9.5), 1 + int(rng.randf() < 0.6), rng)
+	builder._church_tower_details(parent, vc, PI * 0.5, plaster)
+	# Streets: the main street along x passes 12 m in front of the tower (portal side, -z); the
+	# cross street runs along z 42 m east of the tower.
+	var main_z := vc.z - 12.0
+	var cross_x := vc.x + 42.0
+	var main := PackedVector3Array()
+	for k in 31: main.append(Vector3(vc.x + VILLAGE_MIN.x + 15.0 + k * (VILLAGE_MAX.x - VILLAGE_MIN.x - 30.0) / 30.0, 0, main_z))
+	var cross := PackedVector3Array()
+	for k in 25: cross.append(Vector3(cross_x, 0, vc.z + VILLAGE_MIN.y + 12.0 + k * (VILLAGE_MAX.y - VILLAGE_MIN.y - 24.0) / 24.0))
+	var street := C.road_material(1, 6.0, 12.0, "village")
+	parent.add_child(C.road_mesh(main, 3.0, street, false, 0.03))
+	parent.add_child(C.road_mesh(cross, 3.0, street, false, 0.032))
+	# Pavements with kerbs along both streets, open where the streets cross.
+	var paving := C.noise_mat(Color(0.43, 0.42, 0.41), 0.10, 1.2, 0.9)
+	var kerb := C.noise_mat(Color(0.55, 0.54, 0.52), 0.06, 2.0, 0.85)
+	var gap := 3.0 + 1.6
+	var x0 := main[0].x
+	var x1 := main[main.size() - 1].x
+	var z0 := cross[0].z
+	var z1 := cross[cross.size() - 1].z
+	for sgn: float in [-1.0, 1.0]:
+		for span: Vector2 in [Vector2(x0, cross_x - gap), Vector2(cross_x + gap, x1)]:
+			var mid := (span.x + span.y) * 0.5
+			var half := (span.y - span.x) * 0.5
+			C.box(parent, null, Vector3(mid, 0.07, main_z + sgn * 3.8), Vector3(half, 0.07, 0.8), Vector3.ZERO, paving, 0.9, false)
+			C.box(parent, null, Vector3(mid, 0.08, main_z + sgn * 3.06), Vector3(half, 0.08, 0.08), Vector3.ZERO, kerb, 0.9, false)
+		for span: Vector2 in [Vector2(z0, main_z - gap), Vector2(main_z + gap, z1)]:
+			var mid := (span.x + span.y) * 0.5
+			var half := (span.y - span.x) * 0.5
+			C.box(parent, null, Vector3(cross_x + sgn * 3.8, 0.07, mid), Vector3(0.8, 0.07, half), Vector3.ZERO, paving, 0.9, false)
+			C.box(parent, null, Vector3(cross_x + sgn * 3.06, 0.08, mid), Vector3(0.08, 0.08, half), Vector3.ZERO, kerb, 0.9, false)
+	# Field tracks continue from the street ends into the farmland.
+	var track := C.road_material(1, 3.2, 12.0, "dirt")
+	for ends: Array in [[main[0], Vector3(-1, 0, 0)], [main[main.size() - 1], Vector3(1, 0, 0)],
+			[cross[0], Vector3(0, 0, -1)], [cross[cross.size() - 1], Vector3(0, 0, 1)]]:
+		var a: Vector3 = ends[0]
+		var d: Vector3 = ends[1]
+		var path := PackedVector3Array()
+		for k in 12:
+			var bend := Vector3(d.z, 0, -d.x) * sin(k * 0.35) * 4.0 * (k / 11.0)
+			path.append(a + d * (k * 9.0) + bend)
+		if _loop_distance(path[path.size() - 1].x, path[path.size() - 1].z) > 70.0:
+			parent.add_child(C.road_mesh(path, 1.6, track, false, 0.026))
+	# Churchyard: low stone wall round tower and nave, open to the street at the portal, and rows
+	# of gravestones beside the nave.
+	var stone := C.noise_mat(Color(0.56, 0.53, 0.48), 0.12, 3.0, 0.9)
+	var yard_min := Vector2(vc.x - 13.0, vc.z - 7.0)
+	var yard_max := Vector2(vc.x + 13.0, vc.z + 31.0)
+	var wall := func(a: Vector2, b: Vector2) -> void:
+		var mid := (a + b) * 0.5
+		var half := Vector3(maxf(absf(b.x - a.x) * 0.5, 0.25), 0.55, maxf(absf(b.y - a.y) * 0.5, 0.25))
+		C.box(parent, world, Vector3(mid.x, 0.55, mid.y), half, Vector3.ZERO, stone, 0.8)
+		C.box(parent, null, Vector3(mid.x, 1.14, mid.y), half + Vector3(0.06, -0.51, 0.06), Vector3.ZERO, plaster, 0.8, false)
+	wall.call(Vector2(yard_min.x, yard_min.y), Vector2(vc.x - 2.2, yard_min.y))
+	wall.call(Vector2(vc.x + 2.2, yard_min.y), Vector2(yard_max.x, yard_min.y))
+	wall.call(Vector2(yard_min.x, yard_max.y), Vector2(yard_max.x, yard_max.y))
+	wall.call(Vector2(yard_min.x, yard_min.y), Vector2(yard_min.x, yard_max.y))
+	wall.call(Vector2(yard_max.x, yard_min.y), Vector2(yard_max.x, yard_max.y))
+	var grave_stone := C.noise_mat(Color(0.40, 0.39, 0.38), 0.15, 4.0, 0.85)
+	var grave_bed := C.noise_mat(Color(0.22, 0.30, 0.16), 0.2, 3.0, 0.95)
+	for side: float in [-1.0, 1.0]:
+		for row in 2:
+			for k in 6:
+				if rng.randf() < 0.2: continue
+				var gx := vc.x + side * (7.6 + row * 2.3)
+				var gz := vc.z + 2.0 + k * 3.6 + rng.randf_range(-0.2, 0.2)
+				var tall := rng.randf_range(0.7, 1.05)
+				C.box(parent, null, Vector3(gx, tall * 0.5, gz), Vector3(0.09, tall * 0.5, rng.randf_range(0.28, 0.4)), Vector3(0, rng.randf_range(-0.04, 0.04), 0), grave_stone, 0.8, false)
+				C.box(parent, null, Vector3(gx - side * 0.95, 0.08, gz), Vector3(0.85, 0.08, 0.45), Vector3.ZERO, grave_bed, 0.9, false)
+	# Houses along both sides of both streets, eaves to the street, door facing it.
+	var hedges: Array[Transform3D] = []
+	var rails: Array[Transform3D] = []
+	var pickets: Array[Transform3D] = []
+	var church_box := Rect2(yard_min - Vector2(4, 4), yard_max - yard_min + Vector2(8, 8))
+	var placed: Array[Vector3] = []
+	var add_house := func(on: Vector3, facing: Vector3) -> void:
+		# A third of the houses stand gable-end to the street (door then on the side).
+		var gable := rng.randf() < 0.35
+		var length := rng.randf_range(9.0, 11.0) if gable else rng.randf_range(10.0, 13.0)
+		var width := rng.randf_range(7.5, 9.0)
+		var depth := length if gable else width
+		var p := on - facing * (4.6 + rng.randf_range(3.0, 4.5) + depth * 0.5)
+		if church_box.has_point(Vector2(p.x, p.z)) or _loop_distance(p.x, p.z) < 75.0: return
+		if placed.any(func(q: Vector3) -> bool: return q.distance_to(p) < 15.5): return
+		var yaw := atan2(facing.x, facing.z) + (PI * 0.5 if gable else 0.0) + rng.randf_range(-0.04, 0.04)
+		village.house(world, p, yaw, length, width, 1 + int(rng.randf() < 0.65), rng)
 		placed.append(p)
-		trees.append(p + Basis(Vector3.UP, yaw) * Vector3(0, 0, 9.0))
+		# Front garden boundary at the back of the pavement: hedge, picket fence or open.
+		var frontage := (width if gable else length) + rng.randf_range(2.0, 5.0)
+		var along := Vector3(facing.z, 0, -facing.x)
+		var line := on - facing * 1.75
+		var kind := rng.randf()
+		if kind < 0.45:
+			hedges.append(Transform3D(Basis(Vector3.UP, atan2(along.x, along.z)).scaled_local(Vector3(0.7, rng.randf_range(0.9, 1.3), frontage)), line - facing * 0.35 + Vector3.UP * 0.55))
+		elif kind < 0.8:
+			var rb := Basis(Vector3.UP, atan2(along.x, along.z))
+			for h: float in [0.35, 0.8]:
+				rails.append(Transform3D(rb.scaled_local(Vector3(0.04, 0.07, frontage)), line + Vector3.UP * h))
+			var n := int(frontage / 0.14)
+			for k in n:
+				pickets.append(Transform3D(rb, line + along * (-frontage * 0.5 + (k + 0.5) * frontage / n) + Vector3.UP * 0.5))
+		var basis := Basis(Vector3.UP, atan2(facing.x, facing.z))
+		if rng.randf() < 0.35:
+			# Farm: a barn across the yard behind the house.
+			var barn := p + basis * Vector3(rng.randf_range(-3.0, 3.0), 0, -(depth * 0.5 + 9.5))
+			if not church_box.has_point(Vector2(barn.x, barn.z)):
+				village.house(world, barn, atan2(facing.x, facing.z) + PI * 0.5, rng.randf_range(9.0, 12.0), rng.randf_range(7.0, 8.5), 1, rng, true)
+		if rng.randf() < 0.7:
+			trees.append(p + basis * Vector3(rng.randf_range(-6.0, 6.0), 0, -(depth * 0.5 + rng.randf_range(16.0, 22.0))))
+	for street_pts: Array in [[main, Vector3(1, 0, 0)], [cross, Vector3(0, 0, 1)]]:
+		var pts: PackedVector3Array = street_pts[0]
+		var along: Vector3 = street_pts[1]
+		var normal := Vector3(along.z, 0, -along.x)
+		var length_m := pts[0].distance_to(pts[pts.size() - 1])
+		var slot := 6.0
+		while slot < length_m - 6.0:
+			var on := pts[0] + along * slot
+			for sgn: float in [-1.0, 1.0]:
+				if rng.randf() < 0.18: continue
+				# Keep the crossing open.
+				if street_pts[1] == Vector3(1, 0, 0) and absf(on.x - cross_x) < 12.0: continue
+				if street_pts[1] == Vector3(0, 0, 1) and absf(on.z - main_z) < 12.0: continue
+				add_house.call(on + normal * sgn * 3.0, -normal * sgn)
+			slot += rng.randf_range(16.5, 19.5)
+	var unit := BoxMesh.new()
+	C.scatter_multimesh(parent, unit, C.noise_mat(Color(0.17, 0.30, 0.12), 0.25, 1.5, 0.95), hedges)
+	C.scatter_multimesh(parent, unit, C.mat(Color(0.86, 0.85, 0.80), 0.8), rails, false)
+	var picket := BoxMesh.new()
+	picket.size = Vector3(0.025, 1.0, 0.07)
+	C.scatter_multimesh(parent, picket, C.mat(Color(0.86, 0.85, 0.80), 0.8), pickets, false)
+	# Street lamps every ~34 m, alternating sides, at the kerb.
+	var poles: Array[Transform3D] = []
+	var heads: Array[Transform3D] = []
+	for street_pts: Array in [[main, Vector3(1, 0, 0)], [cross, Vector3(0, 0, 1)]]:
+		var pts: PackedVector3Array = street_pts[0]
+		var along: Vector3 = street_pts[1]
+		var normal := Vector3(along.z, 0, -along.x)
+		var k := 0
+		var slot := 10.0
+		while slot < pts[0].distance_to(pts[pts.size() - 1]) - 5.0:
+			var sgn := 1.0 if k % 2 == 0 else -1.0
+			var base := pts[0] + along * slot + normal * sgn * 3.35
+			if not church_box.has_point(Vector2(base.x, base.z)) or sgn > 0.0:
+				poles.append(Transform3D(Basis.IDENTITY, base + Vector3.UP * 2.75))
+				heads.append(Transform3D(Basis(Vector3.UP, atan2(normal.x, normal.z)), base - normal * sgn * 0.45 + Vector3.UP * 5.45))
+			k += 1
+			slot += 34.0
+	var pole := CylinderMesh.new()
+	pole.top_radius = 0.05
+	pole.bottom_radius = 0.08
+	pole.height = 5.5
+	pole.radial_segments = 8
+	C.scatter_multimesh(parent, pole, C.mat(Color(0.30, 0.31, 0.32), 0.6, 0.6), poles, false)
+	var head := BoxMesh.new()
+	head.size = Vector3(0.32, 0.16, 1.1)
+	C.scatter_multimesh(parent, head, C.mat(Color(0.25, 0.26, 0.27), 0.5, 0.5), heads, false)
 	village.build(parent)
 
 

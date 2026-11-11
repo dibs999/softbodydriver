@@ -1064,6 +1064,14 @@ static func _hill_village(world: SBWorld, parent: Node3D, road: PackedVector3Arr
 	spire.rotation.y = cyaw + PI * 0.25
 	parent.add_child(spire)
 	_church_tower_details(parent, tower, cyaw, plaster)
+	# Gravel path from the road edge up to the tower portal.
+	var path := PackedVector3Array()
+	var from_door := tower + cs * 3.7
+	var to_road := road[VILLAGE_AT] - cs * (half_w + 0.6)
+	for k in 6:
+		var q := from_door.lerp(to_road, k / 5.0)
+		path.append(Vector3(q.x, height.call(q.x, q.z), q.z))
+	parent.add_child(C.road_mesh(path, 1.1, C.road_material(1, 2.2, 12.0, "dirt"), false, 0.05, 12.0, height))
 	village.build(parent)
 	V.plant(parent, "broadleaf", trees, 3002, 0.7, 1.0, false)
 	for t in trees:
@@ -1395,3 +1403,32 @@ static func _church_tower_details(parent: Node3D, base: Vector3, yaw: float, pla
 	add.call(box.call(Vector3(0.12, 1.7, 0.12)), Vector3(0, 34.3, 0), gold)
 	add.call(box.call(Vector3(0.9, 0.12, 0.12)), Vector3(0, 34.6, 0), gold)
 	add.call(box.call(Vector3(0.55, 0.32, 0.05)), Vector3(0.1, 35.35, 0), gold)
+	# West portal on the face away from the nave (local +x): stone surround with a round arch and
+	# keystone, a plank door with iron bands and ring, and two steps (buried below for slopes).
+	var wood := C.noise_mat(Color(0.30, 0.19, 0.11), 0.15, 6.0, 0.85)
+	var iron := C.mat(Color(0.12, 0.12, 0.13), 0.6, 0.7)
+	var face_x := 2.75   # plinth face
+	var sill := 0.45
+	var disc_x := func(radius: float) -> CylinderMesh:
+		var c := CylinderMesh.new()
+		c.top_radius = radius
+		c.bottom_radius = radius
+		c.height = 0.1
+		c.radial_segments = 20
+		return c
+	var axis_x := Vector3(0, 0, PI * 0.5)   # cylinder axis along x (out of the face)
+	add.call(box.call(Vector3(0.1, 2.5, 2.3)), Vector3(face_x + 0.05, sill + 1.25, 0), stone)          # surround jambs
+	add.call(disc_x.call(1.15), Vector3(face_x + 0.05, sill + 2.5, 0), stone, axis_x)                  # surround arch
+	add.call(box.call(Vector3(0.12, 0.42, 0.34)), Vector3(face_x + 0.08, sill + 3.5, 0), stone)        # keystone
+	add.call(box.call(Vector3(0.1, 2.4, 1.6)), Vector3(face_x + 0.1, sill + 1.2, 0), wood)            # door leaves
+	add.call(disc_x.call(0.8), Vector3(face_x + 0.1, sill + 2.4, 0), wood, axis_x)                    # arched head
+	add.call(box.call(Vector3(0.02, 3.15, 0.04)), Vector3(face_x + 0.16, sill + 1.58, 0), dark)        # meeting stile
+	for h: float in [0.5, 1.5, 2.3]:
+		add.call(box.call(Vector3(0.03, 0.07, 1.5)), Vector3(face_x + 0.16, sill + h, 0), iron)        # strap hinges
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.07
+	ring.outer_radius = 0.1
+	for side: float in [-0.22, 0.22]:
+		add.call(ring, Vector3(face_x + 0.18, sill + 1.05, side), iron, axis_x)
+	add.call(box.call(Vector3(0.45, sill + 0.6, 2.6)), Vector3(face_x + 0.22, (sill - 0.6) * 0.5, 0), stone)              # upper step
+	add.call(box.call(Vector3(0.45, sill * 0.5 + 0.6, 3.0)), Vector3(face_x + 0.62, (sill * 0.5 - 0.6) * 0.5, 0), stone)   # lower step
