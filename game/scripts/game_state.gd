@@ -612,6 +612,14 @@ func spawn_vehicle(world: SBWorld, path: String, xform: Transform3D) -> SBVehicl
 		plates.name = "Plates"
 		plates.vehicle = v
 		v.add_child(plates)
+		if v.has_meta("light_bar"):
+			var bar: Dictionary = v.get_meta("light_bar")
+			var beacons := preload("res://scripts/vehicle_beacons.gd").new()
+			beacons.name = "Beacons"
+			beacons.vehicle = v
+			beacons.offset = bar["offset"]
+			beacons.size = bar["size"]
+			v.add_child(beacons)
 	return v
 
 
@@ -710,8 +718,31 @@ func apply_visual_model(v: SBVehicle, info: Dictionary) -> void:
 		var parts: Variant = steering.get("parts")
 		if pivot is Vector3 and axis is Vector3 and not axis.is_zero_approx() and parts is Array:
 			options["steering_wheel"] = {"pivot": xf * pivot, "axis": rot * axis, "parts": parts}
+	# Emergency light bar: its housing in car coordinates, relative to the dashboard anchor (the
+	# model's lens mesh also carries other lamp lenses).
+	var lens := root.find_child("lightbar", true, false) as MeshInstance3D
+	if lens and lens.mesh and options.has("dashboard"):
+		var box: AABB = lens.mesh.get_aabb()
+		var to_car: Transform3D = xf * _global_in(root, lens)
+		var lens_lo := Vector3.INF
+		var lens_hi := -Vector3.INF
+		for i in 8:
+			var c: Vector3 = to_car * box.get_endpoint(i)
+			lens_lo = lens_lo.min(c)
+			lens_hi = lens_hi.max(c)
+		v.set_meta("light_bar", {"offset": (lens_lo + lens_hi) * 0.5 - (options["dashboard"] as Vector3), "size": lens_hi - lens_lo})
 	v.attach_model(root, xf, options)
 	root.free()
+
+
+static func _global_in(root: Node, n: Node) -> Transform3D:
+	var t := Transform3D.IDENTITY
+	var node := n
+	while node != null and node != root:
+		if node is Node3D:
+			t = (node as Node3D).transform * t
+		node = node.get_parent()
+	return t
 
 
 func _measure(n: Node, xf: Transform3D, wheel_names: Array, hide: Array, in_wheel: bool, bounds: Array, wheel_bounds: Array, is_root := false) -> void:
@@ -801,6 +832,11 @@ func _setup_input() -> void:
 	_action("indicator_left"); _key("indicator_left", [KEY_COMMA])
 	_action("indicator_right"); _key("indicator_right", [KEY_PERIOD])
 	_action("hazards"); _key("hazards", [KEY_H])
+	_action("siren")
+	var siren_key := InputEventKey.new()
+	siren_key.physical_keycode = KEY_H
+	siren_key.shift_pressed = true
+	InputMap.action_add_event("siren", siren_key)
 	_action("horn"); _key("horn", [KEY_ENTER, KEY_KP_ENTER]); _joy_button("horn", JOY_BUTTON_LEFT_STICK)
 	_action("refuel"); _key("refuel", [KEY_F]); _joy_button("refuel", JOY_BUTTON_DPAD_LEFT)
 	_action("service_repair"); _key("service_repair", [KEY_G]); _joy_button("service_repair", JOY_BUTTON_DPAD_RIGHT)

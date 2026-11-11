@@ -44,7 +44,7 @@ keine stabile Hochgeschwindigkeitsfahrt.
 - Der Kestrel dient als Referenzwagen: zweifarbiger Innenraum, Lüftungsdüsen,
   Türdetails und zusätzliches Live-Display für Kühlmittel, Kraftstoff und Verbrauch.
   Die Minikarte rückt im Cockpit nach oben, damit die Instrumente frei bleiben.
-- Zeitfahren, Lieferfahrten, Rennen und Crashtest vergeben **Medaillen**: Gold im Tempo der
+- Zeitfahren, Lieferfahrten, Rennen, Crashtest und Verfolgungsjagd vergeben **Medaillen**: Gold im Tempo der
   KI-Zielgeschwindigkeiten der Karte, Silber bis 20 %, Bronze bis 50 % langsamer; im Rennen
   Gold und Silber für Platz 1 und 2, im Crashtest nach Sternen (5/4/3), in der Drift-Challenge
   ab 1.000 / 2.500 / 5.000 Punkten (aus der Punkteformel abgeleitet). Die beste Medaille je
@@ -57,7 +57,12 @@ keine stabile Hochgeschwindigkeitsfahrt.
   **Crashtest**: Anlauf auf der Crashbahn, Aufprall auf die Betonwand mit mindestens
   50 km/h; der Bericht nennt Aufprallgeschwindigkeit, Spitzenverzögerung, Front- und
   Fahrgastzellenschaden, Motor- und Kühlerzustand und vergibt 1–5 Sterne (beste
-  Wertung wird gespeichert). `F4` stellt das Auto am Start auf bzw.
+  Wertung wird gespeichert). In der **Verfolgungsjagd** (alle Karten) startet ein
+  Streifenwagen mit Blaulicht und Martinshorn 50 m hinter dem Spieler. Weit weg fährt er die
+  Route in der kürzeren Richtung, nah heran steuert er auf die vorausberechnete Position zu.
+  Abgehängt ist man, wenn man 300 m Abstand 8 s lang hält oder 180 s nicht gestellt wird.
+  Festgenommen ist man nach 3 s mit unter 10 km/h direkt neben der Polizei. Medaillen gibt es
+  nach der Fluchtzeit (Gold bis 60 s, Silber bis 100 s, sonst Bronze). `F4` stellt das Auto am Start auf bzw.
   bricht den Lauf ab. Checkpoints und Ziele erscheinen in Welt und Minikarte.
   Bestleistungen werden je Karte, Auto und Modus lokal gespeichert. Zurücksetzen,
   Reparatur und Fahrzeugwechsel beenden einen laufenden Versuch. Pausen stoppen
@@ -243,6 +248,7 @@ bedienbare Fahrzeugausrüstung:
 | `L` | Aus → Abblendlicht → Fernlicht (bis dahin schaltet der Lichtsensor das Abblendlicht bei Dämmerung, Nacht und starkem Regen selbst) |
 | `,` / `.` | Blinker links/rechts |
 | `H` | Warnblinker |
+| `Umschalt+H` | Blaulicht und Martinshorn (Streifenwagen) |
 | `Enter` (Gamepad: linker Stick drücken) | Hupe |
 | `O` | Motorhaube im Stand öffnen, erneut drücken schließt sie; auch im Pausenmenü |
 | `Shift`+`O` | Heckklappe (Kombi, SUV, Kestrel) bzw. Kofferraumdeckel (Limousine, Fastback) öffnen/schließen; auch im Pausenmenü |
