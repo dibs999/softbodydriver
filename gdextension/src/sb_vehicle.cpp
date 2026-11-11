@@ -888,6 +888,36 @@ void SBVehicle::pre_step(double dt) {
     }
 }
 
+Array SBVehicle::cachedStates(int kind, Array (SBVehicle::*compute)() const) const {
+    // Scripts read these several times a frame (HUD, camera, weather, equipment). Taking the
+    // physics lock for each read waited for the running physics step every time; instead the
+    // states are refreshed once per frame in sync_from_world() for the kinds read last frame.
+    StateCache& c = stateCache_[kind];
+    c.wanted = true;
+    if (c.valid) return c.value;
+    if (!world_) return Array();
+    std::lock_guard<WorldMutex> lock(world_->mutex());
+    c.value = (this->*compute)();
+    c.valid = true;
+    return c.value;
+}
+
+void SBVehicle::refreshStateCache() {
+    static Array (SBVehicle::* const computes[kStateKinds])() const = {
+        &SBVehicle::computeDoorStates, &SBVehicle::computeLampStates, &SBVehicle::computeGlassStates,
+        &SBVehicle::computeBumperStates, &SBVehicle::computeLidStates};
+    for (int k = 0; k < kStateKinds; ++k) {
+        StateCache& c = stateCache_[k];
+        c.valid = c.wanted;
+        if (c.wanted) c.value = (this->*computes[k])();
+        c.wanted = false;
+    }
+}
+
+void SBVehicle::invalidateStates() {
+    for (StateCache& c : stateCache_) c.valid = false;
+}
+
 void SBVehicle::sync_from_world() {
     // Hand the latest controls to the physics thread (one-shot requests are consumed here).
     {
@@ -1370,6 +1400,7 @@ void SBVehicle::reset_to(const Transform3D& xform) {
 }
 
 bool SBVehicle::relocate_to(const Transform3D& xform) {
+    invalidateStates();
     if (!world_ || bodyIndex_ < 0 || !xform.is_finite()) return false;
     // Recovery is a rigid motion: reject scales/reflections rather than changing
     // beam lengths, tyre geometry or deformation with an invalid destination.
@@ -1417,6 +1448,7 @@ bool SBVehicle::relocate_to(const Transform3D& xform) {
 }
 
 bool SBVehicle::service_repair() {
+    invalidateStates();
     if (!world_ || bodyIndex_ < 0) return false;
     {
         std::lock_guard<WorldMutex> lock(world_->mutex());
@@ -1455,6 +1487,7 @@ bool SBVehicle::service_repair() {
 }
 
 bool SBVehicle::set_door_open(int index, bool open) {
+    invalidateStates();
     if (!world_ || bodyIndex_ < 0 || index < 0 || (hasImportedModel_ && !importedDoors_)) return false;
     std::lock_guard<WorldMutex> lock(world_->mutex());
     auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
@@ -1463,6 +1496,7 @@ bool SBVehicle::set_door_open(int index, bool open) {
 }
 
 bool SBVehicle::toggle_door(int index) {
+    invalidateStates();
     if (!world_ || bodyIndex_ < 0 || index < 0 || (hasImportedModel_ && !importedDoors_)) return false;
     std::lock_guard<WorldMutex> lock(world_->mutex());
     auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
@@ -1471,9 +1505,12 @@ bool SBVehicle::toggle_door(int index) {
 }
 
 Array SBVehicle::get_door_states() const {
+    return cachedStates(0, &SBVehicle::computeDoorStates);
+}
+
+Array SBVehicle::computeDoorStates() const {
     Array result;
     if (!world_ || bodyIndex_ < 0 || (hasImportedModel_ && !importedDoors_)) return result;
-    std::lock_guard<WorldMutex> lock(world_->mutex());
     const auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     const auto& positions = body.positions();
     const Vector3 forward = toG(forwardOf(positions)).normalized();
@@ -1524,9 +1561,12 @@ Array SBVehicle::get_door_states() const {
 }
 
 Array SBVehicle::get_lamp_states() const {
+    return cachedStates(1, &SBVehicle::computeLampStates);
+}
+
+Array SBVehicle::computeLampStates() const {
     Array result;
     if (!world_ || bodyIndex_ < 0 || restPositions_.empty()) return result;
-    std::lock_guard<WorldMutex> lock(world_->mutex());
     const auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     const auto& beams = body.beams();
     if (lampBeams_.empty()) {
@@ -1586,9 +1626,12 @@ Array SBVehicle::get_lamp_states() const {
 }
 
 Array SBVehicle::get_glass_states() const {
+    return cachedStates(2, &SBVehicle::computeGlassStates);
+}
+
+Array SBVehicle::computeGlassStates() const {
     Array result;
     if (!world_ || bodyIndex_ < 0 || hasImportedModel_) return result;
-    std::lock_guard<WorldMutex> lock(world_->mutex());
     const auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     const auto& beams = body.beams();
     if (!glassPanesBuilt_) {
@@ -1654,9 +1697,12 @@ Array SBVehicle::get_glass_states() const {
 }
 
 Array SBVehicle::get_bumper_states() const {
+    return cachedStates(3, &SBVehicle::computeBumperStates);
+}
+
+Array SBVehicle::computeBumperStates() const {
     Array result;
     if (!world_ || bodyIndex_ < 0) return result;
-    std::lock_guard<WorldMutex> lock(world_->mutex());
     const auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     const auto& names = body.breakGroupNames();
     for (int end = 0; end < 2; ++end) {
@@ -1721,6 +1767,7 @@ bool SBVehicle::setLid(int index, bool open) {
 }
 
 int SBVehicle::break_group(const String& name) {
+    invalidateStates();
     if (!world_ || bodyIndex_ < 0) return 0;
     std::lock_guard<WorldMutex> lock(world_->mutex());
     auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
@@ -1737,6 +1784,7 @@ int SBVehicle::break_group(const String& name) {
 }
 
 void SBVehicle::ignite(int source) {
+    invalidateStates();
     if (!world_ || bodyIndex_ < 0) return;
     std::lock_guard<WorldMutex> lock(world_->mutex());
     auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
@@ -1745,15 +1793,22 @@ void SBVehicle::ignite(int source) {
     if (s.fire <= 0.0) { s.fire = 0.05; s.fireSource = source == 1 ? 1 : 0; }
 }
 
-bool SBVehicle::release_bonnet() { return setLid(0, true); }
-bool SBVehicle::close_bonnet() { return setLid(0, false); }
-bool SBVehicle::release_tailgate() { return setLid(1, true); }
-bool SBVehicle::close_tailgate() { return setLid(1, false); }
+bool SBVehicle::release_bonnet() {
+    invalidateStates(); return setLid(0, true); }
+bool SBVehicle::close_bonnet() {
+    invalidateStates(); return setLid(0, false); }
+bool SBVehicle::release_tailgate() {
+    invalidateStates(); return setLid(1, true); }
+bool SBVehicle::close_tailgate() {
+    invalidateStates(); return setLid(1, false); }
 
 Array SBVehicle::get_lid_states() const {
+    return cachedStates(4, &SBVehicle::computeLidStates);
+}
+
+Array SBVehicle::computeLidStates() const {
     Array result;
     if (!world_ || bodyIndex_ < 0) return result;
-    std::lock_guard<WorldMutex> lock(world_->mutex());
     const auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
     for (std::size_t i = 0; i < body.lids().size(); ++i) {
         const auto& lid = body.lids()[i];
@@ -1773,6 +1828,7 @@ Array SBVehicle::get_lid_states() const {
 }
 
 double SBVehicle::refuel(double litres) {
+    invalidateStates();
     if (!world_ || bodyIndex_ < 0 || !std::isfinite(litres) || litres <= 0 || get_velocity().length() > 0.25) return 0.0;
     std::lock_guard<WorldMutex> lock(world_->mutex());
     auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));

@@ -34,6 +34,8 @@ public:
     void setup(SBWorld* world, sb::CarBuild&& build, const Transform3D& xform, const Dictionary& materials);  // locked
     void pre_step(double dt);       // locked, physics thread
     void sync_from_world();         // locked, main thread
+    void refreshStateCache();       // locked, main thread (from sync_from_world)
+    void invalidate_state_cache() { invalidateStates(); }
     void update_visual(double delta); // main thread, not locked
     /// Visual level of detail, set by the world from the camera: deform the meshes every n-th
     /// frame (1 = every frame) and move the last deformed meshes rigidly in between.
@@ -260,6 +262,17 @@ private:
     MeshInstance3D* debugInstance_ = nullptr;
     Ref<ImmediateMesh> debugMesh_;
     Ref<StandardMaterial3D> debugMaterial_;
+    // Per-frame snapshot of the part/damage state getters (doors, lamps, glass, bumpers, lids).
+    static constexpr int kStateKinds = 5;
+    struct StateCache { Array value; bool valid = false; bool wanted = false; };
+    mutable StateCache stateCache_[kStateKinds];
+    Array cachedStates(int kind, Array (SBVehicle::*compute)() const) const;
+    void invalidateStates();
+    Array computeDoorStates() const;
+    Array computeLampStates() const;
+    Array computeGlassStates() const;
+    Array computeBumperStates() const;
+    Array computeLidStates() const;
 };
 
 }  // namespace godot
