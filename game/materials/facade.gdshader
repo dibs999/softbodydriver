@@ -65,7 +65,10 @@ void fragment() {
 		float bay_i = floor(uu / bay);
 		// Town buildings over 12 m have a shop ground floor (4.3 m storey with shop windows, some
 		// glass doors and a fascia per shop unit of two bays); the upper storeys start above it.
-		bool shops = box_size.y > 12.0;
+		// Low town houses (8.8-12 m: room for a storey above the shop) have a corner shop in about four of ten, picked by position;
+		// they keep their stone plinth, so the windows start above it and the door is round the side.
+		bool low_shop = box_size.y > 8.8 && box_size.y <= 12.0 && hash(box_origin.xz * 0.037 + 0.5) < 0.4;
+		bool shops = box_size.y > 12.0 || low_shop;
 		float ground_h = shops ? 4.3 : 0.0;
 		float yg = shops ? y - ground_h + fh : y;
 		float floor_i = floor(yg / fh);
@@ -79,14 +82,14 @@ void fragment() {
 		float cell_h = fh;
 		bool shop_zone = shops && y < ground_h;
 		float shop_rand = hash(vec2(floor(bay_i / 2.0), 5.7) + box_origin.xz * 0.031 + n.xz * 3.0);
-		bool door = shop_zone && hash(vec2(bay_i, 1.3) + box_origin.xz * 0.017 + n.xz) < 0.3;
+		bool door = shop_zone && !low_shop && hash(vec2(bay_i, 1.3) + box_origin.xz * 0.017 + n.xz) < 0.3;
 		if (shop_zone) {
 			cell = vec2(fract(uu / bay), y / ground_h);
 			cell_h = ground_h;
 			floor_i = -1.0;
 			in_grid = uu > 0.0 && uu < usable;
 			ww = 0.86;
-			float bottom = door ? 0.04 : 0.6;
+			float bottom = door ? 0.04 : (low_shop ? 1.0 : 0.6);
 			wh = (3.2 - bottom) / ground_h;
 			sill = bottom / ground_h;
 		}
