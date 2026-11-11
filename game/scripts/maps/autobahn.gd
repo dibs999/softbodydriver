@@ -338,8 +338,9 @@ static func _countryside(parent: Node3D, world: SBWorld, center: PackedVector3Ar
 	var plaster := C.noise_mat(Color(0.88, 0.85, 0.78), 0.05, 2.5, 0.92)
 	var slate := C.noise_mat(Color(0.26, 0.26, 0.29), 0.1, 3.0, 0.8)
 	var vc := Vector3(STRAIGHT / 2 + RADIUS + 260.0, 0, -160.0)
-	# Church: nave as a long house, west tower with a four-sided spire.
-	village.house(world, vc + Vector3(0, 0, 10.0), PI * 0.5, 17.0, 9.0, 2, rng)
+	# Church: nave with arched windows, buttresses and apse (as in Lindenau), west tower with a
+	# four-sided spire.
+	preload("res://scripts/map_builder.gd")._church_nave(parent, world, vc + Vector3(0, 0, 10.5), PI * 0.5, plaster, slate)
 	C.box(parent, world, vc + Vector3(0, 11, 0), Vector3(2.6, 11, 2.6), Vector3.ZERO, plaster, 0.8)
 	C.box(parent, null, vc + Vector3(0, 22.3, 0), Vector3(2.75, 0.3, 2.75), Vector3.ZERO, slate, 0.8, false)
 	var spire := MeshInstance3D.new()
