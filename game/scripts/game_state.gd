@@ -82,7 +82,26 @@ const MAPS := [
 ]
 
 
+## Quit without the audio thread racing the teardown: generator-fed players (engine, rain, siren)
+## are stopped and released, and the mixer gets a few frames to drop their playbacks, before the
+## engine shuts down (a test caught the audio thread spinning in a generator mix while the main
+## thread joined it on quit). The window's close button goes the same way.
+func quit_cleanly() -> void:
+	var tree := get_tree()
+	var players: Array[Node] = tree.root.find_children("*", "AudioStreamPlayer", true, false)
+	players.append_array(tree.root.find_children("*", "AudioStreamPlayer3D", true, false))
+	for player in players:
+		player.stop()
+		player.stream = null
+	for i in 3: await tree.process_frame
+	tree.quit()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		quit_cleanly()
+
 func _ready() -> void:
+	get_tree().auto_accept_quit = false   # the close button goes through quit_cleanly()
 	load_settings()
 	_apply_viewport_graphics()
 	_setup_input()
