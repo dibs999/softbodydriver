@@ -47,6 +47,10 @@ bleiben also keine unsichtbaren Hindernisse zurück.
   * Die Verformung der einzelnen Flächen läuft parallel auf dem Godot-WorkerThreadPool; Hochladen
     und Reißprüfung bleiben im Hauptthread. Meridian 10,8 → 5,0 ms, Kestrel 3,7 → 1,9 ms (4 Kerne).
   * Bildzeit ohne Rendering auf allen Karten 38–60 ms → 7,5–10 ms.
+  * Unter ~10 FPS läuft die Physik nicht mehr in Echtzeit davon: Zwischen zwei Bildern simuliert
+    sie höchstens 0,1 s, das Spiel wird dann langsamer statt dass Verkehrs-KI und Spielereingaben
+    seltener als alle 0,1 s ankommen (vorher fuhren die KI-Autos bei ~1 FPS in die Leitplanke).
+    Geprüft mit `--max-fps 5/6`: Wüsten-, Gelände-Verkehr und KI-Folgetest bestehen.
 
 * **Bäume mit Detailstufen:**
   * Jede Baumart hat neben dem Nahmodell ein Fernmodell mit ~22 % der Blattkarten

@@ -66,6 +66,8 @@ void SBWorld::_exit_tree() {
 
 void SBWorld::_process(double delta) {
     if (Engine::get_singleton()->is_editor_hint()) return;
+    frameLocked_ = true;
+    simSinceFrame_ = 0.0;
     sync_visuals_with_delta(delta);
 }
 
@@ -125,6 +127,11 @@ void SBWorld::threadMain() {
         // Never try to catch up more than 100 ms: the game slows down instead of spiralling.
         debt = std::min(debt, 0.1);
         int steps = static_cast<int>(debt / dt);
+        if (frameLocked_) {
+            const double room = kMaxSimPerFrame - simSinceFrame_.load();
+            if (room < dt) debt = 0.0;  // wait for the next frame; that time is not owed
+            steps = std::min(steps, std::max(0, static_cast<int>(room / dt)));
+        }
         if (steps <= 0) {
             std::this_thread::sleep_for(std::chrono::microseconds(300));
             continue;
@@ -142,6 +149,7 @@ void SBWorld::threadMain() {
             debt -= chunk * dt;
             statSteps += static_cast<std::uint64_t>(chunk);
             statSim += chunk * dt;
+            simSinceFrame_ = simSinceFrame_.load() + chunk * dt;
             // Hand the lock to a waiting main thread before the next chunk.
             for (int spin = 0; mtx_.contended() && running_; ++spin) {
                 if (spin < 64) std::this_thread::yield();
