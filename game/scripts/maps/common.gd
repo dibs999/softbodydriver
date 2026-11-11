@@ -455,3 +455,73 @@ static func label3d(parent: Node3D, text: String, pos: Vector3, yaw: float, size
 	l.position = pos
 	l.rotation = Vector3(0, yaw, 0)
 	parent.add_child(l)
+
+
+## Unpaved verges on both sides of a road built with road_mesh (same points, closed flag and
+## height function): strips from just under the asphalt edge out to `width` metres beyond it, UV.x 0
+## at the asphalt and 1 outside. The inner edge sits slightly below the road surface so the asphalt
+## edge stays crisp; the outer edge meets the terrain.
+static func verge_mesh(points: PackedVector3Array, half_w: float, width: float, material: Material, closed := true,
+		road_lift := 0.04, v_scale := 12.0, height_at := Callable()) -> MeshInstance3D:
+	if height_at.is_valid() and points.size() >= 2:
+		var samples := PackedVector3Array()
+		var segments := points.size() if closed else points.size() - 1
+		for i in segments:
+			var a := points[i]
+			var b := points[(i + 1) % points.size()]
+			var count := maxi(1, ceili(a.distance_to(b) / 2.0))
+			for j in count:
+				samples.append(a.lerp(b, float(j) / count))
+		if not closed:
+			samples.append(points[-1])
+		points = samples
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var n := points.size()
+	var segs := n if closed else n - 1
+	var inner := half_w - 0.06
+	var outer := half_w + width
+	var lift_in := maxf(0.01, road_lift - 0.012)
+	var lift_out := 0.012
+	var v := 0.0
+	for i in segs:
+		var a := points[i]
+		var b := points[(i + 1) % n]
+		var ip := (i - 1 + n) % n if closed else maxi(i - 1, 0)
+		var inx := (i + 2) % n if closed else mini(i + 2, n - 1)
+		var da := (b - points[ip]).normalized()
+		var db := (points[inx] - a).normalized()
+		var na := Vector3(-da.z, 0, da.x).normalized()
+		var nb := Vector3(-db.z, 0, db.x).normalized()
+		var v2 := v + a.distance_to(b) / v_scale
+		for side: float in [-1.0, 1.0]:
+			var ai := a + na * (inner * side)
+			var ao := a + na * (outer * side)
+			var bi := b + nb * (inner * side)
+			var bo := b + nb * (outer * side)
+			var quad := [[ai, Vector2(0, v), lift_in], [bo, Vector2(1, v2), lift_out], [ao, Vector2(1, v), lift_out],
+				[ai, Vector2(0, v), lift_in], [bi, Vector2(0, v2), lift_in], [bo, Vector2(1, v2), lift_out]]
+			if side > 0.0:   # keep the winding facing up on both sides
+				quad = [quad[0], quad[2], quad[1], quad[3], quad[5], quad[4]]
+			for vertex in quad:
+				var p: Vector3 = vertex[0]
+				if height_at.is_valid():
+					p.y = height_at.call(p.x, p.z)
+				p.y += vertex[2]
+				st.set_uv(vertex[1])
+				st.set_normal(Vector3.UP)
+				st.add_vertex(p)
+		v = v2
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = material
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
+
+
+static func verge_material(width: float, v_scale := 12.0) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = preload("res://materials/surfaces/verge.gdshader")
+	m.set_shader_parameter("width_m", width)
+	m.set_shader_parameter("v_metres", v_scale)
+	return m
