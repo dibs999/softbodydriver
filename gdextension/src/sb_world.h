@@ -105,6 +105,10 @@ private:
     // physics thread may not run further ahead than kMaxSimPerFrame between two of them:
     // below ~10 FPS the game slows down instead of AI and player input lagging behind.
     std::atomic<double> simSinceFrame_{0.0};
+    // Published for get_stats() so reading them never waits for a physics step.
+    std::atomic<std::uint64_t> stepCount_{0};
+    std::atomic<std::size_t> statNodes_{0}, statBeams_{0};
+    void publishStats();   // with the lock held
     std::atomic<bool> frameLocked_{false};
     static constexpr double kMaxSimPerFrame = 0.1;
     std::vector<SBVehicle*> vehicles_;

@@ -79,8 +79,12 @@ void SBWorld::sync_visuals_with_delta(double delta) {
     // Snapshot every vehicle under one short lock, then rebuild meshes without holding it.
     {
         std::lock_guard<WorldMutex> lock(mtx_);
-        for (SBVehicle* v : vehicles_) v->sync_from_world();
+        for (SBVehicle* v : vehicles_) {
+            v->sync_from_world();
+            v->refreshStateCache();
+        }
         for (SBProp* p : props_) p->sync_from_world();
+        publishStats();
     }
     // Visual level of detail from the camera: full mesh deformation every frame up to 30 m, then
     // every 2nd / 4th / 8th frame; off-screen cars at least every 4th. Without a camera (tools,
@@ -149,6 +153,7 @@ void SBWorld::threadMain() {
                     world_.step();
                     ++chunk;
                 }
+                stepCount_ = world_.stepCount();
             }
             steps -= chunk;
             debt -= chunk * dt;
@@ -311,21 +316,24 @@ double SBWorld::get_air_density() const {
     return world_.settings().airDensity;
 }
 
+void SBWorld::publishStats() {
+    std::size_t nodes = 0, beams = 0;
+    for (const auto& b : world_.bodies()) {
+        nodes += b.nodeCount();
+        beams += b.beamCount();
+    }
+    statNodes_ = nodes;
+    statBeams_ = beams;
+    stepCount_ = world_.stepCount();
+}
+
 Dictionary SBWorld::get_stats() {
     Dictionary d;
-    std::size_t nodes = 0, beams = 0;
-    double simTime = 0;
-    {
-        std::lock_guard<WorldMutex> lock(mtx_);
-        for (const auto& b : world_.bodies()) {
-            nodes += b.nodeCount();
-            beams += b.beamCount();
-        }
-        simTime = world_.time();
-    }
-    d["sim_time"] = simTime;
-    d["nodes"] = static_cast<int64_t>(nodes);
-    d["beams"] = static_cast<int64_t>(beams);
+    // Published by the frame sync (under its lock) and the physics thread: reading the stats never
+    // waits for a physics step.
+    d["sim_time"] = static_cast<double>(stepCount_.load()) * world_.settings().dt;
+    d["nodes"] = static_cast<int64_t>(statNodes_.load());
+    d["beams"] = static_cast<int64_t>(statBeams_.load());
     d["steps_per_second"] = stepsPerSecond_.load();
     d["realtime_factor"] = realtimeFactor_.load();
     d["physics_hz"] = 1.0 / world_.settings().dt;
@@ -342,6 +350,8 @@ void SBWorld::step_blocking(double seconds) {
         for (SBVehicle* v : vehicles_) v->pre_step(dt);
         world_.step();
     }
+    publishStats();
+    for (SBVehicle* v : vehicles_) v->invalidate_state_cache();
 }
 
 }  // namespace godot

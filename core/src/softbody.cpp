@@ -632,9 +632,12 @@ VehicleTelemetry SoftBody::telemetry() const {
         t.wheelSlip.push_back(w.slipSpeed);
         t.wheelLoad.push_back(w.load);
     }
-    const BodyStats bs = stats();
-    t.deformedBeams = bs.deformedBeams;
-    t.brokenBeams = bs.brokenBeams;
+    // Only the damage counts: stats() also sums kinetic and elastic energy over every node and
+    // beam, which the game reads the telemetry for every frame and never needs.
+    for (const Beam& bm : beams_) {
+        if (bm.broken) ++t.brokenBeams;
+        else if (bm.plasticStrain() > 1e-3) ++t.deformedBeams;
+    }
     return t;
 }
 

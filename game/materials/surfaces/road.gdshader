@@ -7,6 +7,9 @@ uniform float road_width = 9.0;
 uniform int lanes = 2;
 uniform bool dirt = false;
 uniform vec4 dirt_tint : source_color = vec4(0.83, 0.68, 0.49, 1.0);
+// Dirt roads: colour of the terrain beside the road (alpha 0 = off). The outer metre or two blends
+// into it, so a graded track does not end on a darker band.
+uniform vec4 ground_color : source_color = vec4(0.0);
 uniform vec4 divider_color : source_color = vec4(0.86, 0.85, 0.77, 1.0);
 uniform float v_metres = 12.0;     // metres per UV.y unit along the road (road_mesh v_scale)
 // Centre-line dashes: period and painted share (German rural Leitlinie: 6 m line, 12 m gap).
@@ -92,16 +95,37 @@ void fragment() {
 			+ smoothstep(road_width * 0.5 - 1.5, road_width * 0.5 - 0.4, abs(across));
 		windrow *= 0.55 + 0.45 * vnoise(vec2(along * 0.15, across * 0.7));
 		base = mix(base, base * vec3(1.20, 1.14, 1.05), windrow * 0.7);
-		// Scattered stones, more of them in the loose gravel.
-		vec2 sp = vec2(across, along) * 3.0;
-		vec2 sc = floor(sp);
-		vec2 sf = fract(sp) - vec2(hash(sc), hash(sc + 5.0)) * 0.6 - 0.2;
-		float stone = (1.0 - smoothstep(0.08, 0.15, length(sf))) * step(0.78 - windrow * 0.3, hash(sc + 11.0));
-		base = mix(base, base * (0.55 + 0.8 * hash(sc + 3.0)), stone);
-		// Washboard corrugations in patches, deepest in the wheel tracks.
+		// Scattered stones, more of them in the loose gravel: two sizes, irregular outlines, a lit and
+		// a shadowed side. They fade out with distance, where a grid of dots would read as a pattern.
+		float cam_d = length(world_pos - CAMERA_POSITION_WORLD);
+		float near = 1.0 - smoothstep(9.0, 26.0, cam_d);
+		for (int k = 0; k < 2; k++) {
+			float density = k == 0 ? 3.1 : 7.3;
+			vec2 sp = vec2(across, along) * density + float(k) * 17.3;
+			sp.x += hash(vec2(floor(sp.y), float(k) + 4.0)) * 3.7;   // stagger rows: no visible grid
+			vec2 sc = floor(sp);
+			vec2 sf = fract(sp) - vec2(hash(sc), hash(sc + 5.0)) * 0.7 - 0.15;
+			float r = (k == 0 ? 0.13 : 0.18) * (0.6 + 0.6 * hash(sc + 2.0));
+			float shape = length(sf * vec2(1.0, 0.75 + 0.5 * hash(sc + 8.0))) + (vnoise(sp * 5.0) - 0.5) * 0.07;
+			float present = step((k == 0 ? 0.80 : 0.86) - windrow * 0.3, hash(sc + 11.0));
+			float stone = (1.0 - smoothstep(r * 0.7, r, shape)) * present * near;
+			float lit = clamp(1.0 - dot(sf, vec2(0.6, 0.8)) / max(r, 1e-3) * 0.5, 0.6, 1.35);
+			float shade = (1.0 - smoothstep(r, r * 1.6, length(sf - vec2(0.04, 0.05)))) * present * near * (1.0 - stone);
+			vec3 rock = base * vec3(0.96, 0.94, 0.92) * (0.7 + 0.5 * hash(sc + 3.0)) * lit;
+			base = mix(base, base * 0.78, shade * 0.6);
+			base = mix(base, rock, stone * 0.85);
+		}
+		// Washboard corrugations in patches, deepest in the wheel tracks; faded with distance, where
+		// the ripples alias into bands.
 		float wb_zone = smoothstep(0.5, 0.72, vnoise(vec2(along * 0.025, 2.0))) * mix(1.0, 0.4, smoothstep(0.03, 0.1, rut_distance));
 		float ripple = sin(along * 8.4 + vnoise(vec2(along * 0.2, across * 0.3)) * 2.0);
-		base *= 1.0 - wb_zone * 0.12 * (ripple * 0.5 + 0.5);
+		base *= 1.0 - wb_zone * 0.09 * (ripple * 0.5 + 0.5) * (1.0 - smoothstep(14.0, 40.0, cam_d));
+		// Blend the outer edge into the terrain beside the road.
+		if (ground_color.a > 0.0) {
+			float edge_dist = (0.5 - abs(UV.x - 0.5)) * road_width + (fbm(world_pos.xz * 0.45) - 0.5) * 1.4;
+			float blend = 1.0 - smoothstep(0.2, 2.0, edge_dist);
+			base = mix(base, ground_color.rgb * mix(0.9, 1.08, fine), blend * 0.85);
+		}
 		// Potholes with a lighter broken rim; they hold water in the rain.
 		vec2 pp = vec2(across, along) / 2.5;
 		vec2 pc = floor(pp);
