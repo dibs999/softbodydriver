@@ -786,8 +786,32 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 		speeds[i] = clampf(26.0 - ang * 60.0, 11.0, 26.0)
 	var s0 := road[0]
 	var s1 := road[1]
+	# Traffic on the network: two cars on the loop, a third over the district road and back along
+	# the loop in the loop traffic's direction (no head-on meetings at the junctions).
+	var net_route := chord.duplicate()
+	for i in range(CHORD_TO + 2, CHORD_FROM - 1):
+		net_route.append(road[i])
+	var net_speeds := PackedFloat32Array()
+	net_speeds.resize(net_route.size())
+	var m := net_route.size()
+	for i in m:
+		var a := net_route[(i - 4 + m) % m]
+		var b := net_route[i]
+		var c := net_route[(i + 4) % m]
+		var ang := (b - a).normalized().angle_to((c - b).normalized())
+		net_speeds[i] = clampf(24.0 - ang * 60.0, 9.0, 24.0)
+	# Slow over the junction mouths (turning in and out).
+	for i in m:
+		if i < 6 or absi(i - chord.size()) < 6 or i > m - 6:
+			net_speeds[i] = minf(net_speeds[i], 8.0)
+	var mid := chord.size() / 2
+	var ai_routes := [
+		{"waypoints": road, "speeds": speeds, "spawn": car_xform(road[144], road[145] - road[144])},
+		{"waypoints": road, "speeds": speeds, "spawn": car_xform(road[320], road[321] - road[320])},
+		{"waypoints": net_route, "speeds": net_speeds, "spawn": car_xform(chord[mid], chord[mid + 1] - chord[mid])},
+	]
 	return {"props": props.duplicate(), "spawns": [car_xform(s0, s1 - s0), car_xform(road[n_road - 6], road[n_road - 5] - road[n_road - 6])],
-		"waypoints": road, "speeds": speeds,
+		"waypoints": road, "speeds": speeds, "ai_routes": ai_routes,
 		"map_paths": [C.closed_route(road), chord, lookout],
 		"map_places": [{"name": "Waldhof", "position": road[12]}, {"name": "Lindenau", "position": road[VILLAGE_AT]}, {"name": "Aussichtspunkt", "position": lookout[4]},
 			{"name": "Bergweide", "position": road[194]}, {"name": "Talblick", "position": road[410]}],

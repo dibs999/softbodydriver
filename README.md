@@ -75,7 +75,7 @@ keine stabile Hochgeschwindigkeitsfahrt.
 - Im Hügelland verbindet eine Kreisstraße quer durchs Tal die Ringstraße hinter Lindenau mit
   dem Abschnitt zwischen Waldhof und Aussichtspunkt. An den T-Einmündungen gibt es ausgerundete
   Ecken, Wartelinie und „Vorfahrt achten“-Schild. Durch Einschnitte und Dämme steigt sie höchstens
-  7 % an.
+  7 % an. Ein Verkehrsauto nimmt die Kreisstraße und fährt über den Ring zurück.
 - Die Stadt enthält befahrbare Werkstatthöfe, eine Altstadtgasse und eine Hochstraße
   mit Unterführung, zusätzlich zu Parkdeck, Markt und Frachtterminal. Auf dem
   Testgelände gibt es eine markierte 100-m-Bremsbahn und eine milde Bodenwellenreihe.

@@ -1,7 +1,8 @@
 extends SceneTree
 ## Hill roads network: the district road across the valley joins the loop at two T-junctions and
 ## can be driven end to end, from the loop at one junction to the loop at the other, without a
-## step at the junctions, a roll-over or getting stuck; it shows on the map.
+## step at the junctions, a roll-over or getting stuck; it shows on the map. Traffic gets a route
+## over it: a car turns off the loop, crosses the valley, turns back onto the loop and comes round.
 ## godot --headless -s res://tests/district_road_test.gd
 const AIDriver := preload("res://scripts/ai_driver.gd")
 const STEP := 0.05
@@ -86,6 +87,35 @@ func _run(scene: Node) -> void:
 	check(closest < 8.0, "The car drives the district road to the far junction")
 	check(min_up > 0.85, "It stays on its wheels all the way")
 	check(int(player.get_telemetry().get("broken_beams", 0)) == 0, "No damage from steps at the junctions")
+	# The traffic route over the network: one full lap with both turns.
+	var routes: Array = scene.map_data.get("ai_routes", [])
+	check(routes.size() == 3, "Traffic has a route over the district road")
+	if routes.size() < 3:
+		return
+	var net: PackedVector3Array = routes[2]["waypoints"]
+	var lap := 0.0
+	for i in net.size(): lap += net[i].distance_to(net[(i + 1) % net.size()])
+	player.reset_to(MapBuilder_xform(net[2], net[4] - net[2]))
+	world.step_blocking(1.0)
+	var taxi := AIDriver.new(player, net, routes[2]["speeds"], 0.9)
+	taxi.idx = 2
+	var progress := 0
+	var prev_idx := taxi.idx
+	t = 0.0
+	min_up = 1.0
+	var passed_far_mouth := false
+	while t < 300.0 and progress < net.size() - 4:
+		taxi.update(STEP)
+		world.step_blocking(STEP)
+		t += STEP
+		var step_idx := posmod(taxi.idx - prev_idx, net.size())
+		if step_idx < net.size() / 2: progress += step_idx   # forward along the route only
+		prev_idx = taxi.idx
+		min_up = minf(min_up, player.get_up().y)
+		if player.get_position_ws().distance_to(far_end) < 10.0: passed_far_mouth = true
+	print("  network lap (%.0f m): %d of %d route points in %.0f s, lowest up %.2f" % [lap, progress, net.size(), t, min_up])
+	check(passed_far_mouth and progress >= net.size() - 4, "A traffic car turns off, crosses the valley, turns back onto the loop and completes the lap")
+	check(min_up > 0.85 and int(player.get_telemetry().get("broken_beams", 0)) == 0, "It turns at both junctions without leaving the road")
 
 func MapBuilder_xform(p: Vector3, heading: Vector3) -> Transform3D:
 	return preload("res://scripts/map_builder.gd").car_xform(p + Vector3.UP * 0.4, heading)
