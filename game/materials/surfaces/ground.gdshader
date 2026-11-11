@@ -110,9 +110,14 @@ void fragment() {
 			float y = world_pos.y / strata_spacing + warp;
 			float layer = floor(y);
 			float f = fract(y);
-			float tone = hash(vec2(layer, 1.3));
-			float seam = 1.0 - smoothstep(0.0, 0.08, f) * smoothstep(1.0, 0.9, f);
-			vec3 layer_col = mix(strata_dark.rgb, strata_light.rgb, tone * 0.8 + 0.2) * (1.0 - seam * 0.3);
+			// Thick beds whose colour drifts gradually from one to the next (sandstone is laid down
+			// in sequences, not alternating stripes), fine lamination inside each layer and only
+			// faint seams.
+			float bed = smoothstep(0.2, 0.8, vnoise(vec2(y * 0.45, 1.3)));
+			float tone = mix(bed, hash(vec2(layer, 1.3)), 0.3);
+			float seam = 1.0 - smoothstep(0.0, 0.06, f) * smoothstep(1.0, 0.94, f);
+			float lamina = 0.94 + 0.06 * sin(y * 25.1327 + vnoise(world_pos.xz * 0.3) * 3.0);
+			vec3 layer_col = mix(strata_dark.rgb, strata_light.rgb, 0.3 + 0.7 * tone) * (1.0 - seam * 0.2) * lamina;
 			// Vertical erosion streaks (desert varnish) running down the faces.
 			float streak = vnoise(vec2((world_pos.x + world_pos.z) * 0.9, world_pos.y * 0.04));
 			layer_col *= 0.86 + 0.24 * streak;

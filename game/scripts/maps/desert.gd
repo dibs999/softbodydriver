@@ -232,9 +232,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		var facing := Basis(Vector3.UP, i * 2.4).scaled_local(Vector3.ONE * s)
 		var stalk := Transform3D(facing, Vector3(p.x, y + 1.4 * s, p.y))
 		xfs.append(stalk)
-		arms.append(stalk * Transform3D(Basis(Vector3.BACK, -0.75).scaled_local(Vector3(0.72, 0.52, 0.72)), Vector3(0.53, 0.2, 0)))
-		if i % 3 != 0:
-			arms.append(stalk * Transform3D(Basis(Vector3.BACK, 0.8).scaled_local(Vector3(0.68, 0.44, 0.68)), Vector3(-0.5, -0.14, 0)))
+		_add_arms(arms, stalk, 1 if i % 3 == 0 else 2, rng)
 	for i in range(4, n_track, 13):
 		var tangent := track[(i + 1) % n_track] - track[i - 1]
 		var side := Vector3(-tangent.z, 0, tangent.x).normalized()
@@ -242,9 +240,9 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		if _near_track(Vector2(p.x, p.z), shortcut, 6.0, false):
 			continue
 		p.y = ground_height.call(p.x, p.z)
-		var stalk := Transform3D(Basis(Vector3.UP, rng.randf() * TAU), p + Vector3.UP * 1.4)
+		var stalk := Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled_local(Vector3.ONE * 1.7), p + Vector3.UP * 1.4 * 1.7)
 		xfs.append(stalk)
-		arms.append(stalk * Transform3D(Basis(Vector3.BACK, -0.75).scaled_local(Vector3(0.72, 0.52, 0.72)), Vector3(0.53, 0.2, 0)))
+		_add_arms(arms, stalk, 1 + rng.randi() % 2, rng)
 	# More saguaros where the track shows them: 12-70 m to either side.
 	for i in range(0, n_track, 2):
 		if rng.randf() > 0.55: continue
@@ -254,18 +252,20 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		if _near_track(Vector2(p.x, p.z), track, 10.0) or _near_track(Vector2(p.x, p.z), shortcut, 7.0, false):
 			continue
 		p.y = ground_height.call(p.x, p.z)
-		var s := rng.randf_range(0.55, 1.35)
+		# Young saguaros are a single column; arms only grow on old, tall ones (5 m and more).
+		var armed := rng.randf() < 0.6
+		var s := rng.randf_range(1.5, 2.6) if armed else rng.randf_range(0.5, 1.1)
 		var stalk := Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled_local(Vector3.ONE * s), p + Vector3.UP * 1.4 * s)
 		xfs.append(stalk)
-		if rng.randf() < 0.75:
-			arms.append(stalk * Transform3D(Basis(Vector3.BACK, -0.75).scaled_local(Vector3(0.72, 0.52, 0.72)), Vector3(0.53, 0.2, 0)))
-		if rng.randf() < 0.45:
-			arms.append(stalk * Transform3D(Basis(Vector3.BACK, 0.8).scaled_local(Vector3(0.68, 0.44, 0.68)), Vector3(-0.5, -0.14, 0)))
+		if armed:
+			_add_arms(arms, stalk, 1 + rng.randi() % 3, rng)
 		if s > 0.8:
 			world.add_box(p + Vector3.UP * 1.4 * s, Vector3(0.22, 1.4 * s, 0.22) * s, Vector3.ZERO, 0.6)
-	var cactus_mat := C.noise_mat(Color(0.27, 0.42, 0.22), 0.12, 2.5, 0.8)
+	# Dusty grey-green, darker in the grooves between the ribs (vertex colour).
+	var cactus_mat := C.noise_mat(Color(0.36, 0.45, 0.29), 0.10, 2.5, 0.8, 0.05, true)
+	cactus_mat.vertex_color_is_srgb = true
 	C.scatter_multimesh(parent, cactus, cactus_mat, xfs)
-	C.scatter_multimesh(parent, cactus, cactus_mat, arms, false)
+	C.scatter_multimesh(parent, _saguaro_arm_mesh(0.9), cactus_mat, arms, false)
 	var sx: Array[Vector3] = []
 	for i in 680:
 		var p := Vector2(rng.randf_range(-840, 840), rng.randf_range(-840, 840))
@@ -342,7 +342,18 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			"fog_density": 0.00065, "sun": Vector3(-43, -120, 0), "sun_energy": 1.5, "sun_color": Color(1.0, 0.93, 0.80)}}
 
 
-## Saguaro: ribbed column with a rounded crown (also used, scaled, for the arms).
+## Elbow arms on a saguaro trunk (`stalk`: trunk centre, scaled): at 45-70 % of its height, spread
+## round the trunk, a little smaller each.
+static func _add_arms(arms: Array[Transform3D], stalk: Transform3D, count: int, rng: RandomNumberGenerator) -> void:
+	var start := rng.randf() * TAU
+	for k in count:
+		var yaw := start + TAU * k / count + rng.randf_range(-0.5, 0.5)
+		var h := rng.randf_range(-0.3, 0.3)
+		var size := rng.randf_range(0.85, 1.15)
+		arms.append(stalk * Transform3D(Basis(Vector3.UP, yaw).scaled_local(Vector3.ONE * size), Vector3(0, h, 0)))
+
+
+## Saguaro: ribbed column with a rounded crown.
 static func _saguaro_mesh() -> Mesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -362,14 +373,55 @@ static func _saguaro_mesh() -> Mesh:
 			var rib := 1.0 + 0.09 * cos(t * 12.0)
 			row.append(Vector3(cos(t) * pr.x * rib, pr.y, sin(t) * pr.x * rib))
 		rows.append(row)
+	_ribbed_strip(st, rows, seg)
+	st.generate_normals()
+	return st.commit()
+
+
+## Faces between consecutive rings, coloured by the rib: dusty grey-green crests, dark grooves.
+static func _ribbed_strip(st: SurfaceTool, rows: Array, seg: int) -> void:
 	for i in rows.size() - 1:
 		for j in seg:
-			var a: Vector3 = rows[i][j]
-			var b: Vector3 = rows[i][j + 1]
-			var c: Vector3 = rows[i + 1][j + 1]
-			var d: Vector3 = rows[i + 1][j]
-			st.add_vertex(a); st.add_vertex(c); st.add_vertex(b)
-			st.add_vertex(a); st.add_vertex(d); st.add_vertex(c)
+			var corners := [[i, j], [i + 1, j + 1], [i, j + 1], [i, j], [i + 1, j], [i + 1, j + 1]]
+			for c: Array in corners:
+				var t := TAU * float(c[1]) / seg
+				var crest := 0.5 + 0.5 * cos(t * 12.0)
+				st.set_color(Color(0.46, 0.53, 0.39) * (0.62 + 0.38 * crest))
+				st.add_vertex(rows[c[0]][c[1]])
+
+
+## Saguaro arm in its local frame: grows out along +x from inside the trunk, bends up through an
+## elbow and rises as a ribbed column with a rounded tip.
+static func _saguaro_arm_mesh(rise: float) -> Mesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var seg := 20
+	var r := 0.15
+	var bend := 0.28
+	var path: Array = []   # [centre, tangent, radius]
+	path.append([Vector3(0.05, 0, 0), Vector3.RIGHT, r * 0.95])
+	path.append([Vector3(0.30, 0, 0), Vector3.RIGHT, r])
+	for k in range(1, 7):
+		var a := PI * 0.5 * k / 6.0
+		path.append([Vector3(0.30 + bend * sin(a), bend * (1.0 - cos(a)), 0), Vector3(cos(a), sin(a), 0), r])
+	var top := 0.30 + bend
+	for k in range(1, 5):
+		path.append([Vector3(top, bend + rise * k / 4.0, 0), Vector3.UP, r * (1.0 - 0.06 * k / 4.0)])
+	for k in range(1, 5):
+		var a := PI * 0.5 * k / 4.0
+		path.append([Vector3(top, bend + rise + r * 0.9 * sin(a), 0), Vector3.UP, r * 0.94 * cos(a) + 0.005])
+	var rows: Array = []
+	for pnt: Array in path:
+		var centre: Vector3 = pnt[0]
+		var tangent: Vector3 = pnt[1]
+		var normal := tangent.cross(Vector3.BACK).normalized()
+		var row: Array = []
+		for j in seg + 1:
+			var t := TAU * j / seg
+			var rib := 1.0 + 0.09 * cos(t * 12.0)
+			row.append(centre + (normal * cos(t) + Vector3.BACK * sin(t)) * float(pnt[2]) * rib)
+		rows.append(row)
+	_ribbed_strip(st, rows, seg)
 	st.generate_normals()
 	return st.commit()
 
