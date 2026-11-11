@@ -86,6 +86,10 @@ keine stabile Hochgeschwindigkeitsfahrt.
   - Die Sofortreparatur unterwegs kostet zusätzlich 150 € Abschleppen und wird abgelehnt, wenn
     das Konto nicht reicht.
   - Der Kontostand (Start 2.000 €) steht im Profil, im HUD und im Hauptmenü.
+  - Garage: Zu Beginn gehört einem nur der Kestrel Hatch. Die anderen Autos kosten beim Händler
+    rund 4 × kW^1,4 (Meridian 4.000 €, Fastback 9.750 €, Concept GT 21.000 €). Kachel und
+    Startknopf zeigen Preis bzw. „im Besitz“; der Startknopf wird zu „Kaufen“ und nennt den
+    fehlenden Betrag. Ein nicht gekauftes Auto startet nie (dann fährt man den Kestrel).
 - Im Hügelland verbindet eine Kreisstraße quer durchs Tal die Ringstraße hinter Lindenau mit
   dem Abschnitt zwischen Waldhof und Aussichtspunkt. An den T-Einmündungen gibt es ausgerundete
   Ecken, Wartelinie und „Vorfahrt achten“-Schild. Durch Einschnitte und Dämme steigt sie höchstens
@@ -410,6 +414,7 @@ godot --headless --path game -s res://tests/siren_test.gd         # Martinshorn:
 godot --headless --path game -s res://tests/desert_traffic_test.gd # Wüstenverkehr über die Abkürzung
 godot --headless --path game -s res://tests/offroad_traffic_test.gd # Ein 4x4 auf der Feldwegrunde
 godot --headless --path game -s res://tests/career_test.gd        # Karriere: Lohn, Werkstattrechnung, Tanken, Konto
+godot --headless --path game -s res://tests/career_garage_test.gd # Karriere: Autopreise, Kauf, Kaufknopf im Menü
 godot --headless --path game -s res://tests/weather_door_test.gd # Offene Tür, Regenabschirmung und Akustik
 godot --headless --path game -s res://tests/door_controls_test.gd # Öffnen, Schließen, Scharniere und Reparatur
 godot --headless --path game -s res://tests/mirror_test.gd       # Optische Flächen, Projektion und Kamerawechsel

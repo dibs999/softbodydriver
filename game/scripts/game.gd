@@ -92,6 +92,10 @@ func _ready() -> void:
 	road_marks.world = world
 	add_child(road_marks)
 
+	if Game.settings.get("career", false):
+		var info: Dictionary = Game.car_info(Game.selected_car)
+		if not info.is_empty() and not Career.owns(Game.progress, str(info["id"])):
+			Game.selected_car = "res://cars/%s.car.json" % Career.STARTER_CAR
 	player = Game.spawn_vehicle(world, Game.selected_car, map_data["spawns"][0])
 	if player == null:
 		push_error("Failed to spawn %s" % Game.selected_car)
