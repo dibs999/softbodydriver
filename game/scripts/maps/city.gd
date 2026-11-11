@@ -693,6 +693,7 @@ static func _street_life(parent: Node3D, world: SBWorld, origin: float, metal: M
 	var racks: Array[Transform3D] = []
 	var bollards: Array[Transform3D] = []
 	var manholes: Array[Transform3D] = []
+	var gullies: Array[Transform3D] = []
 	for line in BLOCKS + 1:
 		var s := origin + STREET * 0.5 + line * PITCH
 		for axis in 2:   # 0: street along x at z = s, 1: street along z at x = s
@@ -703,8 +704,12 @@ static func _street_life(parent: Node3D, world: SBWorld, origin: float, metal: M
 				var centre := (Vector3(a0, 0, s) if axis == 0 else Vector3(s, 0, a0))
 				# Manholes in the carriageway.
 				for t: float in [18.0, 52.0]:
-					manholes.append(Transform3D(Basis.from_scale(Vector3(0.8, 1, 0.8)), centre + d * t + side_v * (2.0 if j % 2 == 0 else -2.0) + Vector3.UP * 0.035))
+					manholes.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU), centre + d * t + side_v * (2.0 if j % 2 == 0 else -2.0) + Vector3.UP * 0.035))
 				var parking_ok := line >= 2 and line <= BLOCKS - 2 and not (axis == 1 and line == 5)
+				# Gully grates in the gutter, 30 cm off the kerb, every ~25 m on both sides.
+				for side: float in [-1.0, 1.0]:
+					for t: float in [10.0, 35.0, 60.0]:
+						gullies.append(Transform3D(Basis(Vector3.UP, atan2(d.x, d.z)), centre + d * (t + rng.randf_range(-1.5, 1.5)) + side_v * side * (STREET * 0.5 - 0.3) + Vector3.UP * 0.036))
 				for side: float in [-1.0, 1.0]:
 					var blk := Vector2i(j, line - (1 if side < 0.0 else 0)) if axis == 0 else Vector2i(line - (1 if side > 0.0 else 0), j)
 					if blk in SPECIAL_BLOCKS:
@@ -770,12 +775,14 @@ static func _street_life(parent: Node3D, world: SBWorld, origin: float, metal: M
 	bollard.height = 1.0
 	bollard.radial_segments = 8
 	C.scatter_multimesh(parent, bollard, C.mat(Color(0.18, 0.18, 0.2), 0.4, 0.6), bollards, false)
-	var cover := CylinderMesh.new()
-	cover.top_radius = 0.5
-	cover.bottom_radius = 0.5
-	cover.height = 0.01
-	cover.radial_segments = 16
-	C.scatter_multimesh(parent, cover, C.noise_mat(Color(0.20, 0.19, 0.18), 0.3, 6.0, 0.5, 0.2, false), manholes, false)
+	# Cast-iron manhole covers (DN 600 opening, ~0.8 m frame) and slotted gully grates, flat decals
+	# on the carriageway with worn, lighter raised parts.
+	var cover := PlaneMesh.new()
+	cover.size = Vector2(0.8, 0.8)
+	C.scatter_multimesh(parent, cover, _iron_material(_manhole_texture()), manholes, false)
+	var grate := PlaneMesh.new()
+	grate.size = Vector2(0.35, 0.5)
+	C.scatter_multimesh(parent, grate, _iron_material(_gully_texture()), gullies, false)
 
 
 const STREET_NAMES := ["Lindenstraße", "Marktgasse", "Bahnhofstraße", "Goethestraße", "Schillerplatz", "Uferweg",
@@ -915,16 +922,91 @@ static func _poster_texture() -> ImageTexture:
 	return _tex_cache["poster"]
 
 
+static func _iron_material(tex: Texture2D) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = tex
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	m.alpha_scissor_threshold = 0.5
+	m.roughness = 0.55
+	m.metallic = 0.55
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	return m
+
+
+## Manhole cover: a frame ring, a lighter worn rim, concentric rings and radial ribs (raised, worn
+## bright), two lifting holes; outside the frame transparent.
+static func _manhole_texture() -> ImageTexture:
+	if _tex_cache.has("manhole"): return _tex_cache["manhole"]
+	var n := 128
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	var noise := FastNoiseLite.new()
+	noise.frequency = 0.12
+	for y in n:
+		for x in n:
+			var p := Vector2(x - (n - 1) * 0.5, y - (n - 1) * 0.5) / (n * 0.5)
+			var r := p.length()
+			var grime := 0.85 + 0.2 * noise.get_noise_2d(x, y)
+			var c := Color(0.0, 0.0, 0.0, 0.0)
+			if r <= 1.0:
+				var dark := Color(0.13, 0.12, 0.115) * grime
+				var bright := Color(0.36, 0.34, 0.31) * grime
+				var raised := false
+				if r > 0.86:
+					raised = r > 0.9                     # frame
+				elif r > 0.80:
+					raised = false                       # joint between frame and lid
+				else:
+					var ring := fmod(r * 7.0, 1.0) < 0.28
+					var rib := fmod((atan2(p.y, p.x) + PI) / TAU * 24.0, 1.0) < 0.22 and r > 0.18
+					raised = ring or rib or r < 0.1
+					for hole: Vector2 in [Vector2(0.55, 0.0), Vector2(-0.55, 0.0)]:
+						if p.distance_to(hole) < 0.06:
+							raised = false
+							dark = Color(0.03, 0.03, 0.03)
+				c = bright if raised else dark
+				c.a = 1.0
+			img.set_pixel(x, y, c)
+	img.generate_mipmaps()
+	_tex_cache["manhole"] = ImageTexture.create_from_image(img)
+	return _tex_cache["manhole"]
+
+
+## Gully grate: a steel frame and longitudinal slots over the dark sump.
+static func _gully_texture() -> ImageTexture:
+	if _tex_cache.has("gully"): return _tex_cache["gully"]
+	var w := 48
+	var h := 64
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	for y in h:
+		for x in w:
+			var frame := x < 4 or x >= w - 4 or y < 4 or y >= h - 4
+			var bar := (x - 4) % 5 < 2 or (y - 4) % 28 < 3
+			var c := Color(0.30, 0.29, 0.27) if frame or bar else Color(0.02, 0.02, 0.02)
+			if frame: c = Color(0.38, 0.36, 0.33)
+			img.set_pixel(x, y, c)
+	img.generate_mipmaps()
+	_tex_cache["gully"] = ImageTexture.create_from_image(img)
+	return _tex_cache["gully"]
+
+
 static func _arrow_texture() -> ImageTexture:
 	if _tex_cache.has("arrow"): return _tex_cache["arrow"]
-	var img := Image.create(32, 128, false, Image.FORMAT_RGBA8)
-	for y in 128:
-		for x in 32:
-			var u := (x - 15.5) / 16.0
-			var v := y / 127.0          # 0 = tip
-			var head := v < 0.35 and absf(u) < (v / 0.35) * 0.95
-			var shaft := v >= 0.35 and absf(u) < 0.28
-			img.set_pixel(x, y, Color(0.93, 0.93, 0.9, 1.0) if head or shaft else Color(0, 0, 0, 0))
+	# 64 x 256 with 4 x 4 supersampled edge coverage: bilinear filtering then draws a smooth outline at
+	# the scissor threshold instead of a staircase of 4-cm texels.
+	var w := 64
+	var h := 256
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	for y in h:
+		for x in w:
+			var cover := 0
+			for sy in 4:
+				for sx in 4:
+					var u := (x + (sx + 0.5) / 4.0 - w * 0.5) / (w * 0.5)
+					var v := (y + (sy + 0.5) / 4.0) / h          # 0 = tip
+					var head := v < 0.35 and absf(u) < (v / 0.35) * 0.95
+					var shaft := v >= 0.35 and v < 0.995 and absf(u) < 0.28
+					if head or shaft: cover += 1
+			img.set_pixel(x, y, Color(0.93, 0.93, 0.9, cover / 16.0))
 	img.generate_mipmaps()
 	_tex_cache["arrow"] = ImageTexture.create_from_image(img)
 	return _tex_cache["arrow"]
