@@ -177,8 +177,12 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	C.terrain_tiles(parent, ox, oz, cell, nx, nz, heights, terrain_mat, colors)
 	var ground_height := func(x: float, z: float) -> float:
 		return C.sample(heights, nx, nz, ox, oz, cell, x, z)
-	parent.add_child(C.road_mesh(track, half_w, C.road_material(2, half_w * 2.0, 12.0, "desert"), true, 0.052, 12.0, ground_height))
-	parent.add_child(C.road_mesh(shortcut, 3.6, C.road_material(2, 7.2, 12.0, "desert"), false, 0.043, 12.0, ground_height))
+	var road_mat := C.road_material(2, half_w * 2.0, 12.0, "desert")
+	var shortcut_mat := C.road_material(2, 7.2, 12.0, "desert")
+	for m: ShaderMaterial in [road_mat, shortcut_mat]:
+		m.set_shader_parameter("ground_color", Color(0.74, 0.62, 0.47))
+	parent.add_child(C.road_mesh(track, half_w, road_mat, true, 0.052, 12.0, ground_height))
+	parent.add_child(C.road_mesh(shortcut, 3.6, shortcut_mat, false, 0.043, 12.0, ground_height))
 	var mine := _mine(parent, world, shortcut, ground_height)
 
 	# Boulders (colliding) and cacti / shrubs (visual).
