@@ -12,7 +12,7 @@ func run() -> void:
 	var state := root.get_node("Game")
 	var original_progress = state.progress
 	state.progress = Progress.new()
-	state.progress.profile_path = "user://trial_profile_%s.json" % Time.get_ticks_usec()
+	state.progress.profile_path = "user://trial_profile_%s.json" % ("%d_%d" % [Time.get_ticks_usec(), randi()])
 	state.settings["traffic"] = false
 	state.settings["automatic"] = true
 	state.settings["tcs"] = true
@@ -30,7 +30,7 @@ func run() -> void:
 	var activity = game.activity
 	activity.set_process(false)
 	var fail_record_save := "--record-save-failure" in OS.get_cmdline_user_args()
-	activity.records_path = ("user://missing_trial_%s/records.cfg" if fail_record_save else "user://trial_%s.cfg") % Time.get_ticks_usec()
+	activity.records_path = ("user://missing_trial_%s/records.cfg" if fail_record_save else "user://trial_%s.cfg") % ("%d_%d" % [Time.get_ticks_usec(), randi()])
 	activity._records = ConfigFile.new()
 	activity.completed.connect(func(result: Dictionary): results.append(result))
 	activity.choose()

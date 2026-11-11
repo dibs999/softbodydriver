@@ -25,7 +25,7 @@ func run() -> void:
 	var state := root.get_node("Game")
 	# Gearbox hotkey saves preferences. Give the entire scene a disposable profile.
 	var original_path: String = state.settings_config_path
-	var profile := "user://gamepad_controls_%s.cfg" % Time.get_ticks_usec()
+	var profile := "user://gamepad_controls_%s.cfg" % ("%d_%d" % [Time.get_ticks_usec(), randi()])
 	state.settings_config_path = profile
 	state.selected_map = "proving_grounds"
 	state.selected_car = "res://cars/kestrel_hatch.car.json"
