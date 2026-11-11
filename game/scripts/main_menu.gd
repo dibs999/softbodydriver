@@ -417,6 +417,11 @@ func _selected_owned() -> bool:
 
 ## Tiles, start button and account line after a purchase or a change of the career setting.
 func _refresh_garage() -> void:
+	for i in mini(map_buttons.size(), Game.MAPS.size()):
+		var id: String = Game.MAPS[i]["id"]
+		var locked := _career_on() and not Career.map_unlocked(Game.progress, id)
+		map_buttons[i].modulate = Color(1, 1, 1, 0.45) if locked else Color.WHITE
+		map_buttons[i].tooltip_text = ("Gesperrt · noch %d Aufträge" % Career.contracts_to_unlock(Game.progress, id)) if locked else Game.MAPS[i]["name"]
 	for i in mini(car_meta.size(), Game.cars.size()):
 		if car_meta[i]: car_meta[i].text = _car_meta_text(Game.cars[i])
 	for i in car_buttons.size():
@@ -429,6 +434,12 @@ func _refresh_garage() -> void:
 func _update_start_button() -> void:
 	if not start_button: return
 	var c: Dictionary = Game.car_info(Game.selected_car)
+	if _career_on() and not Career.map_unlocked(Game.progress, Game.selected_map):
+		var left := Career.contracts_to_unlock(Game.progress, Game.selected_map)
+		start_button.text = "Karte gesperrt · noch %d %s" % [left, "Auftrag" if left == 1 else "Aufträge"]
+		start_button.disabled = true
+		start_button.tooltip_text = "Erledige Aufträge auf den offenen Karten, um diese Karte freizuschalten."
+		return
 	if _selected_owned():
 		start_button.text = "Losfahren  →"
 		start_button.disabled = Game.cars.is_empty()
@@ -511,7 +522,7 @@ func _on_car_selected(i: int) -> void:
 func _on_map_selected(i: int) -> void:
 	Game.selected_map = Game.MAPS[i]["id"]
 	map_info.text = "KARTE: %s\n%s" % [Game.MAPS[i]["name"], Game.MAPS[i]["description"]]
-	if _career_on(): _refresh_garage()   # the account line names this map's contract
+	if _career_on(): _refresh_garage()   # contract line, lock state and start button for this map
 
 
 func _on_start() -> void:

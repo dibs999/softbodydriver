@@ -53,6 +53,7 @@ func _initialize() -> void:
 	game.settings["career"] = true
 	game.settings["traffic"] = false
 	game.selected_car = "res://cars/meridian_sedan.car.json"
+	game.selected_map = "proving_grounds"   # open from the start of a career
 	change_scene_to_file("res://scenes/main_menu.tscn")
 
 func _menu(scene: Node) -> void:

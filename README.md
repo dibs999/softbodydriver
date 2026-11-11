@@ -95,6 +95,9 @@ keine stabile Hochgeschwindigkeitsfahrt.
     Die ersten fordern Bronze oder Silber, ab dem vierten auch Gold; die Prämie wächst mit jedem
     erledigten Auftrag bis aufs Doppelte. Der Auftrag steht im HUD unter dem Kontostand und im
     Hauptmenü bei der gewählten Karte; nach dem Erfüllen folgt sofort der nächste.
+  - Karten: Testgelände und Hügelland sind von Beginn an offen; die Stadt öffnet nach 1, die
+    Autobahn nach 2, Wald & Weide nach 3 und die Wüste nach 5 erledigten Aufträgen. Gesperrte
+    Karten sind im Hauptmenü abgeblendet, der Startknopf nennt die fehlenden Aufträge.
 - Im Hügelland verbindet eine Kreisstraße quer durchs Tal die Ringstraße hinter Lindenau mit
   dem Abschnitt zwischen Waldhof und Aussichtspunkt. An den T-Einmündungen gibt es ausgerundete
   Ecken, Wartelinie und „Vorfahrt achten“-Schild. Durch Einschnitte und Dämme steigt sie höchstens
@@ -421,6 +424,7 @@ godot --headless --path game -s res://tests/offroad_traffic_test.gd # Ein 4x4 au
 godot --headless --path game -s res://tests/career_test.gd        # Karriere: Lohn, Werkstattrechnung, Tanken, Konto
 godot --headless --path game -s res://tests/career_garage_test.gd # Karriere: Autopreise, Kauf, Kaufknopf im Menü
 godot --headless --path game -s res://tests/career_contract_test.gd # Karriere: Aufträge je Karte, Prämie, nächster Auftrag
+godot --headless --path game -s res://tests/career_maps_test.gd   # Karriere: Kartenfreischaltung über Aufträge
 godot --headless --path game -s res://tests/weather_door_test.gd # Offene Tür, Regenabschirmung und Akustik
 godot --headless --path game -s res://tests/door_controls_test.gd # Öffnen, Schließen, Scharniere und Reparatur
 godot --headless --path game -s res://tests/mirror_test.gd       # Optische Flächen, Projektion und Kamerawechsel

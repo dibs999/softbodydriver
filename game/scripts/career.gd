@@ -14,6 +14,16 @@ static func car_price(info: Dictionary) -> float:
 	var kw := maxf(float(info.get("power", 0.0)), 40.0)
 	return maxf(1000.0, roundf(4.0 * pow(kw, 1.4) / 250.0) * 250.0)
 
+## Maps open up with the contracts done: the proving ground and the hill country from the start,
+## then the city, the motorway, the offroad farm and finally the desert.
+const MAP_UNLOCK := {"proving_grounds": 0, "hill_roads": 0, "city": 1, "autobahn": 2, "offroad": 3, "desert": 5}
+
+static func contracts_to_unlock(progress, map_id: String) -> int:
+	return maxi(0, int(MAP_UNLOCK.get(map_id, 0)) - int(progress.contracts_done()))
+
+static func map_unlocked(progress, map_id: String) -> bool:
+	return contracts_to_unlock(progress, map_id) == 0
+
 ## Does the career own this car (id from the car file)?
 static func owns(progress, car_id: String) -> bool:
 	return car_id == STARTER_CAR or progress.owns_car(car_id)
