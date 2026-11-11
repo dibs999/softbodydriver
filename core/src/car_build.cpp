@@ -959,19 +959,43 @@ CarBuild buildCar(const CarDefinition& def) {
             }
             BeamParams latch = makeBeam(1.0e5, 40.0, 1.2e4, 1.0e4);   // door latches hold > 10 kN
             latch.breakGroup = group + "_latch";
-            for (auto node : {door.nodes[0], door.nodes[2]})
-                for (auto anchor : nearestNodes(car, rig.bodyNodes, car.positions()[node], 3))
+            for (auto node : {door.nodes[0], door.nodes[2]}) {
+                const Vec3 at = car.positions()[node];
+                bool inboard = false;   // a striker on the car's side of the latch node
+                for (auto anchor : nearestNodes(car, rig.bodyNodes, at, 3)) {
                     door.latchBeams.push_back(car.addBeam(node, anchor, latch));
+                    inboard = inboard || sign * (car.positions()[anchor].z - at.z) < -0.03;
+                }
+                // With all three strikers outboard in one plane (imported Trailhead rear doors) the
+                // latch has a mirror-image rest pose with the door swung 10-13 degrees out, and the
+                // door was caught there. One striker on the inside removes that second pose.
+                if (!inboard)
+                    for (auto candidate : nearestNodes(car, rig.bodyNodes, at, 16))
+                        if (sign * (car.positions()[candidate].z - at.z) < -0.05) {
+                            door.latchBeams.push_back(car.addBeam(node, candidate, latch));
+                            break;
+                        }
+            }
             // A breakable check strap/assisted opening actuator, rooted inside the pillar ahead
             // of the door, provides a stable 68-degree inspection position.
             const auto moving = door.nodes[0];
-            const auto anchor = nearestNodes(car, rig.bodyNodes,
-                {hingeX - 0.15, car.positions()[moving].y + 0.1, hingeZ - sign * 0.45}, 1).front();
             const Vec3 pivot{hingeX, car.positions()[moving].y, hingeZ};
             const Vec3 delta = car.positions()[moving] - pivot;
             const real angle = sign * openDeg * kPi / 180.0;
             const Vec3 opened = pivot + Vec3{std::cos(angle) * delta.x + std::sin(angle) * delta.z,
                 delta.y, -std::sin(angle) * delta.x + std::cos(angle) * delta.z};
+            // Of the body nodes around the ideal root, take the one with the most leverage (the
+            // largest change of length between shut and open). The nearest one alone could sit
+            // almost on the hinge axis with imported hinge lines (Meridian rear doors: 3.6 % stroke),
+            // too weak to pull the door shut, and the doors stayed open.
+            auto leverage = [&](std::uint32_t a) {
+                const real shut = length(car.positions()[moving] - car.positions()[a]);
+                return shut > 0.15 ? std::abs(length(opened - car.positions()[a]) / shut - 1.0) : 0.0;
+            };
+            auto anchor = nearestNodes(car, rig.bodyNodes, {hingeX - 0.15, car.positions()[moving].y + 0.1, hingeZ - sign * 0.45}, 1).front();
+            if (leverage(anchor) < 0.3)
+                for (auto candidate : nearestNodes(car, rig.bodyNodes, {hingeX - 0.15, car.positions()[moving].y + 0.1, hingeZ - sign * 0.45}, 12))
+                    if (leverage(candidate) > leverage(anchor) + 0.05) anchor = candidate;
             const real closedLength = length(car.positions()[moving] - car.positions()[anchor]);
             BeamParams support = makeBeam(2.0e3, 500.0, kInf, 9.0e3);
             support.type = BeamType::Hydro;
@@ -985,6 +1009,11 @@ CarBuild buildCar(const CarDefinition& def) {
             mechanism.nodes = std::move(cage);
             mechanism.hingeBeams = door.hingeBeams; mechanism.latchBeams = door.latchBeams;
             mechanism.supportBeams = door.supportBeams; mechanism.inputChannel = door.inputChannel;
+            // Closing is a command: the latch catches a door that has slowed down within 20 cm of
+            // shut and draws it in, as the hand pushing it would. On a tilted imported hinge line
+            // the weak check-strap actuator alone left doors resting 1-12 degrees short.
+            mechanism.catchTolerance = 0.20;
+            mechanism.catchMaxSpeed = 0.3;   // a door still swinging fast is not grabbed
             car.addDoor(mechanism);
         };
         for (int side = 0; side < 2; ++side)
@@ -1301,7 +1330,10 @@ CarBuild buildCar(const CarDefinition& def) {
         std::vector<std::string> doors = {"door_left", "door_right"};
         if (bd.doors >= 4 && bd.detachableRearDoors) doors.insert(doors.end(), {"rdoor_left", "rdoor_right"});
         for (const std::string& door : doors)
-            car.addSelfCollisionPanel(door, {"body"}, {door + "_latch", door + "_hinge_lower", door + "_hinge_upper"});
+            // Contact only once a latch or hinge is torn: a door opened by hand swings on intact
+            // hinges, and with imported hinge lines its upper corner caught on the roof edge
+            // while closing (Meridian rear doors stayed 9-60 degrees open).
+            car.addSelfCollisionPanel(door, {"body"}, {door + "_latch", door + "_hinge_lower", door + "_hinge_upper"}, 0.008, false);
     }
     if (bd.detachableTailgate) car.addSelfCollisionPanel("tailgate", {"body"}, {"tailgate_latch", "tailgate_hinge"});
 

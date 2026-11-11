@@ -206,6 +206,9 @@ struct SelfCollisionPanel {
     std::vector<std::uint32_t> nodes, triangles, releaseBeams;
     std::vector<SelfCollisionPoint> points; ///< Corners + triangle centroids, no added mass.
     real skin = 0.008;
+    /// true: contact starts when a release beam breaks or is disabled (a bonnet released by its
+    /// latch); false: only when one breaks (a door opened by hand swings on intact hinges).
+    bool releaseOnDisabled = true;
 };
 
 struct DoorMechanism {
@@ -218,6 +221,8 @@ struct DoorMechanism {
     /// Lids: a lowered panel within this distance of shut is caught by its latch, which then draws
     /// it in at `catchSpeed` (m/s) to the exact shut position (0 = only the strict tolerance).
     real catchTolerance = 0.0, catchSpeed = 0.2;
+    /// Fastest relative latch speed (m/s) at which the catch still grabs (lids: any).
+    real catchMaxSpeed = 1.0e9;
     bool catching = false;
 };
 
@@ -241,7 +246,7 @@ public:
     /// collision triangles exist. Empty releaseGroups means always active;
     /// otherwise contact starts when any listed attachment beam breaks.
     void addSelfCollisionPanel(const std::string& panelGroup, const std::vector<std::string>& targetGroups,
-                               const std::vector<std::string>& releaseGroups, real skin = 0.008);
+                               const std::vector<std::string>& releaseGroups, real skin = 0.008, bool releaseOnDisabled = true);
     const std::vector<SelfCollisionPanel>& selfCollisionPanels() const { return selfCollisionPanels_; }
     bool selfCollisionActive(const SelfCollisionPanel& panel) const;
 
