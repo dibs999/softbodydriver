@@ -208,19 +208,21 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 	for i in 10:
 		_cone(parent, Vector3(-40 - i * 14, 0, -40))
 	# A steep hill: heightfield bump on the pad's far side.
-	var nx := 41
-	var nz := 41
-	var hcell := 2.0
+	# 1 m cells and a foot that sinks 6 cm under the pad: on the 2 m grid the hill's edge met the
+	# asphalt at the same height and broke through it in stair steps.
+	var nx := 81
+	var nz := 81
+	var hcell := 1.0
 	var ox := -200.0
 	var oz := -150.0
 	var heights := PackedFloat32Array()
 	heights.resize(nx * nz)
 	for ix in nx:
 		for iz in nz:
-			var dx := (ix - 20.0) / 20.0
-			var dz := (iz - 20.0) / 20.0
+			var dx := (ix - 40.0) / 40.0
+			var dz := (iz - 40.0) / 40.0
 			var r2 := dx * dx + dz * dz
-			heights[ix * nz + iz] = 7.0 * pow(1.0 - r2, 2.0) if r2 < 1.0 else 0.0
+			heights[ix * nz + iz] = (7.0 * pow(1.0 - r2, 2.0) if r2 < 1.0 else 0.0) - 0.06
 	world.add_heightfield(ox, oz, hcell, nx, nz, heights, 1.0)
 	parent.add_child(C.terrain_mesh(ox, oz, hcell, nx, nz, heights, grass))
 
