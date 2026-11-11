@@ -951,7 +951,7 @@ func _setup_input() -> void:
 	siren_key.shift_pressed = true
 	InputMap.action_add_event("siren", siren_key)
 	_action("horn"); _key("horn", [KEY_ENTER, KEY_KP_ENTER]); _joy_button("horn", JOY_BUTTON_LEFT_STICK)
-	_action("cruise_control"); _key("cruise_control", [KEY_V])
+	_action("cruise_control"); _key("cruise_control", [KEY_V]); _joy_button("cruise_control", JOY_BUTTON_RIGHT_STICK)
 	_action("refuel"); _key("refuel", [KEY_F]); _joy_button("refuel", JOY_BUTTON_DPAD_LEFT)
 	_action("service_repair"); _key("service_repair", [KEY_G]); _joy_button("service_repair", JOY_BUTTON_DPAD_RIGHT)
 	_action("driver_door"); _key("driver_door", [KEY_U])
