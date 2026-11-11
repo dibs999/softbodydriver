@@ -337,9 +337,30 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		"map_paths": [C.closed_route(track), shortcut],
 		"map_places": [{"name": "Rallyelager Red Mesa", "position": track[6]}, {"name": "Raststätte Coyote Flats", "position": post}, {"name": "Alte Mine", "position": mine},
 			{"name": "Dünensprung", "position": track[jumps[0]]}, {"name": "Schluchtsprung", "position": track[jumps[1]]}],
-		"ai_spawns": [C.car_xform(track[200], track[201] - track[200]), C.car_xform(track[540], track[541] - track[540])],
+		"ai_routes": _traffic_routes(track, speeds, shortcut),
 		"environment": {"sky_top": Color(0.32, 0.5, 0.78), "horizon": Color(0.92, 0.82, 0.68), "fog": Color(0.93, 0.83, 0.68),
 			"fog_density": 0.00065, "sun": Vector3(-43, -120, 0), "sun_energy": 1.5, "sun_color": Color(1.0, 0.93, 0.80)}}
+
+
+## Traffic: two cars on the rally loop as before, a third that takes the shortcut through the
+## dunes (same direction as the loop traffic) and rejoins the loop after it.
+static func _traffic_routes(track: PackedVector3Array, speeds: PackedFloat32Array, shortcut: PackedVector3Array) -> Array:
+	var n := track.size()
+	var via := PackedVector3Array()
+	for i in range(0, 22): via.append(track[i])
+	via.append_array(shortcut)
+	for i in range(97, n): via.append(track[i])
+	var via_speeds := C.speeds_from_curvature(via, 22.0, 11.0, 50.0)
+	# Gently over the joins, where the shortcut leaves and rejoins the loop.
+	var join_b := 22 + shortcut.size()
+	for i in via.size():
+		if absi(i - 22) < 5 or absi(i - join_b) < 5:
+			via_speeds[i] = minf(via_speeds[i], 13.0)
+	return [
+		{"waypoints": track, "speeds": speeds, "spawn": C.car_xform(track[200], track[201] - track[200])},
+		{"waypoints": track, "speeds": speeds, "spawn": C.car_xform(track[540], track[541] - track[540])},
+		{"waypoints": via, "speeds": via_speeds, "spawn": C.car_xform(shortcut[shortcut.size() / 2], shortcut[shortcut.size() / 2 + 1] - shortcut[shortcut.size() / 2])},
+	]
 
 
 ## Elbow arms on a saguaro trunk (`stalk`: trunk centre, scaled): at 45-70 % of its height, spread
