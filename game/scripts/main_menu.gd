@@ -402,6 +402,7 @@ func _build_settings(root: Control) -> void:
 	graphics.add_child(Game.make_graphics_options())
 	var driving: VBoxContainer = page.call("Fahrhilfen")
 	for key in [["tcs", "Traktionskontrolle"], ["abs", "ABS"], ["automatic", "Automatikgetriebe"],
+			["manual_clutch", "Kupplung selbst treten (Schaltgetriebe; ohne Kupplung würgt der Motor ab)"],
 			["steering_assist", "Lenkhilfe (glättet Tastatur und begrenzt Lenkeinschlag bei Tempo)"], ["traffic", "KI-Verkehr"],
 			["career", "Karriere: Aktivitäten bringen Geld, Tanken und Reparaturen kosten"]]:
 		driving.add_child(Game.make_driving_option(key[0], key[1]))

@@ -35,6 +35,10 @@ struct WorldStats {
     bool finite = true;            ///< False if any node position became NaN/inf.
 };
 
+/// Stops the physics worker threads shared by all worlds (e.g. before a plugin is unloaded).
+/// The next multi-body step starts them again. Must not run concurrently with World::step().
+void shutdownPhysicsThreads();
+
 class World {
 public:
     explicit World(WorldSettings s = {}) : settings_(s) {}
@@ -67,20 +71,26 @@ public:
 private:
     void accumulateAerodynamicForces(SoftBody& b);
     void integrateBody(SoftBody& b);
-    std::size_t collideBody(SoftBody& b);
+    std::size_t collideBody(SoftBody& b, std::vector<const StaticCollider*>& candidates);
     std::size_t collideBodies();
     std::size_t collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody);
-    std::size_t collideSelfPanels(SoftBody& body, const std::vector<Vec3>& previous);
+    std::size_t collideSelfPanels(SoftBody& body, const std::vector<Vec3>& previous, std::size_t& candidates) const;
 
     WorldSettings settings_;
     std::vector<SoftBody> bodies_;
     std::vector<StaticCollider> colliders_;
-    std::vector<const StaticCollider*> candidates_;  ///< Broadphase scratch list
     std::uint64_t steps_ = 0;
     std::size_t lastContacts_ = 0;
     std::size_t lastBodyContacts_ = 0;
     std::size_t lastSelfContacts_ = 0, lastSelfContactCandidates_ = 0;
-    std::vector<Vec3> selfContactPrevious_; ///< Reused only for bodies with active panel contact.
+    /// Per-body scratch of the parallel part of a step (bodies are independent there).
+    struct BodyScratch {
+        std::vector<Vec3> selfContactPrevious;  ///< Only for bodies with active panel contact.
+        std::vector<const StaticCollider*> candidates;
+        std::size_t selfContacts = 0, selfCandidates = 0, contacts = 0;
+    };
+    std::vector<BodyScratch> scratch_;
+    std::vector<std::size_t> awakeStep_;
     struct BodyContactCandidate {
         real dist = -1e9;
         Vec3 n{};

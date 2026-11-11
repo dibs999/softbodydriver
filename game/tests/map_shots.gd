@@ -72,6 +72,11 @@ func _setup() -> void:
 			var f := v.split_floats(",")
 			views.append([Vector3(f[0], f[1], f[2]), Vector3(f[3], f[4], f[5])])
 	var p: Vector3 = scene.player.get_position_ws()
+	# CAR_VIEWS=dx,dy,dz,tx,ty,tz;...: camera and target relative to the player car.
+	if OS.has_environment("CAR_VIEWS"):
+		for v in OS.get_environment("CAR_VIEWS").split(";"):
+			var f := v.split_floats(",")
+			views.append([p + Vector3(f[0], f[1], f[2]), p + Vector3(f[3], f[4], f[5])])
 	views.append([p + Vector3(-9, 4.5, 6), p + Vector3(6, 0.5, -2)])
 	views.append([p + Vector3(0, 160, 120), p + Vector3(0, 0, -40)])
 	views.append([p + Vector3(-6, 1.6, 0), p + Vector3(40, 18, -25)])

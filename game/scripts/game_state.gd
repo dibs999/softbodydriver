@@ -8,7 +8,7 @@ signal graphics_preset_changed
 signal driving_help_changed(visible: bool)
 signal driving_setting_changed(key: String, enabled: bool)
 
-const DRIVING_SETTINGS := ["tcs", "abs", "automatic", "steering_assist", "traffic", "career"]
+const DRIVING_SETTINGS := ["tcs", "abs", "automatic", "manual_clutch", "steering_assist", "traffic", "career"]
 # An explicit path also allows isolated profile tests without touching the player profile.
 var settings_config_path := GRAPHICS_CONFIG
 
@@ -64,6 +64,7 @@ var settings := {
 	"tcs": true,
 	"abs": true,
 	"automatic": true,
+	"manual_clutch": false,      # manual gearbox without the automatic clutch: the engine can stall
 	"steering_assist": true,     # speed sensitive steering limit
 	"traffic": true,             # AI cars on the map
 	"career": false,             # activities pay, fuel and repairs cost money
@@ -480,6 +481,24 @@ static func _beacon_texture() -> ImageTexture:
 	return _beacon_tex
 
 
+## glTF KHR_texture_transform on a material whose only texture is the normal map is lost on import
+## (Godot reads the transform from the base colour texture). Restore the tiling by name prefix.
+static func _apply_texture_scale(node: Node, scales: Dictionary) -> void:
+	if scales.is_empty():
+		return
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh:
+		var mesh: Mesh = (node as MeshInstance3D).mesh
+		for i in mesh.get_surface_count():
+			var m := mesh.surface_get_material(i) as BaseMaterial3D
+			if m == null:
+				continue
+			for key: String in scales:
+				if m.resource_name.begins_with(key):
+					var sc: Array = scales[key]
+					m.uv1_scale = Vector3(float(sc[0]), float(sc[1]), 1.0)
+	for child in node.get_children():
+		_apply_texture_scale(child, scales)
+
 static func _prop_mat(key: String, color: Color, rough := 0.6, metallic := 0.0) -> StandardMaterial3D:
 	if not _prop_mats.has(key):
 		var m := StandardMaterial3D.new()
@@ -816,6 +835,7 @@ func apply_visual_model(v: SBVehicle, info: Dictionary) -> void:
 		var axle_mid := float(info["rear_axle"]) + float(info.get("wheelbase", 2.62)) * 0.5
 		offset.x = axle_mid - (wheel_bounds[0].x + wheel_bounds[1].x) * 0.5 * scale
 	var xf := Transform3D(rot.scaled(Vector3(scale, scale, scale)), offset)
+	_apply_texture_scale(root, cfg.get("textureScale", {}))
 	var overrides := {}
 	var lib := material_library()
 	for k in cfg.get("materialOverrides", {}).keys():

@@ -94,7 +94,7 @@ bool barycentric(const Vec3& point, const Vec3& a, const Vec3& b, const Vec3& c,
 }
 } // namespace
 
-std::size_t World::collideSelfPanels(SoftBody& body, const std::vector<Vec3>& previous) {
+std::size_t World::collideSelfPanels(SoftBody& body, const std::vector<Vec3>& previous, std::size_t& candidates) const {
     auto& pos = body.positions();
     auto& vel = body.velocities();
     const auto& inv = body.invMasses();
@@ -117,7 +117,7 @@ std::size_t World::collideSelfPanels(SoftBody& body, const std::vector<Vec3>& pr
             if (!overlap(panelLo, panelHi, triLo, triHi)) continue;
             for (const auto& point : panel.points) {
                 if (point.triangle >= 0 && body.triangles()[static_cast<std::size_t>(point.triangle)].broken) continue;
-                ++lastSelfContactCandidates_;
+                ++candidates;
                 real inversePointMass = 0;
                 Vec3 pointPos, pointPrevious, pointVelocity;
                 bool collidable = false;

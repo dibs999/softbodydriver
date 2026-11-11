@@ -8,6 +8,9 @@ uniform sampler2D grass : source_color, filter_linear_mipmap_anisotropic, repeat
 uniform sampler2D soil_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float width = 6.4;
 uniform float greenery = 0.7;
+// Track length in UV.y units (metres / 9). Above zero, both ends fade out over a few metres so a
+// branch blends into the track it leaves instead of ending in a hard polygon edge.
+uniform float length_uv = 0.0;
 global uniform float road_wetness;
 
 varying vec3 world_pos;
@@ -78,7 +81,10 @@ void fragment() {
 	vec3 track_earth = earth * mix(1.0, 0.74 * grooves, worn) * (1.0 + 0.16 * lip);
 	track_earth = mix(track_earth, track_earth * 0.6, stone_shadow * 0.6 * (1.0 - worn));
 	track_earth = mix(track_earth, rock, stone * (1.0 - worn * 0.8));
-	vec3 col = mix(track_earth, plants, clamp(max(center, shoulder * 0.9), 0.0, 1.0));
+	// The crown is painted grass; the shoulders turn transparent so the terrain's own grass shows
+	// through (no darker band with a straight mesh edge, and a branch's shoulder never covers the
+	// ruts of the track it leaves).
+	vec3 col = mix(track_earth, plants, clamp(center, 0.0, 1.0));
 	// Puddles in the ruts.
 	float wet = clamp(road_wetness, 0.0, 1.0);
 	float pool_n = fbm(wp * 0.22 + vec2(3.0, 9.0)) * 0.75 + vnoise(wp * 1.4) * 0.25;
@@ -90,5 +96,11 @@ void fragment() {
 	NORMAL_MAP_DEPTH = 0.45;
 	ROUGHNESS = mix(mix(0.98, 0.6, wet * worn), 0.06, pool);
 	SPECULAR = mix(0.5, 0.65, pool);
-	ALPHA = 1.0 - smoothstep(0.40 + edge_noise * 0.02, 0.5, abs(UV.x - 0.5));
+	float ragged = edge_noise * 0.07 + (vnoise(wp * 2.6) - 0.5) * 0.05;
+	float alpha = (1.0 - smoothstep(0.38 + ragged, 0.5, abs(UV.x - 0.5))) * (1.0 - shoulder);
+	if (length_uv > 0.0) {
+		float from_end = min(UV.y, length_uv - UV.y) * 9.0;   // metres to the nearer end
+		alpha *= smoothstep(1.0, 8.0, from_end + edge_noise * 3.0);
+	}
+	ALPHA = alpha;
 }

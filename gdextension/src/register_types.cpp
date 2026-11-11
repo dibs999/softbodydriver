@@ -8,6 +8,7 @@
 #include "sb_prop.h"
 #include "sb_vehicle.h"
 #include "sb_world.h"
+#include "sbcore/world.hpp"
 
 using namespace godot;
 
@@ -19,7 +20,9 @@ void initialize_softbodydriver(ModuleInitializationLevel p_level) {
 }
 
 void uninitialize_softbodydriver(ModuleInitializationLevel p_level) {
-    (void)p_level;
+    // Join the physics worker threads while the library is still loaded (all worlds have
+    // stopped their physics threads by now).
+    if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) sb::shutdownPhysicsThreads();
 }
 
 extern "C" {
