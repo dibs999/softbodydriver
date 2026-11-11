@@ -669,9 +669,112 @@ static func _plaza(parent: Node3D, world: SBWorld, center: Vector3, station: boo
 		C.label3d(parent, "U   /   NORDPLATZ", p + Vector3(0, 4.67, -5.85), PI, 0.70)
 		C.label3d(parent, "U   /   NORDPLATZ", p + Vector3(0, 4.67, 5.85), 0.0, 0.70)
 	else:
-		C.box(parent, world, p + Vector3(0, 0.72, 0), Vector3(4.0, 0.72, 4.0), Vector3.ZERO, concrete)
-		for i in 3:
-			C.box(parent, world, p + Vector3.UP * (2.1 + i * 2.3), Vector3(1.4, 1.15, 1.35), Vector3(0, i * 0.42, 0.13), accent, 0.8, false)
+		_fountain(parent, world, p)
+
+
+## Market fountain: a round sandstone basin (9 m) with a moulded rim, a water surface, a column with
+## two bowls that spill into each other, a fine spray, and benches round it facing the water. It
+## replaced an abstract sculpture of three boxes.
+static func _fountain(parent: Node3D, world: SBWorld, p: Vector3) -> void:
+	var sandstone := C.noise_mat(Color(0.56, 0.49, 0.40), 0.10, 3.0, 0.85)
+	var water := StandardMaterial3D.new()
+	water.albedo_color = Color(0.13, 0.24, 0.27, 0.86)
+	water.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	water.roughness = 0.06
+	water.metallic = 0.25
+	var falling := StandardMaterial3D.new()
+	falling.albedo_color = Color(0.70, 0.80, 0.86, 0.16)
+	falling.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	falling.roughness = 0.1
+	var add := func(mesh: Mesh, at: Vector3, mat: Material) -> void:
+		var mi := MeshInstance3D.new()
+		mi.mesh = mesh
+		mi.material_override = mat
+		mi.position = at
+		parent.add_child(mi)
+	var cyl := func(r_top: float, r_bottom: float, h: float, segs := 32) -> CylinderMesh:
+		var c := CylinderMesh.new()
+		c.top_radius = r_top
+		c.bottom_radius = r_bottom
+		c.height = h
+		c.radial_segments = segs
+		return c
+	var ring := func(inner: float, outer: float) -> TorusMesh:
+		var t := TorusMesh.new()
+		t.inner_radius = inner
+		t.outer_radius = outer
+		t.rings = 48
+		t.ring_segments = 12
+		return t
+	# Basin: a low floor, a round wall with a moulded rim (rings, so the water shows), water inside.
+	add.call(cyl.call(4.45, 4.55, 0.24), p + Vector3.UP * 0.12, sandstone)
+	add.call(ring.call(4.15, 4.65), p + Vector3.UP * 0.42, sandstone)
+	add.call(ring.call(4.3, 4.78), p + Vector3.UP * 0.66, sandstone)
+	add.call(cyl.call(4.32, 4.32, 0.02), p + Vector3.UP * 0.55, water)
+	# Column with a wide lower bowl and a smaller upper one, water falling from each rim.
+	add.call(cyl.call(0.32, 0.45, 2.4, 16), p + Vector3.UP * 1.7, sandstone)
+	add.call(cyl.call(1.7, 0.35, 0.45, 24), p + Vector3.UP * 2.5, sandstone)
+	add.call(ring.call(1.58, 1.82), p + Vector3.UP * 2.74, sandstone)
+	add.call(cyl.call(1.62, 1.62, 0.02, 24), p + Vector3.UP * 2.75, water)
+	add.call(cyl.call(0.2, 0.28, 1.2, 12), p + Vector3.UP * 3.3, sandstone)
+	add.call(cyl.call(0.9, 0.2, 0.3, 20), p + Vector3.UP * 3.95, sandstone)
+	add.call(ring.call(0.82, 0.98), p + Vector3.UP * 4.11, sandstone)
+	add.call(cyl.call(0.86, 0.86, 0.02, 20), p + Vector3.UP * 4.12, water)
+	var finial := SphereMesh.new()
+	finial.radius = 0.22
+	finial.height = 0.44
+	add.call(finial, p + Vector3.UP * 4.35, sandstone)
+	# Curtains of water from the bowl rims (thin translucent tubes).
+	add.call(cyl.call(1.72, 1.82, 1.95, 32), p + Vector3.UP * 1.52, falling)
+	add.call(cyl.call(0.92, 1.0, 1.3, 24), p + Vector3.UP * 3.38, falling)
+	# Spray where the water lands.
+	var spray := CPUParticles3D.new()
+	spray.amount = 70
+	spray.lifetime = 0.9
+	spray.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	spray.emission_ring_radius = 1.8
+	spray.emission_ring_inner_radius = 1.6
+	spray.emission_ring_height = 0.05
+	spray.emission_ring_axis = Vector3.UP
+	spray.direction = Vector3.UP
+	spray.spread = 35.0
+	spray.initial_velocity_min = 0.4
+	spray.initial_velocity_max = 1.2
+	spray.gravity = Vector3(0, -4.0, 0)
+	spray.scale_amount_min = 0.5
+	spray.scale_amount_max = 1.0
+	var drop := SphereMesh.new()
+	drop.radius = 0.03
+	drop.height = 0.06
+	drop.radial_segments = 4
+	drop.rings = 2
+	var drop_mat := StandardMaterial3D.new()
+	drop_mat.albedo_color = Color(0.9, 0.95, 1.0, 0.55)
+	drop_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	drop_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	drop.material = drop_mat
+	spray.mesh = drop
+	spray.position = p + Vector3.UP * 0.58
+	spray.visibility_range_end = 70.0
+	parent.add_child(spray)
+	if world:
+		# An octagon of boxes approximates the round basin wall; the column stands in the middle.
+		for k in 8:
+			var a := TAU * k / 8.0
+			world.add_box(p + Vector3(cos(a), 0, sin(a)) * 4.3 + Vector3.UP * 0.37, Vector3(0.3, 0.37, 1.85), Vector3(0, -a, 0), 0.7)
+		world.add_box(p + Vector3.UP * 1.5, Vector3(0.45, 1.5, 0.45), Vector3.ZERO, 0.7)
+	# Benches round the fountain, facing the water.
+	var wood := C.noise_mat(Color(0.42, 0.28, 0.16), 0.1, 5.0, 0.8)
+	for k in 4:
+		var a := TAU * k / 4.0 + PI * 0.25
+		var out := Vector3(cos(a), 0, sin(a))
+		var at := p + out * 7.5
+		var yaw := atan2(out.x, out.z)
+		var along := Vector3(out.z, 0, -out.x)
+		C.box(parent, world, at + Vector3.UP * 0.45, Vector3(0.9, 0.04, 0.22), Vector3(0, yaw, 0), wood, 0.6)
+		C.box(parent, null, at + out * 0.22 + Vector3.UP * 0.75, Vector3(0.9, 0.22, 0.03), Vector3(0, yaw, 0), wood, 0.6, false)
+		for leg: float in [-0.75, 0.75]:
+			C.box(parent, null, at + along * leg + Vector3.UP * 0.21, Vector3(0.04, 0.21, 0.2), Vector3(0, yaw, 0), C.mat(Color(0.2, 0.21, 0.22), 0.5, 0.6), 0.6, false)
 
 
 ## Closed kerb lane (street line, block, side) of the roadworks: no parked cars there.
