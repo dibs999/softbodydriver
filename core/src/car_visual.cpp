@@ -1252,38 +1252,68 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         const real xf = L;
         const real hwF = prof.halfW(L - 0.04);
         const bool sport = bd.style == BodyStyle::Coupe;
-        // Headlight units: a narrow dark bezel round a chrome reflector, two projectors with lit
-        // lenses and an L-shaped daytime running light along the lower and outer edge. 17 cm tall
-        // (12 on coupes) and set a little higher on the face; they used to be 12 cm dark slots
-        // with a thin bright strip, which read as air vents rather than lamps.
+        // Lamp strips that follow the plan outline of the nose and tail round into the corner:
+        // flat across the face, then yawed segment by segment along the corner radius. A single
+        // flat box either sat far inboard (the units were small squares beside the plate) or
+        // was cut by the curving body and showed saw-toothed ends.
+        auto lampStrip = [&](bool front, real sg, real zIn, real zOut, int segments,
+                             const std::function<void(const Vec3& centre, const Vec3& n, const Vec3& t, real halfLen, int k)>& part) {
+            const real rc = front ? prof.b.cornerRadiusFront : prof.b.cornerRadiusRear;
+            const real wFace = (front ? prof.halfW(L - rc) : prof.halfW(rc));
+            const real flat = wFace - rc;   // |z| up to here the face is straight
+            auto faceAt = [&](real az, Vec3& n) {
+                const real za = std::abs(az);
+                real x, nx = 1.0, nz = 0.0;
+                if (za <= flat) {
+                    x = front ? L : 0.0;
+                } else {
+                    const real dz = std::min(za - flat, rc * 0.98);
+                    const real dx = std::sqrt(std::max<real>(0.0, rc * rc - dz * dz));
+                    x = front ? (L - rc + dx) : (rc - dx);
+                    nx = dx / rc;
+                    nz = dz / rc;
+                }
+                n = normalize(Vec3{front ? nx : -nx, 0.0, sg * nz});
+                return x;
+            };
+            for (int k = 0; k < segments; ++k) {
+                const real z0 = zIn + (zOut - zIn) * k / segments, z1 = zIn + (zOut - zIn) * (k + 1) / segments;
+                Vec3 n0, n1, n;
+                const Vec3 p0{faceAt(z0, n0), 0.0, z0}, p1{faceAt(z1, n1), 0.0, z1};
+                faceAt(0.5 * (z0 + z1), n);
+                const Vec3 centre = (p0 + p1) * 0.5;
+                const Vec3 t = normalize(p1 - p0);
+                part(centre, n, t, 0.5 * length(p1 - p0), k);
+            }
+        };
+        // Headlight units: dark bezel, chrome reflector across the whole unit, a daytime-running
+        // strip along the lower edge and two projector lenses on the face. 17 cm tall (12 on
+        // coupes), from 40 % of the half width round most of the corner.
         const real housingH = sport ? 0.06 : 0.085;
         // The top stays just under the nose line: above it the face already curves back into the
         // bonnet and the paint would cover the unit's upper corners.
         const real yH = bd.noseHeight - 0.012 - housingH;
-        const real lightW = std::min<real>(0.23, 0.33 * hwF);
+        const real rcF = prof.b.cornerRadiusFront;
+        const real zLampIn = 0.40 * hwF, zLampOut = hwF - 0.18 * rcF;
         for (int side = 0; side < 2; ++side) {
             const real sg = side ? 1.0 : -1.0;
-            // Outer end kept clear of the rounded corner, where the body surface curves back.
-            const real zc = sg * (hwF - lightW - 0.085);
-            // Lens yawed to follow the rounded corner.
-            const Vec3 ax = normalize(Vec3{1.0, 0.0, sg * 0.35});
-            const Vec3 az = normalize(cross(ax, Vec3{0, 1, 0})) * -1.0;
-            const real housing = housingH;
-            const Vec3 c0{xf - 0.035, yH, zc};
-            vb.box("grille", c0, {0.030, housing, lightW + 0.015}, bodyNodes, ax, {0, 1, 0}, az);                       // bezel
-            vb.box("chrome", c0 + ax * 0.026, {0.008, housing - 0.012, lightW - 0.006}, bodyNodes, ax, {0, 1, 0}, az);  // reflector
-            // Daytime running light: along the bottom and up the outer end.
-            vb.box("headlight", c0 + ax * 0.036 + Vec3{0, -housing + 0.018, 0}, {0.006, 0.008, lightW - 0.02}, bodyNodes, ax, {0, 1, 0}, az);
-            vb.box("headlight", c0 + ax * 0.036 + az * (-sg * (lightW - 0.02)) + Vec3{0, -0.006, 0}, {0.006, housing - 0.03, 0.008}, bodyNodes, ax, {0, 1, 0}, az);
-            for (real lens : {-0.42, 0.36}) {
-                const Vec3 center = c0 + ax * 0.034 + az * (lens * lightW) + Vec3{0, 0.012, 0};
-                vb.tube("grille", center - ax * 0.004, center + ax * 0.006, housing * 0.52, bodyNodes, 20);
-                vb.tube("chrome", center + ax * 0.006, center + ax * 0.012, housing * 0.44, bodyNodes, 20);
-                vb.tube("headlight", center + ax * 0.012, center + ax * 0.018, housing * 0.30, bodyNodes, 20);
-            }
+            lampStrip(true, sg, sg * zLampIn, sg * zLampOut, 6, [&](const Vec3& c, const Vec3& n, const Vec3& t, real hl, int k) {
+                const Vec3 up{0, 1, 0};
+                const Vec3 base = c + Vec3{0, yH, 0};
+                const real len = hl * 1.12;   // overlap: no gaps at the joints
+                vb.box("grille", base - n * 0.020, {0.026, housingH, len}, bodyNodes, n, up, t);
+                vb.box("chrome", base + n * 0.004, {0.006, housingH - 0.012, len * 0.99}, bodyNodes, n, up, t);
+                vb.box("headlight", base + n * 0.011 + up * (-housingH + 0.018), {0.004, 0.008, len * 0.99}, bodyNodes, n, up, t);
+                if (k == 1 || k == 3) {
+                    const Vec3 lc = base + up * 0.012;
+                    vb.tube("grille", lc + n * 0.004, lc + n * 0.012, housingH * 0.52, bodyNodes, 20);
+                    vb.tube("chrome", lc + n * 0.012, lc + n * 0.017, housingH * 0.44, bodyNodes, 20);
+                    vb.tube("headlight", lc + n * 0.017, lc + n * 0.022, housingH * 0.30, bodyNodes, 20);
+                }
+            });
         }
         // Grille between the headlights.
-        const real gw = std::max<real>(0.18, hwF - 2.0 * lightW - 0.14);
+        const real gw = std::max<real>(0.16, zLampIn - 0.05);
         vb.box("grille", {xf - 0.02, yH - 0.03, 0.0}, {0.03, 0.065, gw}, bodyNodes);
         for (int slat = 0; slat < 3; ++slat)
             vb.box("trim", {xf + 0.014, yH - 0.065 + slat * 0.032, 0.0}, {0.010, 0.005, gw * 0.94}, bodyNodes);
@@ -1302,24 +1332,32 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             vb.tube("trim", lamp - Vec3{0.012, 0, 0}, lamp + Vec3{0.014, 0, 0}, 0.043, frontNodes, 20);
             vb.tube("chrome", lamp + Vec3{0.015, 0, 0}, lamp + Vec3{0.019, 0, 0}, 0.027, frontNodes, 20);
         }
-        // Tail lights.
+        // Tail lights: housing, red lens with a brighter brake band, following the tail round the
+        // corner like the headlights; a white reversing lamp on the inner segment.
         const real hwR = prof.halfW(0.04);
         const real yT = bd.tailHeight - 0.11;
-        const real tw = std::min<real>(0.22, 0.34 * hwR);
+        const real rcR = prof.b.cornerRadiusRear;
+        const real th = sport ? 0.045 : 0.068;
         for (int side = 0; side < 2; ++side) {
             const real sg = side ? 1.0 : -1.0;
-            const real zc = sg * (hwR - tw - 0.04);
-            const Vec3 ax = normalize(Vec3{1.0, 0.0, -sg * 0.3});
-            const Vec3 az = normalize(cross(ax, Vec3{0, 1, 0})) * -1.0;
-            // Tail lamp: dark housing, a red lens over most of it with a lighter brake-light band
-            // and a white reversing lamp at the inner end (it was two thin red strips).
             const auto& tailNodes = yT > lidLatchY ? lidNodes : bodyNodes;
-            const real th = sport ? 0.042 : 0.062;
-            vb.box("grille", {0.009, yT, zc}, {0.023, th, tw + 0.015}, tailNodes, ax, {0, 1, 0}, az);
-            vb.box("taillight", Vec3{0.009, yT, zc} - ax * 0.026, {0.006, th - 0.01, tw - 0.004}, tailNodes, ax, {0, 1, 0}, az);
-            vb.box("headlight", Vec3{0.009, yT - th * 0.35, zc} - ax * 0.031 + az * (sg * (tw - 0.05)), {0.004, th * 0.4, 0.04}, tailNodes, ax, {0, 1, 0}, az);
-            for (real stripe : {-0.015, 0.017})
-                vb.box("taillight", Vec3{0.009, yT + stripe, zc} - ax * 0.032, {0.004, 0.006, tw - 0.012}, tailNodes, ax, {0, 1, 0}, az);
+            lampStrip(false, sg, sg * (0.46 * hwR), sg * (hwR - 0.15 * rcR), 5, [&](const Vec3& c, const Vec3& n, const Vec3& t, real hl, int k) {
+                const Vec3 up{0, 1, 0};
+                const Vec3 base = c + Vec3{0, yT, 0};
+                const real len = hl * 1.12;
+                vb.box("grille", base - n * 0.016, {0.022, th, len}, tailNodes, n, up, t);
+                if (k == 0) {
+                    vb.box("taillight", base + n * 0.007 + up * (th * 0.35), {0.005, th * 0.55, len * 0.99}, tailNodes, n, up, t);
+                    vb.box("headlight", base + n * 0.007 + up * (-th * 0.55), {0.005, th * 0.30, len * 0.99}, tailNodes, n, up, t);
+                } else {
+                    vb.box("taillight", base + n * 0.007, {0.005, th - 0.010, len * 0.99}, tailNodes, n, up, t);
+                }
+                // Thin dark dividers break the lens into chambers like a real cluster.
+                for (real stripe : {-0.33, 0.30})
+                    vb.box("grille", base + n * 0.0125 + up * (stripe * th), {0.002, 0.0035, len * 0.99}, tailNodes, n, up, t);
+                if (k > 0)
+                    vb.box("grille", base + n * 0.0125 - t * (hl * 0.98), {0.002, th - 0.012, 0.0035}, tailNodes, n, up, t);
+            });
         }
         vb.box("plate", {-0.020, yT - 0.145, 0.0}, {0.013, 0.046, 0.23}, yT - 0.145 > lidLatchY ? lidNodes : bodyNodes);
         // Lettering anchors: the rear plate's outer face, the front plate region's centre.

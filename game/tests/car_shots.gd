@@ -85,6 +85,10 @@ func _setup() -> void:
 		[c + f * (L * 0.30) + r * 1.9 + Vector3.UP * 0.45, c + f * (L * 0.30) + r * 0.7 + Vector3.UP * 0.33],
 		[eye, eye + f * 3.0 - Vector3.UP * 0.35],
 	]
+	# CLOSE=1: front and rear lamp close-ups as two extra views.
+	if OS.get_environment("CLOSE") == "1":
+		views.append([c + f * (L * 0.5 + 1.5) + r * 0.9 + Vector3.UP * 0.75, c + f * (L * 0.5) + r * 0.45 + Vector3.UP * 0.55])
+		views.append([c - f * (L * 0.5 + 1.5) - r * 0.9 + Vector3.UP * 0.85, c - f * (L * 0.5) - r * 0.45 + Vector3.UP * 0.65])
 
 func _process(_d: float) -> bool:
 	frame += 1
