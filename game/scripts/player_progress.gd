@@ -27,6 +27,12 @@ static func _valid(data: Variant) -> bool:
 		if not career is Dictionary: return false
 		for key in ["money", "earned", "spent"]:
 			if not _number(career.get(key, 0.0)): return false
+		if career.has("contracts"):
+			if not career["contracts"] is Dictionary: return false
+			for c in career["contracts"].values():
+				if not c is Dictionary: return false
+				for key in ["mode", "medal", "bonus", "serial"]:
+					if not _number(c.get(key, 0)): return false
 		if career.has("owned"):
 			if not career["owned"] is Array: return false
 			for id in career["owned"]:
@@ -210,6 +216,37 @@ func buy_car(car_id: String, price: float) -> bool:
 	var owned: Array = career.get("owned", []).duplicate()
 	owned.append(car_id)
 	career["owned"] = owned
+	return _commit(previous)
+
+## The map's open contract ({} if none issued yet).
+func get_contract(map_id: String) -> Dictionary:
+	var c: Dictionary = (_career().get("contracts", {}) as Dictionary).get(map_id, {})
+	if c.is_empty(): return {}
+	# JSON keeps every number as a float: hand out the integer fields as integers again.
+	return {"mode": int(c.get("mode", 0)), "medal": int(c.get("medal", 1)), "bonus": float(c.get("bonus", 0.0)), "serial": int(c.get("serial", 0))}
+
+func contracts_done() -> int:
+	return int(_career().get("contracts_done", 0))
+
+func set_contract(map_id: String, contract: Dictionary) -> bool:
+	if read_only: return false
+	var previous := _data.duplicate(true)
+	var all: Dictionary = (_career().get("contracts", {}) as Dictionary).duplicate(true)
+	all[map_id] = contract.duplicate()
+	_career()["contracts"] = all
+	return _commit(previous)
+
+## Pay a fulfilled contract's bonus, count it and put the next contract up, in one save.
+func complete_contract(map_id: String, bonus: float, next: Dictionary) -> bool:
+	if read_only or not is_finite(bonus) or bonus < 0.0: return false
+	var previous := _data.duplicate(true)
+	var career := _career()
+	career["money"] = float(career.get("money", 0.0)) + bonus
+	career["earned"] = float(career.get("earned", 0.0)) + bonus
+	career["contracts_done"] = int(career.get("contracts_done", 0)) + 1
+	var all: Dictionary = (career.get("contracts", {}) as Dictionary).duplicate(true)
+	all[map_id] = next.duplicate()
+	career["contracts"] = all
 	return _commit(previous)
 
 func reset_career() -> bool:

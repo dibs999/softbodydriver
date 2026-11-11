@@ -10,7 +10,7 @@ func _initialize() -> void:
 
 func run() -> void:
 	var GameState: Script = load("res://scripts/game_state.gd")
-	var path := "user://settings_test_%s.cfg" % Time.get_ticks_usec()
+	var path := "user://settings_test_%s.cfg" % ("%d_%d" % [Time.get_ticks_usec(), randi()])
 	var first: Node = GameState.new()
 	first.settings_config_path = path
 	var config := ConfigFile.new()

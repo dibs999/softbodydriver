@@ -16,7 +16,11 @@ func tick() -> void:
 func run() -> void:
 	var game := root.get_node("Game")
 	var profile := Profile.new()
-	profile.profile_path = "user://flow_test_%s.json" % Time.get_ticks_usec()
+	# A fresh profile every run: on a fast machine the microsecond clock alone repeats between runs
+	# and picked up a leftover profile (with a braking record) from an aborted earlier run.
+	profile.profile_path = "user://flow_test_%d_%d.json" % [Time.get_ticks_usec(), randi()]
+	for suffix in ["", ".bak", ".tmp", ".bak.tmp"]:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(profile.profile_path + suffix))
 	game.progress = profile
 	game.selected_car = "res://cars/kestrel_hatch.car.json"
 	game.selected_map = "proving_grounds"
@@ -82,12 +86,19 @@ func run() -> void:
 	check(not reloaded.get_best_braking("kestrel_hatch").is_empty(), "Braking result survives profile reload")
 	for suffix in ["", ".bak", ".tmp", ".bak.tmp"]:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(profile.profile_path + suffix))
+	# Generator-fed audio (rain, vehicle) sometimes hung the engine on quit: the audio thread kept
+	# mixing a generator playback during teardown (gdb: spinning in the generator's mix loop while
+	# the main thread joins it). Stop every player, 2D and 3D, and give the mixer a few frames to
+	# let go of the playbacks before anything is freed.
+	var players: Array[Node] = scene.find_children("*", "AudioStreamPlayer", true, false)
+	players.append_array(scene.find_children("*", "AudioStreamPlayer3D", true, false))
+	for player in players:
+		player.stop()
+		player.stream = null
+	for i in 3: await process_frame
 	if scene.audio: scene.audio.free()
-	# Generator-fed audio (rain, vehicle) sometimes hung the engine on quit when it was torn down
-	# with the scene; stop and free every player first.
-	for player in scene.find_children("*", "AudioStreamPlayer", true, false):
-		(player as AudioStreamPlayer).stop()
-		player.free()
+	for player in players:
+		if is_instance_valid(player): player.free()
 	scene.queue_free()
 	await process_frame
 	await process_frame

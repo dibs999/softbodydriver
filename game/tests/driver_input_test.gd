@@ -8,7 +8,7 @@ func _initialize() -> void:
 func run() -> void:
 	var state := root.get_node("Game")
 	var saved_path: String = state.settings_config_path
-	var path := "user://driver_input_%s.cfg" % Time.get_ticks_usec()
+	var path := "user://driver_input_%s.cfg" % ("%d_%d" % [Time.get_ticks_usec(), randi()])
 	state.settings_config_path = path
 	state.settings["traffic"] = false
 	state.settings["automatic"] = true

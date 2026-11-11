@@ -488,6 +488,9 @@ func _on_car_selected(i: int) -> void:
 			progress_info.text += "\nMedaillen: %d Gold · %d Silber · %d Bronze" % [tally[2], tally[1], tally[0]]
 		if Game.settings.get("career", false):
 			progress_info.text += "\nKarriere · Kontostand %s" % preload("res://scripts/career.gd").money_text(Game.progress.get_money())
+			var contract: Dictionary = Game.progress.get_contract(Game.selected_map)
+			if not contract.is_empty():
+				progress_info.text += "\nAuftrag auf dieser Karte: " + Career.contract_text(contract)
 		if Game.progress.read_only:
 			progress_info.text = "Fortschritt kann nicht gespeichert werden. Das vorhandene Profil bleibt erhalten."
 	_update_start_button()
@@ -508,6 +511,7 @@ func _on_car_selected(i: int) -> void:
 func _on_map_selected(i: int) -> void:
 	Game.selected_map = Game.MAPS[i]["id"]
 	map_info.text = "KARTE: %s\n%s" % [Game.MAPS[i]["name"], Game.MAPS[i]["description"]]
+	if _career_on(): _refresh_garage()   # the account line names this map's contract
 
 
 func _on_start() -> void:

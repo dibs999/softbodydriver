@@ -169,6 +169,12 @@ func _draw() -> void:
 		var mw := _width(money, 12) + 22
 		draw_style_box(_chip_style, Rect2(canvas.x - 16 - mw, 294.0, mw, 24))
 		_right(Vector2(canvas.x - 27, 310.0), money, 12, TEXT)
+		var contract: Dictionary = Game.progress.get_contract(Game.selected_map)
+		if not contract.is_empty():
+			var line := "Auftrag  " + preload("res://scripts/career.gd").contract_text(contract)
+			var cw := _width(line, 12) + 22
+			draw_style_box(_chip_style, Rect2(canvas.x - 16 - cw, 324.0, cw, 24))
+			_right(Vector2(canvas.x - 27, 340.0), line, 12, AMBER)
 	if not cockpit or not in_dash_instruments:
 		_gauge(Vector2(canvas.x - 152, canvas.y - 146))
 	_damage_app(Vector2(16, canvas.y - 276))

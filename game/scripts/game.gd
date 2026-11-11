@@ -172,6 +172,7 @@ func _ready() -> void:
 	activity.spawn_opponents = _spawn_opponents
 	activity.release_opponents = _release_opponents
 	activity.spawn_police = _spawn_police
+	_ensure_contract()
 	hud.activity = activity
 	minimap.activity = activity
 	for v in vehicles:
@@ -212,11 +213,28 @@ func career_charge(amount: float, what: String) -> bool:
 	return false
 
 
+## Career: make sure this map has an open contract the map can actually offer.
+func _ensure_contract() -> void:
+	if not Game.settings.get("career", false) or not activity: return
+	var modes: Array = activity.available_modes()
+	var c: Dictionary = Game.progress.get_contract(Game.selected_map)
+	if c.is_empty() or not int(c.get("mode", 0)) in modes:
+		c = Career.make_contract(Game.selected_map, modes, int(c.get("serial", -1)) + 1, Game.progress.contracts_done())
+		if c.is_empty() or not Game.progress.set_contract(Game.selected_map, c): return
+	hud.toast("Auftrag: " + Career.contract_text(c))
+
 func _on_activity_completed(result: Dictionary) -> void:
 	if Game.settings.get("career", false):
 		var pay := Career.payout(result)
 		if pay > 0.0 and Game.progress.change_money(pay):
 			hud.toast("Verdient: +%s · Konto %s" % [Career.money_text(pay), Career.money_text(Game.progress.get_money())])
+		var contract: Dictionary = Game.progress.get_contract(Game.selected_map)
+		if Career.fulfils(contract, result):
+			var bonus := float(contract.get("bonus", 0.0))
+			var next := Career.make_contract(Game.selected_map, activity.available_modes(), int(contract.get("serial", 0)) + 1, Game.progress.contracts_done() + 1)
+			if Game.progress.complete_contract(Game.selected_map, bonus, next):
+				hud.toast("Auftrag erfüllt: +%s Prämie" % Career.money_text(bonus))
+				hud.toast("Neuer Auftrag: " + Career.contract_text(next))
 	if int(result.get("mode", 0)) == 1:
 		if not Game.progress.complete_milestone("time_trial_complete"):
 			hud.toast("Zeitfahren beendet · Fortschritt konnte nicht gespeichert werden")
