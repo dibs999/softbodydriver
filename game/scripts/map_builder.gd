@@ -1040,6 +1040,7 @@ static func _hill_village(world: SBWorld, parent: Node3D, road: PackedVector3Arr
 			hi = maxf(hi, hq)
 		return hi - lo > 2.0
 	var trees: Array[Vector3] = []
+	var frontages: Array[Dictionary] = []
 	for i in range(VILLAGE_AT - 16, VILLAGE_AT + 17, 4):
 		var f: Array = frame.call(i)
 		var d: Vector3 = f[0]
@@ -1052,8 +1053,11 @@ static func _hill_village(world: SBWorld, parent: Node3D, road: PackedVector3Arr
 			var w := rng.randf_range(7.5, 9.0)
 			var c := road[i] + side * sgn * (half_w + 9.5 + w * 0.5 + rng.randf_range(0.0, 3.0))
 			var storeys := 1 + int(rng.randf() < 0.55)
-			if not steep.call(c, yaw, l, w):
-				village.house(world, floor_at.call(c, yaw, l, w), yaw, l, w, storeys, rng)
+			# Front door (the house's local +z side) towards the road on both sides.
+			var hyaw := yaw + (PI if sgn > 0.0 else 0.0)
+			if not steep.call(c, hyaw, l, w):
+				village.house(world, floor_at.call(c, hyaw, l, w), hyaw, l, w, storeys, rng)
+				frontages.append({"centre": c, "along": d, "toward": -side * sgn, "length": l, "width": w, "yaw": hyaw, "road": road[i]})
 			var garden := road[i] + side * sgn * (half_w + 24.0 + rng.randf_range(0.0, 5.0)) + d * rng.randf_range(-4.0, 4.0)
 			garden.y = height.call(garden.x, garden.z)
 			trees.append(garden)
@@ -1063,6 +1067,7 @@ static func _hill_village(world: SBWorld, parent: Node3D, road: PackedVector3Arr
 				var bl := rng.randf_range(8.0, 10.0)
 				if not steep.call(back, byaw, bl, 7.5):
 					village.house(world, floor_at.call(back, byaw, bl, 7.5), byaw, bl, 7.5, 1, rng)
+	_village_frontages(parent, frontages, half_w, height)
 	# Church behind the row, tower towards the road.
 	var f0: Array = frame.call(VILLAGE_AT)
 	var cd: Vector3 = f0[0]
@@ -1253,6 +1258,66 @@ static func proving_shelters() -> Array[Dictionary]:
 	for x: float in [32, 47, 62]:
 		shelters.append({"center": Vector3(x, 1.455, -65), "half_extents": Vector3(5.8, 1.455, 3.3)})
 	return shelters
+
+
+## Lindenau's front gardens: a gravel path from each front door to the road edge (every other
+## house a wider drive), and the garden boundary along the road as a hedge or a picket fence with
+## a gap for the path, following the slope.
+static func _village_frontages(parent: Node3D, frontages: Array[Dictionary], half_w: float, height: Callable) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3101
+	var gravel := C.road_material(1, 2.0, 12.0, "dirt")
+	var hedges: Array[Transform3D] = []
+	var rails: Array[Transform3D] = []
+	var pickets: Array[Transform3D] = []
+	for f: Dictionary in frontages:
+		var c: Vector3 = f["centre"]
+		var along: Vector3 = f["along"]
+		var toward: Vector3 = f["toward"]
+		var l: float = f["length"]
+		var w: float = f["width"]
+		var basis := Basis(Vector3.UP, f["yaw"])
+		# Door position as village.gd lays it out: the middle window slot of the front.
+		var per_side := maxi(2, int(l / 2.7))
+		var x := -l * 0.5 + (per_side / 2 + 0.5) * l / per_side
+		var door: Vector3 = c + basis * Vector3(x, 0, w * 0.5 + 0.9)
+		var road_pt: Vector3 = f["road"]
+		var on_road := road_pt + along * along.dot(door - road_pt)
+		var edge := on_road - toward * (half_w + 0.4)
+		var drive := rng.randf() < 0.5
+		var path := PackedVector3Array()
+		for k in 5:
+			var q := door.lerp(edge, k / 4.0)
+			path.append(Vector3(q.x, height.call(q.x, q.z), q.z))
+		parent.add_child(C.road_mesh(path, 1.4 if drive else 0.7, gravel, false, 0.05, 12.0, height))
+		# Boundary 3 m in from the road edge, either side of the path, as long as the frontage.
+		var fence_mid := on_road - toward * (half_w + 3.2)
+		var gap := 1.8 if drive else 1.0
+		var half_len := l * 0.5 + 1.5
+		var kind := rng.randf()
+		if kind > 0.8: continue   # an open front garden
+		var rot := Basis(Vector3.UP, atan2(along.x, along.z))
+		for sgn: float in [-1.0, 1.0]:
+			var seg_len := half_len - gap
+			if seg_len < 1.0: continue
+			var mid := fence_mid + along * sgn * (gap + seg_len * 0.5)
+			mid.y = height.call(mid.x, mid.z)
+			if kind < 0.45:
+				hedges.append(Transform3D(rot.scaled_local(Vector3(0.7, rng.randf_range(0.9, 1.25), seg_len)), mid + Vector3.UP * 0.5))
+			else:
+				for h: float in [0.35, 0.8]:
+					rails.append(Transform3D(rot.scaled_local(Vector3(0.04, 0.07, seg_len)), mid + Vector3.UP * h))
+				var count := int(seg_len / 0.14)
+				for k in count:
+					var q := mid + along * (-seg_len * 0.5 + (k + 0.5) * seg_len / count)
+					q.y = height.call(q.x, q.z)
+					pickets.append(Transform3D(rot, q + Vector3.UP * 0.5))
+	var unit := BoxMesh.new()
+	C.scatter_multimesh(parent, unit, C.noise_mat(Color(0.17, 0.30, 0.12), 0.25, 1.5, 0.95), hedges)
+	C.scatter_multimesh(parent, unit, C.mat(Color(0.86, 0.85, 0.80), 0.8), rails, false)
+	var picket := BoxMesh.new()
+	picket.size = Vector3(0.025, 1.0, 0.07)
+	C.scatter_multimesh(parent, picket, C.mat(Color(0.86, 0.85, 0.80), 0.8), pickets, false)
 
 
 ## Village church nave (18 x 9.5 m, long axis along the yaw's x): a tall single space on a stone
