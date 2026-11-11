@@ -8,7 +8,7 @@ signal graphics_preset_changed
 signal driving_help_changed(visible: bool)
 signal driving_setting_changed(key: String, enabled: bool)
 
-const DRIVING_SETTINGS := ["tcs", "abs", "automatic", "steering_assist", "traffic", "career"]
+const DRIVING_SETTINGS := ["tcs", "abs", "automatic", "manual_clutch", "steering_assist", "traffic", "career"]
 # An explicit path also allows isolated profile tests without touching the player profile.
 var settings_config_path := GRAPHICS_CONFIG
 
@@ -64,6 +64,7 @@ var settings := {
 	"tcs": true,
 	"abs": true,
 	"automatic": true,
+	"manual_clutch": false,      # manual gearbox without the automatic clutch: the engine can stall
 	"steering_assist": true,     # speed sensitive steering limit
 	"traffic": true,             # AI cars on the map
 	"career": false,             # activities pay, fuel and repairs cost money

@@ -41,6 +41,8 @@ var _pause_first_button: Button
 var pause_menu: Control
 var _loading_overlay: CanvasLayer
 var _reverse_hold := 0.0
+var _clutch_pedal := 0.0     # smoothed clutch pedal for the manual clutch (0 up, 1 down)
+var _was_running := true
 ## Cruise control: target speed in km/h (< 0 off) and the speed controller's integral term.
 var cruise_kmh := -1.0
 var _cruise_i := 0.0
@@ -109,6 +111,7 @@ func _ready() -> void:
 	Game.apply_chosen_paint(player)
 	vehicles.append(player)
 	_apply_settings(player)
+	_neutral_for_own_clutch()
 	if Game.settings["traffic"]:
 		var others := Game.cars.filter(func(c): return c["path"] != Game.selected_car)
 		var routes: Array = map_data.get("ai_routes", [])
@@ -365,6 +368,7 @@ func _set_player(v: SBVehicle) -> void:
 		activity._read_best()
 	player = v
 	cam.target = v
+	_neutral_for_own_clutch()
 	for car in Game.cars:
 		if car.get("id", "") == v.get_info().get("id", ""):
 			var definition: Variant = JSON.parse_string(FileAccess.get_file_as_string(car["path"]))
@@ -491,10 +495,23 @@ func _drive_player(delta: float) -> void:
 		# could stop 2 deg short of its latch).
 		if _auto_hold and thr <= 0.05 and absf(kmh) < 3.0 and hb < 0.5:
 			brk = maxf(brk, 0.6)
+	elif Game.settings["manual_clutch"]:
+		# Clutch pedal with travel: a key pushes it down quickly and lets it come up over ~0.45 s
+		# (an analogue trigger is followed as closely as the rate allows). Pedal up = engaged.
+		var target := Input.get_action_strength("clutch")
+		_clutch_pedal = move_toward(_clutch_pedal, target, (9.0 if target > _clutch_pedal else 2.2) * delta)
+		player.set_clutch(1.0 - _clutch_pedal)
 	else:
 		player.set_clutch(1.0 - Input.get_action_strength("clutch") if Input.is_action_pressed("clutch") else -1.0)
-	# Auto start: pressing throttle on a stalled (not seized) engine cranks it.
-	if not bool(t["running"]) and not bool(t["seized"]) and thr > 0.5 and String(t["status"]) != "OUT OF FUEL":
+	var running := bool(t["running"])
+	var own_clutch: bool = not player.is_automatic() and Game.settings["manual_clutch"]
+	if _was_running and not running and own_clutch and not bool(t["seized"]) and String(t["status"]) != "OUT OF FUEL":
+		hud.toast("Motor abgewürgt · %s treten und Gas geben zum Starten" % DriverPrompts.hint("clutch"))
+	_was_running = running
+	# Auto start: pressing throttle on a stalled (not seized) engine cranks it. With the clutch in
+	# the driver's foot only with the clutch down or in neutral, like a real starter interlock.
+	var may_start: bool = not own_clutch or _clutch_pedal > 0.6 or gear == 0
+	if not running and not bool(t["seized"]) and thr > 0.5 and String(t["status"]) != "OUT OF FUEL" and may_start:
 		player.start_engine()
 	# Parked: with the engine off and the car at rest, the parking brake holds it (like P on an
 	# automatic). A recovered or switched-off car otherwise rolled away on the slightest slope.
@@ -504,6 +521,16 @@ func _drive_player(delta: float) -> void:
 	player.set_input(thr, brk, steer, hb)
 	cam.look_back = Input.is_action_pressed("look_back")
 	if audio: audio.horn = Input.is_action_pressed("horn")
+
+
+## With the clutch in the driver's foot, a car standing in gear would stall the moment it appears:
+## spawn, reset and switching to the manual gearbox leave it in neutral.
+func _neutral_for_own_clutch() -> void:
+	_clutch_pedal = 0.0
+	_was_running = true
+	if player and not player.is_automatic() and Game.settings["manual_clutch"] \
+			and absf(float(player.get_telemetry().get("speed_kmh", 0.0))) < 3.0:
+		player.set_gear(0)
 
 
 ## Cruise control: holds the set speed with the throttle (PI on the speed error); more throttle
@@ -592,6 +619,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		lesson.notify_interruption("Fahrzeug zurückgesetzt")
 		activity.cancel("Lauf abgebrochen: Zurücksetzen")
 		player.reset_to(map_data["spawns"][0])
+		_neutral_for_own_clutch()
 		_auto_hold = true
 		cam.snap()
 		hud.toast("Fahrzeug zurückgesetzt")
@@ -632,6 +660,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		player.set_automatic(not player.is_automatic())
 		Game.set_driving_setting("automatic", player.is_automatic())
 		player.set_clutch(-1.0)
+		_neutral_for_own_clutch()
 		hud.toast("Getriebe: " + ("Automatik" if player.is_automatic() else "Manuell (%s/%s, %s = Kupplung)" % [DriverPrompts.hint("shift_down"), DriverPrompts.hint("shift_up"), DriverPrompts.hint("clutch")]))
 	elif event.is_action_pressed("shift_up"):
 		player.shift_up()
@@ -920,6 +949,7 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 	var settings_page: VBoxContainer = page.call("Einstellungen")
 	settings_page.add_child(UITheme.section("Fahrhilfen"))
 	settings_page.add_child(Game.make_driving_option("steering_assist", "Lenkhilfe · Tastatur / Gamepad"))
+	settings_page.add_child(Game.make_driving_option("manual_clutch", "Kupplung selbst treten (Schaltgetriebe, Motor kann abwürgen)"))
 	var steering_hint := UITheme.label("An: sanfte Eingaben und weniger Lenkeinschlag bei Tempo.\nAus: direkte Lenkung für erfahrene Fahrer.", 13, UITheme.MUTED)
 	steering_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	settings_page.add_child(steering_hint)

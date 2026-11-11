@@ -52,6 +52,18 @@ bleiben also keine unsichtbaren Hindernisse zurück.
     seltener als alle 0,1 s ankommen (vorher fuhren die KI-Autos bei ~1 FPS in die Leitplanke).
     Geprüft mit `--max-fps 5/6`: Wüsten-, Gelände-Verkehr und KI-Folgetest bestehen.
 
+* **Physik auf mehreren Kernen (11. November 2026):**
+  * Auf einem i5-Laptop zeigte F2 „Physik 52 % Echtzeit“: ein Kern schaffte die 2000 Hz für
+    alle Autos nicht.
+  * `World::step` rechnet Kräfte, Integration und Eigenkontakt
+    jedes wachen Körpers jetzt auf einem kleinen Worker-Pool (bis zu drei Worker neben dem
+    Physik-Thread, `SB_PHYSICS_THREADS=n` überschreibt). Kontakte zwischen Körpern und mit der Strecke bleiben
+    seriell; daher ist das Ergebnis bitgleich zu einem Thread (Vier-Auto-Probe: gleicher
+    Positions-Hash mit 1–4 Threads, 335 → 234 ms CPU je simulierter Sekunde auf 4 vCPUs; auf
+    einer VM, deren Kerne Godot ohnehin auslastet, ist der Gewinn im Spiel kaum messbar).
+  * Die Physik gibt die Weltsperre nach dem laufenden Schritt an einen wartenden Hauptthread
+    ab, statt erst 16 Schritte (auf einem langsamen Laptop ~15 ms) fertigzurechnen.
+
 * **Bäume mit Detailstufen:**
   * Jede Baumart hat neben dem Nahmodell ein Fernmodell mit ~22 % der Blattkarten
     (größere Karten, einfacher Stamm).

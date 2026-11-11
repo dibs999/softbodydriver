@@ -239,7 +239,7 @@ Details und verbleibende Release-Abnahmen: [Linux-Paketierung](docs/RELEASE_LINU
 | `W` / `S` | Gas / Bremse (im Stand halten = Rückwärtsgang) |
 | `A` / `D` | Lenken |
 | `Leertaste` | Handbremse |
-| `Q` / `E`, `M` | Gang runter / hoch, Automatik oder Manuell (`Shift` = Kupplung) |
+| `Q` / `E`, `M` | Gang runter / hoch, Automatik oder Manuell (`Shift` = Kupplung). Mit „Kupplung selbst treten“ (Fahrhilfen) gibt es keine Kupplungsautomatik: ohne Kupplung würgt der Motor beim Anhalten im Gang oder beim Anfahren ohne Gas ab; gestartet wird mit getretener Kupplung oder im Leerlauf und Gas |
 | `I` | Motor starten / abstellen |
 | `T` / `Z` | Traktionskontrolle / ABS ein/aus |
 | `C`, `V` | Kamera wechseln (Verfolger, Orbit, Cockpit, Motorhaube, Streckenrand), Rückblick |
