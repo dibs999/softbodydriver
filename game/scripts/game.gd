@@ -55,6 +55,8 @@ var _control_hint: Label
 
 
 func _ready() -> void:
+	if Game.settings.get("career", false) and not Career.map_unlocked(Game.progress, Game.selected_map):
+		Game.selected_map = "proving_grounds"   # the career has not opened this map yet
 	if DisplayServer.get_name() != "headless":
 		_show_loading_screen()
 		await RenderingServer.frame_post_draw
