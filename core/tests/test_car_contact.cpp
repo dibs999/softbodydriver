@@ -485,3 +485,20 @@ TEST_CASE("a body link tears apart above its break force") {
     w.step();
     CHECK(w.links()[0].broken);
 }
+
+TEST_CASE("a tow bar fitted after the build leaves the body skin and its rigid parts in place") {
+    auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+    std::vector<float> before, after;
+    computeNodeFrames(car.body.positions(), car.visual, before);
+    const auto tow = addTowBar(car.body, car.layout);
+    REQUIRE(tow >= 0);
+    REQUIRE(car.body.nodeCount() == car.visual.restNodes.size() + 1);
+    computeNodeFrames(car.body.positions(), car.visual, after);
+    // The same panel frames (doors, bumpers, lids) as before, only one more node offset slot.
+    const std::size_t n0 = car.visual.restNodes.size();
+    REQUIRE(!car.visual.parts.empty());
+    REQUIRE(after.size() == before.size() + 3);
+    for (std::size_t i = 0; i < 12; ++i) CHECK(after[i] == doctest::Approx(before[i]));
+    for (std::size_t p = 0; p < 16 * car.visual.parts.size(); ++p)
+        CHECK(after[12 + (n0 + 1) * 3 + p] == doctest::Approx(before[12 + n0 * 3 + p]).epsilon(1e-4));
+}

@@ -1,5 +1,7 @@
 #include "sb_prop.h"
 
+#include <algorithm>
+
 #include <godot_cpp/core/class_db.hpp>
 
 #include "sb_world.h"
@@ -22,6 +24,9 @@ void SBProp::_bind_methods() {
     ClassDB::bind_method(D_METHOD("reset"), &SBProp::reset);
     ClassDB::bind_method(D_METHOD("get_displacement"), &SBProp::get_displacement);
     ClassDB::bind_method(D_METHOD("get_damage"), &SBProp::get_damage);
+    ClassDB::bind_method(D_METHOD("get_wheel_transforms"), &SBProp::get_wheel_transforms);
+    ClassDB::bind_method(D_METHOD("get_hitch_position"), &SBProp::get_hitch_position);
+    ClassDB::bind_method(D_METHOD("set_brake", "brake"), &SBProp::set_brake);
 }
 
 void SBProp::setup(SBWorld* world, int bodyIndex, const sb::PropBuild& build, const std::vector<sb::Vec3>& spawn, const String& kind) {
@@ -37,6 +42,10 @@ void SBProp::setup(SBWorld* world, int bodyIndex, const sb::PropBuild& build, co
     restOrigin_ = toG(r[frameOrigin_]);
     spawn_ = spawn;
     spawnFrameOrigin_ = toG(spawn[frameOrigin_]);
+    hitch_ = static_cast<int>(build.hitch);
+    wheels_.clear();
+    for (const auto& w : build.body.wheels())
+        if (!w.treadNodes.empty()) wheels_.push_back({w.spec.hubLeft, w.spec.hubRight, w.treadNodes.front()});
     subOrigin_ = build.subFrameOrigin;
     subX_ = build.subFrameX;
     subY_ = build.subFrameY;
@@ -63,6 +72,15 @@ void SBProp::sync_from_world() {
             sub->set_transform(main.affine_inverse() * Transform3D(sb, so - sb.xform(subRestOrigin_)));
         }
     }
+    if (hitch_ >= 0) hitchPos_ = toG(p[static_cast<std::size_t>(hitch_)]);
+    wheelXf_.resize(wheels_.size());
+    for (std::size_t i = 0; i < wheels_.size(); ++i) {
+        const Vector3 l = toG(p[wheels_[i].hubL]), r = toG(p[wheels_[i].hubR]);
+        const Vector3 c = (l + r) * 0.5f, axle = (l - r).normalized();
+        Vector3 spoke = toG(p[wheels_[i].tread0]) - c;
+        spoke = (spoke - axle * spoke.dot(axle)).normalized();
+        wheelXf_[i] = Transform3D(Basis(spoke, axle, spoke.cross(axle)), c);
+    }
     std::size_t deformed = 0;
     for (const auto& beam : body.beams()) deformed += beam.plasticStrain() > 0.01 ? 1 : 0;
     damage_ = body.beamCount() ? std::min(1.0, 3.0 * static_cast<double>(deformed) / static_cast<double>(body.beamCount())) : 0.0;
@@ -72,6 +90,21 @@ void SBProp::reset() {
     if (!world_ || bodyIndex_ < 0) return;
     std::lock_guard<WorldMutex> lock(world_->mutex());
     world_->world().body(static_cast<std::size_t>(bodyIndex_)).repair(spawn_);
+}
+
+Array SBProp::get_wheel_transforms() const {
+    Array out;
+    for (const auto& xf : wheelXf_) out.push_back(xf);
+    return out;
+}
+
+void SBProp::set_brake(double brake) {
+    if (!world_ || bodyIndex_ < 0) return;
+    std::lock_guard<WorldMutex> lock(world_->mutex());
+    auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+    auto c = body.controls();
+    c.brake = std::clamp(brake, 0.0, 1.0);
+    body.setControls(c);
 }
 
 double SBProp::get_displacement() const {

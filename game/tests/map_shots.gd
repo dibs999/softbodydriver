@@ -46,6 +46,13 @@ func _setup() -> void:
 		ls["lights"] = true
 		ls["light_mode"] = 2
 		ls["manual_lights"] = true
+	# TRAILER=1: the box trailer hung on behind the player's car.
+	if OS.has_environment("TRAILER"):
+		scene.world.time_scale = 1.0
+		print(scene.toggle_trailer())
+		scene.world.step_blocking(2.0)
+		scene.world.sync_visuals()
+		scene.world.time_scale = 0.0
 	# IGNITE=0|1: set the player car on fire (engine bay / tank) and let it burn for a while.
 	if OS.has_environment("IGNITE"):
 		scene.player.ignite(int(OS.get_environment("IGNITE")))

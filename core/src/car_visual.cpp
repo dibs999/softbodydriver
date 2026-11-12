@@ -614,7 +614,9 @@ void computeNodeFrames(const std::vector<Vec3>& pos, const CarVisual& vis, std::
     real R[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
     Vec3 t{0, 0, 0};
     const auto* fr = vis.frameRefs;
-    if (vis.restNodes.size() == n && fr[0] < n && fr[1] < n && fr[2] < n && fr[3] < n) {
+    // Nodes fitted after the build (a tow bar) sit beyond the rest list and are left out.
+    const std::size_t nr = vis.restNodes.size();
+    if (nr != 0 && nr <= n && fr[0] < nr && fr[1] < nr && fr[2] < nr && fr[3] < nr) {
         Vec3 f0, r0, u0, f1, r1, u1;
         cellBasis(vis.restNodes[fr[0]], vis.restNodes[fr[1]], vis.restNodes[fr[2]], vis.restNodes[fr[3]], f0, r0, u0);
         cellBasis(pos[fr[0]], pos[fr[1]], pos[fr[2]], pos[fr[3]], f1, r1, u1);
@@ -631,7 +633,7 @@ void computeNodeFrames(const std::vector<Vec3>& pos, const CarVisual& vis, std::
     frames[9] = static_cast<float>(t.x);
     frames[10] = static_cast<float>(t.y);
     frames[11] = static_cast<float>(t.z);
-    const bool haveRest = vis.restNodes.size() == n;
+    const bool haveRest = nr != 0 && nr <= n;
     // Rigid part frames (bonnet, doors, bumpers): best-fit rotation of each part's nodes, extracted
     // with the iterative method of Mueller et al. 2016 (warm-started from the previous frame), so a
     // panel swinging on its hinges or lying loose on the road keeps its shape.
@@ -704,7 +706,7 @@ void computeNodeFrames(const std::vector<Vec3>& pos, const CarVisual& vis, std::
     }
     for (std::size_t k = 0; k < n; ++k) {
         Vec3 d{0, 0, 0};
-        if (haveRest) {
+        if (haveRest && k < nr) {
             const Vec3& q = vis.restNodes[k];
             const std::int32_t part = k < vis.nodePart.size() ? vis.nodePart[k] : -1;
             const float* F = part >= 0 && static_cast<std::size_t>(part) < nParts ? &frames[partBase + 16 * static_cast<std::size_t>(part)] : frames.data();

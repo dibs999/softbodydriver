@@ -15,6 +15,8 @@ const DrivingActivity := preload("res://scripts/driving_activity.gd")
 const DriverPrompts := preload("res://scripts/driver_prompts.gd")
 var equipment: Node3D
 var grabber: Node3D   # Ctrl + left mouse: pull a node of any car (node_grabber.gd)
+var trailer: SBProp   # the box trailer (pause menu: Anhänger), coupled to the player's tow bar or parked
+var _trailer_was_coupled := false
 var weather: Node
 var wipers: Node3D
 var cabin_closure: Node3D
@@ -375,6 +377,8 @@ func _apply_settings(v: SBVehicle) -> void:
 
 
 func _set_player(v: SBVehicle) -> void:
+	if is_instance_valid(player) and player != v:
+		uncouple_trailer()
 	_reverse_hold = 0.0
 	recovery.clear()
 	_auto_hold = true
@@ -405,12 +409,71 @@ func _set_player(v: SBVehicle) -> void:
 		ai.erase(v)
 
 
+## Pause menu "Anhänger": hangs the box trailer on the tow bar (spawned behind the car the first
+## time), unhitches it (it stays parked on its drawbar), or couples it again when the tow ball is
+## within a metre of its hitch; otherwise it is fetched back behind the car.
+func toggle_trailer() -> String:
+	if absf(player.get_speed_kmh()) > 3.0:
+		return "Zum An- und Abkuppeln anhalten"
+	if is_instance_valid(trailer):
+		if bool(world.get_coupling(trailer)["coupled"]):
+			uncouple_trailer()
+			return "Anhänger abgekuppelt"
+		if trailer.get_hitch_position().distance_to(player.get_tow_position()) < 1.0 and world.couple_trailer(player, trailer):
+			_trailer_was_coupled = true
+			return "Anhänger angekuppelt"
+		world.remove_prop(trailer)
+		trailer = null
+	var f := player.get_forward()
+	f.y = 0.0
+	f = f.normalized()
+	var basis := Basis(f, Vector3.UP, f.cross(Vector3.UP))   # the trailer's +x along the car
+	var tow := player.get_tow_position()
+	var origin := tow - basis * Vector3(2.3, 0.45, 0.0)   # its hitch head on the tow ball
+	origin.y = maxf(origin.y, player.get_position_ws().y)   # wheels on the ground, not in it
+	trailer = Game.spawn_prop(world, "trailer", Transform3D(basis, origin))
+	if trailer == null or not world.couple_trailer(player, trailer):
+		return "Anhänger konnte nicht angekuppelt werden"
+	_trailer_was_coupled = true
+	return "Anhänger angekuppelt · Auflaufbremse folgt der Bremse"
+
+
+## Unhitches before the car is moved by a reset, a recovery or a vehicle switch: the coupling
+## would otherwise yank the trailer after it (or tear apart).
+func uncouple_trailer() -> void:
+	if is_instance_valid(trailer):
+		world.uncouple_trailer(trailer)
+		trailer.set_brake(1.0)   # parked: its brake holds it
+	_trailer_was_coupled = false
+
+
+func _update_trailer() -> void:
+	if not is_instance_valid(trailer):
+		return
+	var visual := trailer.get_node_or_null("TrailerVisual")
+	var coupling: Dictionary = world.get_coupling(trailer)
+	if bool(coupling["coupled"]):
+		# Overrun brake: the trailer brakes with the car.
+		trailer.set_brake(float(player.get_telemetry().get("brake", 0.0)))
+		if visual:
+			visual.towing = player
+			visual.lamp_state = equipment.state_for(player)
+	elif visual:
+		visual.towing = null
+		visual.lamp_state = {}
+	if _trailer_was_coupled and bool(coupling["broken"]):
+		_trailer_was_coupled = false
+		hud.toast("Anhängerkupplung abgerissen")
+
+
 ## Pos1: back to where the car last stood on its wheels a few seconds ago, upright and at rest,
 ## damage kept (BeamNG's "recover"). A timed run does not survive it, like a reset.
 func recover_player() -> bool:
 	if _replay_frames > 0:
 		return false
 	var pose: Variant = recovery.take(float(world.get_stats()["sim_time"]))
+	if pose != null:
+		uncouple_trailer()
 	if pose == null or not player.relocate_to(pose):
 		hud.toast("Keine frühere Position · %s setzt an den Start zurück" % DriverPrompts.hint("reset_vehicle"))
 		return false
@@ -481,6 +544,7 @@ func _process(delta: float) -> void:
 		_drive_player(delta)
 	if _replay_frames == 0:
 		recovery.record(player, float(world.get_stats()["sim_time"]))
+	_update_trailer()
 	_watch_physics_load(delta)
 	if wipers:
 		wipers.update(0.0 if world.paused else delta * world.time_scale, weather.weather_index == weather.RAIN, weather.wetness)
@@ -501,6 +565,7 @@ func _process(delta: float) -> void:
 		lesson.notify_interruption("Fahrzeug außerhalb des Geländes")
 		activity.cancel("Lauf abgebrochen: Bergung")
 		_auto_hold = true
+		uncouple_trailer()
 		if equipment.recover_to_service():
 			cam.snap()
 			hud.toast("Zum Service geborgen · Schäden und Tankinhalt bleiben erhalten")
@@ -686,6 +751,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		set_cruise(false)
 		lesson.notify_interruption("Fahrzeug zurückgesetzt")
 		activity.cancel("Lauf abgebrochen: Zurücksetzen")
+		uncouple_trailer()
 		player.reset_to(map_data["spawns"][0])
 		recovery.clear()
 		_neutral_for_own_clutch()
@@ -888,6 +954,7 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 				lesson.notify_interruption("Bergung zum Service")
 				activity.cancel("Lauf abgebrochen: Bergung")
 				_auto_hold = true
+				uncouple_trailer()
 				equipment.recover_to_service()
 				cam.snap()
 				_toggle_pause()],
@@ -962,6 +1029,9 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 				for p in props:
 					if is_instance_valid(p): p.reset()
 				hud.toast("Pylonen und Fässer stehen wieder an ihrem Platz" if not props.is_empty() else "Keine Pylonen oder Fässer auf dieser Karte")
+				_toggle_pause()],
+			["Anhänger ankuppeln / abkuppeln", func():
+				hud.toast(toggle_trailer())
 				_toggle_pause()],
 			["Scheibenwischer umschalten", func():
 				hud.toast(wipers.cycle_mode())

@@ -35,6 +35,9 @@ void SBWorld::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_vehicles"), &SBWorld::get_vehicles);
     ClassDB::bind_method(D_METHOD("spawn_prop", "kind", "xform"), &SBWorld::spawn_prop);
     ClassDB::bind_method(D_METHOD("remove_prop", "prop"), &SBWorld::remove_prop);
+    ClassDB::bind_method(D_METHOD("couple_trailer", "car", "trailer"), &SBWorld::couple_trailer);
+    ClassDB::bind_method(D_METHOD("uncouple_trailer", "trailer"), &SBWorld::uncouple_trailer);
+    ClassDB::bind_method(D_METHOD("get_coupling", "trailer"), &SBWorld::get_coupling);
     ClassDB::bind_method(D_METHOD("get_props"), &SBWorld::get_props);
     ClassDB::bind_method(D_METHOD("get_stats"), &SBWorld::get_stats);
     ClassDB::bind_method(D_METHOD("step_blocking", "seconds"), &SBWorld::step_blocking);
@@ -300,6 +303,49 @@ void SBWorld::remove_prop(SBProp* p) {
         removeBodyAt(idx);
     }
     p->queue_free();
+}
+
+bool SBWorld::couple_trailer(SBVehicle* car, SBProp* trailer) {
+    if (!car || !trailer || trailer->hitch_node() < 0) return false;
+    std::lock_guard<WorldMutex> lock(mtx_);
+    const int ci = car->body_index(), ti = trailer->body_index();   // world body indices (props and cars share them)
+    if (ci < 0 || ti < 0) return false;
+    for (const auto& l : world_.links())
+        if (!l.broken && (l.bodyA == static_cast<std::size_t>(ti) || l.bodyB == static_cast<std::size_t>(ti))) return false;
+    const std::int64_t tow = car->fit_tow_bar_locked();
+    if (tow < 0) return false;
+    sb::BodyLink link;
+    link.bodyA = static_cast<std::size_t>(ci);
+    link.nodeA = static_cast<std::uint32_t>(tow);
+    link.bodyB = static_cast<std::size_t>(ti);
+    link.nodeB = static_cast<std::uint32_t>(trailer->hitch_node());
+    world_.addLink(link);
+    return true;
+}
+
+void SBWorld::uncouple_trailer(SBProp* trailer) {
+    if (!trailer) return;
+    std::lock_guard<WorldMutex> lock(mtx_);
+    const auto ti = static_cast<std::size_t>(trailer->body_index());
+    auto& links = world_.links();
+    links.erase(std::remove_if(links.begin(), links.end(), [&](const sb::BodyLink& l) { return l.bodyA == ti || l.bodyB == ti; }), links.end());
+}
+
+Dictionary SBWorld::get_coupling(SBProp* trailer) const {
+    Dictionary d;
+    d["coupled"] = false;
+    d["broken"] = false;
+    d["force"] = 0.0;
+    if (!trailer || trailer->body_index() < 0) return d;
+    std::lock_guard<WorldMutex> lock(mtx_);
+    const auto ti = static_cast<std::size_t>(trailer->body_index());
+    for (const auto& l : world_.links()) {
+        if (l.bodyA != ti && l.bodyB != ti) continue;
+        d["coupled"] = !l.broken;
+        d["broken"] = l.broken;
+        d["force"] = l.force;
+    }
+    return d;
 }
 
 TypedArray<SBProp> SBWorld::get_props() const {

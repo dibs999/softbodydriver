@@ -581,6 +581,9 @@ func spawn_prop(world: SBWorld, kind: String, xform: Transform3D) -> SBProp:
 	var prop := world.spawn_prop(kind, xform)
 	if prop == null:
 		return null
+	if kind == "trailer":
+		prop.add_child(preload("res://scripts/trailer_visual.gd").new(prop))
+		return prop
 	if kind == "barrier":
 		# Water-filled roadworks barrier: red/white alternating segments, tapered top, fill cap.
 		var red := _prop_mat("barrier_red", Color(0.78, 0.10, 0.07), 0.55)
