@@ -27,6 +27,11 @@ uniform bool markings = true;      // false: unmarked (village streets)
 // The asphalt photo averages an albedo of 0.015, darker than even fresh asphalt (~0.04); weathered
 // road surface is ~0.06-0.1; this gain brings it to ~0.065 (the grain stays the photo's).
 uniform float asphalt_gain = 4.0;
+// Rough road surfaces scatter back towards the light: under headlights, whose source sits beside
+// the driver's eye, a road lit at a grazing angle looks many times brighter than a matt (Lambert)
+// surface would (road-lighting luminance coefficients, here on the generous side: a screen has no
+// dark-adapted eye). Gain of that retro lobe over Lambert.
+uniform float retro_gain = 25.0;
 global uniform float road_wetness;  // set by the weather (darker, glossier)
 
 varying vec3 world_pos;
@@ -285,4 +290,24 @@ void fragment() {
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
 	ROUGHNESS = rough;
 	SPECULAR = mix(0.5, 0.65, wetness);
+}
+
+
+// Lambert with the retro lobe above, plus GGX specular (wet roads mirror lamps and headlights).
+void light() {
+	float ndl = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
+	float retro = pow(clamp(dot(LIGHT, VIEW), 0.0, 1.0), 12.0) * retro_gain;
+	DIFFUSE_LIGHT += ndl * (1.0 + retro) * ATTENUATION * LIGHT_COLOR / PI;
+	vec3 h = normalize(LIGHT + VIEW);
+	float ndh = clamp(dot(NORMAL, h), 0.0, 1.0);
+	float ndv = clamp(dot(NORMAL, VIEW), 0.001, 1.0);
+	float a = max(ROUGHNESS * ROUGHNESS, 0.002);
+	float a2 = a * a;
+	float dd = ndh * ndh * (a2 - 1.0) + 1.0;
+	float dist = a2 / (PI * dd * dd);
+	float k = a * 0.5;
+	float vis = 0.25 / ((ndl * (1.0 - k) + k) * (ndv * (1.0 - k) + k));
+	float f0 = 0.08 * SPECULAR_AMOUNT;
+	float fres = f0 + (1.0 - f0) * pow(1.0 - clamp(dot(LIGHT, h), 0.0, 1.0), 5.0);
+	SPECULAR_LIGHT += dist * vis * fres * ndl * ATTENUATION * LIGHT_COLOR;
 }

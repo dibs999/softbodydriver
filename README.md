@@ -279,6 +279,9 @@ ausgetauschten und gesprungenen Platten, Flecken und Kaugummis) hinter Granit-Bo
 Nachts werfen alle Straßenlaternen der Stadt Lichtkegel auf Fahrbahn und Gehweg; der Boden-Shader
 rechnet die 48 nächsten Laternen selbst, weil der Mobile-Renderer echte Lichter auf 8 pro Objekt
 begrenzt (eine ganze Straße ist ein Objekt). Echte Spotlichter beleuchten weiter Autos und Gegenstände.
+Fahrbahnen streuen Licht wie echter Asphalt zur Lichtquelle zurück: Im Abblendlicht ist die
+Straße bis weit voraus zu sehen, nicht nur ein Fleck vor dem Stoßfänger. Straßen und Bankette haben
+echte Flächennormalen, auch an Steigungen.
 
 Statische Hindernisse laufen über eine Broadphase. Deshalb bremsen auch Karten mit über 600 Kollisionsobjekten (Leitplanken, Gebäude) die 2000-Hz-Physik nicht aus.
 
