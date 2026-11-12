@@ -24,6 +24,9 @@
       "caliper"
     ],
     "materialOverrides": { "Glass": "glass", "Paint 1": "paint", "Dashboard": "trim", "License": "trim" },
+    "parts": {
+      "tailgate": ["BodyRearwindow", "InteriorRearHatch"]
+    },
     "_textureScale": "KHR_texture_transform scales of normal-mapped materials without a base colour texture; Godot's importer drops them, which stretched the flake and leather normals into blotches.",
     "textureScale": { "Interior 1": [200, 400], "Interior 2": [100, 100], "Interior 3": [200, 400], "Floormat": [2, 3], "Paint 2": [30, 30], "Tiretread": [1, 4] }
   },
@@ -36,6 +39,8 @@
     "hoodLength": 1.05, "windshieldRun": 1.05, "roofLength": 0.80, "rearWindowRun": 1.00,
     "roofWidthRatio": 0.62, "cornerRadiusFront": 0.40, "cornerRadiusRear": 0.30,
     "archClearance": 0.05,
+    "detachableTailgate": true, "tailgateHingeX": 1.50, "tailgateHingeY": 1.29, "tailgateLatchX": 0.33, "tailgateLatchY": 1.10,
+    "tailgateHalfWidth": 0.70, "tailgateOpenDeg": 55, "tailgateMass": 10,
     "paint": [0.55, 0.03, 0.05], "paintMetallic": 0.6
   },
   "chassis": { "curbMass": 1580, "frontWeight": 0.44, "bodyStiffness": 1.7, "bodyStrength": 1.3 },
