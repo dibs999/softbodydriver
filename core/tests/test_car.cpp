@@ -262,6 +262,14 @@ TEST_CASE("Concept GT suspension holds alignment under driving loads and can sti
         } else {
             CHECK_FALSE(broken);
             CHECK(worst < 0.02);
+            // Alignment is judged once the car has stopped: sampled mid-slide (the fast turn ends
+            // in a spin) the toe reading is the momentary flutter of a sliding wheel, not a bent
+            // suspension, and swung by +-0.1 with any change to the body.
+            controls = VehicleControls{};
+            controls.brake = 1.0;
+            car.setControls(controls);
+            world.simulate(4.0);
+            REQUIRE(car.telemetry().speedKmh < 1.0);
             const auto& p = car.positions();
             const Vec3 forward = normalize((p[layout.refFL] + p[layout.refFR]) - (p[layout.refRL] + p[layout.refRR]));
             const Vec3 right = (p[layout.refFR] + p[layout.refRR]) - (p[layout.refFL] + p[layout.refRL]);
@@ -269,7 +277,8 @@ TEST_CASE("Concept GT suspension holds alignment under driving loads and can sti
             for (const auto& wheel : car.wheels()) {
                 CHECK(std::abs(dot(wheel.axis(car), up)) < 0.45);
                 if (!wheel.spec.steered) {
-                    CHECK(std::abs(dot(wheel.axis(car), forward)) < (scenario == Landing ? 0.12 : 0.30));
+                    MESSAGE("rear toe at rest " << dot(wheel.axis(car), forward));
+                    CHECK(std::abs(dot(wheel.axis(car), forward)) < 0.03);
                 }
             }
         }

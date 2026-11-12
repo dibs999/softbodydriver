@@ -25,6 +25,8 @@
     ],
     "materialOverrides": { "Glass": "glass", "Paint 1": "paint", "Dashboard": "trim", "License": "trim" },
     "parts": {
+      "door_left": ["BodyDoorLColor1", "BodyDoorLColor2", "BodyDoorLHandle01", "BodyDoorLHandle02", "BodyDoorLMirror", "BodyDoorLMirrorColor1", "BodyDoorLMirrorColor2", "BodyDoorLWindow", "BodyDoorLWindowGasket", "InteriorDoorL01", "InteriorDoorL02", "InteriorDoorL03", "InteriorDoorL04", "InteriorDoorL05", "InteriorDoorL06"],
+      "door_right": ["BodyDoorRColor1", "BodyDoorRColor2", "BodyDoorRHandle01", "BodyDoorRHandle02", "BodyDoorRMirror", "BodyDoorRMirrorColor1", "BodyDoorRMirrorColor2", "BodyDoorRWindow", "BodyDoorRWindowGasket", "InteriorDoorR01", "InteriorDoorR02", "InteriorDoorR03", "InteriorDoorR04", "InteriorDoorR05", "InteriorDoorR06"],
       "tailgate": ["BodyRearwindow", "InteriorRearHatch"]
     },
     "_textureScale": "KHR_texture_transform scales of normal-mapped materials without a base colour texture; Godot's importer drops them, which stretched the flake and leather normals into blotches.",
@@ -39,6 +41,7 @@
     "hoodLength": 1.05, "windshieldRun": 1.05, "roofLength": 0.80, "rearWindowRun": 1.00,
     "roofWidthRatio": 0.62, "cornerRadiusFront": 0.40, "cornerRadiusRear": 0.30,
     "archClearance": 0.05,
+    "detachableDoors": true, "frontDoorHingeX": 2.93, "bPillarX": 1.27,
     "detachableTailgate": true, "tailgateHingeX": 1.50, "tailgateHingeY": 1.29, "tailgateLatchX": 0.33, "tailgateLatchY": 1.10,
     "tailgateHalfWidth": 0.70, "tailgateOpenDeg": 55, "tailgateMass": 10,
     "paint": [0.55, 0.03, 0.05], "paintMetallic": 0.6
@@ -48,7 +51,7 @@
     "front": { "wheelRate": 46000, "bumpDamping": 3000, "reboundDamping": 5800, "antiRollRate": 22000, "bumpTravel": 0.065, "droopTravel": 0.08 },
     "rear":  { "wheelRate": 50000, "bumpDamping": 3100, "reboundDamping": 6000, "antiRollRate": 15000, "bumpTravel": 0.065, "droopTravel": 0.08 }
   },
-  "tires": { "radius": 0.41, "width": 0.27, "widthRear": 0.35, "rimRadius": 0.27, "pressurePsi": 34, "friction": 1.32, "tireMass": 13.0, "rimMass": 11.0, "rays": 20 },
+  "tires": { "radius": 0.38, "width": 0.27, "widthRear": 0.35, "rimRadius": 0.27, "pressurePsi": 34, "friction": 1.32, "tireMass": 13.0, "rimMass": 11.0, "rays": 20 },
   "engine": {
     "name": "4.0 V8 Biturbo", "layout": "RWD", "position": "mid", "cylinders": 8,
     "torqueCurve": [[800, 320], [2000, 640], [2800, 750], [5500, 750], [6800, 640], [7600, 500], [8000, 0]],
