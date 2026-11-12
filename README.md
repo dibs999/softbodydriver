@@ -271,6 +271,9 @@ Rollspuren und am Rand, vergossene Risse, Flicken, Längsnähte zwischen den Fer
 vereinzelte Bremsspuren, Ölflecken und angeschwemmte Erde am Rand. Aus der Nähe bleibt das
 Gesteinskorn sichtbar, auf mittlere Distanz wird der Belag fleckig statt einfarbig. Landstraßen
 und Autobahn haben ein Bankett aus Splitt, Erde, Asphaltbrocken und einwachsendem Gras.
+Die prozeduralen Räder haben gegossene, verjüngte Alu-Speichen, die Reifenflanken erhabene
+Beschriftung (Marke, Größe, M+S), die SUVs glatte Kunststoff-Radlaufverbreiterungen; Laubbäume
+bilden Blattbüschel mit schattigem Kroneninneren.
 
 Statische Hindernisse laufen über eine Broadphase. Deshalb bremsen auch Karten mit über 600 Kollisionsobjekten (Leitplanken, Gebäude) die 2000-Hz-Physik nicht aus.
 
