@@ -124,6 +124,7 @@ private:
     real clutchEngagement_ = 0.0;
     real shiftTimer_ = 0.0;
     real cooldownTimer_ = 0.0;
+    real shiftThrottle_ = 0.0;   ///< Smoothed pedal for the automatic's shift points
     real lastEngineTorque_ = 0.0;
     real lastEnginePower_ = 0.0;
     real clutchTempC_ = 45.0, clutchWear_ = 0.0, gearboxDamage_ = 0.0;
