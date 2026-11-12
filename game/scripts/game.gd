@@ -41,6 +41,7 @@ var _pause_first_button: Button
 var pause_menu: Control
 var _loading_overlay: CanvasLayer
 var _reverse_hold := 0.0
+var recovery: RefCounted = preload("res://scripts/recovery_trail.gd").new()   # where the player stood on its wheels lately (Pos1)
 var _clutch_pedal := 0.0     # smoothed clutch pedal for the manual clutch (0 up, 1 down)
 var _was_running := true
 ## Cruise control: target speed in km/h (< 0 off) and the speed controller's integral term.
@@ -360,6 +361,7 @@ func _apply_settings(v: SBVehicle) -> void:
 
 func _set_player(v: SBVehicle) -> void:
 	_reverse_hold = 0.0
+	recovery.clear()
 	_auto_hold = true
 	if lesson: lesson.notify_interruption("Fahrzeug gewechselt")
 	if activity:
@@ -386,6 +388,25 @@ func _set_player(v: SBVehicle) -> void:
 	audio.configure(v, int(hud.info.get("cylinders", 4)))
 	if ai.has(v):
 		ai.erase(v)
+
+
+## Pos1: back to where the car last stood on its wheels a few seconds ago, upright and at rest,
+## damage kept (BeamNG's "recover"). A timed run does not survive it, like a reset.
+func recover_player() -> bool:
+	if _replay_frames > 0:
+		return false
+	var pose: Variant = recovery.take(float(world.get_stats()["sim_time"]))
+	if pose == null or not player.relocate_to(pose):
+		hud.toast("Keine frühere Position · %s setzt an den Start zurück" % DriverPrompts.hint("reset_vehicle"))
+		return false
+	_reverse_hold = 0.0
+	set_cruise(false)
+	lesson.notify_interruption("Fahrzeug zurückgestellt")
+	activity.cancel("Lauf abgebrochen: Zurückstellen")
+	_auto_hold = true
+	cam.snap()
+	hud.toast("Zurückgestellt · Schäden bleiben · nochmals drücken für weiter zurück")
+	return true
 
 
 ## Replay of the player's last 20 seconds (F5): physics pause, the car's recorded motion loops
@@ -443,6 +464,8 @@ func _process(delta: float) -> void:
 		player.replay_show(int(_replay_time * 30.0))
 	if not pause_menu.visible:
 		_drive_player(delta)
+	if _replay_frames == 0:
+		recovery.record(player, float(world.get_stats()["sim_time"]))
 	_watch_physics_load(delta)
 	if wipers:
 		wipers.update(0.0 if world.paused else delta * world.time_scale, weather.weather_index == 2, weather.wetness)
@@ -643,10 +666,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		lesson.notify_interruption("Fahrzeug zurückgesetzt")
 		activity.cancel("Lauf abgebrochen: Zurücksetzen")
 		player.reset_to(map_data["spawns"][0])
+		recovery.clear()
 		_neutral_for_own_clutch()
 		_auto_hold = true
 		cam.snap()
 		hud.toast("Fahrzeug zurückgesetzt")
+	elif event.is_action_pressed("recover_vehicle"):
+		recover_player()
 	elif event.is_action_pressed("repair_vehicle"):
 		# In the career an instant repair is towing plus the workshop bill.
 		var bill := Career.repair_cost(player.get_telemetry())
@@ -834,6 +860,9 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 	_pause_first_button = null
 	for entry in [["Weiterfahren", _toggle_pause],
 			["Neu starten", func(): get_tree().reload_current_scene()],
+			["Auf letzte Position zurückstellen", func():
+				_toggle_pause()
+				recover_player()],
 			["Zum Service bergen · Schäden bleiben", func():
 				lesson.notify_interruption("Bergung zum Service")
 				activity.cancel("Lauf abgebrochen: Bergung")

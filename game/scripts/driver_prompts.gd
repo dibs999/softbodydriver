@@ -8,7 +8,7 @@ const KEYS := {
 	"shift_down": "Q", "shift_up": "E", "clutch": "Shift",
 	"handbrake": "Leertaste", "refuel": "F", "service_repair": "G",
 	"cruise_control": "V",
-	"menu": "Esc", "reset_vehicle": "R", "driver_door": "U", "passenger_door": "Shift+U", "cockpit_look": "rechte Maustaste + Maus",
+	"menu": "Esc", "reset_vehicle": "R", "recover_vehicle": "Pos1", "driver_door": "U", "passenger_door": "Shift+U", "cockpit_look": "rechte Maustaste + Maus",
 }
 const PAD := {
 	"throttle": "RT", "brake": "LT", "steering": "linker Stick", "camera_next": "Y",
@@ -16,7 +16,7 @@ const PAD := {
 	"shift_down": "LB", "shift_up": "RB", "clutch": "X",
 	"handbrake": "A", "refuel": "D-Pad ←", "service_repair": "D-Pad →",
 	"cruise_control": "R3",
-	"menu": "Start", "reset_vehicle": "B", "driver_door": "Start → Fahrertür", "passenger_door": "Start → Beifahrertür", "cockpit_look": "rechter Stick",
+	"menu": "Start", "reset_vehicle": "B", "recover_vehicle": "Start → Zurückstellen", "driver_door": "Start → Fahrertür", "passenger_door": "Start → Beifahrertür", "cockpit_look": "rechter Stick",
 }
 
 func _input(event: InputEvent) -> void:

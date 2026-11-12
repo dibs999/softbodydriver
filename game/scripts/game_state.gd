@@ -1043,6 +1043,7 @@ func _setup_input() -> void:
 	_action("ignition"); _key("ignition", [KEY_I]); _joy_button("ignition", JOY_BUTTON_BACK)
 	_action("reset_vehicle"); _key("reset_vehicle", [KEY_R]); _joy_button("reset_vehicle", JOY_BUTTON_B)
 	_action("repair_vehicle"); _key("repair_vehicle", [KEY_BACKSPACE, KEY_INSERT])
+	_action("recover_vehicle"); _key("recover_vehicle", [KEY_HOME])
 	_action("camera_next"); _key("camera_next", [KEY_C]); _joy_button("camera_next", JOY_BUTTON_Y)
 	_action("debug_view"); _key("debug_view", [KEY_B])
 	_action("toggle_tcs"); _key("toggle_tcs", [KEY_T])
@@ -1084,7 +1085,8 @@ func _setup_input() -> void:
 	passenger_door_key.physical_keycode = KEY_U
 	passenger_door_key.shift_pressed = true
 	InputMap.action_add_event("passenger_door", passenger_door_key)
-	_action("look_back"); _key("look_back", [KEY_V])
+	# V is the cruise control; looking back sits on the key left of 1 (^ on German keyboards).
+	_action("look_back"); _key("look_back", [KEY_QUOTELEFT, KEY_KP_0])
 	_action("replay"); _key("replay", [KEY_F5])
 	_action("camera_free"); _key("camera_free", [KEY_F9])
 
