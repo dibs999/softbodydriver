@@ -159,6 +159,22 @@ void SBVehicle::applyTransform(const Transform3D& xform) {
     visualResetPending_ = true;
 }
 
+namespace {
+constexpr double kNearOnlyRange = 60.0;
+// Materials of cabin, engine bay and underside parts (also as door_/tailgate_ etc. part prefixes).
+bool isNearOnlyMaterial(const std::string& name) {
+    std::string base = name;
+    for (const std::string prefix : {"bumper_front_", "bumper_rear_", "door_left_", "door_right_", "rdoor_left_", "rdoor_right_", "tailgate_"})
+        if (base.rfind(prefix, 0) == 0) { base = base.substr(prefix.size()); break; }
+    static const char* names[] = {"interior", "upholstery", "seat_insert", "seat_frame", "seat_belt", "headliner", "fabric",
+                                  "carpet", "belt", "engine", "radiator", "heatshield", "tank", "exhaust", "spring",
+                                  "caliper", "chassis", "bonnet_inner"};
+    for (const char* n : names)
+        if (base == n) return true;
+    return false;
+}
+}  // namespace
+
 Ref<Material> SBVehicle::materialFor(const std::string& name, const Dictionary& lib) const {
     std::string base = name;
     for (const std::string prefix : {"bumper_front_", "bumper_rear_", "door_left_", "door_right_", "rdoor_left_", "rdoor_right_", "tailgate_"})
@@ -286,6 +302,13 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
                              (s.material == "glass" ? paneNames[std::clamp<int>(s.pane, 0, 4)] : ""));
         if (s.material == "glass" || s.material.ends_with("_glass"))
             g.instance->set_cast_shadows_setting(GeometryInstance3D::SHADOW_CASTING_SETTING_OFF);
+        // Cabin and underside parts are invisible from further than a few car lengths; beyond
+        // 60 m the renderer culls them (a generated car has ~35 of them, each its own draw call,
+        // and traffic is mostly that far away).
+        if (isNearOnlyMaterial(s.material)) {
+            g.instance->set_visibility_range_end(kNearOnlyRange);
+            g.instance->set_visibility_range_end_margin(5.0);
+        }
         add_child(g.instance);
         surfaces_.push_back(g);
     }
@@ -343,6 +366,10 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
             const bool tire = s.material == "tire";
             const bool patterned = tire && materials.has("tire_wheel");
             addWheelSurface(wg, v, n, Array(), idx, materialFor(patterned ? std::string("tire_wheel") : s.material, materials), tire);
+            if (s.material == "brake_disc" || s.material == "chrome") {   // disc and hub nuts behind the rim
+                wg.surfs.back().instance->set_visibility_range_end(kNearOnlyRange);
+                wg.surfs.back().instance->set_visibility_range_end_margin(5.0);
+            }
             if (patterned) {
                 // The tyre shader draws its tread and sidewall pattern from these radii.
                 wg.surfs.back().instance->set_instance_shader_parameter("tire_radius", def_.tires.radius);
