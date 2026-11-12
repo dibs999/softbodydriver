@@ -35,6 +35,7 @@ var crashed := false
 var _crash_t := 0.0
 var _check_t := 0.0
 var _was_running := false
+var _tow_grace := 0.0          # s after a tow in which the stale pre-repair telemetry is ignored
 const CRASH_IMPACT := 30.0       # take_impact() units: deformed beams + 6 per broken beam
 const TOW_AFTER := 45.0
 const TOW_DISTANCE := 120.0
@@ -101,7 +102,8 @@ func update(delta: float) -> void:
 		return
 	if reacts_to_crashes:
 		_check_t += delta
-		if _check_t > 0.5:
+		_tow_grace = maxf(0.0, _tow_grace - delta)
+		if _check_t > 0.5 and _tow_grace <= 0.0:
 			_check_t = 0.0
 			_check_breakdown()
 		if crashed:
@@ -279,6 +281,9 @@ func tow() -> void:
 	crashed = false
 	_crash_t = 0.0
 	_was_running = false
+	# The repair lands with the next physics step; until then the telemetry still shows the
+	# flat tyre or dead engine, and a breakdown check would stop the car again at once.
+	_tow_grace = 1.5
 	if not lamps.is_empty():
 		lamps["hazards"] = false
 		lamps["signal"] = 0
