@@ -1017,8 +1017,10 @@ void SBVehicle::sync_from_world() {
                         6.0 * static_cast<double>(b > lastBroken_ ? b - lastBroken_ : 0);
     }
     if (d != lastDeformed_ || b != lastBroken_ || nodeDamage_.size() != pos_.size()) {
-        // Worst plastic strain at each node (actuated beams excluded: steering is not damage).
+        // Plastic strain at each node (actuated beams excluded: steering is not damage).
         nodeDamage_.assign(pos_.size(), 0.0f);
+        std::vector<std::uint16_t> damageBeams(pos_.size(), 0);
+        std::vector<float> worstStrain(pos_.size(), 0.0f);
         // A released latch (bonnet opened from the cabin) breaks its beams on purpose: that is not
         // crash damage, so it must not scratch the paint around the striker.
         const auto& groupNames = body.breakGroupNames();
@@ -1027,10 +1029,22 @@ void SBVehicle::sync_from_world() {
         for (const sb::Beam& bm : body.beams()) {
             if (bm.hydroInput >= 0 || bm.a >= nodeDamage_.size() || bm.b >= nodeDamage_.size()) continue;
             if (bm.broken && bm.breakGroup >= 0 && static_cast<std::size_t>(bm.breakGroup) < latch.size() && latch[static_cast<std::size_t>(bm.breakGroup)]) continue;
+            // Hinges, clips and mounts (break groups) are meant to let go; a part torn off its
+            // mount is not crushed paint (a bonnet with snapped hinges was speckled along its edge).
+            if (bm.broken && bm.breakGroup >= 0) continue;
             const float strain = bm.broken ? 0.2f : static_cast<float>(bm.plasticStrain());
-            nodeDamage_[bm.a] = std::max(nodeDamage_[bm.a], strain);
-            nodeDamage_[bm.b] = std::max(nodeDamage_[bm.b], strain);
+            nodeDamage_[bm.a] += strain;
+            nodeDamage_[bm.b] += strain;
+            worstStrain[bm.a] = std::max(worstStrain[bm.a], strain);
+            worstStrain[bm.b] = std::max(worstStrain[bm.b], strain);
+            ++damageBeams[bm.a];
+            ++damageBeams[bm.b];
         }
+        // Halfway between the node's mean and its worst beam: crumple-zone beams inside the body
+        // fold completely by design, and their maximum alone painted the skin above them as
+        // wrecked; the mean alone left a 50 km/h crash with hardly a chip.
+        for (std::size_t i = 0; i < nodeDamage_.size(); ++i)
+            if (damageBeams[i] > 0) nodeDamage_[i] = 0.5f * (nodeDamage_[i] / static_cast<float>(damageBeams[i]) + worstStrain[i]);
         damageDirty_ = true;
     }
     lastDeformed_ = d;
