@@ -41,6 +41,22 @@ func run() -> void:
 	fresh.load_settings()
 	check(fresh.settings["tcs"] == true, "Malformed driving value retains safe default")
 	check(fresh.settings["traffic"] == false, "Valid neighboring preference still loads")
+	# VSync used to be on/off: an old profile on a preset gets the preset's mode (adaptive on the
+	# low presets), an old custom profile keeps its choice as on/off.
+	var old_cfg := ConfigFile.new()
+	old_cfg.set_value("graphics", "preset", 0)
+	old_cfg.set_value("graphics", "vsync", true)
+	old_cfg.save(path)
+	var legacy: Node = GameState.new()
+	legacy.settings_config_path = path
+	legacy.load_settings()
+	check(legacy.graphics["vsync"] == 2, "An old profile on the lowest preset gets adaptive VSync")
+	old_cfg.set_value("graphics", "preset", GameState.CUSTOM_PRESET)
+	old_cfg.set_value("graphics", "vsync", false)
+	old_cfg.save(path)
+	legacy.load_settings()
+	check(legacy.graphics["vsync"] == 0, "An old custom profile keeps VSync off")
+	legacy.free()
 	option.free()
 	second.free()
 	third.free()

@@ -29,25 +29,25 @@ const GRAPHICS_OPTIONS := [
 	{"key": "mirrors", "caption": "Spiegel", "values": [0, 1, 2], "labels": ["Aus", "Niedrig", "Hoch"]},
 	{"key": "effects", "caption": "Partikel und Regen", "values": [0, 1], "labels": ["Reduziert", "Voll"]},
 	{"key": "fps_limit", "caption": "Bildrate begrenzen", "values": [0, 30, 60, 120, 144], "labels": ["Aus", "30", "60", "120", "144"]},
-	{"key": "vsync", "caption": "VSync", "values": [false, true], "labels": ["Aus", "An"]},
+	{"key": "vsync", "caption": "VSync", "values": [0, 1, 2], "labels": ["Aus", "An", "Adaptiv"]},
 ]
 
 const GRAPHICS_PRESETS := [
-	{"name": "Sehr niedrig", "hint": "Für schwache Laptops: 50 % Auflösung, ohne Schatten, Gras und Spiegel; bei Onboard-Grafik zusätzlich Renderer „Leistung“ wählen, bei langsamer CPU KI-Verkehr ausschalten",
+	{"name": "Sehr niedrig", "hint": "Für schwache Laptops: 50 % Auflösung, ohne Schatten, Gras und Spiegel, adaptives VSync; bei Onboard-Grafik zusätzlich Renderer „Leistung“ wählen, bei langsamer CPU KI-Verkehr ausschalten",
 		"values": {"render_scale": 0.5, "upscaler": 1, "aa": 0, "shadows": 0, "ssao": false, "glow": false, "view_distance": 600.0,
-			"vegetation": 0.3, "grass": 0.0, "facades": 0, "mirrors": 0, "effects": 0, "fps_limit": 60, "vsync": true}},
+			"vegetation": 0.3, "grass": 0.0, "facades": 0, "mirrors": 0, "effects": 0, "fps_limit": 60, "vsync": 2}},
 	{"name": "Niedrig", "hint": "67 % Auflösung mit FSR, einfache Schatten, wenig Vegetation",
 		"values": {"render_scale": 0.67, "upscaler": 1, "aa": 1, "shadows": 1, "ssao": false, "glow": false, "view_distance": 1200.0,
-			"vegetation": 0.6, "grass": 45.0, "facades": 0, "mirrors": 1, "effects": 0, "fps_limit": 60, "vsync": true}},
+			"vegetation": 0.6, "grass": 45.0, "facades": 0, "mirrors": 1, "effects": 0, "fps_limit": 60, "vsync": 2}},
 	{"name": "Mittel", "hint": "80 % Auflösung mit FSR, Schatten, volle Vegetation",
 		"values": {"render_scale": 0.8, "upscaler": 1, "aa": 1, "shadows": 2, "ssao": false, "glow": false, "view_distance": 2500.0,
-			"vegetation": 1.0, "grass": 85.0, "facades": 1, "mirrors": 1, "effects": 1, "fps_limit": 0, "vsync": true}},
+			"vegetation": 1.0, "grass": 85.0, "facades": 1, "mirrors": 1, "effects": 1, "fps_limit": 0, "vsync": 1}},
 	{"name": "Hoch", "hint": "Volle Auflösung, 4× MSAA, SSAO und Leuchteffekte",
 		"values": {"render_scale": 1.0, "upscaler": 0, "aa": 4, "shadows": 3, "ssao": true, "glow": true, "view_distance": 2500.0,
-			"vegetation": 1.0, "grass": 85.0, "facades": 1, "mirrors": 2, "effects": 1, "fps_limit": 0, "vsync": true}},
+			"vegetation": 1.0, "grass": 85.0, "facades": 1, "mirrors": 2, "effects": 1, "fps_limit": 0, "vsync": 1}},
 	{"name": "Ultra", "hint": "Wie Hoch, zusätzlich maximale Sichtweite und weites Gras",
 		"values": {"render_scale": 1.0, "upscaler": 0, "aa": 4, "shadows": 3, "ssao": true, "glow": true, "view_distance": 4000.0,
-			"vegetation": 1.0, "grass": 130.0, "facades": 1, "mirrors": 2, "effects": 1, "fps_limit": 0, "vsync": true}},
+			"vegetation": 1.0, "grass": 130.0, "facades": 1, "mirrors": 2, "effects": 1, "fps_limit": 0, "vsync": 1}},
 ]
 const CUSTOM_PRESET := -1
 
@@ -127,6 +127,10 @@ func load_settings() -> void:
 				graphics = GRAPHICS_PRESETS[saved]["values"].duplicate()
 		for option: Dictionary in GRAPHICS_OPTIONS:
 			var value: Variant = config.get_value("graphics", option["key"], graphics[option["key"]])
+			# VSync was on/off (bool) before adaptive sync was offered; a preset keeps its own mode.
+			if option["key"] == "vsync" and value is bool:
+				if _graphics_preset >= 0: continue
+				value = 1 if value else 0
 			if typeof(value) == typeof(graphics[option["key"]]) or (value is float and graphics[option["key"]] is int) or (value is int and graphics[option["key"]] is float):
 				graphics[option["key"]] = value
 		var show_help: Variant = config.get_value("interface", "show_help", false)
@@ -343,7 +347,9 @@ func _apply_viewport_graphics() -> void:
 	viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if advanced and aa == 1 else Viewport.SCREEN_SPACE_AA_DISABLED
 	viewport.use_taa = advanced and aa == 2 and upscaler != 2
 	Engine.max_fps = int(graphics["fps_limit"])
-	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if graphics["vsync"] else DisplayServer.VSYNC_DISABLED)
+	# Adaptive VSync on the low presets: a frame that misses the refresh is shown at once instead
+	# of waiting for the next one, which on a weak GPU halved the rate (just under 20 FPS -> 15).
+	DisplayServer.window_set_vsync_mode([DisplayServer.VSYNC_DISABLED, DisplayServer.VSYNC_ENABLED, DisplayServer.VSYNC_ADAPTIVE][clampi(int(graphics["vsync"]), 0, 2)])
 	RenderingServer.global_shader_parameter_set("facade_detail", float(graphics["facades"]))
 	var shadows := int(graphics["shadows"])
 	RenderingServer.directional_shadow_atlas_set_size([1024, 1024, 2048, 4096][shadows], true)

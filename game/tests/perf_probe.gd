@@ -16,6 +16,8 @@ func _next() -> void:
 			if args.is_empty() or m["id"] in args:
 				maps.append(m["id"])
 	if maps.is_empty():
+		# The preset was measured from a temporary settings file; leave the user folder clean.
+		DirAccess.remove_absolute(ProjectSettings.globalize_path("user://perf_probe_%d.cfg" % OS.get_process_id()))
 		quit()
 		return
 	current = maps.pop_front()
@@ -52,8 +54,9 @@ func _process(delta: float) -> bool:
 		for row in samples:
 			for k in 4: s[k] += row[k] / samples.size()
 		var stats: Dictionary = scene.world.get_stats()
-		print("%-16s draws %5d  objects %5d  prims %8.0fk  process %5.1f ms  realtime %.2f  nodes %d  mmi %d  viewports %d  lights %d  cars %d" % [
-			current, s[0], s[1], s[2] / 1000.0, s[3], float(stats.get("realtime_factor", 0)), scene.get_tree().get_node_count(),
+		print("%-16s draws %5d  objects %5d  prims %8.0fk  process %5.1f ms (wait %.1f copy %.1f mesh %.1f)  realtime %.2f  nodes %d  mmi %d  viewports %d  lights %d  cars %d" % [
+			current, s[0], s[1], s[2] / 1000.0, s[3], float(stats.get("sync_wait_ms", 0)), float(stats.get("sync_copy_ms", 0)), float(stats.get("sync_mesh_ms", 0)),
+			float(stats.get("realtime_factor", 0)), scene.get_tree().get_node_count(),
 			_count(scene, "MultiMeshInstance3D"), _count(scene, "SubViewport"), _count(scene, "Light3D"), scene.vehicles.size()])
 		wait = -1
 		call_deferred("_next")
