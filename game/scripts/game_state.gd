@@ -33,7 +33,7 @@ const GRAPHICS_OPTIONS := [
 ]
 
 const GRAPHICS_PRESETS := [
-	{"name": "Sehr niedrig", "hint": "Für schwache Laptops: 50 % Auflösung, ohne Schatten, Gras und Spiegel; bei Onboard-Grafik zusätzlich Renderer „Leistung“ wählen",
+	{"name": "Sehr niedrig", "hint": "Für schwache Laptops: 50 % Auflösung, ohne Schatten, Gras und Spiegel; bei Onboard-Grafik zusätzlich Renderer „Leistung“ wählen, bei langsamer CPU KI-Verkehr ausschalten",
 		"values": {"render_scale": 0.5, "upscaler": 1, "aa": 0, "shadows": 0, "ssao": false, "glow": false, "view_distance": 600.0,
 			"vegetation": 0.3, "grass": 0.0, "facades": 0, "mirrors": 0, "effects": 0, "fps_limit": 60, "vsync": true}},
 	{"name": "Niedrig", "hint": "67 % Auflösung mit FSR, einfache Schatten, wenig Vegetation",
