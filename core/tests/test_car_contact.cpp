@@ -502,3 +502,53 @@ TEST_CASE("a tow bar fitted after the build leaves the body skin and its rigid p
     for (std::size_t p = 0; p < 16 * car.visual.parts.size(); ++p)
         CHECK(after[12 + (n0 + 1) * 3 + p] == doctest::Approx(before[12 + n0 * 3 + p]).epsilon(1e-4));
 }
+
+TEST_CASE("a light trailer's sway after a steering pulse at 120 km/h dies down") {
+    auto trailer = buildProp(PropKind::Trailer);
+    auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+    World w;
+    w.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+    const auto ic = w.addBody(std::move(car.body));
+    const auto tow = static_cast<std::uint32_t>(addTowBar(w.body(ic), car.layout));
+    trailer.body.translate(w.body(ic).positions()[tow] - trailer.body.positions()[static_cast<std::size_t>(trailer.hitch)]);
+    const auto it = w.addBody(std::move(trailer.body));
+    BodyLink link;
+    link.bodyA = ic; link.nodeA = tow; link.bodyB = it; link.nodeB = static_cast<std::uint32_t>(trailer.hitch);
+    w.addLink(link);
+    auto& c = w.body(ic);
+    auto& t = w.body(it);
+    // Rolling at 120 km/h from the start (the tyres spin up within a few tenths of a second).
+    const real v0 = 120.0 / 3.6;
+    for (auto& v : c.velocities()) v = {v0, 0, 0};
+    for (auto& v : t.velocities()) v = {v0, 0, 0};
+    const std::size_t hitch = static_cast<std::size_t>(trailer.hitch);
+    auto articulation = [&]() {   // trailer heading relative to the car's, in degrees
+        const Vec3 cf = c.centerOfMass() - c.positions()[tow];
+        const Vec3 tf = t.positions()[hitch] - t.centerOfMass();
+        real a = std::atan2(tf.z, tf.x) - std::atan2(cf.z, cf.x);
+        while (a > 3.141592653589793) a -= 2 * 3.141592653589793;
+        while (a < -3.141592653589793) a += 2 * 3.141592653589793;
+        return a * 180.0 / 3.141592653589793;
+    };
+    VehicleControls ctl;
+    real time = 0, during = 0, after = 0;
+    const real dt = 0.02;
+    while (time < 6.0) {
+        ctl.throttle = c.telemetry().speedKmh < 120.0 ? 0.6 : 0.2;
+        // One full sine of steering (about 1.3 deg at the road wheels) between 1.5 s and 2.5 s, then straight.
+        ctl.steer = time > 1.5 && time < 2.5 ? 0.06 * std::sin(2 * 3.141592653589793 * (time - 1.5)) : 0.0;
+        c.setControls(ctl);
+        w.simulate(dt);
+        time += dt;
+        if (time > 1.5 && time < 3.0) during = std::max(during, std::abs(articulation()));
+        if (time > 4.5) after = std::max(after, std::abs(articulation()));
+    }
+    REQUIRE(w.stats().finite);
+    CAPTURE(during);
+    CAPTURE(after);
+    CHECK(c.telemetry().speedKmh > 100.0);
+    CHECK(during > 0.5);    // the pulse does swing it
+    CHECK(during < 6.0);    // but only a little: 200 kg behind a 1.1 t car
+    CHECK(after < 0.3);     // and two seconds later the sway has died out
+    CHECK_FALSE(w.links()[0].broken);
+}
