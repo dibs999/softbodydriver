@@ -34,6 +34,9 @@ func run() -> void:
   worlds.append(world)
   cars.append(car)
  check(cars[1].has_node("BodyHood"), "Detailed Concept body is attached")
+ # The vented front panel is the Concept's bonnet: it follows the physical bonnet, so the lid opens.
+ var lids: Array = cars[1].get_lid_states()
+ check(lids.size() > 0 and bool(lids[0].get("available", false)), "Concept front lid (vented panel) can open")
  check(source_material.get_flag(BaseMaterial3D.FLAG_AO_ON_UV2) == source_ao_on_uv2, "AO channel override preserves shared source material")
  source_model.free()
  var ao_materials := 0

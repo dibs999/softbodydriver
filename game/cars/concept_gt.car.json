@@ -27,6 +27,7 @@
     "parts": {
       "door_left": ["BodyDoorLColor1", "BodyDoorLColor2", "BodyDoorLHandle01", "BodyDoorLHandle02", "BodyDoorLMirror", "BodyDoorLMirrorColor1", "BodyDoorLMirrorColor2", "BodyDoorLWindow", "BodyDoorLWindowGasket", "InteriorDoorL01", "InteriorDoorL02", "InteriorDoorL03", "InteriorDoorL04", "InteriorDoorL05", "InteriorDoorL06"],
       "door_right": ["BodyDoorRColor1", "BodyDoorRColor2", "BodyDoorRHandle01", "BodyDoorRHandle02", "BodyDoorRMirror", "BodyDoorRMirrorColor1", "BodyDoorRMirrorColor2", "BodyDoorRWindow", "BodyDoorRWindowGasket", "InteriorDoorR01", "InteriorDoorR02", "InteriorDoorR03", "InteriorDoorR04", "InteriorDoorR05", "InteriorDoorR06"],
+      "bonnet": ["BodyHoodTopgrill", "BodyHoodInterior02"],
       "tailgate": ["BodyRearwindow", "InteriorRearHatch"]
     },
     "_textureScale": "KHR_texture_transform scales of normal-mapped materials without a base colour texture; Godot's importer drops them, which stretched the flake and leather normals into blotches.",
