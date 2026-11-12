@@ -35,6 +35,18 @@ struct WorldStats {
     bool finite = true;            ///< False if any node position became NaN/inf.
 };
 
+/// A coupling between two bodies: a ball joint (spring-damper pulling node A of body A onto node B
+/// of body B) that breaks above `breakForce`. A trailer's hitch on a car's tow ball.
+struct BodyLink {
+    std::size_t bodyA = 0, bodyB = 0;
+    std::uint32_t nodeA = 0, nodeB = 0;
+    real stiffness = 2.0e5;   ///< N/m
+    real damping = 1.5e3;     ///< N*s/m
+    real breakForce = 6.0e4;  ///< N; the coupling tears apart above this (a crash, not a tow)
+    bool broken = false;
+    real force = 0.0;         ///< Magnitude in the last step (N), for HUD and tests.
+};
+
 /// Stops the physics worker threads shared by all worlds (e.g. before a plugin is unloaded).
 /// The next multi-body step starts them again. Must not run concurrently with World::step().
 void shutdownPhysicsThreads();
@@ -47,6 +59,11 @@ public:
     /// Removes body i; indices of later bodies shift down by one.
     void removeBody(std::size_t i);
     void addCollider(const StaticCollider& c) { colliders_.push_back(c); }
+    /// Couples two bodies (see BodyLink). Returns its index; links of a removed body go with it.
+    std::size_t addLink(const BodyLink& link) { links_.push_back(link); return links_.size() - 1; }
+    void removeLink(std::size_t i) { if (i < links_.size()) links_.erase(links_.begin() + static_cast<std::ptrdiff_t>(i)); }
+    std::vector<BodyLink>& links() { return links_; }
+    const std::vector<BodyLink>& links() const { return links_; }
     void clearColliders() { colliders_.clear(); }
 
     /// Advances one fixed physics step.
@@ -73,6 +90,7 @@ private:
     void integrateBody(SoftBody& b);
     std::size_t collideBody(SoftBody& b, std::vector<const StaticCollider*>& candidates);
     std::size_t collideBodies();
+    void applyLinks();
     /// triLo/triHi: triBody's box, grown by the contact margin. heavyPair: both are vehicles.
     std::size_t collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody, const Vec3& triLo, const Vec3& triHi,
                                        bool heavyPair);
@@ -81,6 +99,7 @@ private:
     WorldSettings settings_;
     std::vector<SoftBody> bodies_;
     std::vector<StaticCollider> colliders_;
+    std::vector<BodyLink> links_;
     std::uint64_t steps_ = 0;
     std::size_t lastContacts_ = 0;
     std::size_t lastBodyContacts_ = 0;

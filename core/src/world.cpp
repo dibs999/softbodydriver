@@ -20,7 +20,44 @@ constexpr real kDeepContact = 0.01;  // m behind a face of another vehicle: inte
 }  // namespace
 
 void World::removeBody(std::size_t i) {
-    if (i < bodies_.size()) bodies_.erase(bodies_.begin() + static_cast<std::ptrdiff_t>(i));
+    if (i >= bodies_.size()) return;
+    bodies_.erase(bodies_.begin() + static_cast<std::ptrdiff_t>(i));
+    // Links to the removed body go with it; the others follow the index shift.
+    std::vector<BodyLink> kept;
+    for (BodyLink l : links_) {
+        if (l.bodyA == i || l.bodyB == i) continue;
+        if (l.bodyA > i) --l.bodyA;
+        if (l.bodyB > i) --l.bodyB;
+        kept.push_back(l);
+    }
+    links_.swap(kept);
+}
+
+void World::applyLinks() {
+    // Serial, after the parallel integration: each link exchanges an equal and opposite impulse,
+    // so momentum is conserved like in a beam, only across two bodies.
+    const real dt = settings_.dt;
+    for (BodyLink& l : links_) {
+        if (l.broken || l.bodyA >= bodies_.size() || l.bodyB >= bodies_.size() || l.bodyA == l.bodyB) continue;
+        SoftBody& a = bodies_[l.bodyA];
+        SoftBody& b = bodies_[l.bodyB];
+        if (l.nodeA >= a.nodeCount() || l.nodeB >= b.nodeCount()) continue;
+        const Vec3 d = b.positions()[l.nodeB] - a.positions()[l.nodeA];
+        const Vec3 dv = b.velocities()[l.nodeB] - a.velocities()[l.nodeA];
+        const Vec3 f = d * l.stiffness + dv * l.damping;   // on A, towards B
+        l.force = length(f);
+        if (l.force > l.breakForce) {
+            l.broken = true;
+            continue;
+        }
+        const real ia = a.invMasses()[l.nodeA], ib = b.invMasses()[l.nodeB];
+        a.velocities()[l.nodeA] += f * (dt * ia);
+        b.velocities()[l.nodeB] -= f * (dt * ib);
+        if (l.force > 1.0) {
+            if (a.asleep()) a.wake();
+            if (b.asleep()) b.wake();
+        }
+    }
 }
 
 void World::accumulateAerodynamicForces(SoftBody& b) {
@@ -454,6 +491,7 @@ void World::step() {
         lastSelfContacts_ += scratch_[bi].selfContacts;
         lastSelfContactCandidates_ += scratch_[bi].selfCandidates;
     }
+    if (!links_.empty()) applyLinks();
     lastBodyContacts_ = collideBodies();
     // Bodies woken by a contact in collideBodies() take part from here on.
     awakeStep_.clear();

@@ -235,6 +235,10 @@ struct CarLayout {
     // inner then outer skin. Gas struts on channel 6 share the hinge breakgroup.
     std::vector<std::uint32_t> tailgateNodes, tailgateStrutBeams;
     std::vector<std::uint32_t> frontBumperNodes, rearBumperNodes; // cuboid ix*4 + iy*2 + iz
+    /// Where a tow ball goes (see addTowBar): the rear rail nodes it is braced to and its offset
+    /// from their centre in car axes (x forward, y up, z right).
+    std::vector<std::uint32_t> towRails;
+    Vec3 towOffset{};
     real length = 0, width = 0, height = 0;
 };
 
@@ -249,6 +253,13 @@ struct CarBuild {
 /// Builds the complete car with the rear bumper at x = 0, ground at y = 0, centred on z = 0,
 /// facing +X. Call body.translate() to place it.
 CarBuild buildCar(const CarDefinition& def);
+
+/// Fits the tow bar for a trailer: a 4 kg ball 10 cm behind the rear in the middle, at hitch
+/// height, on steel braces to the rear rails that bend above 40 kN and tear off above 60 kN. It is
+/// added to the running car (in its present pose) only when a trailer is coupled, so a car without
+/// one is unchanged. Returns the ball's node (the existing one on a second call), -1 if the layout
+/// has no tow position.
+std::int64_t addTowBar(SoftBody& body, const CarLayout& layout);
 
 /// Computes the skinning state (rigid frame + per-node displacements) into `frames`.
 void computeNodeFrames(const std::vector<Vec3>& positions, const CarVisual& vis, std::vector<float>& frames);
