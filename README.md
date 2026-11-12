@@ -385,6 +385,16 @@ bis Gas gegeben wird, statt es in der Fahrstufe davonkriechen zu lassen (`auto_h
 Bremsen halten wie echte Bremssättel auch statisch: Ein voll gebremstes Auto steht an 30 %
 Steigung, die Handbremse allein hält an 20 %, ohne zu rutschen oder zu schaukeln.
 Das Pausenmenü bietet Aktivitäten, Wetter und Tageszeit auch ohne Funktionstasten.
+**Werkstatt** (Pausenmenü): Teile und Tuning wie in BeamNGs Fahrzeugkonfiguration. Jeder Motor
+aus allen Fahrzeugen lässt sich einbauen (mit dem eigenen Getriebe, dessen Schaltpunkte an den neuen
+Drehzahlbereich angepasst werden, oder mit dem des Spenderautos); das Leergewicht ändert sich um die
+Motormassen-Differenz. Dazu Kennfeld-Leistung (70–150 %), Drehzahlbegrenzer, Achsübersetzung,
+Antrieb (Front, Heck, Allrad), Sperrdifferenzial, Federn, Dämpfer und Stabilisatoren je Achse,
+Reifenmischung (Eco, Serie, Sport, Semi-Slick), Bremsanlage und Zusatz- oder Minusgewicht. Die
+Ergebniszeile zeigt Leistung, Drehmoment, Drehzahlgrenze, Antrieb, Gewicht und Leistungsgewicht.
+„Übernehmen“ baut das Auto im Stand an Ort und Stelle neu auf; die Konfiguration wird je Fahrzeug
+im Profil gespeichert und gilt beim nächsten Start wieder (Verkehr und Gegner fahren Serie).
+„Werkszustand wiederherstellen“ setzt alles zurück (`workshop_test`).
 Unter **Fahrzeug → Abstimmung** lassen sich der Reifendruck je Achse (18–50 psi) und der
 Bremskraftanteil vorn (50–80 %) einstellen; „Abstimmung auf Werkswerte“ setzt beides zurück.
 Weniger Druck macht die Reifen weicher, mehr Bremskraft vorn lässt die Vorderräder früher
@@ -483,6 +493,7 @@ godot --headless --path game -s res://tests/driver_input_test.gd # Rückwärtsfa
 godot --headless --path game -s res://tests/cockpit_instruments_test.gd # Echte Zustände im Cockpit
 godot --headless --path game -s res://tests/session_controls_test.gd # Pausenmenü, Wetter, Aktivitäten und Bergung
 godot --headless --path game -s res://tests/trailer_test.gd         # Anhänger an-/abkuppeln, ziehen, bremsen
+godot --headless --path game -s res://tests/workshop_test.gd        # Werkstatt: Motortausch, Allrad, Reifen, Werkszustand
 godot --headless --path game -s res://tests/time_trial_flow_test.gd # Echte vollständige Runde, Ergebnis und Profil-Neuladen
 godot --headless --path game -s res://tests/time_trial_flow_test.gd -- --record-save-failure # Echte Runde bei nicht schreibbarer Rekorddatei
 godot --headless --path game -s res://tests/proving_ground_test.gd # Anfahrt, Service, Gelände und Kollisionen

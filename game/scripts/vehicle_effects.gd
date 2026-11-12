@@ -244,7 +244,8 @@ func update_effects(t: Dictionary, anchors: Dictionary, slip: PackedFloat32Array
 	_mark_timer -= delta
 	var refresh_surface := _mark_timer <= 0
 	if refresh_surface: _mark_timer = 0.08
-	for i in mini(4, wheels.size()):
+	# A car rebuilt this frame (Werkstatt) has no contact data yet.
+	for i in mini(mini(4, wheels.size()), mini(contacts.size(), normals.size())):
 		var loose: bool = wheel_surfaces[i] in ["sand", "gravel", "grass"] if surfaces else dirt
 		var contact := load[i] if i < load.size() else 0.0
 		var sliding := slip[i] if i < slip.size() else 0.0

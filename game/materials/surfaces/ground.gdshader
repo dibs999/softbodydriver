@@ -351,8 +351,15 @@ void fragment() {
 	float wet = clamp(road_wetness * wet_response, 0.0, 1.0);
 	col *= mix(1.0, 0.66, wet);
 	ALBEDO = col;
+	float final_rough = mix(roughness * mix(0.96, 1.04, fine) * (1.0 - street_gloss), 0.18 + 0.3 * fine, wet * 0.85);
 	if (lamp_count > 0) {
 		vec3 lamp_light = vec3(0.0);
+		float lamp_spec = 0.0;
+		// GGX highlight of each lamp: on a wet street it draws the long reflections of the lamps.
+		vec3 v_dir = normalize(CAMERA_POSITION_WORLD - world_pos);
+		float a_sp = max(final_rough * final_rough, 0.002);
+		float a2_sp = a_sp * a_sp;
+		float ndv_sp = clamp(dot(n, v_dir), 0.001, 1.0);
 		for (int i = 0; i < 48; i++) {
 			if (i >= lamp_count) break;
 			vec4 lamp = lamp_pool[i];
@@ -362,12 +369,21 @@ void fragment() {
 			vec3 l = d / dist;
 			float window = pow(clamp(1.0 - pow(dist / 20.0, 4.0), 0.0, 1.0), 2.0);
 			float cone = pow(clamp((l.y - cos(radians(62.0))) / (1.0 - cos(radians(62.0))), 0.0, 1.0), 1.0 / 1.6);
-			lamp_light += vec3(lamp.w * window * cone * pow(dist, -0.9) * max(dot(n, l), 0.0));
+			float ndl_l = max(dot(n, l), 0.0);
+			float irr = lamp.w * window * cone * pow(dist, -0.9);
+			lamp_light += vec3(irr * ndl_l);
+			vec3 h_sp = normalize(l + v_dir);
+			float ndh = clamp(dot(n, h_sp), 0.0, 1.0);
+			float dd = ndh * ndh * (a2_sp - 1.0) + 1.0;
+			float k_sp = a_sp * 0.5;
+			float vis = 0.25 / ((ndl_l * (1.0 - k_sp) + k_sp) * (ndv_sp * (1.0 - k_sp) + k_sp));
+			float fres = 0.04 + 0.96 * pow(1.0 - clamp(dot(l, h_sp), 0.0, 1.0), 5.0);
+			lamp_spec += a2_sp / (3.14159 * dd * dd) * vis * fres * ndl_l * irr;
 		}
 		// Diffuse as Godot lights it (energy already includes the Lambert normalisation).
-		EMISSION = col * lamp_color.rgb * lamp_light * 2.5;
+		EMISSION = col * lamp_color.rgb * lamp_light * 2.5 + lamp_color.rgb * lamp_spec;
 	}
-	ROUGHNESS = mix(roughness * mix(0.96, 1.04, fine) * (1.0 - street_gloss), 0.18 + 0.3 * fine, wet * 0.85);
+	ROUGHNESS = final_rough;
 	SPECULAR = mix(0.5, 0.62, wet);
 	if (has_normal) {
 		NORMAL = normalize((VIEW_MATRIX * vec4(normalize(nrm), 0.0)).xyz);

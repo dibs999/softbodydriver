@@ -34,6 +34,10 @@ konkrete Teilergebnisse und erklärt das Gesamtprodukt noch nicht für fertig.
   80 km/h ab (Kerntest), bei 100 km/h bleibt sie stehen, bei 130 km/h schaukelt sie sich auf; die
   Stützlast steigt im Spiel von rund 780 auf 1190 N (`trailer_test`). Das Fahrgefühl beim Ziehen ist
   nicht von Hand abgenommen.
+* Werkstatt (`workshop_test.gd`): Der 5,0-V8 des Vortex GT mit Allrad und Semi-Slicks im Kestrel
+  baut das Auto im Stand neu auf, 90 kg schwerer (Motormassen-Differenz), auf demselben Platz in
+  der Fahrzeugliste; nach 4 s Vollgas 104 statt rund 63 km/h. Werkszustand stellt Motor und
+  Profil zurück, ein reines Kennfeld-Tuning baut ebenfalls neu auf, in Fahrt wird abgelehnt.
 * Alle sieben `cartest … --quick`-Prüfstände: `RESULT: OK`.
 * Erweiterter Headless-Belastungstest: **30 Minuten 1,75 Sekunden simuliert**
   in **5 Minuten 5,753 Sekunden Laufzeit**. **51 vollständige Zyklen** mit echter

@@ -464,6 +464,22 @@ func apply_chosen_paint(vehicle: SBVehicle) -> void:
 	if chosen is Color: paint_vehicle(vehicle, chosen)
 
 
+const Workshop := preload("res://scripts/vehicle_workshop.gd")
+var _engines: Array = []
+## Every engine of every car (Werkstatt engine swap).
+func engine_catalogue() -> Array:
+	if _engines.is_empty():
+		_engines = Workshop.engine_catalogue(cars)
+	return _engines
+
+
+func car_path_for_id(car_id: String) -> String:
+	for c in cars:
+		if str(c["id"]) == car_id:
+			return c["path"]
+	return ""
+
+
 func car_info(path: String) -> Dictionary:
 	for c in cars:
 		if c["path"] == path:
@@ -837,8 +853,16 @@ func spawn_prop(world: SBWorld, kind: String, xform: Transform3D) -> SBProp:
 
 ## Spawns a car and, if its definition references a 3D model, replaces the procedural body with
 ## that model (bound to the soft-body nodes as a flexbody).
-func spawn_vehicle(world: SBWorld, path: String, xform: Transform3D) -> SBVehicle:
-	var v := world.spawn_car(path, xform)
+func spawn_vehicle(world: SBWorld, path: String, xform: Transform3D, configured := false) -> SBVehicle:
+	# The player's car is built with its Werkstatt configuration (engine swap, tuning, ...); traffic
+	# and opponents with the same model stay as they leave the factory.
+	var build_path := path
+	if configured:
+		var info := car_info(path)
+		var cfg := progress.get_config(str(info.get("id", "")))
+		if not cfg.is_empty():
+			build_path = Workshop.configured_path(path, cfg, engine_catalogue())
+	var v := world.spawn_car(build_path, xform)
 	if v:
 		apply_visual_model(v, car_info(path))
 		var effects := preload("res://scripts/vehicle_effects.gd").new()
