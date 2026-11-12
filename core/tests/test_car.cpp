@@ -910,7 +910,9 @@ TEST_CASE("rolling resistance stays like a real tyre from town to motorway speed
     // 16 tread nodes made a polygon that lost energy at every node strike: c_rr 0.006 at 30 km/h
     // but 0.039 at 120 km/h. 20 nodes plus a load-proportional hysteresis torque keep it at
     // 0.006-0.019 (real car tyres ~0.008-0.015, rising slightly with speed).
-    for (const real kmh : {30.0, 60.0, 100.0, 130.0}) {
+    // The stiffer tread contact (4.5e5) also had a narrow resonance bump, c_rr 0.021 at 85 km/h on
+    // this car: the 75-95 km/h points watch for it.
+    for (const real kmh : {30.0, 60.0, 75.0, 85.0, 95.0, 100.0, 130.0}) {
         CAPTURE(kmh);
         CarBuild cb = buildCar(loadCarDefinition(carPath("kestrel_hatch")));
         WorldSettings settings;
@@ -939,7 +941,7 @@ TEST_CASE("rolling resistance stays like a real tyre from town to motorway speed
         const real crr = (v0 - v1) / 3.0 / 9.81;
         MESSAGE("c_rr at " << kmh << " km/h: " << crr);
         CHECK(crr > 0.005);
-        CHECK(crr < 0.02);
+        CHECK(crr < 0.016);
     }
 }
 

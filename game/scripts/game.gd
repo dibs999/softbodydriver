@@ -525,10 +525,12 @@ func _drive_player(delta: float) -> void:
 		steer = preload("res://scripts/steering_assist.gd").apply(steer, kmh, float(hud.info.get("wheelbase", 2.8)))
 	var hb := Input.get_action_strength("handbrake")
 	# Automatic gearbox: hold brake at standstill to engage reverse, throttle to go forward again.
+	# Reverse waits 0.8 s at a real standstill: braking to a stop from speed with the pedal still
+	# down must stop the car, not roll it straight back (it engaged after 0.35 s below 2 km/h).
 	if player.is_automatic():
-		if gear >= 0 and kmh < 2.0 and brk > 0.5 and thr < 0.1:
+		if gear >= 0 and kmh < 1.0 and brk > 0.5 and thr < 0.1:
 			_reverse_hold += delta
-			if _reverse_hold > 0.35:
+			if _reverse_hold > 0.8:
 				player.set_gear(-1)
 				_reverse_hold = 0.0
 		elif gear < 0 and kmh < 2.0 and thr > 0.5 and brk < 0.1:
