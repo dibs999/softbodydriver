@@ -73,18 +73,20 @@ static func _merged_full(path: String) -> Array:
 
 
 ## Places parked cars at the given ground transforms (basis yaw: car faces local +z of xf).
-## `paints` overrides the paint colours (e.g. rust for wrecks).
-static func place(parent: Node3D, world: SBWorld, xforms: Array[Transform3D], seed := 5, paints: Array = []) -> void:
+## `paints` overrides the paint colours (e.g. rust for wrecks), `models` the choice of models.
+static func place(parent: Node3D, world: SBWorld, xforms: Array[Transform3D], seed := 5, paints: Array = [],
+		models: Array = []) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
+	var pool: Array = models if not models.is_empty() else MODELS
 	var groups: Array = []
-	for m in MODELS: groups.append([])
+	for m in pool: groups.append([])
 	for xf in xforms:
-		groups[rng.randi() % MODELS.size()].append(xf)
-	for k in MODELS.size():
+		groups[rng.randi() % pool.size()].append(xf)
+	for k in pool.size():
 		var list: Array = groups[k]
 		if list.is_empty(): continue
-		var merged := _merged(MODELS[k])
+		var merged := _merged(pool[k])
 		if merged.is_empty(): continue
 		var mesh: ArrayMesh = merged[0]
 		var aabb: AABB = merged[1]

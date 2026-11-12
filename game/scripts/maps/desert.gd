@@ -498,7 +498,8 @@ static func _mine(parent: Node3D, world: SBWorld, path: PackedVector3Array, heig
 		var b := Basis(Vector3.UP, yaw + 0.6 + 1.9 * k).rotated(forward, 0.05 - 0.09 * k).rotated(side, 0.03)
 		wrecks.append(Transform3D(b, w))
 	preload("res://scripts/maps/parked_cars.gd").place(parent, world, wrecks, 77,
-		[Color(0.16, 0.07, 0.03), Color(0.22, 0.10, 0.04), Color(0.14, 0.10, 0.07)])
+		[Color(0.16, 0.07, 0.03), Color(0.22, 0.10, 0.04), Color(0.14, 0.10, 0.07)],
+		["res://models/rubble/sedan.glb", "res://models/rubble/suv_4x4.glb"])   # no light bar on a wreck
 	var tyre := TorusMesh.new()
 	tyre.inner_radius = 0.2
 	tyre.outer_radius = 0.33
