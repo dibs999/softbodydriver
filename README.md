@@ -390,11 +390,13 @@ aus allen Fahrzeugen lässt sich einbauen (mit dem eigenen Getriebe, dessen Scha
 Drehzahlbereich angepasst werden, oder mit dem des Spenderautos); das Leergewicht ändert sich um die
 Motormassen-Differenz. Dazu Kennfeld-Leistung (70–150 %), Drehzahlbegrenzer, Achsübersetzung,
 Antrieb (Front, Heck, Allrad), Sperrdifferenzial, Federn, Dämpfer und Stabilisatoren je Achse,
-Reifenmischung (Eco, Serie, Sport, Semi-Slick), Bremsanlage und Zusatz- oder Minusgewicht. Die
+Fahrzeughöhe (−40 bis +60 mm), Reifenmischung (Eco, Serie, Sport, Semi-Slick), Reifenbreite,
+Bremsanlage und Zusatz- oder Minusgewicht. Die
 Ergebniszeile zeigt Leistung, Drehmoment, Drehzahlgrenze, Antrieb, Gewicht und Leistungsgewicht.
 „Übernehmen“ baut das Auto im Stand an Ort und Stelle neu auf; die Konfiguration wird je Fahrzeug
 im Profil gespeichert und gilt beim nächsten Start wieder (Verkehr und Gegner fahren Serie).
-„Werkszustand wiederherstellen“ setzt alles zurück (`workshop_test`).
+„Werkszustand wiederherstellen“ setzt alles zurück (`workshop_test`; `workshop_extremes_test` baut
+jedes Auto an beiden Enden aller Bereiche und fährt es an).
 Unter **Fahrzeug → Abstimmung** lassen sich der Reifendruck je Achse (18–50 psi) und der
 Bremskraftanteil vorn (50–80 %) einstellen; „Abstimmung auf Werkswerte“ setzt beides zurück.
 Weniger Druck macht die Reifen weicher, mehr Bremskraft vorn lässt die Vorderräder früher
