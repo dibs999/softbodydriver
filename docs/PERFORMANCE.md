@@ -65,6 +65,15 @@ bleiben also keine unsichtbaren Hindernisse zurück.
     Skriptzeit. Gemessen (ohne Darstellung, 2–4 Autos): Warten 0,1–0,7 ms, Kopieren 0,2–0,5 ms,
     Verformung 7–8 ms; Stichproben des Hauptthreads liegen sonst überwiegend im Leerlauf.
 
+* **Scheinwerferschatten nur noch für das eigene Auto (13. November 2026):**
+  * Jeder Scheinwerfer mit Schatten rendert die Szene ein weiteres Mal; nachts mit Verkehr waren
+    das zwei Schattendurchgänge je Auto. Jetzt werfen nur die Scheinwerfer des gespielten Autos
+    Schatten, und nicht bei der niedrigsten Schattenstufe.
+  * Im Compatibility-Renderer (OpenGL) legten die groben Spot-Schatten breite diagonale Streifen
+    über Hausfassaden 20–40 m voraus, unabhängig von Bias und Atlasgröße; dort werfen die
+    Scheinwerfer keine Schatten mehr. `map_shots` mit `FROM_LIGHT=1` zeigt die Sicht des rechten
+    Scheinwerfers.
+
 * **Karosserieflächen nur bei echter Formänderung verformen (13. November 2026):**
   * Die Hauptthread-Aufschlüsselung zeigte 7–9 ms je Bild für das Verformen der Fahrzeugmeshes;
     nahe Autos verformten bisher jedes Bild alle ihre ~110–160 Flächen.

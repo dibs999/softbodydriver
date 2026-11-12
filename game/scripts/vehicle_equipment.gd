@@ -7,6 +7,7 @@ signal service_completed(kind: String)
 signal fuel_delivered(litres: float, session_litres: float)
 
 const REPAIR_SECONDS := 4.0
+var _headlight_shadows := true
 const FUEL_RATE_LPS := 0.8
 var service_progress := 0.0
 var refuel_delivered_litres := 0.0
@@ -167,7 +168,7 @@ func state_for(v: SBVehicle) -> Dictionary:
 		light.spot_angle = 44
 		light.light_energy = 16
 		light.spot_attenuation = 0.65
-		light.shadow_enabled = true
+		light.shadow_enabled = false   # set per frame: only the player's car (see _process)
 		light.light_color = Color(1.0, 0.95, 0.82)
 		rig.add_child(light)
 		headlights.append(light)
@@ -350,6 +351,11 @@ func hud_state() -> Dictionary:
 
 func _process(delta: float) -> void:
 	if not game: return
+	# Only the player's headlights cast shadows: every shadowed lamp renders the scene once more
+	# (a whole traffic queue at night), and the Compatibility renderer's coarse spot shadows laid
+	# broad diagonal acne bands across facades 30 m ahead, whatever the bias. Not on the lowest
+	# shadow setting either.
+	_headlight_shadows = int(Game.graphics.get("shadows", 1)) > 0 and RenderingServer.get_current_rendering_method() != "gl_compatibility"
 	for old_vehicle in states.keys():
 		if not is_instance_valid(old_vehicle) or old_vehicle not in game.vehicles:
 			states[old_vehicle]["rig"].queue_free()
@@ -383,6 +389,7 @@ func _process(delta: float) -> void:
 			light.spot_angle = 32.0 if high else 44.0
 			light.light_energy = 30.0 if high else 16.0
 			light.rotation_degrees.x = -0.5 if high else -2.0
+			light.shadow_enabled = v == game.player and _headlight_shadows
 		for lamp in s["left"]: lamp.visible = blink and (s["hazards"] or s["signal"] == -1) and not broken.get(lamp.get_meta("corner"), false)
 		for lamp in s["right"]: lamp.visible = blink and (s["hazards"] or s["signal"] == 1) and not broken.get(lamp.get_meta("corner"), false)
 		for signal_material in s["authored_signals"]:

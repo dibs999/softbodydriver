@@ -83,6 +83,9 @@ func _setup() -> void:
 			if count == 0: views.append([at + Vector3(0.0, 2.6, 0.02), at])
 			count += 1
 	var p: Vector3 = scene.player.get_position_ws()
+	# FROM_LIGHT=1: what the player's right headlight sees (anything in front of it shadows the beam).
+	if OS.has_environment("FROM_LIGHT") and scene.get("equipment"):
+		views.append(["light"])   # resolved when the shot is taken: the lamp rig follows the car
 	# CAR_VIEWS=dx,dy,dz,tx,ty,tz;...: camera and target relative to the player car.
 	if OS.has_environment("CAR_VIEWS"):
 		for v in OS.get_environment("CAR_VIEWS").split(";"):
@@ -99,8 +102,12 @@ func _process(_d: float) -> bool:
 	var f0 := start_frame
 	var vi := (frame - f0) / 6
 	if frame >= f0 and (frame - f0) % 6 == 0 and vi < views.size():
-		cam.position = views[vi][0]
-		cam.look_at(views[vi][1])
+		if views[vi][0] is String:
+			var lamp: SpotLight3D = scene.equipment.state_for(scene.player)["headlights"][1]
+			cam.global_transform = lamp.global_transform
+		else:
+			cam.position = views[vi][0]
+			cam.look_at(views[vi][1])
 	if frame >= f0 and (frame - f0) % 6 == 5 and vi < views.size():
 		root.get_viewport().get_texture().get_image().save_png("%s_%d.png" % [prefix, vi])
 	return frame > f0 + 6 * views.size()
