@@ -181,6 +181,47 @@ static func carve_path(h: PackedFloat32Array, nx: int, nz: int, ox: float, oz: f
 			h[k] = lerpf(by[k] - depth, h[k], t)
 
 
+## Physics copy of a heightfield, raised under the road meshes by each road's lift. A road mesh is
+## drawn `lift` above the terrain so the terrain never shows through it; on the bare terrain the
+## wheels and props sank into the drawn road by that lift (3-6 cm: the bottom of every tyre cut
+## off by the road surface). Full lift within the road's half width, fading out over one cell
+## beyond it, so the bilinear surface reaches the full lift wherever the road is drawn.
+## roads: [{"points": PackedVector3Array, "half_w": float, "lift": float, "closed": bool}].
+static func raise_under_roads(h: PackedFloat32Array, nx: int, nz: int, ox: float, oz: float, cell: float,
+		roads: Array) -> PackedFloat32Array:
+	var raise := PackedFloat32Array()
+	raise.resize(nx * nz)
+	raise.fill(0.0)
+	for road: Dictionary in roads:
+		var path: PackedVector3Array = road["points"]
+		var half_w: float = road["half_w"]
+		var lift: float = road["lift"]
+		var reach := half_w + cell
+		var n := path.size()
+		for i in (n if road.get("closed", false) else n - 1):
+			var a := path[i]
+			var b := path[(i + 1) % n]
+			var start := Vector2(a.x, a.z)
+			var segment := Vector2(b.x, b.z) - start
+			var length_sq := maxf(segment.length_squared(), 0.000001)
+			var min_x := maxi(0, ceili((minf(a.x, b.x) - reach - ox) / cell))
+			var max_x := mini(nx - 1, floori((maxf(a.x, b.x) + reach - ox) / cell))
+			var min_z := maxi(0, ceili((minf(a.z, b.z) - reach - oz) / cell))
+			var max_z := mini(nz - 1, floori((maxf(a.z, b.z) + reach - oz) / cell))
+			for ix in range(min_x, max_x + 1):
+				for iz in range(min_z, max_z + 1):
+					var offset := Vector2(ox + ix * cell, oz + iz * cell) - start
+					var along := clampf(offset.dot(segment) / length_sq, 0.0, 1.0)
+					var d := (offset - segment * along).length()
+					if d >= reach: continue
+					var k := ix * nz + iz
+					raise[k] = maxf(raise[k], lift * (1.0 - smoothstep(half_w, reach, d)))
+	var out := h.duplicate()
+	for k in nx * nz:
+		out[k] += raise[k]
+	return out
+
+
 ## Terrain mesh straight from packed arrays (fast). `colors` (optional, nx * nz) gives vertex colours.
 static func terrain_mesh(ox: float, oz: float, cell: float, nx: int, nz: int, h: PackedFloat32Array,
 		material: Material, colors := PackedColorArray(), region := Rect2i()) -> MeshInstance3D:

@@ -138,7 +138,12 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			smooth[i].y = (shortcut[i - 1].y + shortcut[i].y * 2.0 + shortcut[i + 1].y) * 0.25
 		shortcut = smooth
 	C.carve_path(heights, nx, nz, ox, oz, cell, shortcut, 5.0, 11.0, 0.08, false)
-	world.add_heightfield(ox, oz, cell, nx, nz, heights, 0.82)
+	# The pistes are drawn 4-5 cm above the sand; the physics ground is raised under them by the
+	# same amount so the wheels roll on the drawn surface instead of sinking into it.
+	var physical := C.raise_under_roads(heights, nx, nz, ox, oz, cell, [
+		{"points": track, "half_w": half_w, "lift": 0.052, "closed": true},
+		{"points": shortcut, "half_w": 3.6, "lift": 0.043}])
+	world.add_heightfield(ox, oz, cell, nx, nz, physical, 0.82)
 
 	# Vertex colours: sand on flats, red rock on steep slopes and mesa walls.
 	var colors := PackedColorArray()

@@ -64,11 +64,21 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var paths: Array[PackedVector3Array] = [C.closed_route(loop), forest, ridge_path, access, rock_path]
 	var ground := func(x: float, z: float) -> float:
 		return C.sample(heights, COUNT, COUNT, ORIGIN, ORIGIN, CELL, x, z)
-	# Waypoints, visuals and collision share the final terrain, including junctions.
+	# The tracks are drawn 5.5 cm above the terrain (the yard apron 6 cm); the physics ground is
+	# raised under them by the same amount so wheels and props rest on the drawn surface.
+	var widths := [3.2, 2.5, 2.5, 4.0, 2.15]
+	var yard := PackedVector3Array([farm - forward * 15, farm + forward * 15])
+	var roads: Array = [{"points": yard, "half_w": 15.0, "lift": 0.06}]
+	for i in paths.size():
+		roads.append({"points": paths[i], "half_w": widths[i], "lift": 0.055})
+	var physical := C.raise_under_roads(heights, COUNT, COUNT, ORIGIN, ORIGIN, CELL, roads)
+	var surface := func(x: float, z: float) -> float:
+		return C.sample(physical, COUNT, COUNT, ORIGIN, ORIGIN, CELL, x, z)
+	# Waypoints follow the surface the cars drive on, including junctions.
 	for path in paths:
-		for i in path.size(): path[i].y = ground.call(path[i].x, path[i].z)
-	for i in loop.size(): loop[i].y = ground.call(loop[i].x, loop[i].z)
-	world.add_heightfield(ORIGIN, ORIGIN, CELL, COUNT, COUNT, heights, 0.94)
+		for i in path.size(): path[i].y = surface.call(path[i].x, path[i].z)
+	for i in loop.size(): loop[i].y = surface.call(loop[i].x, loop[i].z)
+	world.add_heightfield(ORIGIN, ORIGIN, CELL, COUNT, COUNT, physical, 0.94)
 	var colors := PackedColorArray()
 	colors.resize(heights.size())
 	for ix in COUNT:
@@ -83,14 +93,12 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			# Forest floor (needles, moss, shade) under the woods so they read as forest from afar.
 			colors[ix*COUNT+iz] = c.lerp(Color(0.27, 0.32, 0.18), _woods(x, z) * 0.9)
 	C.terrain_tiles(parent, ORIGIN, ORIGIN, CELL, COUNT, COUNT, heights, C.terrain_material("grass", 3.8), colors)
-	var widths := [3.2, 2.5, 2.5, 4.0, 2.15]
 	for i in paths.size():
 		var track := _track_material(widths[i] * 2, 0.75 if i != 4 else 0.25)
 		if i > 0:   # branches and dead ends fade out instead of stopping at a hard edge
 			track.set_shader_parameter("length_uv", _path_length(paths[i]) / 9.0)
 		parent.add_child(C.road_mesh(paths[i], widths[i], track, false, 0.055, 9.0, ground))
 	# A ground-following apron instead of a floating horizontal yard slab.
-	var yard := PackedVector3Array([farm - forward * 15, farm + forward * 15])
 	var apron := _track_material(30, 0)
 	apron.set_shader_parameter("length_uv", 30.0 / 9.0)
 	parent.add_child(C.road_mesh(yard, 15, apron, false, 0.06, 9.0, ground))
@@ -125,7 +133,8 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	_sign(parent, world, ridge_path[5] + Vector3(5,0,0), "HÖHENWEG  /  LANGSAM", ground)
 	_sign(parent, world, rock_path[5] + Vector3(0,0,4), "GERÖLLPFAD  /  4x4", ground)
 	var stones := _rock_garden(parent, world, rock_path, ground)
-	var props := _loose_logs(paths, ground, timber)
+	var props := _loose_logs(paths, surface, timber)
+	props.append_array(_fallen_branches(paths, surface, timber))
 	var length_m := 0.0
 	for i in loop.size(): length_m += loop[i].distance_to(loop[(i+1)%loop.size()])
 	var loop_speeds := C.speeds_from_curvature(loop, 12.0, 6.0, 35)
@@ -569,6 +578,33 @@ static func _loose_logs(paths: Array[PackedVector3Array], ground: Callable, timb
 	dir = dir.normalized()
 	var across_trail := Vector3(-dir.z, 0, dir.x)
 	place.call(rock[k], atan2(-across_trail.z, across_trail.x))
+	return out
+
+## Dead branches (2.4 m, ~14 kg soft-body props) blown down onto the forest trail: some across the
+## ruts, some at an angle near the verge. A car rolls over them or knocks them aside. Only on the
+## forest trail, away from the main loop the AI drives, and not next to the felled trunks.
+static func _fallen_branches(paths: Array[PackedVector3Array], ground: Callable, timber: Vector3) -> Array:
+	var out: Array = []
+	var forest := paths[1]
+	var others: Array[PackedVector3Array] = [paths[0], paths[2], paths[3], paths[4]]
+	var count := 0
+	for i in range(30, forest.size() - 20, 17):
+		var tangent := forest[i + 1] - forest[i - 1]
+		tangent.y = 0
+		tangent = tangent.normalized()
+		var side := Vector3(-tangent.z, 0, tangent.x)
+		var h := float((i * 7919) % 1000) / 1000.0
+		var p := forest[i] + side * lerpf(-1.6, 1.6, h)
+		if _near_paths(Vector2(p.x, p.z), others, 9.0) or p.distance_to(timber) < 12.0: continue
+		# Mostly across the trail (+-35 deg), every third one lying along the verge.
+		var heading := atan2(-tangent.z, tangent.x)
+		var yaw := heading + PI * 0.5 + lerpf(-0.6, 0.6, fmod(h * 3.7, 1.0)) if count % 3 != 2 else heading + lerpf(-0.3, 0.3, h)
+		var axis := Vector3(cos(yaw), 0, -sin(yaw))
+		var hi := -INF
+		for t: float in [-1.2, -0.6, 0.0, 0.6, 1.2]:
+			hi = maxf(hi, ground.call(p.x + axis.x * t, p.z + axis.z * t))
+		out.append({"kind": "branch", "position": Vector3(p.x, hi + 0.02, p.z), "yaw": yaw})
+		count += 1
 	return out
 
 static func _sign(parent: Node3D, world: SBWorld, p: Vector3, caption: String, ground: Callable) -> void:

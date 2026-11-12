@@ -8,7 +8,7 @@
 
 namespace sb {
 
-enum class PropKind { Cone, Barrel, Barrier, Log, Bin, Beacon };
+enum class PropKind { Cone, Barrel, Barrier, Log, Bin, Beacon, Branch };
 
 struct PropBuild {
     PropKind kind = PropKind::Cone;
@@ -31,8 +31,11 @@ struct PropBuild {
 /// Beacon: Leitbake (sign 605) on a rubber foot, 1.0 x 0.25 m panel, 28 kg foot 0.8 x 0.4 m; the
 /// panel faces +x/-x (the approaching traffic when x points along the road), the foot runs along
 /// z under it, parallel to the panel; the panel pops off its foot in a hard strike.
+/// Branch: fallen branch, 2.4 m, 10 -> 7 cm thick, two twigs, ~14 kg (long axis along x); snaps
+/// in the middle (butt half: main frame, tip half: sub frame).
 PropBuild buildProp(PropKind kind);
-/// "cone" / "barrel" / "barrier" / "log" / "bin" / "beacon"; throws std::invalid_argument otherwise.
+/// "cone" / "barrel" / "barrier" / "log" / "bin" / "beacon" / "branch"; throws
+/// std::invalid_argument otherwise.
 PropKind propKindFromString(const std::string& name);
 
 }  // namespace sb

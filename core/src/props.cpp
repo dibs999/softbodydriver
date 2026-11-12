@@ -259,6 +259,84 @@ PropBuild buildLog() {
     out.restPositions = b.positions();
     return out;
 }
+// Fallen branch, 2.4 m long, 10 cm thick at the butt tapering to 7 cm, with two side twigs,
+// ~14 kg (long axis along x). Two halves of stiff wood, each a triangular prism (one face flat
+// on the ground) joined in the middle by brittle fibres: a hard hit or a wheel bending it over
+// uneven ground snaps it in two, and each half then follows its own visual frame.
+PropBuild buildBranch() {
+    PropBuild out;
+    out.kind = PropKind::Branch;
+    SoftBody& b = out.body;
+    b.setName("branch");
+    NodeParams np;
+    np.mass = 13.0 / 18.0;   // green-ish wood, ~900 kg/m^3
+    np.friction = 0.45;
+    np.group = "prop";
+    const real xs[6] = {-1.2, -0.6, -0.05, 0.05, 0.6, 1.2};
+    std::vector<std::vector<std::uint32_t>> st(6);
+    for (int k = 0; k < 6; ++k) {
+        const real r = 0.05 - 0.015 * (xs[k] + 1.2) / 2.4;
+        const real yc = 0.5 * r + 0.005;   // bottom face 5 mm above the ground
+        for (int i = 0; i < 3; ++i) {
+            const real a = kPi * 0.5 + 2.0 * kPi * i / 3.0;   // top, then the two bottom corners
+            st[static_cast<std::size_t>(k)].push_back(
+                b.addNode("s" + std::to_string(k) + "_" + std::to_string(i), {xs[k], yc + r * std::sin(a), r * std::cos(a)}, np));
+        }
+    }
+    NodeParams twig = np;
+    twig.mass = 0.6;
+    const auto twigL = b.addNode("twigL", {-0.40, 0.24, 0.42}, twig);
+    const auto twigR = b.addNode("twigR", {0.80, 0.20, -0.46}, twig);
+    BeamParams wood;
+    wood.spring = 1.5e5;
+    wood.damp = 40.0;
+    auto half = [&](int first) {
+        std::vector<std::uint32_t> nodes;
+        for (int k = first; k < first + 3; ++k) nodes.insert(nodes.end(), st[static_cast<std::size_t>(k)].begin(), st[static_cast<std::size_t>(k)].end());
+        return nodes;
+    };
+    connectAll(b, half(0), wood);
+    connectAll(b, half(3), wood);
+    BeamParams twigWood = wood;
+    twigWood.spring = 3.0e4;
+    twigWood.damp = 10.0;
+    for (int k : {1, 2})
+        for (auto n : st[static_cast<std::size_t>(k)]) b.addBeam(twigL, n, twigWood);
+    for (int k : {4, 5})
+        for (auto n : st[static_cast<std::size_t>(k)]) b.addBeam(twigR, n, twigWood);
+    // Dry fibres across the middle: they bend a little, then snap (~1.5 kNm, a dead branch).
+    BeamParams fibre = wood;
+    fibre.deform = 5.0e3;
+    fibre.strength = 8.0e3;
+    for (auto a : st[2])
+        for (auto c : st[3]) b.addBeam(a, c, fibre);
+    ColTriParams skin;
+    skin.friction = 0.45;
+    skin.dragCoef = 0.6;
+    for (int k = 0; k < 5; ++k) {
+        const auto& A = st[static_cast<std::size_t>(k)];
+        const auto& B = st[static_cast<std::size_t>(k + 1)];
+        const Vec3 c = (b.positions()[A[0]] + b.positions()[B[0]]) * 0.5 - Vec3{0, 0.03, 0};
+        for (int i = 0; i < 3; ++i) {
+            const auto a0 = A[static_cast<std::size_t>(i)], a1 = A[static_cast<std::size_t>((i + 1) % 3)];
+            const auto b0 = B[static_cast<std::size_t>(i)], b1 = B[static_cast<std::size_t>((i + 1) % 3)];
+            outwardTri(b, a0, a1, b1, c, skin);
+            outwardTri(b, a0, b1, b0, c, skin);
+        }
+    }
+    outwardTri(b, st[0][0], st[0][1], st[0][2], {0, 0.03, 0}, skin);
+    outwardTri(b, st[5][0], st[5][1], st[5][2], {0, 0.03, 0}, skin);
+    // Main frame on the butt half, "Sub" frame on the tip half.
+    out.frameOrigin = st[0][1];
+    out.frameX = st[2][1];
+    out.frameY = st[1][0];
+    out.subFrameOrigin = st[3][1];
+    out.subFrameX = st[5][1];
+    out.subFrameY = st[4][0];
+    out.restPositions = b.positions();
+    return out;
+}
+
 // 240 l wheelie bin, 0.73 x 0.58 x 1.07 m, ~15 kg with some rubbish in it (long side along x).
 // HDPE: springy, dents and stays dented after a proper hit. Built like the drum, rings of eight
 // nodes (corners and side centres) at three heights: an eight-node box let a car's nose pass
@@ -419,7 +497,7 @@ PropBuild buildBeacon() {
 PropBuild buildProp(PropKind kind) {
     PropBuild out = kind == PropKind::Log ? buildLog() : kind == PropKind::Barrier ? buildBarrier()
                   : kind == PropKind::Barrel ? buildBarrel() : kind == PropKind::Bin ? buildBin()
-                  : kind == PropKind::Beacon ? buildBeacon() : buildCone();
+                  : kind == PropKind::Beacon ? buildBeacon() : kind == PropKind::Branch ? buildBranch() : buildCone();
     out.body.setSleepEnabled(true);
     // Flat-bottomed props only: on a round log the lower faces are the ones a tyre climbs over.
     out.body.setDownFacesPassive(kind != PropKind::Log);
@@ -433,6 +511,7 @@ PropBuild buildProp(PropKind kind) {
         case PropKind::Log: out.body.setContactThickness(0.07); break;
         case PropKind::Bin: out.body.setContactThickness(0.12); break;
         case PropKind::Beacon: out.body.setContactThickness(0.03); break;   // thin foot and panel
+        case PropKind::Branch: out.body.setContactThickness(0.03); break;
     }
     return out;
 }
@@ -444,6 +523,7 @@ PropKind propKindFromString(const std::string& name) {
     if (name == "log") return PropKind::Log;
     if (name == "bin") return PropKind::Bin;
     if (name == "beacon") return PropKind::Beacon;
+    if (name == "branch") return PropKind::Branch;
     throw std::invalid_argument("unknown prop kind '" + name + "'");
 }
 

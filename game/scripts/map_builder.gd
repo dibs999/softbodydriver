@@ -549,7 +549,12 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	var half_w := 4.5
 	C.carve_path(heights, nx, nz, ox, oz, cell, road, half_w + 0.75, 13.0, 0.05)
 	C.carve_path(heights, nx, nz, ox, oz, cell, chord, CHORD_HALF_W + 0.75, 11.0, 0.05, false)
-	world.add_heightfield(ox, oz, cell, nx, nz, heights, 1.0)
+	# The roads are drawn 4-5 cm above the terrain; the physics ground is raised under them by the
+	# same amount so the wheels roll on the drawn asphalt instead of sinking into it.
+	var physical := C.raise_under_roads(heights, nx, nz, ox, oz, cell, [
+		{"points": road, "half_w": half_w, "lift": 0.05, "closed": true},
+		{"points": chord, "half_w": CHORD_HALF_W, "lift": 0.044}])
+	world.add_heightfield(ox, oz, cell, nx, nz, physical, 1.0)
 	var grass := C.terrain_material("grass", 3.4)
 	var colors := PackedColorArray()
 	colors.resize(nx * nz)
