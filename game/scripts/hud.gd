@@ -457,7 +457,7 @@ func _row(p: Vector2, title: String, value: String, fraction: float, color := AC
 	_bar(p + Vector2(0, 8), 242, fraction, color)
 
 func _diagnostics(canvas: Vector2) -> void:
-	var p := _overlay(canvas, Vector2(610, 404), "FAHRZEUGZUSTAND", "F2  Schließen")
+	var p := _overlay(canvas, Vector2(610, 424), "FAHRZEUGZUSTAND", "F2  Schließen")
 	_text(p + Vector2(22, 76), "ANTRIEB & KÜHLUNG", 11, ACCENT, bold)
 	_row(p + Vector2(22, 104), "Motor", "%d %% intakt" % roundi(100 * (1 - float(_t["engine_damage"]))), 1 - float(_t["engine_damage"]))
 	var cw := float(_t.get("clutch_wear", 0))
@@ -482,6 +482,9 @@ func _diagnostics(canvas: Vector2) -> void:
 	_text(p + Vector2(22, 342), "Rücktaste  Fahrzeug vollständig reparieren", 13, MUTED)
 	_text(p + Vector2(22, 367), "%d FPS · %.1f ms Ø / %.1f ms P95 · %d Zeichenaufrufe" % [Engine.get_frames_per_second(), _mean_ms, _p95_ms, RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)], 12, MUTED)
 	_text(p + Vector2(22, 387), "Physik %d Hz · %.0f %% Echtzeit · Messfenster bis 240 Bilder" % [_stats.get("physics_hz", 2000), 100 * float(_stats.get("realtime_factor", 1))], 11, MUTED)
+	# Main-thread cost per frame: waiting for the physics thread, copying its state, deforming the
+	# car meshes, and all scripts together (includes the three before).
+	_text(p + Vector2(22, 405), "Hauptthread: warten %.1f · kopieren %.1f · Verformung %.1f · gesamt %.1f ms" % [float(_stats.get("sync_wait_ms", 0)), float(_stats.get("sync_copy_ms", 0)), float(_stats.get("sync_mesh_ms", 0)), Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0], 11, MUTED)
 
 func _help(canvas: Vector2) -> void:
 	var p := _overlay(canvas, Vector2(640, 500), "STEUERUNG", "F1  Schließen")

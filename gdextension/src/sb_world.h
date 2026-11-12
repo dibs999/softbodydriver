@@ -105,6 +105,7 @@ private:
     // physics thread may not run further ahead than kMaxSimPerFrame between two of them:
     // below ~10 FPS the game slows down instead of AI and player input lagging behind.
     std::atomic<double> simSinceFrame_{0.0};
+    double lockWaitMs_ = 0.0, snapshotMs_ = 0.0, visualMs_ = 0.0;   ///< Main-thread frame sync cost, smoothed.
     // Published for get_stats() so reading them never waits for a physics step.
     std::atomic<std::uint64_t> stepCount_{0};
     std::atomic<std::size_t> statNodes_{0}, statBeams_{0};

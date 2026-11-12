@@ -52,6 +52,19 @@ bleiben also keine unsichtbaren Hindernisse zurück.
     seltener als alle 0,1 s ankommen (vorher fuhren die KI-Autos bei ~1 FPS in die Leitplanke).
     Geprüft mit `--max-fps 5/6`: Wüsten-, Gelände-Verkehr und KI-Folgetest bestehen.
 
+* **Adaptives VSync und Hauptthread-Aufschlüsselung in F2 (12. November 2026):**
+  * Auf dem i5-Laptop mit Intel-UHD-Grafik zeigte F2 16 FPS bei 66 % GPU- und 32 % CPU-Last:
+    keine Einheit voll ausgelastet, das Bild wartet. Alle Voreinstellungen hatten VSync an; ein
+    Bild, das den Bildwechsel knapp verpasst, wartet dann auf den nächsten (60 → 30 → 20 → 15 FPS).
+    „Sehr niedrig“ und „Niedrig“ nutzen jetzt adaptives VSync: rechtzeitige Bilder ohne Reißen,
+    verspätete sofort statt einen ganzen Bildwechsel später. VSync ist in den Einstellungen
+    Aus/An/Adaptiv; ein altes Profil mit Voreinstellung übernimmt deren Modus, ein altes
+    benutzerdefiniertes behält An/Aus (`settings_test`).
+  * F2 zeigt jetzt, was der Hauptthread je Bild für den Abgleich mit der Physik braucht: Warten
+    auf den Physikthread, Kopieren des Zustands, Verformen der Fahrzeugmeshes, dazu die gesamte
+    Skriptzeit. Gemessen (ohne Darstellung, 2–4 Autos): Warten 0,1–0,7 ms, Kopieren 0,2–0,5 ms,
+    Verformung 7–8 ms; Stichproben des Hauptthreads liegen sonst überwiegend im Leerlauf.
+
 * **Kontakt zwischen Fahrzeugen über ein Raster (12. November 2026):**
   * Eine zehnminütige Fahrt mit vier verunfallten Autos kostete nach einem Zusammenstoß
     4–6-mal so viel Rechenzeit je simulierter Sekunde: der Auto-gegen-Auto-Kontakt prüfte jedes

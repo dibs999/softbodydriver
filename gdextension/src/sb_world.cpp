@@ -77,14 +77,19 @@ void SBWorld::sync_visuals() {
 
 void SBWorld::sync_visuals_with_delta(double delta) {
     // Snapshot every vehicle under one short lock, then rebuild meshes without holding it.
+    using clock = std::chrono::steady_clock;
+    const auto t0 = clock::now();
+    auto t1 = t0, t2 = t0;
     {
         std::lock_guard<WorldMutex> lock(mtx_);
+        t1 = clock::now();
         for (SBVehicle* v : vehicles_) {
             v->sync_from_world();
             v->refreshStateCache();
         }
         for (SBProp* p : props_) p->sync_from_world();
         publishStats();
+        t2 = clock::now();
     }
     // Visual level of detail from the camera: full mesh deformation every frame up to 30 m, then
     // every 2nd / 4th / 8th frame; off-screen cars at least every 4th. Without a camera (tools,
@@ -101,6 +106,14 @@ void SBWorld::sync_visuals_with_delta(double delta) {
         v->set_visual_interval(interval);
     }
     for (SBVehicle* v : vehicles_) v->update_visual(delta);
+    // Main-thread cost of the frame sync (F2 overlay): waiting for the physics thread to hand
+    // over the world, copying the state out, and deforming the meshes. Smoothed over ~20 frames.
+    const auto t3 = clock::now();
+    auto ms = [](clock::duration d) { return std::chrono::duration<double, std::milli>(d).count(); };
+    auto smooth = [](double& acc, double v) { acc += (v - acc) * 0.05; };
+    smooth(lockWaitMs_, ms(t1 - t0));
+    smooth(snapshotMs_, ms(t2 - t1));
+    smooth(visualMs_, ms(t3 - t2));
 }
 
 void SBWorld::startThread() {
@@ -338,6 +351,9 @@ Dictionary SBWorld::get_stats() {
     d["realtime_factor"] = realtimeFactor_.load();
     d["physics_hz"] = 1.0 / world_.settings().dt;
     d["vehicles"] = static_cast<int64_t>(vehicles_.size());
+    d["sync_wait_ms"] = lockWaitMs_;
+    d["sync_copy_ms"] = snapshotMs_;
+    d["sync_mesh_ms"] = visualMs_;
     return d;
 }
 
