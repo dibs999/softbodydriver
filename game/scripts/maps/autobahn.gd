@@ -50,8 +50,10 @@ static func _offset(pts: PackedVector3Array, off: float) -> PackedVector3Array:
 
 static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	world.add_ground_plane(1.0)
+	# The carriageways are drawn 4 mm above the physics plane (they were 3 cm: the bottom of every
+	# tyre disappeared in the asphalt); every ground layer below them keeps its order, 2.6 cm lower.
 	var grass := C.surface_material("grass", 3.5, Color(0.73, 0.92, 0.66))
-	C.quad(parent, Vector3(0, -0.02, 0), Vector2(6200, 5000), grass)
+	C.quad(parent, Vector3(0, -0.046, 0), Vector2(6200, 5000), grass)
 	var concrete := C.noise_mat(Color(0.66, 0.66, 0.63), 0.1, 0.5, 0.8, 0.2)
 	var metal := C.mat(Color(0.72, 0.74, 0.76), 0.35, 0.85)
 	var road := C.road_material(3, CARRIAGE_HALF * 2.0, 14.0, "autobahn")
@@ -66,8 +68,8 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var center := _loop()
 	var a_center := _offset(center, CARRIAGE_OFFSET)
 	var b_center := _offset(center, -CARRIAGE_OFFSET)
-	parent.add_child(C.road_mesh(a_center, CARRIAGE_HALF, road, true, 0.03, 14.0))
-	parent.add_child(C.road_mesh(b_center, CARRIAGE_HALF, road_b, true, 0.03, 14.0))
+	parent.add_child(C.road_mesh(a_center, CARRIAGE_HALF, road, true, 0.004, 14.0))
+	parent.add_child(C.road_mesh(b_center, CARRIAGE_HALF, road_b, true, 0.004, 14.0))
 	# Verges beyond the guard rails; the service area keeps its paving.
 	V.roadside_grass(parent, center, true, CARRIAGE_OFFSET + CARRIAGE_HALF + 1.6, CARRIAGE_OFFSET + CARRIAGE_HALF + 22.0, 1.6, 93,
 		Callable(), func(p: Vector3) -> bool: return p.x > SERVICE_START - 40.0 and p.x < SERVICE_END + 40.0 and p.z < -RADIUS + 120.0)
@@ -274,7 +276,7 @@ static func _overpass(parent: Node3D, world: SBWorld, x: float, z: float, span: 
 	for i in n + 1:
 		var zz := lerpf(z0, z1, float(i) / n)
 		road_pts.append(Vector3(x, height.call(zz), zz))
-	parent.add_child(C.road_mesh(road_pts, 3.25, road, false, 0.03, 12.0))
+	parent.add_child(C.road_mesh(road_pts, 3.25, road, false, 0.004, 12.0))
 	# Earth ramps and abutments.
 	for end: float in [-1.0, 1.0]:
 		var start := z + end * deck_half
@@ -324,8 +326,8 @@ static func _service_area(parent: Node3D, world: SBWorld, concrete: Material, me
 		Vector3(mid + 50, 0, z + 35.0), Vector3(SERVICE_END - 83, 0, z + 27.0),
 		Vector3(SERVICE_END - 41, 0, z + 14.6), Vector3(SERVICE_END - 16, 0, z + 10.8),
 	])
-	parent.add_child(C.road_mesh(road, 4.0, asphalt, false, 0.016))
-	C.quad(parent, Vector3(mid, 0.012, z + 44), Vector2(104, 26), asphalt)
+	parent.add_child(C.road_mesh(road, 4.0, asphalt, false, -0.010))
+	C.quad(parent, Vector3(mid, -0.014, z + 44), Vector2(104, 26), asphalt)
 	C.box(parent, world, Vector3(mid, 2.2, z + 63), Vector3(11, 2.2, 4.5), Vector3.ZERO, concrete)
 	C.box(parent, world, Vector3(mid, 4.5, z + 62), Vector3(11.5, 0.22, 6.4), Vector3.ZERO, navy, 0.8, false)
 	var glass := C.mat(Color(0.14, 0.30, 0.39), 0.26, 0.35)
@@ -346,17 +348,17 @@ static func _service_area(parent: Node3D, world: SBWorld, concrete: Material, me
 	C.label3d(parent, "P   ↗", Vector3(SERVICE_START + 33.88, 2.15, z + 23), -PI * 0.5, 0.74)
 	var marks: Array[Transform3D] = []
 	for slot in 19:
-		marks.append(Transform3D(Basis.from_scale(Vector3(0.12, 1, 5.4)), Vector3(mid - 46.0 + slot * 5.1, 0.022, z + 52.0)))
+		marks.append(Transform3D(Basis.from_scale(Vector3(0.12, 1, 5.4)), Vector3(mid - 46.0 + slot * 5.1, -0.004, z + 52.0)))
 	var paint := PlaneMesh.new()
 	paint.size = Vector2.ONE
 	C.scatter_multimesh(parent, paint, C.mat(Color(0.85, 0.85, 0.8)), marks, false)
 	var truck_box := Vector3(mid + 54, 0, z + 73)
-	C.quad(parent, truck_box + Vector3.UP * 0.011, Vector2(55, 36), asphalt)
+	C.quad(parent, truck_box + Vector3.UP * -0.015, Vector2(55, 36), asphalt)
 	var trailer_colors := [C.mat(Color(0.82, 0.83, 0.84), 0.6), C.mat(Color(0.55, 0.12, 0.10), 0.6), C.mat(Color(0.20, 0.32, 0.52), 0.6)]
 	var cab_colors := [C.mat(Color(0.88, 0.88, 0.86), 0.4, 0.3), C.mat(Color(0.12, 0.25, 0.45), 0.4, 0.3), C.mat(Color(0.65, 0.10, 0.08), 0.4, 0.3)]
 	for slot in 8:
 		var x := truck_box.x - 22 + 6.0 * slot
-		C.quad(parent, Vector3(x, 0.026, truck_box.z + 6), Vector2(0.14, 18), concrete)
+		C.quad(parent, Vector3(x, 0.0, truck_box.z + 6), Vector2(0.14, 18), concrete)
 		if slot % 3 == 0:
 			_parked_truck(parent, world, Vector3(x + 2.5, 0, truck_box.z + 6.0), trailer_colors[slot / 3 % 3], cab_colors[slot / 3 % 3], metal)
 	_service_details(parent, world, z, mid, asphalt, concrete, metal, navy, glass)
@@ -453,7 +455,7 @@ static func _service_details(parent: Node3D, world: SBWorld, z: float, mid: floa
 	var fx := SERVICE_START + 64.0
 	var fz := z + 37.0   # posts clear of the entry road, which rises to z + 27 here
 	# Forecourt from the entry road's edge (about z + 21) to behind the canopy.
-	C.quad(parent, Vector3(fx, 0.014, fz - 4.0), Vector2(34, 22), asphalt)
+	C.quad(parent, Vector3(fx, -0.012, fz - 4.0), Vector2(34, 22), asphalt)
 	for px: float in [-11.0, 11.0]:
 		for pz: float in [-4.0, 4.0]:
 			C.box(parent, world, Vector3(fx + px, 2.6, fz + pz), Vector3(0.2, 2.6, 0.2), Vector3.ZERO, white, 0.6)
@@ -521,7 +523,7 @@ static func _countryside(parent: Node3D, world: SBWorld, center: PackedVector3Ar
 					if r <= acc:
 						pick = i
 						break
-				C.quad(parent, Vector3(c.x, -0.006, c.y), size, mats[pick])
+				C.quad(parent, Vector3(c.x, -0.032, c.y), size, mats[pick])
 				# Hedgerow trees along one long and one short edge.
 				for t in 7:
 					if rng.randf() < 0.45:
@@ -570,8 +572,8 @@ static func _village(parent: Node3D, world: SBWorld, trees: Array[Vector3], rng:
 	var cross := PackedVector3Array()
 	for k in 25: cross.append(Vector3(cross_x, 0, vc.z + VILLAGE_MIN.y + 12.0 + k * (VILLAGE_MAX.y - VILLAGE_MIN.y - 24.0) / 24.0))
 	var street := C.road_material(1, 6.0, 12.0, "village")
-	parent.add_child(C.road_mesh(main, 3.0, street, false, 0.03))
-	parent.add_child(C.road_mesh(cross, 3.0, street, false, 0.032))
+	parent.add_child(C.road_mesh(main, 3.0, street, false, 0.004))
+	parent.add_child(C.road_mesh(cross, 3.0, street, false, 0.006))
 	# Pavements with kerbs along both streets, open where the streets cross.
 	var paving := C.noise_mat(Color(0.43, 0.42, 0.41), 0.10, 1.2, 0.9)
 	var kerb := C.noise_mat(Color(0.55, 0.54, 0.52), 0.06, 2.0, 0.85)
@@ -602,7 +604,7 @@ static func _village(parent: Node3D, world: SBWorld, trees: Array[Vector3], rng:
 			var bend := Vector3(d.z, 0, -d.x) * sin(k * 0.35) * 4.0 * (k / 11.0)
 			path.append(a + d * (k * 9.0) + bend)
 		if _loop_distance(path[path.size() - 1].x, path[path.size() - 1].z) > 70.0:
-			parent.add_child(C.road_mesh(path, 1.6, track, false, 0.026))
+			parent.add_child(C.road_mesh(path, 1.6, track, false, 0.0))
 	# Churchyard: low stone wall round tower and nave, open to the street at the portal, and rows
 	# of gravestones beside the nave.
 	var stone := C.noise_mat(Color(0.56, 0.53, 0.48), 0.12, 3.0, 0.9)
@@ -813,8 +815,8 @@ static func _landmarks(parent: Node3D, world: SBWorld, metal: Material) -> void:
 	var gravel := C.noise_mat(Color(0.41, 0.32, 0.19), 0.25, 0.12)
 	var wheat := C.noise_mat(Color(0.57, 0.46, 0.20), 0.18, 0.09)
 	for x: float in [-1750.0, -760.0, 610.0, 1260.0]:
-		C.quad(parent, Vector3(x, -0.013, -210), Vector2(410, 112), wheat, 0.07)
-		C.quad(parent, Vector3(x - 45.0, -0.012, 230), Vector2(365, 142), gravel, -0.05)
+		C.quad(parent, Vector3(x, -0.039, -210), Vector2(410, 112), wheat, 0.07)
+		C.quad(parent, Vector3(x - 45.0, -0.038, 230), Vector2(365, 142), gravel, -0.05)
 	var white := C.mat(Color(0.76, 0.78, 0.78), 0.72)
 	var red := C.mat(Color(0.71, 0.18, 0.12), 0.7)
 	for i in 6:
