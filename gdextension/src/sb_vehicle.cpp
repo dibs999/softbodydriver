@@ -1181,6 +1181,39 @@ void SBVehicle::deformJob(uint32_t index) {
     }
 }
 
+void SBVehicle::prepareShape(SurfaceGpu& g, const sb::MeshSurface& s) {
+    if (g.shapeKnown) return;
+    g.shapeKnown = true;
+    std::vector<uint8_t> used(pos_.size(), 0);
+    for (const auto& sk : s.skin)
+        for (int k = 0; k < 4; ++k)
+            if (sk.weight[k] > 0.0f && sk.node[k] < used.size()) used[sk.node[k]] = 1;
+    // Tyres and anything else hanging on a turning wheel change shape every frame.
+    for (const WheelGpu& w : wheels_) {
+        for (auto n : w.tread) if (n < used.size() && used[n]) g.alwaysDeform = true;
+        if ((w.hubL < used.size() && used[w.hubL]) || (w.hubR < used.size() && used[w.hubR])) g.alwaysDeform = true;
+    }
+    for (std::uint32_t n = 0; n < used.size(); ++n)
+        if (used[n]) g.shapeNodes.push_back(n);
+}
+
+bool SBVehicle::shapeChanged(const SurfaceGpu& g, const Transform3D& carInverse) const {
+    constexpr real_t kTolerance = 0.003;   // m relative to the car: well under a panel gap
+    if (g.shapeRef.size() != g.shapeNodes.size()) return true;
+    for (std::size_t j = 0; j < g.shapeNodes.size(); ++j)
+        if ((carInverse.xform(toG(renderPos_[g.shapeNodes[j]])) - g.shapeRef[j]).length_squared() > kTolerance * kTolerance)
+            return true;
+    return false;
+}
+
+void SBVehicle::recordShape(SurfaceGpu& g, const Transform3D& carNow, const Transform3D& carInverse, const Transform3D& steer) {
+    g.shapeRef.resize(g.shapeNodes.size());
+    for (std::size_t j = 0; j < g.shapeNodes.size(); ++j) g.shapeRef[j] = carInverse.xform(toG(renderPos_[g.shapeNodes[j]]));
+    g.shapeFrame = carNow;
+    g.shapeSteer = steer;
+    g.shapeValid = true;
+}
+
 Transform3D SBVehicle::rigidVisualFrame() const {
     const sb::Vec3 fl = renderPos_[layout_.refFL], fr = renderPos_[layout_.refFR], rl = renderPos_[layout_.refRL], rr = renderPos_[layout_.refRR];
     const Vector3 x = toG((fl + fr) - (rl + rr)).normalized();
@@ -1247,30 +1280,38 @@ void SBVehicle::update_visual(double delta) {
             return;
         }
     }
+    // Freshly damaged, reset or shown as beams: every surface deforms. Otherwise a surface whose
+    // nodes kept their shape relative to the car (within 3 mm) is only moved rigidly with it, so
+    // a cruising undamaged car mostly re-deforms its tyres and steering wheel alone.
+    const bool reshapeAll = snap || !lodFrameValid_ || damageDirty_ || debugView_ || damageNow != lodDamageSeen_;
     if (full) {
         lodPositions_ = renderPos_;
         visualCounter_ = 0;
-        lodFrame_ = rigidNow;
-        lodSteering_ = steeringTransform;
         lodFrameValid_ = true;
         lodDamageSeen_ = damageNow;
     }
-    const Transform3D lodDelta = full ? Transform3D() : rigidNow * lodFrame_.affine_inverse();
-    if (!full) {
-        lodMoved_ = true;
-        const std::size_t generated = std::min(surfaces_.size(), visual_.skinned.size());
-        for (std::size_t si = 0; si < generated + std::min(importedGpu_.size(), importedSurf_.size()); ++si) {
-            SurfaceGpu& g = si < generated ? surfaces_[si] : importedGpu_[si - generated];
-            const sb::MeshSurface& s = si < generated ? visual_.skinned[si] : importedSurf_[si - generated];
-            if (g.instance) g.instance->set_transform(s.steeringWheel ? lodDelta * lodSteering_ : lodDelta);
-        }
-    } else if (lodMoved_) {
-        lodMoved_ = false;
-        const std::size_t generated = std::min(surfaces_.size(), visual_.skinned.size());
-        for (std::size_t si = 0; si < generated + std::min(importedGpu_.size(), importedSurf_.size()); ++si) {
-            SurfaceGpu& g = si < generated ? surfaces_[si] : importedGpu_[si - generated];
-            const sb::MeshSurface& s = si < generated ? visual_.skinned[si] : importedSurf_[si - generated];
-            if (g.instance && !s.steeringWheel) g.instance->set_transform(Transform3D());
+    // The car's pose for the shape check: the best fit of the passenger cell (rest -> now), not
+    // the four reference nodes by the wheels, which ride on the suspension and made every body
+    // panel look reshaped whenever the car pitched or rolled.
+    const Transform3D cellNow(Basis(frames_[0], frames_[1], frames_[2], frames_[3], frames_[4], frames_[5], frames_[6], frames_[7], frames_[8]),
+                              Vector3(frames_[9], frames_[10], frames_[11]));
+    const Transform3D carInverse = cellNow.affine_inverse();
+    const std::size_t generatedCount = std::min(surfaces_.size(), visual_.skinned.size());
+    const std::size_t surfaceCount = generatedCount + std::min(importedGpu_.size(), importedSurf_.size());
+    auto surfaceAt = [&](std::size_t si) -> std::pair<SurfaceGpu*, const sb::MeshSurface*> {
+        return si < generatedCount ? std::make_pair(&surfaces_[si], &visual_.skinned[si])
+                                   : std::make_pair(&importedGpu_[si - generatedCount], &importedSurf_[si - generatedCount]);
+    };
+    // Surfaces not deformed this frame follow the car from the pose they were last deformed in.
+    skipSurface_.assign(surfaceCount, 0);
+    for (std::size_t si = 0; si < surfaceCount; ++si) {
+        auto [g, s] = surfaceAt(si);
+        if (!g->instance) continue;
+        prepareShape(*g, *s);
+        const bool deform = full && (reshapeAll || !g->shapeValid || g->alwaysDeform || s->steeringWheel || shapeChanged(*g, carInverse));
+        if (!deform && g->shapeValid) {
+            g->instance->set_transform(cellNow * g->shapeFrame.affine_inverse() * g->shapeSteer);
+            skipSurface_[si] = 1;
         }
     }
 
@@ -1301,16 +1342,16 @@ void SBVehicle::update_visual(double delta) {
     // normals into the surface's own vertex buffer); GPU uploads and tearing stay on this thread.
     deformJobs_.clear();
     if (full) {
-        for (std::size_t si = 0; si < surfaces_.size() && si < visual_.skinned.size(); ++si) {
-            SurfaceGpu& g = surfaces_[si];
-            if (!g.instance->is_visible()) continue;
-            if (visual_.skinned[si].steeringWheel) g.instance->set_transform(steeringTransform);
-            deformJobs_.push_back({false, si, g.buffer.ptrw()});
-        }
-        for (std::size_t si = 0; si < importedGpu_.size() && si < importedSurf_.size(); ++si) {
-            SurfaceGpu& g = importedGpu_[si];
-            if (importedSurf_[si].steeringWheel) g.instance->set_transform(steeringTransform);
-            deformJobs_.push_back({true, si, g.buffer.ptrw()});
+        for (std::size_t si = 0; si < surfaceCount; ++si) {
+            auto [gp, sp] = surfaceAt(si);
+            SurfaceGpu& g = *gp;
+            if (!g.instance || skipSurface_[si]) continue;
+            if (si < generatedCount && !g.instance->is_visible()) continue;
+            const Transform3D steer = sp->steeringWheel ? steeringTransform : Transform3D();
+            g.instance->set_transform(steer);
+            recordShape(g, cellNow, carInverse, steer);
+            const bool imported = si >= generatedCount;
+            deformJobs_.push_back({imported, imported ? si - generatedCount : si, g.buffer.ptrw()});
         }
         if (jobPositions_.size() < deformJobs_.size()) jobPositions_.resize(deformJobs_.size());
         if (deformJobs_.size() > 1) {
