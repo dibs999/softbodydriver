@@ -402,11 +402,19 @@ var _slow_hint_given := false
 func _watch_physics_load(delta: float) -> void:
 	if _slow_hint_given or world.paused or world.time_scale < 0.99 or not Game.settings["traffic"] or ai.is_empty():
 		return
-	var rt := float(world.get_stats().get("realtime_factor", 1.0))
+	check_physics_load(delta, float(world.get_stats().get("realtime_factor", 1.0)))
+
+## The decision itself, with the measured real-time factor passed in. Returns true when it shows
+## the hint.
+func check_physics_load(delta: float, rt: float) -> bool:
+	if _slow_hint_given:
+		return false
 	_slow_physics = _slow_physics + delta if rt < 0.85 else maxf(0.0, _slow_physics - delta)
-	if _slow_physics > 8.0:
-		_slow_hint_given = true
-		hud.toast("Die Physik schafft nur %d %% Echtzeit · KI-Verkehr unter Einstellungen › Fahrhilfen ausschalten entlastet die CPU" % int(rt * 100.0))
+	if _slow_physics <= 8.0:
+		return false
+	_slow_hint_given = true
+	hud.toast("Die Physik schafft nur %d %% Echtzeit · KI-Verkehr unter Einstellungen › Fahrhilfen ausschalten entlastet die CPU" % int(rt * 100.0))
+	return true
 
 
 func toggle_replay() -> void:
