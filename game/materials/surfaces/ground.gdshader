@@ -9,6 +9,7 @@ uniform float normal_strength = 0.3;
 uniform float tile_metres = 2.0;
 uniform vec4 tint : source_color = vec4(1.0);
 uniform float albedo_gain = 1.0;          // brightness correction of the photo (asphalt: see common.gd)
+uniform float retro_gain = 0.0;           // asphalt: back-scatter towards the light (see road.gdshader)
 uniform bool use_vertex_color = false;
 uniform float roughness = 0.9;
 uniform float macro_strength = 0.12;      // brightness variation of the large patches
@@ -371,4 +372,25 @@ void fragment() {
 	if (has_normal) {
 		NORMAL = normalize((VIEW_MATRIX * vec4(normalize(nrm), 0.0)).xyz);
 	}
+}
+
+
+// As in road.gdshader: Lambert, a retro lobe towards the light source for asphalt (headlights at a
+// grazing angle), GGX specular for wet surfaces.
+void light() {
+	float ndl = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
+	float retro = pow(clamp(dot(LIGHT, VIEW), 0.0, 1.0), 12.0) * retro_gain;
+	DIFFUSE_LIGHT += ndl * (1.0 + retro) * ATTENUATION * LIGHT_COLOR / PI;
+	vec3 h = normalize(LIGHT + VIEW);
+	float ndh = clamp(dot(NORMAL, h), 0.0, 1.0);
+	float ndv = clamp(dot(NORMAL, VIEW), 0.001, 1.0);
+	float a = max(ROUGHNESS * ROUGHNESS, 0.002);
+	float a2 = a * a;
+	float dd = ndh * ndh * (a2 - 1.0) + 1.0;
+	float dist = a2 / (PI * dd * dd);
+	float k = a * 0.5;
+	float vis = 0.25 / ((ndl * (1.0 - k) + k) * (ndv * (1.0 - k) + k));
+	float f0 = 0.08 * SPECULAR_AMOUNT;
+	float fres = f0 + (1.0 - f0) * pow(1.0 - clamp(dot(LIGHT, h), 0.0, 1.0), 5.0);
+	SPECULAR_LIGHT += dist * vis * fres * ndl * ATTENUATION * LIGHT_COLOR;
 }
