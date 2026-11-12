@@ -70,6 +70,8 @@ func run() -> void:
    max_tangent_error = maxf(max_tangent_error, a.distance_to(b))
  check(max_tangent_error < 0.003, "Undeformed render upload preserves imported tangent frames")
  await process_frame # release replaced procedural wheel meshes after the upload checks
+ var spec: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://cars/concept_gt.car.json"))
+ var diameter := 2.0 * float(spec["tires"]["radius"])
  for name in ["FL", "FR", "RL", "RR"]:
   var wheel := cars[1].get_node(name)
   var bounds := AABB()
@@ -79,7 +81,7 @@ func run() -> void:
     bounds = part.mesh.get_aabb() if first else bounds.merge(part.mesh.get_aabb())
     first = false
   var axle_width := 0.27 if name.begins_with("F") else 0.35  # staggered Concept GT tyres
-  check(not first and absf(bounds.size.z - axle_width) < 0.002 and absf(bounds.size.x - 0.82) < 0.01 and absf(bounds.size.y - 0.82) < 0.01,
+  check(not first and absf(bounds.size.z - axle_width) < 0.002 and absf(bounds.size.x - diameter) < 0.01 and absf(bounds.size.y - diameter) < 0.01,
     "Imported wheel %s fits physics radius, width and axle" % name)
  var max_delta := 0.0
  for step in 100:
