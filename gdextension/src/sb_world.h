@@ -63,6 +63,13 @@ public:
     // Loose props ("cone", "barrel"): small soft bodies the cars can knock around.
     SBProp* spawn_prop(const String& kind, const Transform3D& xform);
     void remove_prop(SBProp* p);
+    /// Couples a trailer prop to a car: fits the car's tow bar and links it to the trailer's hitch
+    /// head (a ball joint that tears apart above 60 kN). False if either is missing or the trailer
+    /// is coupled already.
+    bool couple_trailer(SBVehicle* car, SBProp* trailer);
+    void uncouple_trailer(SBProp* trailer);
+    /// {"coupled": bool, "broken": bool, "force": N} of the trailer's coupling.
+    Dictionary get_coupling(SBProp* trailer) const;
     TypedArray<SBProp> get_props() const;
 
     void set_time_scale(double s) { timeScale_ = s; }
@@ -96,7 +103,7 @@ private:
     void stopThread();
 
     sb::World world_;
-    WorldMutex mtx_;
+    mutable WorldMutex mtx_;
     std::thread thread_;
     std::atomic<bool> running_{false};
     std::atomic<double> timeScale_{1.0};

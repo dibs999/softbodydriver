@@ -118,6 +118,7 @@ void SBVehicle::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_effect_anchors"), &SBVehicle::get_effect_anchors);
     ClassDB::bind_method(D_METHOD("puncture_tire", "wheel", "leak_psi_per_second"), &SBVehicle::puncture_tire);
     ClassDB::bind_method(D_METHOD("pick_node", "origin", "direction", "radius"), &SBVehicle::pick_node);
+    ClassDB::bind_method(D_METHOD("get_tow_position"), &SBVehicle::get_tow_position);
     ClassDB::bind_method(D_METHOD("get_node_position", "node"), &SBVehicle::get_node_position);
     ClassDB::bind_method(D_METHOD("set_grab", "node", "target"), &SBVehicle::set_grab);
     ClassDB::bind_method(D_METHOD("release_grab"), &SBVehicle::release_grab);
@@ -2067,6 +2068,35 @@ Dictionary SBVehicle::get_telemetry() const {
     d["brake_temps"] = brakes;
     d["suspension_damage"] = susp;
     return d;
+}
+
+Vector3 SBVehicle::get_tow_position() const {
+    if (pos_.empty() || layout_.towRails.empty()) return get_position_ws();
+    if (const std::int64_t tow = towNode_; tow >= 0 && static_cast<std::size_t>(tow) < pos_.size()) return toG(pos_[static_cast<std::size_t>(tow)]);
+    const sb::Vec3 f = sb::normalize((pos_[layout_.refFL] + pos_[layout_.refFR]) * 0.5 - (pos_[layout_.refRL] + pos_[layout_.refRR]) * 0.5);
+    sb::Vec3 r = sb::normalize((pos_[layout_.refFR] + pos_[layout_.refRR]) - (pos_[layout_.refFL] + pos_[layout_.refRL]));
+    const sb::Vec3 u = sb::normalize(sb::cross(r, f));
+    r = sb::cross(f, u);
+    sb::Vec3 c{};
+    for (auto n : layout_.towRails) c += pos_[n];
+    c = c / static_cast<double>(layout_.towRails.size());
+    return toG(c + f * layout_.towOffset.x + u * layout_.towOffset.y + r * layout_.towOffset.z);
+}
+
+std::int64_t SBVehicle::fit_tow_bar_locked() {
+    if (!world_ || bodyIndex_ < 0) return -1;
+    auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+    const std::int64_t tow = sb::addTowBar(body, layout_);
+    if (tow < 0) return -1;
+    towNode_ = tow;
+    // Its build-pose position (the car's own axes), so a reset or repair puts it back too.
+    if (restPositions_.size() < body.nodeCount()) {
+        sb::Vec3 c{};
+        for (auto n : layout_.towRails) c += restPositions_[n];
+        c = c / static_cast<double>(layout_.towRails.size());
+        restPositions_.resize(body.nodeCount(), c + layout_.towOffset);
+    }
+    return tow;
 }
 
 int SBVehicle::pick_node(const Vector3& origin, const Vector3& direction, double radius) const {

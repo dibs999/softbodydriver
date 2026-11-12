@@ -397,3 +397,108 @@ TEST_CASE("a heavy tailgate stays latched in a 50 km/h frontal impact") {
     CHECK(frontDamage > 50);   // it really was a hard frontal crash
     CHECK(lidBroken == 0);
 }
+
+TEST_CASE("a box trailer stands on its drawbar alone and follows the car on the tow bar") {
+    auto trailer = buildProp(PropKind::Trailer);
+    CHECK(trailer.hitch >= 0);
+    CHECK(trailer.body.stabilityRatio(1.0 / 2000.0) < 0.9);
+    // Alone it tips onto its drawbar: the centre of mass is ahead of the axle.
+    {
+        auto alone = buildProp(PropKind::Trailer);
+        World w;
+        w.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+        const auto i = w.addBody(std::move(alone.body));
+        w.simulate(4.0);
+        REQUIRE(w.stats().finite);
+        CHECK(w.body(i).positions()[static_cast<std::size_t>(alone.hitch)].y < 0.05);
+    }
+    auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+    const real curb = car.body.totalMass();
+    const std::size_t nodes = car.body.nodeCount();
+    World w;
+    w.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+    const auto ic = w.addBody(std::move(car.body));
+    w.simulate(1.0);
+    // The tow bar is fitted to the running car only now: before, the car is exactly as built.
+    CHECK(w.body(ic).nodeCount() == nodes);
+    const auto towNode = addTowBar(w.body(ic), car.layout);
+    REQUIRE(towNode >= 0);
+    const auto tow = static_cast<std::uint32_t>(towNode);
+    CHECK(addTowBar(w.body(ic), car.layout) == towNode);   // a second call finds it
+    CHECK(w.body(ic).totalMass() == doctest::Approx(curb + 4.0));
+    trailer.body.translate(w.body(ic).positions()[tow] - trailer.body.positions()[static_cast<std::size_t>(trailer.hitch)]);
+    const auto it = w.addBody(std::move(trailer.body));
+    BodyLink link;
+    link.bodyA = ic; link.nodeA = tow;
+    link.bodyB = it; link.nodeB = static_cast<std::uint32_t>(trailer.hitch);
+    w.addLink(link);
+    VehicleControls c;
+    c.gear = 1;
+    w.body(ic).setControls(c);
+    w.simulate(2.0);
+    // At rest the hitch carries the tongue load (~220 N), not a fight with the car's skin.
+    MESSAGE("tongue load at rest " << w.links()[0].force << " N");
+    CHECK(w.links()[0].force > 80.0);
+    CHECK(w.links()[0].force < 600.0);
+    c.throttle = 0.6;
+    w.body(ic).setControls(c);
+    real worstGap = 0.0, worstForce = 0.0;
+    for (int i = 0; i < 80; ++i) {
+        w.simulate(0.1);
+        const real gap = std::abs(w.body(ic).telemetry().speedKmh - length(w.body(it).centerOfMassVelocity()) * 3.6);
+        if (w.time() > 3.5) worstGap = std::max(worstGap, gap);
+        worstForce = std::max(worstForce, w.links()[0].force);
+    }
+    const real kmh = w.body(ic).telemetry().speedKmh;
+    MESSAGE("towed to " << kmh << " km/h; trailer speed off by at most " << worstGap << " km/h, peak pull " << worstForce << " N");
+    CHECK(kmh > 40.0);
+    CHECK(worstGap < 2.0);
+    CHECK_FALSE(w.links()[0].broken);
+    // Braking (the trailer's overrun brake follows the car's): both stop, coupled, upright.
+    c.throttle = 0.0;
+    c.brake = 1.0;
+    w.body(ic).setControls(c);
+    auto tc = w.body(it).controls();
+    tc.brake = 1.0;
+    w.body(it).setControls(tc);
+    w.simulate(3.0);
+    REQUIRE(w.stats().finite);
+    CHECK(length(w.body(it).centerOfMassVelocity()) < 0.5);
+    CHECK_FALSE(w.links()[0].broken);
+    const auto& tp = w.body(it).positions();
+    CHECK(std::abs(tp[trailer.frameOrigin].y - tp[trailer.frameX].y) < 0.15);   // level, not jack-knifed onto its side
+    // Removing the trailer takes its link with it.
+    w.removeBody(it);
+    CHECK(w.links().empty());
+}
+
+TEST_CASE("a body link tears apart above its break force") {
+    World w;
+    auto a = buildProp(PropKind::Barrel);
+    auto b = buildProp(PropKind::Barrel);
+    b.body.translate({3.0, 0.0, 0.0});
+    const auto ia = w.addBody(std::move(a.body));
+    const auto ib = w.addBody(std::move(b.body));
+    BodyLink l;
+    l.bodyA = ia; l.bodyB = ib; l.nodeA = 0; l.nodeB = 0;   // 3 m apart: 6e5 N on the spring
+    w.addLink(l);
+    w.step();
+    CHECK(w.links()[0].broken);
+}
+
+TEST_CASE("a tow bar fitted after the build leaves the body skin and its rigid parts in place") {
+    auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+    std::vector<float> before, after;
+    computeNodeFrames(car.body.positions(), car.visual, before);
+    const auto tow = addTowBar(car.body, car.layout);
+    REQUIRE(tow >= 0);
+    REQUIRE(car.body.nodeCount() == car.visual.restNodes.size() + 1);
+    computeNodeFrames(car.body.positions(), car.visual, after);
+    // The same panel frames (doors, bumpers, lids) as before, only one more node offset slot.
+    const std::size_t n0 = car.visual.restNodes.size();
+    REQUIRE(!car.visual.parts.empty());
+    REQUIRE(after.size() == before.size() + 3);
+    for (std::size_t i = 0; i < 12; ++i) CHECK(after[i] == doctest::Approx(before[i]));
+    for (std::size_t p = 0; p < 16 * car.visual.parts.size(); ++p)
+        CHECK(after[12 + (n0 + 1) * 3 + p] == doctest::Approx(before[12 + n0 * 3 + p]).epsilon(1e-4));
+}

@@ -1400,6 +1400,19 @@ CarBuild buildCar(const CarDefinition& def) {
     build.layout.refFR = static_cast<std::uint32_t>(rig.shell[sf][0][1]);
     build.layout.refRL = static_cast<std::uint32_t>(rig.shell[sr][0][0]);
     build.layout.refRR = static_cast<std::uint32_t>(rig.shell[sr][0][1]);
+    {
+        // Tow bar position: a ball 10 cm behind the rear face in the middle at hitch height,
+        // braced to the four nearest rear rail nodes. It is only created when a trailer is coupled
+        // (addTowBar): even a dormant 50 g node changed the outcome of chaotic prop strikes.
+        const real y = std::clamp<real>(prof.yBottom(0.0) + 0.05, 0.38, 0.46);   // ball 0.38-0.46 m up
+        const Vec3 at{-0.10, y, 0.0};
+        const auto rails = nearestNodes(car, rig.bodyNodes, at + Vec3{0.25, 0.0, 0.0}, 4);
+        Vec3 c{};
+        for (auto n : rails) c += car.positions()[n];
+        c = c / static_cast<real>(rails.size());
+        build.layout.towRails = rails;
+        build.layout.towOffset = at - c;   // car axes: x forward, y up, z right
+    }
     build.layout.bodyNodes = rig.bodyNodes;
     build.layout.engineNodes = rig.engine;
     build.layout.radiatorNodes = rig.radiator;
@@ -1449,6 +1462,32 @@ CarBuild buildCar(const CarDefinition& def) {
                                  build.layout.frontBumperNodes, build.layout.rearBumperNodes, build.layout.tailgateNodes});
     build.restPositions = car.positions();
     return build;
+}
+
+std::int64_t addTowBar(SoftBody& body, const CarLayout& layout) {
+    if (layout.towRails.size() < 3) return -1;
+    if (const auto existing = body.findNode("towbar"); existing >= 0) return existing;
+    const auto& p = body.positions();
+    // The car's present frame from its floor reference nodes (it may have moved and turned).
+    const Vec3 f = normalize((p[layout.refFL] + p[layout.refFR]) * 0.5 - (p[layout.refRL] + p[layout.refRR]) * 0.5);
+    Vec3 r = normalize((p[layout.refFR] + p[layout.refRR]) - (p[layout.refFL] + p[layout.refRL]));
+    const Vec3 u = normalize(cross(r, f));
+    r = cross(f, u);
+    Vec3 c{}, v{};
+    for (auto n : layout.towRails) { c += p[n]; v += body.velocities()[n]; }
+    c = c / static_cast<real>(layout.towRails.size());
+    v = v / static_cast<real>(layout.towRails.size());
+    const Vec3 at = c + f * layout.towOffset.x + u * layout.towOffset.y + r * layout.towOffset.z;
+    NodeParams ball;
+    ball.mass = 4.0;
+    ball.collision = false;   // under the bumper: it neither scrapes nor snags props
+    ball.group = "towbar";
+    const auto tow = body.addNode("towbar", at, ball);
+    body.velocities()[tow] = v;
+    BeamParams brace;
+    brace.spring = 8.0e5; brace.damp = 100.0; brace.deform = 4.0e4; brace.strength = 6.0e4;
+    for (auto n : layout.towRails) body.addBeam(tow, n, brace);
+    return tow;
 }
 
 }  // namespace sb

@@ -22,6 +22,12 @@ konkrete Teilergebnisse und erklärt das Gesamtprodukt noch nicht für fertig.
 
 * Native Kernprüfung: **97 Testfälle, 86.601 Assertions bestanden**. Darin echte
   Aufprallversuche, Haubenstabilität, Kontaktimpulse und Reparaturzustände.
+* Anhänger: Der Kern prüft, dass der Kastenanhänger allein auf Deichsel und Rädern steht,
+  dem Zugwagen an der Kugelkopf-Verbindung folgt (Abweichung unter 0,22 km/h) und die
+  Verbindung über ihrer Bruchkraft reißt. `trailer_test.gd`: ankuppeln (Stützlast ~800 N,
+  Kupplungsspalt < 0,1 m), mit 60 km/h ziehen (Spalt 0,005 m), gemeinsam bremsen,
+  abkuppeln und wegfahren, Kuppeln nur im Stand, aus der Ferne zurückholen, Zurücksetzen
+  kuppelt ab. Fahrgefühl beim Ziehen und Pendeln bei hohem Tempo sind nicht von Hand abgenommen.
 * Alle sieben `cartest … --quick`-Prüfstände: `RESULT: OK`.
 * Erweiterter Headless-Belastungstest: **30 Minuten 1,75 Sekunden simuliert**
   in **5 Minuten 5,753 Sekunden Laufzeit**. **51 vollständige Zyklen** mit echter

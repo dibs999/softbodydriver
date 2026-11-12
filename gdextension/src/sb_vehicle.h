@@ -110,6 +110,10 @@ public:
     void release_grab();
     Dictionary get_info() const;
     Vector3 get_position_ws() const;   ///< Centre between the axles at floor level
+    /// Where the tow ball sits (or would sit) behind the rear, from the last synced pose.
+    Vector3 get_tow_position() const;
+    /// Internal (SBWorld, under the world lock): fits the tow bar to the running body.
+    std::int64_t fit_tow_bar_locked();
     Vector3 get_chase_target() const;
     Vector3 get_driver_eye() const;
     Variant get_dashboard_transform() const;
@@ -177,6 +181,7 @@ private:
     sb::CarDefinition def_;
     sb::CarVisual visual_;
     sb::CarLayout layout_;
+    std::int64_t towNode_ = -1;   ///< Fitted tow ball (-1 until a trailer is coupled)
     std::vector<sb::Vec3> restPositions_;   ///< Build pose (rear bumper at origin)
 
     // Snapshot of the physics state (main thread side).

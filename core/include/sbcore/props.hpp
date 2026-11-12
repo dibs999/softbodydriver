@@ -8,7 +8,7 @@
 
 namespace sb {
 
-enum class PropKind { Cone, Barrel, Barrier, Log, Bin, Beacon, Branch };
+enum class PropKind { Cone, Barrel, Barrier, Log, Bin, Beacon, Branch, Trailer };
 
 struct PropBuild {
     PropKind kind = PropKind::Cone;
@@ -19,6 +19,8 @@ struct PropBuild {
     /// off its foot: the visual's "Sub" child follows it.
     std::int64_t subFrameOrigin = -1, subFrameX = -1, subFrameY = -1;
     std::vector<Vec3> restPositions;
+    /// Trailer: the hitch head node at the front of the drawbar (-1 for other props).
+    std::int64_t hitch = -1;
 };
 
 /// Builds a prop standing on the ground at the origin (y = 0 bottom), upright along +y.
@@ -33,8 +35,12 @@ struct PropBuild {
 /// z under it, parallel to the panel; the panel pops off its foot in a hard strike.
 /// Branch: fallen branch, 2.4 m, 10 -> 7 cm thick, two twigs, ~14 kg (long axis along x); snaps
 /// in the middle (butt half: main frame, tip half: sub frame).
+/// Trailer: single-axle box trailer, 2.4 x 1.4 m bed with 0.36 m side walls, A-frame drawbar to a
+/// hitch head 1.1 m ahead of the bed (along +x, 0.45 m up), two 0.58 m tyres; ~260 kg. It rolls on
+/// its own wheels (brakes from its controls, the overrun brake) and is towed through a World link
+/// on `hitch`.
 PropBuild buildProp(PropKind kind);
-/// "cone" / "barrel" / "barrier" / "log" / "bin" / "beacon" / "branch"; throws
+/// "cone" / "barrel" / "barrier" / "log" / "bin" / "beacon" / "branch" / "trailer"; throws
 /// std::invalid_argument otherwise.
 PropKind propKindFromString(const std::string& name);
 

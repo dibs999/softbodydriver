@@ -331,6 +331,16 @@ Autos stoßen die Requisiten um, schleifen
 Pylonen unter dem Stoßfänger mit oder schleudern Fässer weg; das Pausenmenü stellt
 alle wieder auf („Pylonen und Fässer zurückstellen“).
 
+**Anhänger:** „Anhänger ankuppeln / abkuppeln“ im Pausenmenü hängt einen Kastenanhänger
+(knapp 200 kg, Stahlrahmen aus Knoten und Balken, zwei eigene Druckluftreifen, Blattfeder-
+Achse) an die Anhängerkupplung hinter dem Auto. Die Kupplung ist eine federnde Kugelkopf-
+Verbindung zwischen zwei Körpern: Im Stand trägt sie nur die Stützlast (rund 800 N), beim
+Ziehen und Bremsen die Zug- und Schubkräfte; über 60 kN reißt sie ab. Der Anhänger bremst
+über eine Auflaufbremse mit, seine Rückleuchten zeigen Licht, Bremslicht und Blinker des
+Zugwagens. An- und Abkuppeln geht nur im Stand; abgekuppelt bleibt er mit angezogener
+Bremse stehen, aus der Ferne erneut angefordert wird er hinter das Auto geholt.
+Zurücksetzen, Bergen und Fahrzeugwechsel kuppeln ihn ab (`trailer_test`).
+
 Alle Fahrzeuge tragen vorn und hinten deutsche Kennzeichen (520 × 110 mm, blaues EU-Feld, je Fahrzeug eigene Nummer), die am Karosserie-Skinning hängen und sich mit einem eingedrückten Stoßfänger mitbewegen.
 
 Meridian Estate und Trailhead 4x4 haben eine Heckklappe, Meridian-Limousinen und
@@ -452,6 +462,7 @@ godot --headless --path game -s res://tests/gamepad_controls_test.gd # Gamepad b
 godot --headless --path game -s res://tests/driver_input_test.gd # Rückwärtsfahrt und manueller/automatischer Antrieb
 godot --headless --path game -s res://tests/cockpit_instruments_test.gd # Echte Zustände im Cockpit
 godot --headless --path game -s res://tests/session_controls_test.gd # Pausenmenü, Wetter, Aktivitäten und Bergung
+godot --headless --path game -s res://tests/trailer_test.gd         # Anhänger an-/abkuppeln, ziehen, bremsen
 godot --headless --path game -s res://tests/time_trial_flow_test.gd # Echte vollständige Runde, Ergebnis und Profil-Neuladen
 godot --headless --path game -s res://tests/time_trial_flow_test.gd -- --record-save-failure # Echte Runde bei nicht schreibbarer Rekorddatei
 godot --headless --path game -s res://tests/proving_ground_test.gd # Anfahrt, Service, Gelände und Kollisionen

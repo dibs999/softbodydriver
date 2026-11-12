@@ -1,5 +1,6 @@
 #include "sbcore/props.hpp"
 
+#include <array>
 #include <cmath>
 #include <stdexcept>
 
@@ -494,10 +495,147 @@ PropBuild buildBeacon() {
 
 }  // namespace
 
+
+PropBuild buildTrailer() {
+    PropBuild out;
+    out.kind = PropKind::Trailer;
+    SoftBody& b = out.body;
+    b.setName("trailer");
+    NodeParams frame;
+    frame.mass = 10.0; frame.friction = 0.6; frame.group = "trailer";
+    NodeParams light = frame;
+    light.mass = 4.0;
+    // Bed frame: three stations along x (rear, middle, front), both sides, lower and upper chord.
+    const std::array<real, 3> xs{-1.2, 0.0, 1.2};
+    std::uint32_t lo[3][2], up[3][2], rail[3][2];
+    for (int i = 0; i < 3; ++i)
+        for (int s = 0; s < 2; ++s) {
+            const real z = s ? 0.7 : -0.7;
+            lo[i][s] = b.addNode("lo" + std::to_string(i) + std::to_string(s), {xs[i], 0.42, z}, frame);
+            up[i][s] = b.addNode("up" + std::to_string(i) + std::to_string(s), {xs[i], 0.56, z}, frame);
+            rail[i][s] = b.addNode("rail" + std::to_string(i) + std::to_string(s), {xs[i], 0.92, z}, light);
+        }
+    BeamParams steel;
+    steel.spring = 2.0e6; steel.damp = 150.0; steel.deform = 6.0e4; steel.strength = 1.5e5;
+    std::vector<std::uint32_t> chassis;
+    for (int i = 0; i < 3; ++i)
+        for (int s = 0; s < 2; ++s) { chassis.push_back(lo[i][s]); chassis.push_back(up[i][s]); }
+    connectAll(b, chassis, steel);
+    // Side and end walls: sheet steel panels on the bed, a top rail along them.
+    BeamParams wall;
+    wall.spring = 6.0e5; wall.damp = 60.0; wall.deform = 1.2e4; wall.strength = 4.0e4;
+    for (int s = 0; s < 2; ++s)
+        for (int i = 0; i < 3; ++i) {
+            b.addBeam(rail[i][s], up[i][s], wall);
+            b.addBeam(rail[i][s], lo[i][s], wall);
+            if (i < 2) {
+                b.addBeam(rail[i][s], rail[i + 1][s], wall);
+                b.addBeam(rail[i][s], up[i + 1][s], wall);
+                b.addBeam(rail[i + 1][s], up[i][s], wall);
+            }
+        }
+    for (int i : {0, 2}) {
+        b.addBeam(rail[i][0], rail[i][1], wall);
+        b.addBeam(rail[i][0], up[i][1], wall);
+        b.addBeam(rail[i][1], up[i][0], wall);
+    }
+    // A-frame drawbar to the hitch head.
+    NodeParams bar = frame;
+    bar.mass = 5.0;
+    const auto barL = b.addNode("drawbar_l", {1.75, 0.44, -0.18}, bar);
+    const auto barR = b.addNode("drawbar_r", {1.75, 0.44, 0.18}, bar);
+    NodeParams head = frame;
+    head.mass = 6.0;
+    const auto hitch = b.addNode("hitch", {2.3, 0.45, 0.0}, head);
+    for (auto n : {barL, barR}) {
+        for (int s = 0; s < 2; ++s) {
+            b.addBeam(n, lo[2][s], steel);
+            b.addBeam(n, up[2][s], steel);
+        }
+        b.addBeam(n, hitch, steel);
+        b.addBeam(n, lo[1][n == barR ? 1 : 0], steel);
+    }
+    b.addBeam(barL, barR, steel);
+    b.addBeam(hitch, lo[2][0], steel);
+    b.addBeam(hitch, lo[2][1], steel);
+    b.addBeam(hitch, up[2][0], steel);
+    b.addBeam(hitch, up[2][1], steel);
+    // Axle a little behind the middle (tongue load on the hitch), stiff leaf-spring mounts.
+    NodeParams hubP = frame;
+    hubP.mass = 6.0;
+    const real xa = -0.15, radius = 0.29;
+    std::uint32_t hubIn[2], hubOut[2];
+    for (int s = 0; s < 2; ++s) {
+        const real sg = s ? 1.0 : -1.0;
+        hubIn[s] = b.addNode("hub_in" + std::to_string(s), {xa, radius, sg * 0.60}, hubP);
+        hubOut[s] = b.addNode("hub_out" + std::to_string(s), {xa, radius, sg * 0.80}, hubP);
+    }
+    BeamParams axle = steel;
+    axle.deform = 4.0e4;
+    b.addBeam(hubIn[0], hubIn[1], axle);
+    b.addBeam(hubIn[0], hubOut[1], axle);
+    b.addBeam(hubIn[1], hubOut[0], axle);
+    for (int s = 0; s < 2; ++s) b.addBeam(hubIn[s], hubOut[s], axle);
+    BeamParams leaf;
+    leaf.spring = 1.6e5; leaf.damp = 1.4e3; leaf.deform = 3.5e4; leaf.strength = 9.0e4;
+    for (int s = 0; s < 2; ++s)
+        for (auto h : {hubIn[s], hubOut[s]})
+            for (auto f : {lo[0][s], lo[1][s], up[0][s], up[1][s], lo[1][1 - s]})
+                b.addBeam(h, f, leaf);
+    // Two 155/80 R13 tyres on the trailer's own pressure wheels.
+    for (int s = 0; s < 2; ++s) {
+        PressureWheelSpec ws;
+        ws.name = s ? "TR" : "TL";
+        ws.hubRight = s ? hubOut[s] : hubIn[s];
+        ws.hubLeft = s ? hubIn[s] : hubOut[s];
+        ws.radius = radius;
+        ws.width = 0.155;
+        ws.numRays = 16;
+        ws.tireMass = 7.0;
+        ws.friction = 1.1;
+        ws.pressurePsi = 36.0;
+        const real rayScale = 12.0 / 16.0;
+        ws.spokeSpring = 1.05e5 * rayScale;
+        ws.treadSpring = 1.3e5;
+        ws.spokeDamp = 20.0 * rayScale;
+        ws.treadDamp = 22.5;
+        ws.contactStiffness = 2.7e5;
+        ws.membranePressure = 2.0;
+        ws.rollingHysteresis = 0.004;
+        ws.ratedLoad = 1500.0;
+        ws.braked = true;
+        ws.handbraked = true;
+        b.addWheel(ws);
+    }
+    // Collision skin: the bed, the side and end walls, the drawbar.
+    ColTriParams skin;
+    const Vec3 centre{0.0, 0.62, 0.0};
+    for (int i = 0; i < 2; ++i) {
+        outwardTri(b, up[i][0], up[i + 1][0], up[i + 1][1], {0.0, 0.0, 0.0}, skin);
+        outwardTri(b, up[i][0], up[i + 1][1], up[i][1], {0.0, 0.0, 0.0}, skin);
+        for (int s = 0; s < 2; ++s) {
+            outwardTri(b, lo[i][s], lo[i + 1][s], rail[i + 1][s], centre, skin);
+            outwardTri(b, lo[i][s], rail[i + 1][s], rail[i][s], centre, skin);
+        }
+    }
+    for (int i : {0, 2}) {
+        outwardTri(b, lo[i][0], lo[i][1], rail[i][1], centre, skin);
+        outwardTri(b, lo[i][0], rail[i][1], rail[i][0], centre, skin);
+    }
+    outwardTri(b, barL, barR, hitch, {1.9, 0.0, 0.0}, skin);
+    out.frameOrigin = up[0][0];
+    out.frameX = up[2][0];
+    out.frameY = rail[0][0];
+    out.hitch = hitch;
+    out.restPositions = b.positions();
+    return out;
+}
+
 PropBuild buildProp(PropKind kind) {
     PropBuild out = kind == PropKind::Log ? buildLog() : kind == PropKind::Barrier ? buildBarrier()
                   : kind == PropKind::Barrel ? buildBarrel() : kind == PropKind::Bin ? buildBin()
-                  : kind == PropKind::Beacon ? buildBeacon() : kind == PropKind::Branch ? buildBranch() : buildCone();
+                  : kind == PropKind::Beacon ? buildBeacon() : kind == PropKind::Branch ? buildBranch()
+                  : kind == PropKind::Trailer ? buildTrailer() : buildCone();
     out.body.setSleepEnabled(true);
     // Flat-bottomed props only: on a round log the lower faces are the ones a tyre climbs over.
     out.body.setDownFacesPassive(kind != PropKind::Log);
@@ -512,6 +650,7 @@ PropBuild buildProp(PropKind kind) {
         case PropKind::Bin: out.body.setContactThickness(0.12); break;
         case PropKind::Beacon: out.body.setContactThickness(0.03); break;   // thin foot and panel
         case PropKind::Branch: out.body.setContactThickness(0.03); break;
+        case PropKind::Trailer: out.body.setContactThickness(0.08); break;
     }
     return out;
 }
@@ -524,6 +663,7 @@ PropKind propKindFromString(const std::string& name) {
     if (name == "bin") return PropKind::Bin;
     if (name == "beacon") return PropKind::Beacon;
     if (name == "branch") return PropKind::Branch;
+    if (name == "trailer") return PropKind::Trailer;
     throw std::invalid_argument("unknown prop kind '" + name + "'");
 }
 

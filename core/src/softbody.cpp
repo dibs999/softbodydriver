@@ -181,7 +181,8 @@ void SoftBody::repair(const std::vector<Vec3>& restPositions) {
     for (auto* list : {&doors_, &lids_})
         for (auto& door : *list) { door.requestedOpen = false; door.latched = true; door.catching = false; door.travel = 0; }
     clearContacts();
-    if (restPositions.size() == pos_.size()) pos_ = restPositions;
+    // Nodes fitted later (a tow bar) beyond the given list keep their place.
+    for (std::size_t i = 0; i < std::min(restPositions.size(), pos_.size()); ++i) pos_[i] = restPositions[i];
     for (auto& v : vel_) v = {};
     for (std::size_t i = 0; i < beams_.size(); ++i) {
         Beam& b = beams_[i];
