@@ -17,6 +17,11 @@ uniform vec2 pivot_a;
 uniform vec2 pivot_b;
 uniform vec2 radius_a;             // blade inner/outer radius
 uniform vec2 radius_b;
+// Metres the drops of each layer have run along the glass (+ up: airflow above ~55 km/h, - down:
+// gravity when slow), and how far they are drawn out into streaks by the airflow (0 .. 1).
+uniform float flow_a = 0.0;
+uniform float flow_b = 0.0;
+uniform float stretch = 0.0;
 
 float hash(vec2 p) {
 	p = fract(p * vec2(123.34, 456.21));
@@ -42,7 +47,7 @@ float since_wiped(vec2 m, vec2 pivot, vec2 radius) {
 }
 
 // One layer of drops on a grid of `cell` metres. Returns refraction offset (xy) and coverage (z).
-vec3 drops(vec2 m, float cell, float since, float seed) {
+vec3 drops(vec2 m, float cell, float since, float seed, float streak) {
 	vec2 g = m / cell;
 	vec2 id = floor(g);
 	vec2 f = fract(g) - 0.5;
@@ -54,8 +59,16 @@ vec3 drops(vec2 m, float cell, float since, float seed) {
 	float birth = hash(id * 1.7 + seed + 3.1) * 14.0;
 	float grown = clamp((since * (0.25 + 1.5 * rain) - birth) * 0.8, 0.0, 1.0) * clamp(wetness * 1.5, 0.0, 1.0);
 	vec2 c = (vec2(hash(id + 7.7 + seed), hash(id + 1.3 + seed)) - 0.5) * 0.5;
-	float size = mix(0.12, 0.3, pow(hash(id + 9.1 + seed), 2.0)) * grown;
+	// In the airflow fewer drops stay on, smaller, and their centre moves up so the tail fits in
+	// the cell instead of being cut off at its edge.
+	c.y += 0.2 * streak;
+	float size = mix(0.12, 0.3, pow(hash(id + 9.1 + seed), 2.0)) * grown * (1.0 - 0.4 * streak);
+	size *= step(hash(id + 4.4 + seed), 1.0 - 0.4 * streak);
 	vec2 d = (f - c) / max(size, 1e-3);
+	// Running drops are drawn out along the glass, with the thin end trailing.
+	float tail = d.y < 0.0 ? 1.0 + 1.8 * streak : 1.0 + 0.3 * streak;
+	d.y /= tail;
+	d.x *= 1.0 + 0.35 * streak;
 	float r2 = dot(d, d);
 	float cover = (1.0 - smoothstep(0.75, 1.0, r2)) * step(1e-3, size);
 	vec2 n = d * sqrt(max(1.0 - r2, 0.0));
@@ -66,8 +79,8 @@ void fragment() {
 	vec2 m = UV2;
 	float since = min(since_wiped(m, pivot_a, radius_a), since_wiped(m, pivot_b, radius_b));
 	since = min(since, 1e4);
-	vec3 a = drops(m, 0.022, since, 0.0);
-	vec3 b = drops(m + vec2(0.0045, 0.0071), 0.011, since * 1.3, 11.0);
+	vec3 a = drops(m - vec2(0.0, flow_a), 0.022, since, 0.0, stretch);
+	vec3 b = drops(m + vec2(0.0045, 0.0071 - flow_b), 0.011, since * 1.3, 11.0, stretch * 0.6);
 	vec2 offset = (a.xy * 0.03 + b.xy * 0.016);
 	float cover = clamp(a.z + b.z * 0.85, 0.0, 1.0);
 	// Thin smeared film right behind a blade, fading within a second.

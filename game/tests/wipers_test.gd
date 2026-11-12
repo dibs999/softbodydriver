@@ -44,6 +44,17 @@ func run() -> void:
 	check(car.get_up().dot(centre - car.get_position_ws()) > 0.5, "Pane lies above the vehicle reference")
 	check((centre - car.get_position_ws()).dot(car.get_forward()) > 0.0, "Pane lies ahead of mid-wheelbase")
 	print("local ", local)
+	# Drops run along the glass: slowly down when stationary, up in the airflow at speed.
+	var still_from: float = wipers._flow_a
+	wipers.speed_override = 0.0
+	for i in 10: wipers.update(0.1, true, 1.0)
+	var still_run := fposmod(wipers._flow_a - still_from + 11.0, 22.0) - 11.0
+	wipers.speed_override = 110.0
+	var fast_from: float = wipers._flow_a
+	for i in 10: wipers.update(0.1, true, 1.0)
+	var fast_run := fposmod(wipers._flow_a - fast_from + 11.0, 22.0) - 11.0
+	wipers.speed_override = -1.0
+	check(still_run < 0.0 and still_run > -0.02 and fast_run > 0.15, "Drops creep down when stationary (%.3f m/s), run up at 110 km/h (%.2f m/s)" % [still_run, fast_run])
 	wipers.attach(null, {})
 	wipers.update(0.1, true, 1.0)
 	check(not wipers.visible, "Detached wipers hide")
