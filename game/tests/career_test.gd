@@ -14,6 +14,9 @@ func check(value: bool, caption: String) -> void:
 	failed = failed or not value
 
 func _initialize() -> void:
+	# The Game autoload reads the saved profile in its _ready, after this starts: wait for it, or
+	# a stored "career = false" overrides the setting made below.
+	await process_frame
 	# Rules.
 	check(Career.repair_cost({"broken_beams": 0, "deformed_beams": 0}) == 0.0, "A clean car costs nothing to repair")
 	var bill := Career.repair_cost({"broken_beams": 40, "deformed_beams": 120, "radiator_damage": 0.6, "engine_damage": 0.2})

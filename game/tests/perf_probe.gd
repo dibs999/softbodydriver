@@ -16,6 +16,8 @@ func _next() -> void:
 			if args.is_empty() or m["id"] in args:
 				maps.append(m["id"])
 	if maps.is_empty():
+		# The preset was measured from a temporary settings file; leave the user folder clean.
+		DirAccess.remove_absolute(ProjectSettings.globalize_path("user://perf_probe_%d.cfg" % OS.get_process_id()))
 		quit()
 		return
 	current = maps.pop_front()

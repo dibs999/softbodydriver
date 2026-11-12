@@ -16,6 +16,9 @@ func _clean(path: String) -> void:
 	for suffix in ["", ".bak"]: DirAccess.remove_absolute(ProjectSettings.globalize_path(path + suffix))
 
 func _initialize() -> void:
+	# The Game autoload reads the saved profile in its _ready, after this starts: wait for it, or
+	# a stored "career = false" overrides the setting made below.
+	await process_frame
 	# Rules.
 	var a := Career.make_contract("city", [0, 1, 2, 3], 0, 0)
 	var again := Career.make_contract("city", [0, 1, 2, 3], 0, 0)
