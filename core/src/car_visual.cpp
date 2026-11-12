@@ -578,10 +578,16 @@ std::vector<MeshSurface> buildWheelMeshes(const TireDef& tire, BodyStyle style) 
     {
         LocalMesh lm{&out[3]};
         lm.revolve({{0.0, hwid * 0.80}, {0.032, hwid * 0.78}, {0.036, hwid * 0.74}}, 18, true);
-        // Lug nuts.
+        // Wheel nuts: hexagonal, each from three crossed flat bars.
         for (int s = 0; s < 5; ++s) {
             const real a = 2.0 * kPi * (s + 0.5) / 5;
-            lm.boxLocal({0.052, 0.0, hwid * 0.76}, {0.009, 0.009, 0.012}, a);
+            for (int k = 0; k < 3; ++k) {
+                const real spin = kPi / 3.0 * k;
+                const real cx = 0.052 * std::cos(a), cy = 0.052 * std::sin(a);
+                // boxLocal rotates about the wheel axis: place the nut centre, then turn the bar.
+                const real ca = std::cos(-spin), sa = std::sin(-spin);
+                lm.boxLocal({cx * ca - cy * sa, cx * sa + cy * ca, hwid * 0.76}, {0.0095, 0.0055, 0.012}, spin);
+            }
         }
     }
     for (MeshSurface& m : out) computeNormals(m.positions, m.indices, m.normals);
