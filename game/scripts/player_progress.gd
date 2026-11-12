@@ -43,6 +43,12 @@ static func _valid(data: Variant) -> bool:
 			if not rgb is Array or rgb.size() != 3: return false
 			for c in rgb:
 				if not _number(c): return false
+	if data.has("configs"):
+		if not data["configs"] is Dictionary: return false
+		for cfg in data["configs"].values():
+			if not cfg is Dictionary: return false
+			for v in cfg.values():
+				if not (v is String or _number(v)): return false
 	var selection: Dictionary = data["selection"]
 	if not selection.get("last_car") is String or not selection.get("last_map") is String: return false
 	for car in data["braking"].values():
@@ -177,6 +183,20 @@ func set_paint(car_id: String, color: Variant) -> bool:
 	if color is Color: all[car_id] = [color.r, color.g, color.b]
 	else: all.erase(car_id)
 	_data["paint"] = all
+	return _commit(previous)
+
+## Werkstatt configuration of a car (vehicle_workshop.gd), {} for the factory build.
+func get_config(car_id: String) -> Dictionary:
+	var cfg: Variant = (_data.get("configs", {}) as Dictionary).get(car_id)
+	return (cfg as Dictionary).duplicate() if cfg is Dictionary else {}
+
+func set_config(car_id: String, cfg: Dictionary) -> bool:
+	if read_only: return false
+	var previous := _data.duplicate(true)
+	var all: Dictionary = (_data.get("configs", {}) as Dictionary).duplicate(true)
+	if cfg.is_empty(): all.erase(car_id)
+	else: all[car_id] = cfg.duplicate()
+	_data["configs"] = all
 	return _commit(previous)
 
 func set_selection(car_path: String, map_id: String) -> bool:

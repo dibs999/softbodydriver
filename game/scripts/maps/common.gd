@@ -46,6 +46,10 @@ static func surface_material(kind: String, tile_metres: float, tint := Color.WHI
 	m.set_shader_parameter("albedo_tex", load(SURFACE_PATH + kind + ".jpg"))
 	m.set_shader_parameter("tile_metres", tile_metres)
 	m.set_shader_parameter("tint", tint)
+	if kind == "asphalt":
+		# The photo averages an albedo of 0.015 (darker than fresh asphalt); x4 is weathered asphalt.
+		m.set_shader_parameter("albedo_gain", 4.0)
+		m.set_shader_parameter("retro_gain", 25.0)
 	var look: Array = GROUND_LOOK.get(kind, [0.08, 30.0, Color.WHITE, 0.0, 0.9, 0.6])
 	m.set_shader_parameter("macro_strength", look[0])
 	m.set_shader_parameter("macro_scale", look[1])
@@ -369,9 +373,13 @@ static func road_mesh(points: PackedVector3Array, half_w: float, material: Mater
 					p.y = height_at.call(p.x, p.z)
 				p.y += lift
 				st.set_uv(vertex[1])
-				st.set_normal(Vector3.UP)
 				st.add_vertex(p)
 		v = v2
+	# Normals from the faces (they were all straight up, which on a gradient shaded a road facing
+	# the headlights like one lit at a grazing angle), smoothed over shared vertices, then tangents
+	# for the normal map.
+	st.index()
+	st.generate_normals()
 	if material is ShaderMaterial:
 		st.generate_tangents()
 	var mi := MeshInstance3D.new()
@@ -555,9 +563,10 @@ static func verge_mesh(points: PackedVector3Array, half_w: float, width: float, 
 					p.y = height_at.call(p.x, p.z)
 				p.y += vertex[2]
 				st.set_uv(vertex[1])
-				st.set_normal(Vector3.UP)
 				st.add_vertex(p)
 		v = v2
+	st.index()
+	st.generate_normals()   # true normals on gradients and banks, as for the road
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
 	mi.material_override = material

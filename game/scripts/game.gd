@@ -17,6 +17,11 @@ var equipment: Node3D
 var grabber: Node3D   # Ctrl + left mouse: pull a node of any car (node_grabber.gd)
 var trailer: SBProp   # the box trailer (pause menu: Anhänger), coupled to the player's tow bar or parked
 var trailer_load := 0.0   # kg of cargo on the trailer's deck (pause menu: Anhänger-Ladung)
+const Workshop := preload("res://scripts/vehicle_workshop.gd")
+const LSD_CHOICES := [["Original", -1.0], ["Offen", 0.0], ["Straße", 8.0], ["Sport", 20.0], ["Rennsport", 40.0]]
+var _ws := {}   # Werkstatt controls by configuration key
+var _ws_info: Label
+var _ws_engine_ids: Array = []
 var _trailer_was_coupled := false
 var weather: Node
 var wipers: Node3D
@@ -109,7 +114,7 @@ func _ready() -> void:
 		var info: Dictionary = Game.car_info(Game.selected_car)
 		if not info.is_empty() and not Career.owns(Game.progress, str(info["id"])):
 			Game.selected_car = "res://cars/%s.car.json" % Career.STARTER_CAR
-	player = Game.spawn_vehicle(world, Game.selected_car, map_data["spawns"][0])
+	player = Game.spawn_vehicle(world, Game.selected_car, map_data["spawns"][0], true)
 	if player == null:
 		push_error("Failed to spawn %s" % Game.selected_car)
 		get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
@@ -1088,6 +1093,8 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 		_apply_tuning())
 	vehicle_page.add_child(reset_tuning)
 
+	_build_workshop(page.call("Werkstatt"))
+
 	var drive_page: VBoxContainer = page.call("Fahrt & Umgebung")
 	drive_page.add_child(UITheme.section("Aktivität"))
 	var offered := activity.available_modes()
@@ -1139,6 +1146,153 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 	controls_page.add_child(_control_hint)
 	controls_page.add_child(UITheme.label("F1 im Fahrbetrieb zeigt alle Tasten.", 13, UITheme.MUTED))
 	Game.get_node("DriverPrompts").device_changed.connect(func(): _control_hint.text = DriverPrompts.control_summary())
+
+## Werkstatt page: parts and tuning for the player's car (vehicle_workshop.gd). The choices are
+## stored per car and take effect when the car is rebuilt with "Übernehmen".
+func _build_workshop(ws_page: VBoxContainer) -> void:
+	var note := func(_v: Variant = null) -> void: _workshop_preview()
+	ws_page.add_child(UITheme.section("Motor und Antrieb"))
+	var engines: Array = Game.engine_catalogue()
+	_ws_engine_ids = [""]
+	var names: Array = ["Serienmotor"]
+	for e: Dictionary in engines:
+		_ws_engine_ids.append(e["id"])
+		names.append("%s · %d kW · %d Nm (%s)" % [e["name"], int(round(e["power_kw"])), int(round(e["torque_nm"])), e["car"]])
+	_ws["engine"] = _pause_choices(ws_page, "Motor", names)
+	_ws["gearbox"] = _pause_choices(ws_page, "Getriebe", ["Eigenes Getriebe", "Getriebe des Spendermotors"])
+	_ws["power"] = _pause_slider(ws_page, "Leistung (Kennfeld)", 70.0, 150.0, 5.0, "%.0f %%", note)
+	_ws["limiter"] = _pause_slider(ws_page, "Drehzahlbegrenzer", -500.0, 800.0, 100.0, "%+.0f U/min", note)
+	_ws["final_drive"] = _pause_slider(ws_page, "Achsübersetzung", 80.0, 125.0, 1.0, "%.0f %%", note)
+	_ws["layout"] = _pause_choices(ws_page, "Antrieb", Workshop.LAYOUTS.map(func(l): return l[0]))
+	_ws["lsd"] = _pause_choices(ws_page, "Sperrdifferenzial", LSD_CHOICES.map(func(l): return l[0]))
+	ws_page.add_child(UITheme.section("Fahrwerk"))
+	_ws["spring_f"] = _pause_slider(ws_page, "Federn vorn", 60.0, 180.0, 5.0, "%.0f %%", note)
+	_ws["spring_r"] = _pause_slider(ws_page, "Federn hinten", 60.0, 180.0, 5.0, "%.0f %%", note)
+	_ws["damp_f"] = _pause_slider(ws_page, "Dämpfer vorn", 60.0, 180.0, 5.0, "%.0f %%", note)
+	_ws["damp_r"] = _pause_slider(ws_page, "Dämpfer hinten", 60.0, 180.0, 5.0, "%.0f %%", note)
+	_ws["arb_f"] = _pause_slider(ws_page, "Stabilisator vorn", 0.0, 200.0, 10.0, "%.0f %%", note)
+	_ws["arb_r"] = _pause_slider(ws_page, "Stabilisator hinten", 0.0, 200.0, 10.0, "%.0f %%", note)
+	_ws["ride_height"] = _pause_slider(ws_page, "Fahrzeughöhe", -40.0, 60.0, 5.0, "%+.0f mm", note)
+	ws_page.add_child(UITheme.section("Räder, Bremsen, Gewicht"))
+	_ws["compound"] = _pause_choices(ws_page, "Reifen", Workshop.COMPOUNDS.map(func(c): return c[0]))
+	_ws["tire_width"] = _pause_slider(ws_page, "Reifenbreite", 85.0, 125.0, 5.0, "%.0f %%", note)
+	_ws["brakes"] = _pause_slider(ws_page, "Bremsanlage", 70.0, 150.0, 5.0, "%.0f %%", note)
+	_ws["ballast"] = _pause_slider(ws_page, "Gewicht", -150.0, 300.0, 10.0, "%+.0f kg", note)
+	for key in ["engine", "gearbox", "layout", "lsd", "compound"]:
+		(_ws[key] as OptionButton).item_selected.connect(func(_i: int): _workshop_preview())
+	_ws_info = UITheme.label("", 14, UITheme.MUTED)
+	_ws_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	ws_page.add_child(_ws_info)
+	var apply := Button.new()
+	apply.text = "Übernehmen – Auto in der Werkstatt neu aufbauen"
+	apply.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	apply.pressed.connect(func():
+		hud.toast(rebuild_player(_workshop_read()))
+		_toggle_pause())
+	ws_page.add_child(apply)
+	var factory := Button.new()
+	factory.text = "Werkszustand wiederherstellen"
+	factory.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	factory.pressed.connect(func():
+		hud.toast(rebuild_player({}))
+		_toggle_pause())
+	ws_page.add_child(factory)
+
+
+## Fills the Werkstatt controls from the player's car's stored configuration.
+func _workshop_load() -> void:
+	if _ws.is_empty() or not is_instance_valid(player):
+		return
+	var cfg := Workshop.normalized(Game.progress.get_config(str(player.get_info().get("id", ""))))
+	(_ws["engine"] as OptionButton).select(maxi(0, _ws_engine_ids.find(cfg["engine"])))
+	(_ws["gearbox"] as OptionButton).select(1 if cfg["gearbox"] == "donor" else 0)
+	(_ws["layout"] as OptionButton).select(maxi(0, Workshop.LAYOUTS.map(func(l): return l[1]).find(cfg["layout"])))
+	(_ws["lsd"] as OptionButton).select(maxi(0, LSD_CHOICES.map(func(l): return l[1]).find(float(cfg["lsd"]))))
+	(_ws["compound"] as OptionButton).select(int(cfg["compound"]))
+	for key in ["power", "final_drive", "spring_f", "spring_r", "damp_f", "damp_r", "arb_f", "arb_r", "brakes", "tire_width"]:
+		(_ws[key] as HSlider).value = float(cfg[key]) * 100.0
+	(_ws["ride_height"] as HSlider).value = float(cfg["ride_height"]) * 1000.0
+	(_ws["limiter"] as HSlider).value = float(cfg["limiter"])
+	(_ws["ballast"] as HSlider).value = float(cfg["ballast"])
+	for key in _ws.keys():
+		if _ws[key] is HSlider:   # the value label also when the value did not change
+			var sl: HSlider = _ws[key]
+			(sl.get_meta("label") as Label).text = String(sl.get_meta("format")) % sl.value
+	_workshop_preview()
+
+
+func _workshop_read() -> Dictionary:
+	var cfg := {}
+	cfg["engine"] = _ws_engine_ids[(_ws["engine"] as OptionButton).selected]
+	if cfg["engine"] == str(player.get_info().get("id", "")):
+		cfg["engine"] = ""
+	cfg["gearbox"] = "donor" if (_ws["gearbox"] as OptionButton).selected == 1 else "own"
+	cfg["layout"] = Workshop.LAYOUTS[(_ws["layout"] as OptionButton).selected][1]
+	cfg["lsd"] = LSD_CHOICES[(_ws["lsd"] as OptionButton).selected][1]
+	cfg["compound"] = (_ws["compound"] as OptionButton).selected
+	for key in ["power", "final_drive", "spring_f", "spring_r", "damp_f", "damp_r", "arb_f", "arb_r", "brakes", "tire_width"]:
+		cfg[key] = (_ws[key] as HSlider).value / 100.0
+	cfg["ride_height"] = (_ws["ride_height"] as HSlider).value / 1000.0
+	cfg["limiter"] = (_ws["limiter"] as HSlider).value
+	cfg["ballast"] = (_ws["ballast"] as HSlider).value
+	return Workshop.normalized(cfg)
+
+
+## Resulting key figures of the configuration shown under the controls.
+func _workshop_preview() -> void:
+	if _ws_info == null or not is_instance_valid(player):
+		return
+	var path := Game.car_path_for_id(str(player.get_info().get("id", "")))
+	var d := Workshop.apply(Workshop.read_definition(path), _workshop_read(), Game.engine_catalogue())
+	var e: Dictionary = d.get("engine", {})
+	var peak_t := 0.0
+	var peak_p := 0.0
+	for pt in e.get("torqueCurve", []):
+		peak_t = maxf(peak_t, float(pt[1]))
+		peak_p = maxf(peak_p, float(pt[1]) * float(pt[0]) * TAU / 60.0 / 1000.0)
+	var mass := float(d.get("chassis", {}).get("curbMass", 0.0))
+	_ws_info.text = "Ergebnis: %s, %d kW (%d PS), %d Nm, Drehzahlgrenze %d U/min, %s, %d kg, %.1f kg/kW" % [
+		e.get("name", "?"), int(round(peak_p)), int(round(peak_p * 1.36)), int(round(peak_t)), int(e.get("redlineRpm", 0)),
+		e.get("layout", "?"), int(round(mass)), mass / maxf(peak_p, 1.0)]
+
+
+## Rebuilds the player's car with configuration `cfg` where it stands (upright, at rest): stores the
+## configuration for this car, spawns the new build and replaces the old one, like applying parts
+## in a garage. Returns the message for the toast.
+func rebuild_player(cfg: Dictionary) -> String:
+	if absf(player.get_speed_kmh()) > 5.0:
+		return "Für die Werkstatt anhalten"
+	var id := str(player.get_info().get("id", ""))
+	var path := Game.car_path_for_id(id)
+	if path.is_empty():
+		return "Fahrzeug nicht gefunden"
+	Game.progress.set_config(id, {} if Workshop.is_default(cfg) else cfg)
+	uncouple_trailer()
+	var old := player
+	var f := old.get_forward()
+	f.y = 0.0
+	f = f.normalized() if f.length() > 0.1 else Vector3.RIGHT
+	var xf := MapBuilder.car_xform(old.get_position_ws() + Vector3.UP * 0.25, f)
+	# The old car goes first: two bodies built into each other would be blown apart.
+	var i := vehicles.find(old)
+	vehicles.erase(old)
+	world.remove_vehicle(old)
+	var message := "Werkstatt: %s" % Workshop.summary(cfg, Game.engine_catalogue())
+	var v := Game.spawn_vehicle(world, path, xf, true)
+	if v == null:
+		Game.progress.set_config(id, {})
+		v = Game.spawn_vehicle(world, path, xf, false)
+		message = "Diese Konfiguration ließ sich nicht aufbauen – Serienstand"
+	Game.apply_chosen_paint(v)
+	vehicles.insert(maxi(0, i), v)
+	_apply_settings(v)
+	_configure_effects(v)
+	_set_player(v)
+	for driver in ai.values():
+		driver.player = v
+	cam.snap()
+	return message
+
 
 func _pause_slider(parent: VBoxContainer, caption: String, low: float, high: float, step: float, fmt: String,
 		changed: Callable) -> HSlider:
@@ -1217,6 +1371,7 @@ func _toggle_pause() -> void:
 	if pause_menu.visible:
 		_pause_activity.select(maxi(0, activity.available_modes().find(activity.mode)))
 		_sync_tuning()
+		_workshop_load()
 		_pause_weather.select(weather.weather_index)
 		_pause_time.select(weather.time_index)
 		_pause_clock.set_pressed_no_signal(weather.automatic_time)

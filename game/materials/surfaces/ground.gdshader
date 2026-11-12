@@ -8,6 +8,8 @@ uniform bool has_normal = false;
 uniform float normal_strength = 0.3;
 uniform float tile_metres = 2.0;
 uniform vec4 tint : source_color = vec4(1.0);
+uniform float albedo_gain = 1.0;          // brightness correction of the photo (asphalt: see common.gd)
+uniform float retro_gain = 0.0;           // asphalt: back-scatter towards the light (see road.gdshader)
 uniform bool use_vertex_color = false;
 uniform float roughness = 0.9;
 uniform float macro_strength = 0.12;      // brightness variation of the large patches
@@ -40,6 +42,13 @@ uniform vec4 street_grid = vec4(0.0);
 uniform vec2 paving = vec2(0.0);
 uniform vec4 kerb_grid = vec4(0.0);
 uniform float kerb_top = 0.16;
+// Street lamps lighting the ground (street_lighting.gd): the nearest lamps as xyz = light source,
+// w = energy. Computed here instead of with real lights, which the Mobile and Compatibility
+// renderers cap at 8 per object (a whole street is one object); spot cone and falloff as the
+// pooled SpotLight3D (range 20 m, 62 deg, attenuation 0.9).
+uniform vec4 lamp_pool[48];
+uniform int lamp_count = 0;
+uniform vec4 lamp_color : source_color = vec4(1.0, 0.84, 0.62, 1.0);
 uniform float street_lane = 4.0;
 global uniform float road_wetness;
 
@@ -174,7 +183,7 @@ void fragment() {
 			nrm += vec3(t + n.xy, n.z) * w.z;
 		}
 	}
-	col *= tint.rgb;
+	col *= tint.rgb * albedo_gain;
 	if (use_vertex_color) {
 		col *= COLOR.rgb;
 	}
@@ -342,9 +351,62 @@ void fragment() {
 	float wet = clamp(road_wetness * wet_response, 0.0, 1.0);
 	col *= mix(1.0, 0.66, wet);
 	ALBEDO = col;
-	ROUGHNESS = mix(roughness * mix(0.96, 1.04, fine) * (1.0 - street_gloss), 0.18 + 0.3 * fine, wet * 0.85);
+	float final_rough = mix(roughness * mix(0.96, 1.04, fine) * (1.0 - street_gloss), 0.18 + 0.3 * fine, wet * 0.85);
+	if (lamp_count > 0) {
+		vec3 lamp_light = vec3(0.0);
+		float lamp_spec = 0.0;
+		// GGX highlight of each lamp: on a wet street it draws the long reflections of the lamps.
+		vec3 v_dir = normalize(CAMERA_POSITION_WORLD - world_pos);
+		float a_sp = max(final_rough * final_rough, 0.002);
+		float a2_sp = a_sp * a_sp;
+		float ndv_sp = clamp(dot(n, v_dir), 0.001, 1.0);
+		for (int i = 0; i < 48; i++) {
+			if (i >= lamp_count) break;
+			vec4 lamp = lamp_pool[i];
+			vec3 d = lamp.xyz - world_pos;
+			float dist = length(d);
+			if (dist > 20.0 || d.y <= 0.0) continue;
+			vec3 l = d / dist;
+			float window = pow(clamp(1.0 - pow(dist / 20.0, 4.0), 0.0, 1.0), 2.0);
+			float cone = pow(clamp((l.y - cos(radians(62.0))) / (1.0 - cos(radians(62.0))), 0.0, 1.0), 1.0 / 1.6);
+			float ndl_l = max(dot(n, l), 0.0);
+			float irr = lamp.w * window * cone * pow(dist, -0.9);
+			lamp_light += vec3(irr * ndl_l);
+			vec3 h_sp = normalize(l + v_dir);
+			float ndh = clamp(dot(n, h_sp), 0.0, 1.0);
+			float dd = ndh * ndh * (a2_sp - 1.0) + 1.0;
+			float k_sp = a_sp * 0.5;
+			float vis = 0.25 / ((ndl_l * (1.0 - k_sp) + k_sp) * (ndv_sp * (1.0 - k_sp) + k_sp));
+			float fres = 0.04 + 0.96 * pow(1.0 - clamp(dot(l, h_sp), 0.0, 1.0), 5.0);
+			lamp_spec += a2_sp / (3.14159 * dd * dd) * vis * fres * ndl_l * irr;
+		}
+		// Diffuse as Godot lights it (energy already includes the Lambert normalisation).
+		EMISSION = col * lamp_color.rgb * lamp_light * 2.5 + lamp_color.rgb * lamp_spec;
+	}
+	ROUGHNESS = final_rough;
 	SPECULAR = mix(0.5, 0.62, wet);
 	if (has_normal) {
 		NORMAL = normalize((VIEW_MATRIX * vec4(normalize(nrm), 0.0)).xyz);
 	}
+}
+
+
+// As in road.gdshader: Lambert, a retro lobe towards the light source for asphalt (headlights at a
+// grazing angle), GGX specular for wet surfaces.
+void light() {
+	float ndl = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
+	float retro = pow(clamp(dot(LIGHT, VIEW), 0.0, 1.0), 12.0) * retro_gain;
+	DIFFUSE_LIGHT += ndl * (1.0 + retro) * ATTENUATION * LIGHT_COLOR / PI;
+	vec3 h = normalize(LIGHT + VIEW);
+	float ndh = clamp(dot(NORMAL, h), 0.0, 1.0);
+	float ndv = clamp(dot(NORMAL, VIEW), 0.001, 1.0);
+	float a = max(ROUGHNESS * ROUGHNESS, 0.002);
+	float a2 = a * a;
+	float dd = ndh * ndh * (a2 - 1.0) + 1.0;
+	float dist = a2 / (PI * dd * dd);
+	float k = a * 0.5;
+	float vis = 0.25 / ((ndl * (1.0 - k) + k) * (ndv * (1.0 - k) + k));
+	float f0 = 0.08 * SPECULAR_AMOUNT;
+	float fres = f0 + (1.0 - f0) * pow(1.0 - clamp(dot(LIGHT, h), 0.0, 1.0), 5.0);
+	SPECULAR_LIGHT += dist * vis * fres * ndl * ATTENUATION * LIGHT_COLOR;
 }

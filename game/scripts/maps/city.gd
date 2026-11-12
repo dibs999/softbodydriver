@@ -367,6 +367,8 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	street_lighting.name = "StreetLighting"
 	parent.add_child(street_lighting)
 	street_lighting.setup(lamp_lights, lens_material)
+	var ground: Array[ShaderMaterial] = [asphalt, pavement]
+	street_lighting.set_ground_materials(ground)
 
 	# AI loop: rectangle around the inner blocks, right-hand lane.
 	var lo := origin + STREET * 0.5 + 1 * PITCH

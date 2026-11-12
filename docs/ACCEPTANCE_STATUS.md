@@ -34,6 +34,10 @@ konkrete Teilergebnisse und erklärt das Gesamtprodukt noch nicht für fertig.
   80 km/h ab (Kerntest), bei 100 km/h bleibt sie stehen, bei 130 km/h schaukelt sie sich auf; die
   Stützlast steigt im Spiel von rund 780 auf 1190 N (`trailer_test`). Das Fahrgefühl beim Ziehen ist
   nicht von Hand abgenommen.
+* Werkstatt (`workshop_test.gd`): Der 5,0-V8 des Vortex GT mit Allrad und Semi-Slicks im Kestrel
+  baut das Auto im Stand neu auf, 90 kg schwerer (Motormassen-Differenz), auf demselben Platz in
+  der Fahrzeugliste; nach 4 s Vollgas 104 statt rund 63 km/h. Werkszustand stellt Motor und
+  Profil zurück, ein reines Kennfeld-Tuning baut ebenfalls neu auf, in Fahrt wird abgelehnt.
 * Alle sieben `cartest … --quick`-Prüfstände: `RESULT: OK`.
 * Erweiterter Headless-Belastungstest: **30 Minuten 1,75 Sekunden simuliert**
   in **5 Minuten 5,753 Sekunden Laufzeit**. **51 vollständige Zyklen** mit echter
@@ -73,6 +77,12 @@ konkrete Teilergebnisse und erklärt das Gesamtprodukt noch nicht für fertig.
 ## Bildprüfung und Grenzen
 
 Die aktuelle Cloud-Prüfung verwendet Godot 4.5.1 mit Software-OpenGL/llvmpipe.
+Seit November 2026 werden Bilder auch mit den Renderern geprüft, die Spieler tatsächlich nutzen
+(Forward+ und Mobile über Vulkan/lavapipe: `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json
+godot --rendering-driver vulkan --rendering-method forward_plus|mobile`). Der Kompatibilitäts-
+Renderer stellt Albedo und Umgebungslicht deutlich heller dar; der Asphalt war auf ihn abgestimmt
+und in Forward+/Mobile fast schwarz (Albedo 0,015). Er liegt jetzt bei rund 0,065 (verwitterter
+Asphalt), was in Forward+ und Mobile realistisch aussieht und im Kompatibilitäts-Renderer zu hell.
 Geprüft wurden Fahransicht, Cockpit, Service, Nachtlicht, Regen unter Dächern und
 geöffnete Haube. Die neue Türserie zeigt eine tatsächlich um 68,36° geöffnete
 Tür, erneutes Verriegeln bei 0,01°, Abtrennung nach einem Fahrzeug-Seitenaufprall

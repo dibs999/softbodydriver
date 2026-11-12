@@ -74,9 +74,15 @@ func _process(_d: float) -> bool:
 			Input.action_release("throttle")
 			check(v.get_speed_kmh() > 25.0, "Towing, the car gets going (%.0f km/h)" % v.get_speed_kmh())
 			check(_gap() < 0.15, "The trailer follows on the ball (%.3f m)" % _gap())
-			var turned := (scene.trailer.get_wheel_transforms()[0] as Transform3D).basis.x.angle_to(wheel_x0)
-			check(turned > 0.01, "Its wheels turn")
 			check(not bool(scene.world.get_coupling(scene.trailer)["broken"]), "The coupling holds")
+			# Wheel turn over a few hundredths of a second (over seconds it may come round to where it was).
+			wheel_x0 = (scene.trailer.get_wheel_transforms()[0] as Transform3D).basis.x
+			mark = _sim()
+			phase = 20
+		20:
+			if _sim() - mark < 0.03: return false
+			var turned := (scene.trailer.get_wheel_transforms()[0] as Transform3D).basis.x.angle_to(wheel_x0)
+			check(turned > 0.05, "Its wheels turn (%.2f rad in %.0f ms)" % [turned, (_sim() - mark) * 1000.0])
 			Input.action_press("brake", 1.0)
 			mark = _sim()
 			phase = 3
