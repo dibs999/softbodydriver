@@ -531,11 +531,26 @@ func _on_car_selected(i: int) -> void:
 	car_stats[0].text = "%.0f kW" % c["power"]
 	car_stats[1].text = "%.0f Nm" % c["torque"]
 	car_stats[2].text = "%.0f kg" % c["mass"]
+	# A car rebuilt in the Werkstatt shows its actual figures (and what was changed).
+	var W := preload("res://scripts/vehicle_workshop.gd")
+	var cfg := Game.progress.get_config(str(c["id"]))
+	if not cfg.is_empty() and not W.is_default(cfg):
+		var d := W.apply(W.read_definition(c["path"]), cfg, Game.engine_catalogue())
+		var e: Dictionary = d.get("engine", {})
+		var peak_t := 0.0
+		var peak_p := 0.0
+		for pt in e.get("torqueCurve", []):
+			peak_t = maxf(peak_t, float(pt[1]))
+			peak_p = maxf(peak_p, float(pt[1]) * float(pt[0]) * TAU / 60.0 / 1000.0)
+		car_stats[0].text = "%.0f kW" % peak_p
+		car_stats[1].text = "%.0f Nm" % peak_t
+		car_stats[2].text = "%.0f kg" % float(d.get("chassis", {}).get("curbMass", c["mass"]))
+		car_info.text = "%s  ·  %s  ·  Werkstatt: %s" % [e.get("name", c["engine"]), e.get("layout", c["layout"]), W.summary(cfg, Game.engine_catalogue())]
 	if preview_car:
 		world.remove_vehicle(preview_car)
 		preview_car = null
 	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(-30)), Vector3.ZERO)
-	preview_car = Game.spawn_vehicle(world, c["path"], xf)
+	preview_car = Game.spawn_vehicle(world, c["path"], xf, true)   # as configured (a wing shows)
 	Game.apply_chosen_paint(preview_car)
 	_mark_paint(str(c["id"]))
 	if preview_car:
