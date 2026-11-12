@@ -24,6 +24,9 @@ uniform float inner_strip_m = 0.0;
 uniform float edge_line_m = 0.12;
 uniform float wear = 1.0;          // 0 = fresh surface, 1 = typical public road
 uniform bool markings = true;      // false: unmarked (village streets)
+// The asphalt photo averages an albedo of 0.015, darker than even fresh asphalt (~0.04); weathered
+// road surface is ~0.06-0.1; this gain brings it to ~0.065 (the grain stays the photo's).
+uniform float asphalt_gain = 4.0;
 global uniform float road_wetness;  // set by the weather (darker, glossier)
 
 varying vec3 world_pos;
@@ -76,6 +79,7 @@ void vertex() {
 void fragment() {
 	vec2 surface_uv = UV * texture_repeats;
 	vec3 base = texture(surface_color, surface_uv).rgb;
+	if (!dirt) base *= asphalt_gain;
 	NORMAL_MAP = texture(surface_normal, surface_uv).rgb;
 	NORMAL_MAP_DEPTH = dirt ? 0.54 : 0.38;
 	float rough = dirt ? 0.98 : 0.86;

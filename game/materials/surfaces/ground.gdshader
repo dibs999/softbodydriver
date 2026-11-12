@@ -8,6 +8,7 @@ uniform bool has_normal = false;
 uniform float normal_strength = 0.3;
 uniform float tile_metres = 2.0;
 uniform vec4 tint : source_color = vec4(1.0);
+uniform float albedo_gain = 1.0;          // brightness correction of the photo (asphalt: see common.gd)
 uniform bool use_vertex_color = false;
 uniform float roughness = 0.9;
 uniform float macro_strength = 0.12;      // brightness variation of the large patches
@@ -181,7 +182,7 @@ void fragment() {
 			nrm += vec3(t + n.xy, n.z) * w.z;
 		}
 	}
-	col *= tint.rgb;
+	col *= tint.rgb * albedo_gain;
 	if (use_vertex_color) {
 		col *= COLOR.rgb;
 	}

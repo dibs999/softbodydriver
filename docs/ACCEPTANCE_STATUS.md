@@ -73,6 +73,12 @@ konkrete Teilergebnisse und erklärt das Gesamtprodukt noch nicht für fertig.
 ## Bildprüfung und Grenzen
 
 Die aktuelle Cloud-Prüfung verwendet Godot 4.5.1 mit Software-OpenGL/llvmpipe.
+Seit November 2026 werden Bilder auch mit den Renderern geprüft, die Spieler tatsächlich nutzen
+(Forward+ und Mobile über Vulkan/lavapipe: `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json
+godot --rendering-driver vulkan --rendering-method forward_plus|mobile`). Der Kompatibilitäts-
+Renderer stellt Albedo und Umgebungslicht deutlich heller dar; der Asphalt war auf ihn abgestimmt
+und in Forward+/Mobile fast schwarz (Albedo 0,015). Er liegt jetzt bei rund 0,065 (verwitterter
+Asphalt), was in Forward+ und Mobile realistisch aussieht und im Kompatibilitäts-Renderer zu hell.
 Geprüft wurden Fahransicht, Cockpit, Service, Nachtlicht, Regen unter Dächern und
 geöffnete Haube. Die neue Türserie zeigt eine tatsächlich um 68,36° geöffnete
 Tür, erneutes Verriegeln bei 0,01°, Abtrennung nach einem Fahrzeug-Seitenaufprall
