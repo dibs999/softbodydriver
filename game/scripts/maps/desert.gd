@@ -489,6 +489,29 @@ static func _mine(parent: Node3D, world: SBWorld, path: PackedVector3Array, heig
 		var crate := p + forward * (-5.0 + slot * 3.4) + side * 3.2
 		crate.y = float(height.call(crate.x, crate.z)) + 0.66
 		C.box(parent, world, crate, Vector3(1.1, 0.66, 0.88), rotation, wood)
+	# Two rusting wrecks left behind the yard, sat down on flat tyres and leaning, and stacks of
+	# scrap tyres by the shed.
+	var wrecks: Array[Transform3D] = []
+	for k in 2:
+		var w := p + side * (15.5 + 3.5 * k) + forward * (-7.0 + 12.0 * k)
+		w.y = float(height.call(w.x, w.z)) - 0.12
+		var b := Basis(Vector3.UP, yaw + 0.6 + 1.9 * k).rotated(forward, 0.05 - 0.09 * k).rotated(side, 0.03)
+		wrecks.append(Transform3D(b, w))
+	preload("res://scripts/maps/parked_cars.gd").place(parent, world, wrecks, 77,
+		[Color(0.16, 0.07, 0.03), Color(0.22, 0.10, 0.04), Color(0.14, 0.10, 0.07)])
+	var tyre := TorusMesh.new()
+	tyre.inner_radius = 0.2
+	tyre.outer_radius = 0.33
+	tyre.rings = 18
+	tyre.ring_segments = 8
+	var stacks: Array[Transform3D] = []
+	for k in 2:
+		var base := p + forward * (9.5 + 1.0 * k) + side * (1.0 + 0.9 * k)
+		var gy: float = height.call(base.x, base.z)
+		for level in 3 + k:
+			stacks.append(Transform3D(Basis(Vector3.UP, level * 0.7), Vector3(base.x, gy + 0.065 + level * 0.13, base.z) + Vector3(0.03 * level, 0, 0)))
+		world.add_box(Vector3(base.x, gy + 0.3, base.z), Vector3(0.33, 0.3, 0.33), Vector3.ZERO, 0.8)
+	C.scatter_multimesh(parent, tyre, C.mat(Color(0.06, 0.06, 0.06), 0.95), stacks)
 	var sign := track_point + side * 6.1
 	sign.y = float(height.call(sign.x, sign.z))
 	C.box(parent, world, sign + Vector3.UP * 0.93, Vector3(0.09, 0.93, 0.09), rotation, iron)
