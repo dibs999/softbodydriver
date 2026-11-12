@@ -274,6 +274,8 @@ und Autobahn haben ein Bankett aus Splitt, Erde, Asphaltbrocken und einwachsende
 Die prozeduralen Räder haben gegossene, verjüngte Alu-Speichen, die Reifenflanken erhabene
 Beschriftung (Marke, Größe, M+S), die SUVs glatte Kunststoff-Radlaufverbreiterungen; Laubbäume
 bilden Blattbüschel mit schattigem Kroneninneren.
+In der Stadt liegen die Gehwege als 40 × 40 cm Betonplatten im Verband (mit Fugen, Farbunterschieden,
+ausgetauschten und gesprungenen Platten, Flecken und Kaugummis) hinter Granit-Bordsteinen in Meterlängen.
 
 Statische Hindernisse laufen über eine Broadphase. Deshalb bremsen auch Karten mit über 600 Kollisionsobjekten (Leitplanken, Gebäude) die 2000-Hz-Physik nicht aus.
 
