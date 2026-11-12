@@ -1027,6 +1027,33 @@ TEST_CASE("automatic cars pull away with a gentle throttle and stop fully under 
     }
 }
 
+TEST_CASE("the automatic shifts by the pedal: early and low revs when cruising, kickdown when floored") {
+    // Fixed full-load shift points held every car in 2nd at ~4000 rpm at 50 km/h.
+    CarBuild cb = buildCar(loadCarDefinition(carPath("kestrel_hatch")));
+    World w = flatWorld();
+    w.addBody(std::move(cb.body));
+    auto& car = w.body(0);
+    VehicleControls controls;
+    car.setControls(controls);
+    w.simulate(1.0);
+    for (int k = 0; k < 40; ++k) {   // a driver holding 50 km/h
+        controls.throttle = std::clamp(0.12 + (50.0 - car.telemetry().speedKmh) * 0.05, 0.0, 1.0);
+        car.setControls(controls);
+        w.simulate(0.5);
+    }
+    const int cruiseGear = car.telemetry().gear;
+    MESSAGE("50 km/h: gear " << cruiseGear << " at " << car.telemetry().engineRpm << " rpm");
+    CHECK(car.telemetry().speedKmh == doctest::Approx(50.0).epsilon(0.05));
+    CHECK(cruiseGear >= 4);
+    CHECK(car.telemetry().engineRpm < 2300.0);
+    controls.throttle = 1.0;   // kickdown
+    car.setControls(controls);
+    w.simulate(1.0);
+    MESSAGE("floored: gear " << car.telemetry().gear << " at " << car.telemetry().engineRpm << " rpm");
+    CHECK(car.telemetry().gear <= cruiseGear - 2);
+    CHECK(car.telemetry().engineRpm > 3500.0);
+}
+
 TEST_CASE("panels on their own rigid frame keep their shape when they swing open or come off") {
     // Imported panels are bound to their part's nodes; linear blending of node displacements
     // stretched a door or bonnet swinging through 60 degrees. Each separate part now carries its

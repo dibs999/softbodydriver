@@ -123,13 +123,34 @@ void Powertrain::step(const PowertrainInputs& in,
     // Automatic transmission shift logic ( based on wheel-referred RPM so wheelspin / clutch slip stays sane ).
     const real ratio = currentTotalRatio();
     const real wheelReferredRpm = std::abs(avgDrivenOmega * ratio) * (60.0 / (2.0 * kPi));
+    // Shift points follow the pedal like a real automatic: a light foot shifts up early and cruises
+    // at low revs, full throttle (and kickdown) uses the car's full-load points. With fixed
+    // full-load points every car held 2nd at 4000 rpm at 50 km/h, and a sports car circling at
+    // part throttle sat at 7200 rpm in 2nd at 145 km/h. The pedal is smoothed (~0.6 s) so a
+    // driver's or AI's small corrections do not shift; flooring it acts at once. A shift is only
+    // made if the other gear lands inside the band for the same pedal, so it never hunts.
+    shiftThrottle_ += (throttle - shiftThrottle_) * std::min<real>(1.0, dt / 0.6);
     if (spec_.automatic && in.requestedGear == -99 && gear_ >= 1 && cooldownTimer_ <= 0.0) {
-        if (gear_ < static_cast<int>(spec_.forwardGears.size()) &&
-            wheelReferredRpm > spec_.shiftUpRpm && throttle > 0.2) {
+        const real load = throttle > 0.9 ? 1.0 : std::clamp((shiftThrottle_ - 0.15) / 0.7, 0.0, 1.0);
+        const real downLight = std::min(spec_.shiftDownRpm, std::max(spec_.idleRpm * 1.7, spec_.shiftDownRpm * 0.6));
+        const real upLight = std::min(spec_.shiftUpRpm, std::max(downLight * 1.9, spec_.redlineRpm * 0.3));
+        const real upRpm = upLight + (spec_.shiftUpRpm - upLight) * load;
+        const real downRpm = downLight + (spec_.shiftDownRpm - downLight) * load;
+        const auto& g = spec_.forwardGears;
+        const auto idx = static_cast<std::size_t>(gear_ - 1);
+        if (gear_ < static_cast<int>(g.size()) && wheelReferredRpm > upRpm && throttle > 0.05 &&
+            wheelReferredRpm * g[idx + 1] / g[idx] > downRpm * 1.1) {
             ++gear_;
             shiftTimer_ = spec_.shiftDuration;
             cooldownTimer_ = spec_.shiftCooldown;
-        } else if (gear_ > 1 && wheelReferredRpm < spec_.shiftDownRpm) {
+        } else if (gear_ > 1 && wheelReferredRpm < downRpm &&
+                   (wheelReferredRpm * g[idx - 1] / g[idx] < upRpm * 0.92 || wheelReferredRpm < spec_.idleRpm * 1.2)) {
+            --gear_;
+            shiftTimer_ = spec_.shiftDuration * 0.7;
+            cooldownTimer_ = spec_.shiftCooldown;
+        } else if (gear_ > 1 && throttle > 0.9 && wheelReferredRpm * g[idx - 1] / g[idx] < spec_.shiftUpRpm * 0.75) {
+            // Kickdown: flooring it drops gears one by one while the lower gear stays well below
+            // the full-load shift point (50 km/h in 4th at 1900 rpm -> 2nd at ~3600 rpm).
             --gear_;
             shiftTimer_ = spec_.shiftDuration * 0.7;
             cooldownTimer_ = spec_.shiftCooldown;

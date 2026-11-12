@@ -52,6 +52,18 @@ bleiben also keine unsichtbaren Hindernisse zurück.
     seltener als alle 0,1 s ankommen (vorher fuhren die KI-Autos bei ~1 FPS in die Leitplanke).
     Geprüft mit `--max-fps 5/6`: Wüsten-, Gelände-Verkehr und KI-Folgetest bestehen.
 
+* **Kontakt zwischen Fahrzeugen über ein Raster (12. November 2026):**
+  * Eine zehnminütige Fahrt mit vier verunfallten Autos kostete nach einem Zusammenstoß
+    4–6-mal so viel Rechenzeit je simulierter Sekunde: der Auto-gegen-Auto-Kontakt prüfte jedes
+    Dreieck gegen jeden Knoten im Überlappungsbereich, und fortgeschleuderte Teile machten die
+    Hüllbox eines Autos kilometergroß.
+  * Jetzt kommen nur Knoten in der Hüllbox des anderen Körpers in ein nach Zellen sortiertes
+    Raster, und jedes Dreieck prüft nur die Knoten der Zellen um sich herum. Die gewählten
+    Kontakte sind bitgleich (gleiche Dreiecksreihenfolge je Knoten). Zwei ineinander gedrückte
+    Autos: 17,9 → 2,3 s Rechenzeit für 10 simulierte Sekunden; dieselbe Langzeitfahrt bleibt
+    nach dem Zusammenstoß bei 1,4–1,8-facher Rechenzeit (drei stehende Wracks werden weiter
+    gerechnet).
+
 * **Physik auf mehreren Kernen (11. November 2026):**
   * Auf einem i5-Laptop zeigte F2 „Physik 52 % Echtzeit“: ein Kern schaffte die 2000 Hz für
     alle Autos nicht.

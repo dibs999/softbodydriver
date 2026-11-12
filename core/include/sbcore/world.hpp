@@ -73,7 +73,9 @@ private:
     void integrateBody(SoftBody& b);
     std::size_t collideBody(SoftBody& b, std::vector<const StaticCollider*>& candidates);
     std::size_t collideBodies();
-    std::size_t collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody);
+    /// triLo/triHi: triBody's box, grown by the contact margin. heavyPair: both are vehicles.
+    std::size_t collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody, const Vec3& triLo, const Vec3& triHi,
+                                       bool heavyPair);
     std::size_t collideSelfPanels(SoftBody& body, const std::vector<Vec3>& previous, std::size_t& candidates) const;
 
     WorldSettings settings_;
@@ -99,6 +101,8 @@ private:
         bool valid = false;
     };
     std::vector<BodyContactCandidate> contactScratch_;
+    std::vector<std::uint32_t> contactNodes_;   ///< Inter-body: nodes inside the other body's box.
+    std::vector<std::pair<std::int64_t, std::uint32_t>> contactGrid_;  ///< (cell, node), sorted.
     std::vector<Vec3> aabbLo_, aabbHi_;      ///< Inter-body broadphase boxes (kept for sleeping bodies).
     std::vector<std::size_t> awake_;
     std::vector<unsigned char> sleptBox_;   ///< 1 = box of a body already asleep last step (still valid). ///< Best node-vs-triangle contact per node (inter-body).

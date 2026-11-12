@@ -55,6 +55,42 @@ TEST_CASE("a rear-ended car drives away: bodies do not hook together after the i
     CHECK(rearEndGap("kestrel_hatch", "kestrel_hatch", 50.0, 75.0) > 20.0);
 }
 
+TEST_CASE("two cars pressed into each other settle instead of pumping energy into their beams") {
+    // After a crash two cars can stay interlocked with nodes deep inside each other. Pushing such a
+    // node out by 2 cm every step against both sets of beams fed energy in: two wrecks locked
+    // together gained ~1.5 MJ in ten seconds with no engine running and finally flew apart at
+    // 320 km/h. Here a parked saloon's nose is set 20 cm into the flank of a parked hatch (before:
+    // 26 kJ peak, still 9 kJ after 3 s, parts thrown 13 m apart).
+    auto carA = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+    auto carB = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/meridian_sedan.car.json"));
+    Vec3 lo, hi, blo, bhi;
+    carA.body.aabb(lo, hi);
+    for (auto& p : carB.body.positions()) p = {p.z, p.y, -p.x};   // nose (+x) turned towards -z
+    carB.body.aabb(blo, bhi);
+    carB.body.translate({0.5 * (lo.x + hi.x) - 0.5 * (blo.x + bhi.x), 0.0, hi.z - blo.z - 0.2});
+    World world;
+    world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+    const auto ia = world.addBody(std::move(carA.body));
+    const auto ib = world.addBody(std::move(carB.body));
+    VehicleControls c;
+    c.gear = 0;
+    c.handbrake = 1.0;
+    world.body(ia).setControls(c);
+    world.body(ib).setControls(c);
+    real late = 0.0;
+    for (int k = 0; k < 100; ++k) {
+        world.simulate(0.1);
+        if (k >= 30) late = std::max(late, world.body(ia).kineticEnergy() + world.body(ib).kineticEnergy());
+    }
+    REQUIRE(world.stats().finite);
+    MESSAGE("kinetic energy after 3 s at most " << late << " J");
+    CHECK(late < 1000.0);
+    for (const auto i : {ia, ib}) {
+        world.body(i).aabb(lo, hi);
+        CHECK(length(hi - lo) < 7.0);   // nothing torn off and thrown away
+    }
+}
+
 TEST_CASE("props stand still on the ground and a car knocks them over without tearing them up") {
     auto coast = [](bool withProp, PropKind kind, real* knocked, real offset = 0.3, real ahead = 6.0) {
         auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));

@@ -15,6 +15,8 @@ std::size_t World::addBody(SoftBody body) {
 namespace {
 constexpr real kSoftContactMaxDepth = 0.02;   // beyond this the rubber is "bottomed": rigid stop
 constexpr real kSoftContactDampingRatio = 0.02; // rubber loss lives in the tyre beams
+constexpr real kHeavyBody = 600.0;   // kg: vehicles, as opposed to props (a felled log is 380 kg)
+constexpr real kDeepContact = 0.01;  // m behind a face of another vehicle: interlocked structure
 }  // namespace
 
 void World::removeBody(std::size_t i) {
@@ -171,7 +173,8 @@ std::size_t World::collideBody(SoftBody& b, std::vector<const StaticCollider*>& 
     return contacts;
 }
 
-std::size_t World::collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody) {
+std::size_t World::collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody, const Vec3& triLo,
+                                          const Vec3& triHi, bool heavyPair) {
     if (triBody.triangleCount() == 0 || nodeBody.nodeCount() == 0) return 0;
 
     auto& nPos = nodeBody.positions();
@@ -189,8 +192,43 @@ std::size_t World::collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody)
                                                           : settings_.colTriThickness;
     const real margin = std::max(skin, maxDepth);
 
-    Vec3 nodeLo, nodeHi;
-    nodeBody.aabb(nodeLo, nodeHi);
+    // Only nodes inside the other body's box can touch it. They go into a uniform grid sorted by
+    // cell, so a triangle tests just the nodes of the cells around it instead of every node of
+    // the body: two cars side by side or interlocked after a crash cost a few hundred tests per
+    // triangle less, and a car whose torn-off parts lie far apart (a box kilometres wide) no
+    // longer turns every pair into nodes x triangles. Nodes are tested per triangle in the same
+    // triangle order as before, so the chosen contacts are exactly the same.
+    std::vector<std::uint32_t>& list = contactNodes_;
+    list.clear();
+    Vec3 nodeLo{kInf, kInf, kInf}, nodeHi{-kInf, -kInf, -kInf};
+    for (std::size_t i = 0; i < nPos.size(); ++i) {
+        if (!nCol[i] || nInvM[i] == 0) continue;
+        const Vec3 p = nPos[i];
+        // Written so that a non-finite position fails it too (it must not reach the cell index).
+        if (!(p.x >= triLo.x && p.x <= triHi.x && p.y >= triLo.y && p.y <= triHi.y && p.z >= triLo.z && p.z <= triHi.z))
+            continue;
+        list.push_back(static_cast<std::uint32_t>(i));
+        nodeLo = {std::min(nodeLo.x, p.x), std::min(nodeLo.y, p.y), std::min(nodeLo.z, p.z)};
+        nodeHi = {std::max(nodeHi.x, p.x), std::max(nodeHi.y, p.y), std::max(nodeHi.z, p.z)};
+    }
+    if (list.empty()) return 0;
+
+    const Vec3 ext = nodeHi - nodeLo;
+    const real cell = std::max<real>(0.3, std::max({ext.x, ext.y, ext.z}) / 1024.0);
+    const real invCell = 1.0 / cell;
+    const std::int64_t ny = static_cast<std::int64_t>(ext.y * invCell) + 1;
+    const std::int64_t nz = static_cast<std::int64_t>(ext.z * invCell) + 1;
+    const std::int64_t nx = static_cast<std::int64_t>(ext.x * invCell) + 1;
+    auto cellOf = [&](real v, real lo, std::int64_t n) {
+        return std::clamp<std::int64_t>(static_cast<std::int64_t>(std::floor((v - lo) * invCell)), 0, n - 1);
+    };
+    std::vector<std::pair<std::int64_t, std::uint32_t>>& grid = contactGrid_;
+    grid.clear();
+    for (const std::uint32_t i : list) {
+        const Vec3 p = nPos[i];
+        grid.push_back({(cellOf(p.x, nodeLo.x, nx) * ny + cellOf(p.y, nodeLo.y, ny)) * nz + cellOf(p.z, nodeLo.z, nz), i});
+    }
+    std::sort(grid.begin(), grid.end());
 
     // Gather the single best contact per node first. Applying every triangle in range lets two
     // faces of the other body that point towards each other (a crease, a pocket behind a fascia)
@@ -198,7 +236,8 @@ std::size_t World::collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody)
     // other. A node outside the surface beats one inside it; inside, the shallowest wins.
     using Candidate = BodyContactCandidate;
     std::vector<Candidate>& best = contactScratch_;
-    best.assign(nPos.size(), Candidate{});
+    if (best.size() < nPos.size()) best.resize(nPos.size());
+    for (const std::uint32_t i : list) best[i] = Candidate{};
     for (const ColTri& tri : triBody.triangles()) {
         if (tri.broken) continue;
         const std::uint32_t ia = tri.a, ib = tri.b, ic = tri.c;
@@ -231,18 +270,17 @@ std::size_t World::collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody)
         if (std::abs(denom) < 1e-12) continue;
         const real invDenom = 1.0 / denom;
 
-        for (std::size_t i = 0; i < nPos.size(); ++i) {
-            if (!nCol[i] || nInvM[i] == 0) continue;
+        auto test = [&](const std::uint32_t i) {
             const Vec3 p = nPos[i];
             if (p.x < tLo.x || p.x > tHi.x ||
                 p.y < tLo.y || p.y > tHi.y ||
                 p.z < tLo.z || p.z > tHi.z) {
-                continue;
+                return;
             }
 
             const real dist = dot(p - pa, n);
-            if (dist >= skin || dist < -maxDepth) continue;
-            if (best[i].valid && dist <= best[i].dist) continue;
+            if (dist >= skin || dist < -maxDepth) return;
+            if (best[i].valid && dist <= best[i].dist) return;
 
             // Project onto triangle plane and compute barycentric coordinates (w0, w1, w2).
             const Vec3 pProj = p - n * dist;
@@ -253,24 +291,37 @@ std::size_t World::collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody)
             real w2 = (d00 * d21 - d01 * d20) * invDenom;
             real w0 = 1.0 - w1 - w2;
             constexpr real kBaryTol = -0.04;
-            if (w0 < kBaryTol || w1 < kBaryTol || w2 < kBaryTol) continue;
+            if (w0 < kBaryTol || w1 < kBaryTol || w2 < kBaryTol) return;
 
             w0 = std::max<real>(0.0, w0);
             w1 = std::max<real>(0.0, w1);
             w2 = std::max<real>(0.0, w2);
             const real wSum = w0 + w1 + w2;
-            if (wSum <= 0.0) continue;
+            if (wSum <= 0.0) return;
 
             const Vec3 vTri = (tVel[ia] * w0 + tVel[ib] * w1 + tVel[ic] * w2) / wSum;
             const real vn = dot(nVel[i] - vTri, n);
             // Ignore back-face encounters where the node is moving along +n from behind.
-            if (dist < 0.0 && vn > 1.0) continue;
+            if (dist < 0.0 && vn > 1.0) return;
             best[i] = {dist, n, ia, ib, ic, w0 / wSum, w1 / wSum, w2 / wSum, tri.friction, true};
+        };
+        const std::int64_t x0 = cellOf(tLo.x, nodeLo.x, nx), x1 = cellOf(tHi.x, nodeLo.x, nx);
+        const std::int64_t y0 = cellOf(tLo.y, nodeLo.y, ny), y1 = cellOf(tHi.y, nodeLo.y, ny);
+        const std::int64_t z0 = cellOf(tLo.z, nodeLo.z, nz), z1 = cellOf(tHi.z, nodeLo.z, nz);
+        if ((x1 - x0 + 1) * (y1 - y0 + 1) > static_cast<std::int64_t>(list.size())) {
+            for (const std::uint32_t i : list) test(i);   // a huge (torn, stretched) triangle
+            continue;
         }
+        for (std::int64_t x = x0; x <= x1; ++x)
+            for (std::int64_t y = y0; y <= y1; ++y) {
+                const std::int64_t col = (x * ny + y) * nz;
+                auto it = std::lower_bound(grid.begin(), grid.end(), std::make_pair(col + z0, std::uint32_t{0}));
+                for (; it != grid.end() && it->first <= col + z1; ++it) test(it->second);
+            }
     }
 
     std::size_t contacts = 0;
-    for (std::size_t i = 0; i < nPos.size(); ++i) {
+    for (const std::uint32_t i : list) {
         const Candidate& c = best[i];
         if (!c.valid) continue;
         const Vec3 n = c.n;
@@ -285,7 +336,13 @@ std::size_t World::collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody)
         // Resolve deep penetration over a few steps rather than at once: a heavy car node sunk
         // into a light prop would otherwise shove the prop's nodes ~15 cm in one 0.5 ms step and
         // its beams would fling it away. The impulse below still removes the approach speed.
-        const real penetration = std::min(skin - c.dist, 0.02);
+        // Between two vehicles, a node more than 1 cm inside the other is part of two crushed
+        // structures pressed into each other, not a fresh touch: pushing it out by 2 cm every step
+        // against both sets of beams pumped energy into them. Two crashed cars that stayed
+        // interlocked gained ~1.5 MJ in ten seconds without any engine and finally flew apart at
+        // 320 km/h, scattering parts. 2 mm per step lets them settle. Props (a cone squashed under
+        // a bumper) keep the fast push-out, without which they wedge under the car.
+        const real penetration = std::min(skin - c.dist, c.dist < -kDeepContact && heavyPair ? 0.002 : 0.02);
         const Vec3 corr = n * (penetration / wTotal);
         nPos[i] += corr * wp;
         tPos[ia] -= corr * (w0 * wa);
@@ -357,8 +414,9 @@ std::size_t World::collideBodies() {
                 bodies_[j].wake();
                 sleptBox_[j] = 0;
             }
-            contacts += collideNodeVsTriangles(bodies_[i], bodies_[j]);
-            contacts += collideNodeVsTriangles(bodies_[j], bodies_[i]);
+            const bool heavyPair = bodies_[i].totalMass() > kHeavyBody && bodies_[j].totalMass() > kHeavyBody;
+            contacts += collideNodeVsTriangles(bodies_[i], bodies_[j], aabbLo_[j], aabbHi_[j], heavyPair);
+            contacts += collideNodeVsTriangles(bodies_[j], bodies_[i], aabbLo_[i], aabbHi_[i], heavyPair);
         }
     }
     return contacts;
