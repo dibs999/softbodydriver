@@ -46,6 +46,8 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	world.add_ground_plane(1.0)
 	var asphalt := C.surface_material("asphalt", 2.0, Color.WHITE, 0.30)
 	var pavement := C.surface_material("pavement", 1.8, Color.WHITE, 0.30)
+	# Footways of 40 x 40 cm concrete slabs with granite kerbstones along every block edge.
+	pavement.set_shader_parameter("paving", Vector2(0.4, 0.4))
 	var grass := C.surface_material("grass", 2.8, Color(0.70, 0.90, 0.64))
 	var line := C.mat(Color(0.92, 0.92, 0.88), 0.6)
 	var metal := C.mat(Color(0.3, 0.32, 0.34), 0.4, 0.8)
@@ -53,6 +55,8 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var origin := -size * 0.5
 	# The carriageway quad wears like a town street along the grid (see ground.gdshader).
 	asphalt.set_shader_parameter("street_grid", Vector4(origin, origin, PITCH, STREET))
+	pavement.set_shader_parameter("kerb_grid", Vector4(origin, origin, PITCH, STREET))
+	pavement.set_shader_parameter("kerb_top", KERB)
 	C.quad(parent, Vector3(0, -0.01, 0), Vector2(size + 600, size + 600), asphalt)
 
 	var facades: Array[Material] = [
@@ -536,6 +540,7 @@ static func _freight_yard(parent: Node3D, world: SBWorld, center: Vector3, aspha
 static func _market(parent: Node3D, world: SBWorld, center: Vector3, pavement: Material, metal: Material) -> void:
 	var p := Vector3(center.x, KERB, center.z)
 	var tile := C.surface_material("pavement", 1.8, Color(0.82, 0.74, 0.65))
+	tile.set_shader_parameter("paving", Vector2(0.20, 0.14))   # small warm-toned concrete pavers
 	var timber := C.mat(Color(0.40, 0.25, 0.13))
 	var canvas := [C.mat(Color(0.68, 0.19, 0.19)), C.mat(Color(0.20, 0.46, 0.43)), C.mat(Color(0.86, 0.65, 0.28))]
 	C.quad(parent, p + Vector3.UP * 0.005, Vector2(58, 58), tile)
@@ -645,6 +650,7 @@ static func _townhouses(parent: Node3D, world: SBWorld, center: Vector3, grass: 
 static func _plaza(parent: Node3D, world: SBWorld, center: Vector3, station: bool, concrete: Material, metal: Material) -> void:
 	var p := Vector3(center.x, KERB, center.z)
 	var tiles := C.surface_material("pavement", 1.8, Color(0.80, 0.84, 0.85), 0.25)
+	tiles.set_shader_parameter("paving", Vector2(0.80, 0.40))  # large flagstones
 	var glass := C.mat(Color(0.15, 0.30, 0.39), 0.3, 0.30)
 	var accent := C.mat(Color(0.08, 0.35, 0.37) if station else Color(0.65, 0.27, 0.17), 0.52)
 	C.quad(parent, p + Vector3.UP * 0.003, Vector2(61, 60), tiles)

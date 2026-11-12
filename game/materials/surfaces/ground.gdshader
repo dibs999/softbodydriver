@@ -33,6 +33,13 @@ uniform bool meadow = false;
 // wear of a real town street: polished wheel tracks per lane, oil drips, utility trenches filled
 // with fresher asphalt, a crack network sealed with bitumen in places and a dirty gutter.
 uniform vec4 street_grid = vec4(0.0);
+// Paved footways (city): concrete slabs of this size in metres (0 = off) laid in a running bond,
+// with joints, a tone per slab, replaced and cracked slabs, stains and chewing gum. With
+// kerb_grid (like street_grid) the outer 15 cm of each block and its vertical face are granite
+// kerbstones in 1 m lengths.
+uniform vec2 paving = vec2(0.0);
+uniform vec4 kerb_grid = vec4(0.0);
+uniform float kerb_top = 0.16;
 uniform float street_lane = 4.0;
 global uniform float road_wetness;
 
@@ -196,6 +203,67 @@ void fragment() {
 			earth = mix(earth, vec3(dot(earth, vec3(0.33))), 0.6) * 1.6 * layer_col;
 		}
 		col = mix(col, earth * slope_tint.rgb, steep);
+	}
+	if (paving.x > 0.0) {
+		vec2 q = world_pos.xz;
+		float px = max(length(fwidth(q)), 0.0005);
+		vec3 mean_col = vec3(0.34, 0.33, 0.305) * tint.rgb;   // light grey concrete (the photo without its joints)
+		// Concrete with exposed aggregate: fine speckle, faded out once it is below a pixel.
+		float near = 1.0 - smoothstep(0.004, 0.012, px);
+		vec2 gp = q * 140.0;
+		vec2 gc = floor(gp);
+		float grain_dot = step(0.86, hash(gc)) * (1.0 - smoothstep(0.25, 0.42, length(fract(gp) - 0.5)));
+		vec3 slab_col = mean_col * (0.92 + 0.16 * vnoise(q * 38.0) * near) * mix(1.0, 0.7 + 0.8 * hash(gc + 3.0), grain_dot * near);
+		bool kerb = false;
+		float kerb_d = 1.0e3;
+		vec2 kerb_along = vec2(0.0);
+		if (kerb_grid.z > 0.0) {
+			vec2 lm = mod(q - kerb_grid.xy, kerb_grid.z);
+			vec2 e = min(lm - kerb_grid.w, kerb_grid.z - lm);   // metres in from each block edge
+			if (e.x >= -0.02 && e.y >= -0.02) {
+				kerb_d = min(e.x, e.y);
+				kerb_along = e.x < e.y ? vec2(q.y, e.x) : vec2(q.x, e.y);
+				kerb = kerb_d < 0.15 || (n.y < 0.7 && world_pos.y < kerb_top + 0.01);
+			}
+		}
+		if (kerb) {
+			// Grey granite with dark and white crystals; a joint every metre, weathered top edge.
+			float crystal = vnoise(q * 90.0 + world_pos.y * 60.0);
+			vec3 granite = vec3(0.30, 0.30, 0.29) * (0.82 + 0.36 * crystal * near + 0.12 * vnoise(q * 7.0));
+			float kj = abs(fract(kerb_along.x) - 0.5) * 2.0;     // 0 at a joint
+			float kjoint = 1.0 - smoothstep(0.004, 0.004 + px * 2.0, (1.0 - kj) * 0.5);
+			granite = mix(granite, granite * 0.4, kjoint);
+			// The road-side arris is darker (tyre rubber and dirt) on the top face.
+			if (n.y > 0.7) granite = mix(granite * 0.75, granite, smoothstep(0.0, 0.05, kerb_d));
+			col = granite;
+		} else if (n.y > 0.7) {
+			vec2 sp = q / paving;
+			sp.x += mod(floor(sp.y), 2.0) * 0.5;           // running bond
+			vec2 cell = floor(sp);
+			vec2 f = fract(sp);
+			vec2 dm = min(f, 1.0 - f) * paving;            // metres to the joints
+			float dj = min(dm.x, dm.y);
+			float far = smoothstep(0.015, 0.06, px);        // joints fade to an average darkening
+			float joint = (1.0 - smoothstep(0.003, 0.003 + px, dj)) * (1.0 - far);
+			float chamfer = (1.0 - smoothstep(0.0, 0.025, dj)) * (1.0 - far);
+			float tone = hash(cell + 3.1);
+			slab_col *= mix(0.9, 1.1, tone);
+			slab_col = mix(slab_col, slab_col * vec3(1.15, 1.16, 1.18), step(0.965, hash(cell + 7.7)));   // replaced slab
+			// A crack across some slabs.
+			float cracked = step(0.94, hash(cell + 12.0));
+			float cline = abs(f.y - 0.5 - (f.x - 0.5) * (hash(cell + 2.0) - 0.5) * 1.4 - 0.08 * (vnoise(sp * 9.0) - 0.5));
+			float crack = cracked * (1.0 - smoothstep(0.004, 0.004 + px * 1.5 / paving.y, cline * paving.y)) * (1.0 - far);
+			slab_col *= 1.0 - chamfer * 0.12;
+			slab_col = mix(slab_col, slab_col * 0.45, max(joint, crack) * 0.7);
+			slab_col *= mix(1.0, 0.95, far);
+			// Stains and chewing gum.
+			slab_col *= 1.0 - smoothstep(0.62, 0.82, fbm(q * 0.55 + 11.0)) * 0.16;
+			vec2 mp2 = q * 2.5;
+			vec2 mc2 = floor(mp2);
+			float gum = (1.0 - smoothstep(0.035, 0.06, length(fract(mp2) - 0.2 - 0.6 * vec2(hash(mc2), hash(mc2 + 1.0))))) * step(0.975, hash(mc2 + 5.0));
+			slab_col = mix(slab_col, slab_col * 0.5, gum * (1.0 - smoothstep(0.008, 0.025, px)));
+			col = slab_col;
+		}
 	}
 	// Large patches in world space: lighter/darker batches, dry or lush areas.
 	vec2 mp = world_pos.xz / macro_scale;

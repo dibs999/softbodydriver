@@ -1,7 +1,7 @@
 extends SceneTree
 ## Map renders without driving: godot -s res://tests/map_shots.gd -- <map_id> <out_prefix> [car] [night]
 ## Places the camera at five points along the map's route (eye height, looking ahead) plus one overview.
-## HIGH_BEAM=1 switches the player's lamps to high beam. AT=<i,j,...> picks the route waypoints to look ahead from. PROP_VIEWS=<kind> adds close views
+## TRAILER=1 hangs the box trailer on (TRAILER=<kg> loads it). HIGH_BEAM=1 switches the player's lamps to high beam. AT=<i,j,...> picks the route waypoints to look ahead from. PROP_VIEWS=<kind> adds close views
 ## of the first three props of that kind.
 
 var frame := 0
@@ -50,6 +50,9 @@ func _setup() -> void:
 	if OS.has_environment("TRAILER"):
 		scene.world.time_scale = 1.0
 		print(scene.toggle_trailer())
+		if int(OS.get_environment("TRAILER")) > 1:   # TRAILER=<kg>: with that much cargo
+			scene.trailer_load = float(OS.get_environment("TRAILER"))
+			scene._apply_trailer_load()
 		scene.world.step_blocking(2.0)
 		scene.world.sync_visuals()
 		scene.world.time_scale = 0.0

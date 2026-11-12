@@ -129,6 +129,38 @@ func _ready() -> void:
 		_wheels.append(w)
 
 
+## Crated goods on the deck for `kg` of cargo (none when 0): pallets with boxes, strapped down.
+func set_cargo(kg: float) -> void:
+	var old := get_node_or_null("Cargo")
+	if old:
+		remove_child(old)   # out of the tree now, so the new node can take the name
+		old.queue_free()
+	if kg <= 0.0:
+		return
+	var cargo := Node3D.new()
+	cargo.name = "Cargo"
+	add_child(cargo)
+	var pallet := _mat(Color(0.62, 0.50, 0.34), 0.9)
+	var crate := _mat(Color(0.55, 0.40, 0.24), 0.85)
+	var carton := _mat(Color(0.66, 0.53, 0.36), 0.95)
+	var strap := _mat(Color(0.9, 0.55, 0.1), 0.6)
+	var count := clampi(int(round(kg / 125.0)), 1, 4)
+	for i in count:
+		var x := -0.75 + (i % 2) * 1.0 + (0.0 if count > 2 else 0.25)
+		var z := -0.33 if i < 2 else 0.33
+		if count <= 2:
+			z = 0.0
+		var base := Vector3(x, 0.56, z)
+		var p := _box(Vector3(0.8, 0.12, 0.6 if count > 2 else 1.2), base + Vector3(0, 0.06, 0), pallet)
+		p.reparent(cargo)
+		var h := 0.42 if i % 2 == 0 else 0.34
+		var depth := 0.56 if count > 2 else 1.15
+		var b := _box(Vector3(0.76, h, depth), base + Vector3(0, 0.12 + h * 0.5, 0), crate if i % 2 == 0 else carton)
+		b.reparent(cargo)
+		var s := _box(Vector3(0.05, 0.01, depth + 0.02), base + Vector3(0, 0.125 + h, 0), strap)
+		s.reparent(cargo)
+
+
 func _process(delta: float) -> void:
 	var xfs := prop.get_wheel_transforms()
 	for i in mini(xfs.size(), _wheels.size()):

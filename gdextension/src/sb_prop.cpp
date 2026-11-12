@@ -27,6 +27,8 @@ void SBProp::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_wheel_transforms"), &SBProp::get_wheel_transforms);
     ClassDB::bind_method(D_METHOD("get_hitch_position"), &SBProp::get_hitch_position);
     ClassDB::bind_method(D_METHOD("set_brake", "brake"), &SBProp::set_brake);
+    ClassDB::bind_method(D_METHOD("set_load", "kg"), &SBProp::set_load);
+    ClassDB::bind_method(D_METHOD("get_load"), &SBProp::get_load);
 }
 
 void SBProp::setup(SBWorld* world, int bodyIndex, const sb::PropBuild& build, const std::vector<sb::Vec3>& spawn, const String& kind) {
@@ -105,6 +107,30 @@ void SBProp::set_brake(double brake) {
     auto c = body.controls();
     c.brake = std::clamp(brake, 0.0, 1.0);
     body.setControls(c);
+}
+
+void SBProp::set_load(double kg) {
+    if (!world_ || bodyIndex_ < 0) return;
+    std::lock_guard<WorldMutex> lock(world_->mutex());
+    auto& body = world_->world().body(static_cast<std::size_t>(bodyIndex_));
+    if (deckBase_.empty()) {
+        // The six deck nodes of the box trailer (sbcore buildTrailer: "up<station><side>").
+        for (int i = 0; i < 3; ++i)
+            for (int sd = 0; sd < 2; ++sd) {
+                const auto n = body.findNode("up" + std::to_string(i) + std::to_string(sd));
+                if (n >= 0) deckBase_.push_back({static_cast<std::uint32_t>(n), body.masses()[static_cast<std::size_t>(n)]});
+            }
+    }
+    if (deckBase_.empty()) return;
+    load_ = std::clamp(kg, 0.0, 600.0);
+    // Stacked towards the middle of the deck (a fifth over each end station, three fifths over
+    // the middle one), so the trailer's yaw inertia is that of real cargo, not of two loads at
+    // its ends; the middle station sits 15 cm ahead of the axle, which keeps a tongue load.
+    for (std::size_t k = 0; k < deckBase_.size(); ++k) {
+        const double weight = (deckBase_.size() == 6 && k / 2 == 1) ? 0.6 : 0.2;
+        body.setNodeMass(deckBase_[k].first, deckBase_[k].second + load_ * weight * 0.5);
+    }
+    body.wake();
 }
 
 double SBProp::get_displacement() const {

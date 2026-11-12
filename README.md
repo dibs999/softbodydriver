@@ -274,6 +274,8 @@ und Autobahn haben ein Bankett aus Splitt, Erde, Asphaltbrocken und einwachsende
 Die prozeduralen Räder haben gegossene, verjüngte Alu-Speichen, die Reifenflanken erhabene
 Beschriftung (Marke, Größe, M+S), die SUVs glatte Kunststoff-Radlaufverbreiterungen; Laubbäume
 bilden Blattbüschel mit schattigem Kroneninneren.
+In der Stadt liegen die Gehwege als 40 × 40 cm Betonplatten im Verband (mit Fugen, Farbunterschieden,
+ausgetauschten und gesprungenen Platten, Flecken und Kaugummis) hinter Granit-Bordsteinen in Meterlängen.
 
 Statische Hindernisse laufen über eine Broadphase. Deshalb bremsen auch Karten mit über 600 Kollisionsobjekten (Leitplanken, Gebäude) die 2000-Hz-Physik nicht aus.
 
@@ -348,7 +350,10 @@ Ziehen und Bremsen die Zug- und Schubkräfte; über 60 kN reißt sie ab. Der Anh
 über eine Auflaufbremse mit, seine Rückleuchten zeigen Licht, Bremslicht und Blinker des
 Zugwagens. An- und Abkuppeln geht nur im Stand; abgekuppelt bleibt er mit angezogener
 Bremse stehen, aus der Ferne erneut angefordert wird er hinter das Auto geholt.
-Zurücksetzen, Bergen und Fahrzeugwechsel kuppeln ihn ab (`trailer_test`).
+Zurücksetzen, Bergen und Fahrzeugwechsel kuppeln ihn ab (`trailer_test`). „Anhänger-Ladung“
+lädt 250 oder 500 kg Kisten auf die Pritsche: Die Stützlast steigt (500 kg: von rund 780 auf
+1190 N), der Bremsweg wird länger, und das Gespann pendelt länger nach. Wie bei echten schwer
+beladenen Anhängern ist es bei 80 km/h stabil, kann sich ab etwa 100 km/h aber aufschaukeln.
 
 Alle Fahrzeuge tragen vorn und hinten deutsche Kennzeichen (520 × 110 mm, blaues EU-Feld, je Fahrzeug eigene Nummer), die am Karosserie-Skinning hängen und sich mit einem eingedrückten Stoßfänger mitbewegen.
 

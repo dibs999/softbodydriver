@@ -16,6 +16,7 @@ const DriverPrompts := preload("res://scripts/driver_prompts.gd")
 var equipment: Node3D
 var grabber: Node3D   # Ctrl + left mouse: pull a node of any car (node_grabber.gd)
 var trailer: SBProp   # the box trailer (pause menu: Anhänger), coupled to the player's tow bar or parked
+var trailer_load := 0.0   # kg of cargo on the trailer's deck (pause menu: Anhänger-Ladung)
 var _trailer_was_coupled := false
 var weather: Node
 var wipers: Node3D
@@ -432,10 +433,36 @@ func toggle_trailer() -> String:
 	var origin := tow - basis * Vector3(2.3, 0.45, 0.0)   # its hitch head on the tow ball
 	origin.y = maxf(origin.y, player.get_position_ws().y)   # wheels on the ground, not in it
 	trailer = Game.spawn_prop(world, "trailer", Transform3D(basis, origin))
+	if trailer != null and trailer_load > 0.0:
+		_apply_trailer_load()
 	if trailer == null or not world.couple_trailer(player, trailer):
 		return "Anhänger konnte nicht angekuppelt werden"
 	_trailer_was_coupled = true
 	return "Anhänger angekuppelt · Auflaufbremse folgt der Bremse"
+
+
+## Pause menu "Anhänger-Ladung": empty, 250 kg or 500 kg of crated goods on the deck (a box
+## trailer's payload is about 550 kg). The mass sits on the deck nodes slightly ahead of the axle,
+## so the tongue load grows with it; braking distance and sway change accordingly.
+const TRAILER_LOADS := [0.0, 250.0, 500.0]
+func cycle_trailer_load() -> String:
+	var i := TRAILER_LOADS.find(trailer_load)
+	trailer_load = TRAILER_LOADS[(i + 1) % TRAILER_LOADS.size()]
+	if not is_instance_valid(trailer):
+		return "Anhänger-Ladung: %s (gilt beim nächsten Ankuppeln)" % _load_text()
+	_apply_trailer_load()
+	return "Anhänger-Ladung: %s" % _load_text()
+
+
+func _load_text() -> String:
+	return "leer" if trailer_load <= 0.0 else "%d kg" % int(trailer_load)
+
+
+func _apply_trailer_load() -> void:
+	trailer.set_load(trailer_load)
+	var visual := trailer.get_node_or_null("TrailerVisual")
+	if visual:
+		visual.set_cargo(trailer_load)
 
 
 ## Unhitches before the car is moved by a reset, a recovery or a vehicle switch: the coupling
@@ -1032,6 +1059,9 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 				_toggle_pause()],
 			["Anhänger ankuppeln / abkuppeln", func():
 				hud.toast(toggle_trailer())
+				_toggle_pause()],
+			["Anhänger-Ladung: leer / 250 kg / 500 kg", func():
+				hud.toast(cycle_trailer_load())
 				_toggle_pause()],
 			["Scheibenwischer umschalten", func():
 				hud.toast(wipers.cycle_mode())
