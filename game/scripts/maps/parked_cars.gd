@@ -73,7 +73,8 @@ static func _merged_full(path: String) -> Array:
 
 
 ## Places parked cars at the given ground transforms (basis yaw: car faces local +z of xf).
-static func place(parent: Node3D, world: SBWorld, xforms: Array[Transform3D], seed := 5) -> void:
+## `paints` overrides the paint colours (e.g. rust for wrecks).
+static func place(parent: Node3D, world: SBWorld, xforms: Array[Transform3D], seed := 5, paints: Array = []) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
 	var groups: Array = []
@@ -105,7 +106,8 @@ static func place(parent: Node3D, world: SBWorld, xforms: Array[Transform3D], se
 			for i in chunk.size():
 				var xf: Transform3D = chunk[i]
 				mm.set_instance_transform(i, xf * Transform3D(Basis.IDENTITY, offset))
-				mm.set_instance_color(i, PAINTS[rng.randi() % PAINTS.size()])
+				var palette: Array = paints if not paints.is_empty() else PAINTS
+				mm.set_instance_color(i, palette[rng.randi() % palette.size()])
 			var mmi := MultiMeshInstance3D.new()
 			mmi.multimesh = mm
 			mmi.visibility_range_end = 180.0
