@@ -582,3 +582,39 @@ TEST_CASE("loaded with 500 kg the trailer is stable at 80 km/h but sways for lon
     CHECK(s.after < 1.0);
     CHECK_FALSE(s.broken);
 }
+
+TEST_CASE("a bolt-on rear wing presses the rear axle down at speed and adds drag") {
+    auto rearLoad = [](real wing, real& decel) {
+        auto def = loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json");
+        def.body.rearWing = wing;
+        auto car = buildCar(def);
+        if (wing > 0.0) {
+            REQUIRE(car.layout.wingNodes.size() == 4);
+            REQUIRE(car.layout.wingMounts.size() == 4);
+        }
+        World w;
+        w.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+        const auto ic = w.addBody(std::move(car.body));
+        auto& b = w.body(ic);
+        w.simulate(1.0);
+        for (auto& v : b.velocities()) v.x += 200.0 / 3.6;
+        w.simulate(1.0);
+        real rear = 0.0;
+        const real v0 = b.telemetry().speedKmh;
+        for (int k = 0; k < 200; ++k) {
+            w.simulate(0.005);
+            rear += b.wheels()[2].load + b.wheels()[3].load;
+        }
+        decel = (v0 - b.telemetry().speedKmh) / 3.6;
+        REQUIRE(w.stats().finite);
+        return rear / 200.0;
+    };
+    real d0 = 0, d1 = 0;
+    const real plain = rearLoad(0.0, d0);
+    const real winged = rearLoad(20.0, d1);
+    CAPTURE(plain);
+    CAPTURE(winged);
+    CHECK(winged > plain + 300.0);   // several hundred newtons of downforce at ~170 km/h
+    CHECK(winged < plain + 1500.0);  // but not a racing car's
+    CHECK(d1 > d0);                  // and it costs speed
+}

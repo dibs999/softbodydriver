@@ -1161,7 +1161,9 @@ func _build_workshop(ws_page: VBoxContainer) -> void:
 	_ws["engine"] = _pause_choices(ws_page, "Motor", names)
 	_ws["gearbox"] = _pause_choices(ws_page, "Getriebe", ["Eigenes Getriebe", "Getriebe des Spendermotors"])
 	_ws["power"] = _pause_slider(ws_page, "Leistung (Kennfeld)", 70.0, 150.0, 5.0, "%.0f %%", note)
+	_ws["boost"] = _pause_slider(ws_page, "Ladedruck", 0.0, 40.0, 5.0, "%+.0f %%", note)
 	_ws["limiter"] = _pause_slider(ws_page, "Drehzahlbegrenzer", -500.0, 800.0, 100.0, "%+.0f U/min", note)
+	_ws["gear_spread"] = _pause_slider(ws_page, "Getriebeabstufung", 75.0, 125.0, 5.0, "%.0f %%", note)
 	_ws["final_drive"] = _pause_slider(ws_page, "Achsübersetzung", 80.0, 125.0, 1.0, "%.0f %%", note)
 	_ws["layout"] = _pause_choices(ws_page, "Antrieb", Workshop.LAYOUTS.map(func(l): return l[0]))
 	_ws["lsd"] = _pause_choices(ws_page, "Sperrdifferenzial", LSD_CHOICES.map(func(l): return l[0]))
@@ -1176,9 +1178,10 @@ func _build_workshop(ws_page: VBoxContainer) -> void:
 	ws_page.add_child(UITheme.section("Räder, Bremsen, Gewicht"))
 	_ws["compound"] = _pause_choices(ws_page, "Reifen", Workshop.COMPOUNDS.map(func(c): return c[0]))
 	_ws["tire_width"] = _pause_slider(ws_page, "Reifenbreite", 85.0, 125.0, 5.0, "%.0f %%", note)
+	_ws["wing"] = _pause_choices(ws_page, "Heckflügel", Workshop.WINGS.map(func(w): return w[0]))
 	_ws["brakes"] = _pause_slider(ws_page, "Bremsanlage", 70.0, 150.0, 5.0, "%.0f %%", note)
 	_ws["ballast"] = _pause_slider(ws_page, "Gewicht", -150.0, 300.0, 10.0, "%+.0f kg", note)
-	for key in ["engine", "gearbox", "layout", "lsd", "compound"]:
+	for key in ["engine", "gearbox", "layout", "lsd", "compound", "wing"]:
 		(_ws[key] as OptionButton).item_selected.connect(func(_i: int): _workshop_preview())
 	_ws_info = UITheme.label("", 14, UITheme.MUTED)
 	_ws_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1209,7 +1212,12 @@ func _workshop_load() -> void:
 	(_ws["layout"] as OptionButton).select(maxi(0, Workshop.LAYOUTS.map(func(l): return l[1]).find(cfg["layout"])))
 	(_ws["lsd"] as OptionButton).select(maxi(0, LSD_CHOICES.map(func(l): return l[1]).find(float(cfg["lsd"]))))
 	(_ws["compound"] as OptionButton).select(int(cfg["compound"]))
-	for key in ["power", "final_drive", "spring_f", "spring_r", "damp_f", "damp_r", "arb_f", "arb_r", "brakes", "tire_width"]:
+	(_ws["wing"] as OptionButton).select(int(cfg["wing"]))
+	# Wings only on the generated bodies (an imported model hides it).
+	var imported := not (Game.car_info(Game.car_path_for_id(str(player.get_info().get("id", "")))).get("visual_model", {}) as Dictionary).is_empty()
+	(_ws["wing"] as OptionButton).disabled = imported
+	(_ws["wing"] as OptionButton).tooltip_text = "Nur für Fahrzeuge ohne importiertes Modell" if imported else ""
+	for key in ["power", "final_drive", "spring_f", "spring_r", "damp_f", "damp_r", "arb_f", "arb_r", "brakes", "tire_width", "boost", "gear_spread"]:
 		(_ws[key] as HSlider).value = float(cfg[key]) * 100.0
 	(_ws["ride_height"] as HSlider).value = float(cfg["ride_height"]) * 1000.0
 	(_ws["limiter"] as HSlider).value = float(cfg["limiter"])
@@ -1230,7 +1238,8 @@ func _workshop_read() -> Dictionary:
 	cfg["layout"] = Workshop.LAYOUTS[(_ws["layout"] as OptionButton).selected][1]
 	cfg["lsd"] = LSD_CHOICES[(_ws["lsd"] as OptionButton).selected][1]
 	cfg["compound"] = (_ws["compound"] as OptionButton).selected
-	for key in ["power", "final_drive", "spring_f", "spring_r", "damp_f", "damp_r", "arb_f", "arb_r", "brakes", "tire_width"]:
+	cfg["wing"] = (_ws["wing"] as OptionButton).selected
+	for key in ["power", "final_drive", "spring_f", "spring_r", "damp_f", "damp_r", "arb_f", "arb_r", "brakes", "tire_width", "boost", "gear_spread"]:
 		cfg[key] = (_ws[key] as HSlider).value / 100.0
 	cfg["ride_height"] = (_ws["ride_height"] as HSlider).value / 1000.0
 	cfg["limiter"] = (_ws["limiter"] as HSlider).value

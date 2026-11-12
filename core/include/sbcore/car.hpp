@@ -73,6 +73,9 @@ struct CarBodyDef {
     /// body produces exactly Cd * A head-on. 0 = typical value for the body style /
     /// 0.84 * width * (height - groundClearance).
     real dragCoefficient = 0.0;
+    /// Bolt-on rear wing: angle of attack in degrees (0 = none). A flat plate on two struts over
+    /// the rear deck; its downforce and drag come from the triangle aerodynamics like the body's.
+    real rearWing = 0.0;
     real frontalArea = 0.0;
 };
 
@@ -220,6 +223,9 @@ struct DoorLayout {
 };
 
 struct CarLayout {
+    /// Rear wing (CarBodyDef::rearWing): plate corners front-left, front-right, rear-left,
+    /// rear-right, and the body nodes its struts stand on.
+    std::vector<std::uint32_t> wingNodes, wingMounts;
     std::array<DoorLayout, 2> frontDoors; // left, right
     std::array<DoorLayout, 2> rearDoors;  // left, right (four-door bodies with detachable doors)
 
