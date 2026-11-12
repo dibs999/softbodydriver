@@ -340,7 +340,14 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
                 idx[static_cast<int64_t>(i + 1)] = static_cast<int32_t>(s.indices[i + 2]);
                 idx[static_cast<int64_t>(i + 2)] = static_cast<int32_t>(s.indices[i + 1]);
             }
-            addWheelSurface(wg, v, n, Array(), idx, materialFor(s.material, materials), s.material == "tire");
+            const bool tire = s.material == "tire";
+            const bool patterned = tire && materials.has("tire_wheel");
+            addWheelSurface(wg, v, n, Array(), idx, materialFor(patterned ? std::string("tire_wheel") : s.material, materials), tire);
+            if (patterned) {
+                // The tyre shader draws its tread and sidewall pattern from these radii.
+                wg.surfs.back().instance->set_instance_shader_parameter("tire_radius", def_.tires.radius);
+                wg.surfs.back().instance->set_instance_shader_parameter("rim_radius", def_.tires.rimRadius);
+            }
         }
         wheels_.push_back(wg);
     }

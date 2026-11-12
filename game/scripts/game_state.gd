@@ -1085,6 +1085,10 @@ func make_material_library() -> Dictionary:
 	lib["seat_frame"] = _metal(Color(0.32, 0.32, 0.33), 0.8, 0.35)
 	lib["seat_belt"] = _textile(Color(0.035, 0.035, 0.04), 0.8, 2.0, 0.3)
 	lib["tire"] = _plastic(Color(0.035, 0.035, 0.035), 0.92)
+	# Procedural wheel tyres: tread sipes and sidewall lettering (radii set per wheel instance).
+	var tire_wheel := ShaderMaterial.new()
+	tire_wheel.shader = preload("res://materials/tire.gdshader")
+	lib["tire_wheel"] = tire_wheel
 	lib["radiator"] = _metal(Color(0.15, 0.15, 0.16), 0.6, 0.5)
 	lib["spring"] = _plastic(Color(0.75, 0.08, 0.06), 0.35)
 	lib["caliper"] = _plastic(Color(0.78, 0.1, 0.06), 0.3)
