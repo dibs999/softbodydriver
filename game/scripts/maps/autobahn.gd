@@ -114,19 +114,12 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			markers.append(Transform3D(basis, center[i] + side * sign * (CARRIAGE_OFFSET + CARRIAGE_HALF + 0.35)))
 	C.roadside_markers(parent, markers)
 
-	# Overpasses across the two straights.
+	# Overpasses across the two straights: a farm road on earth ramps, bridged over the motorway.
 	var deck_mat := C.noise_mat(Color(0.6, 0.6, 0.58), 0.12, 0.3, 0.85, 0.1)
+	var lane_road := C.road_material(2, 6.5, 12.0, "rural")
 	for x: float in [-420.0, 380.0, 1030.0]:
 		for z: float in [-RADIUS, RADIUS]:
-			var span := 2.0 * (CARRIAGE_OFFSET + CARRIAGE_HALF + 4.0)
-			C.box(parent, world, Vector3(x, 6.6, z), Vector3(7.0, 0.6, span * 0.5 + 6.0), Vector3.ZERO, deck_mat, 0.8, false)
-			C.box(parent, world, Vector3(x, 7.6, z - span * 0.5 - 5.5), Vector3(7.0, 0.5, 0.25), Vector3.ZERO, concrete, 0.8, false)
-			C.box(parent, world, Vector3(x, 7.6, z + span * 0.5 + 5.5), Vector3(7.0, 0.5, 0.25), Vector3.ZERO, concrete, 0.8, false)
-			for pz: float in [z - span * 0.5 - 2.0, z, z + span * 0.5 + 2.0]:
-				C.box(parent, world, Vector3(x, 3.0, pz), Vector3(0.7, 3.0, 0.7), Vector3.ZERO, concrete, 0.7)
-			# Embankments at both ends.
-			for ez: float in [z - span * 0.5 - 30.0, z + span * 0.5 + 30.0]:
-				C.box(parent, world, Vector3(x, 2.5, ez), Vector3(9.0, 4.2, 24.0), Vector3(deg_to_rad(10.0) * signf(ez - z), 0, 0), grass, 0.9, false)
+			_overpass(parent, world, x, z, 2.0 * (CARRIAGE_OFFSET + CARRIAGE_HALF + 4.0), deck_mat, concrete, grass, lane_road)
 
 	# Sign gantries + distance boards on carriageway A.
 	var sign_mat := C.mat(Color(0.1, 0.32, 0.72), 0.5)
@@ -252,6 +245,72 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		"environment": {"sky_top": Color(0.26, 0.46, 0.8), "horizon": Color(0.68, 0.76, 0.86), "fog": Color(0.72, 0.78, 0.86),
 			"fog_density": 0.00045, "sun": Vector3(-40, -30, 0), "sun_energy": 1.3},
 	}
+
+
+## Road bridge across both carriageways at x, centred on the motorway line z: deck on three pier
+## rows with parapets along its sides, concrete abutments, and at each end an earth ramp - a
+## trapezoid with 1:1.5 grass slopes - that carries the road down to the fields over 60 m.
+static func _overpass(parent: Node3D, world: SBWorld, x: float, z: float, span: float, deck_mat: Material,
+		concrete: Material, grass: Material, road: Material) -> void:
+	const DECK_Y := 7.2          # road surface height on the bridge
+	const HALF := 7.0            # half width of deck and ramp crown
+	const RAMP := 60.0
+	var deck_half := span * 0.5 + 6.0
+	C.box(parent, world, Vector3(x, DECK_Y - 0.6, z), Vector3(HALF, 0.6, deck_half), Vector3.ZERO, deck_mat, 0.8, false)
+	for side: float in [-1.0, 1.0]:
+		C.box(parent, world, Vector3(x + side * (HALF - 0.2), DECK_Y + 0.5, z), Vector3(0.2, 0.5, deck_half), Vector3.ZERO, concrete, 0.8, false)
+	for pz: float in [z - span * 0.5 - 2.0, z, z + span * 0.5 + 2.0]:
+		for px: float in [-4.0, 4.0]:
+			C.box(parent, world, Vector3(x + px, (DECK_Y - 1.2) * 0.5, pz), Vector3(0.6, (DECK_Y - 1.2) * 0.5, 0.6), Vector3.ZERO, concrete, 0.7)
+		C.box(parent, world, Vector3(x, DECK_Y - 1.5, pz), Vector3(HALF - 0.4, 0.3, 0.8), Vector3.ZERO, concrete, 0.7, false)   # pier cap
+	# Road across the deck and both ramps as one strip (the ramps follow the slope).
+	var road_pts := PackedVector3Array()
+	var z0 := z - deck_half - RAMP - 40.0   # on into the fields a little way
+	var z1 := z + deck_half + RAMP + 40.0
+	var height := func(zz: float) -> float:
+		var out := absf(zz - z) - deck_half
+		return DECK_Y if out <= 0.0 else DECK_Y * clampf(1.0 - out / RAMP, 0.0, 1.0)
+	var n := 48
+	for i in n + 1:
+		var zz := lerpf(z0, z1, float(i) / n)
+		road_pts.append(Vector3(x, height.call(zz), zz))
+	parent.add_child(C.road_mesh(road_pts, 3.25, road, false, 0.03, 12.0))
+	# Earth ramps and abutments.
+	for end: float in [-1.0, 1.0]:
+		var start := z + end * deck_half
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var steps := 16
+		var prev: Array = []
+		for k in steps + 1:
+			var d := float(k) / steps * RAMP
+			var h := DECK_Y * (1.0 - d / RAMP)
+			var zz := start + end * d
+			var foot := HALF + 1.5 * h
+			var ring := [Vector3(x - foot, 0.0, zz), Vector3(x - HALF, h - 0.02, zz), Vector3(x + HALF, h - 0.02, zz), Vector3(x + foot, 0.0, zz)]
+			if k > 0:
+				for f in 3:
+					var a: Vector3 = prev[f]
+					var b: Vector3 = prev[f + 1]
+					var c: Vector3 = ring[f + 1]
+					var e: Vector3 = ring[f]
+					var normal := (b - a).cross(e - a).normalized()
+					if normal.y < 0.0:
+						normal = -normal
+						for v: Vector3 in [a, c, b, a, e, c]:
+							st.set_normal(normal); st.set_uv(Vector2(v.x, v.z) * 0.25); st.add_vertex(v)
+					else:
+						for v: Vector3 in [a, b, c, a, c, e]:
+							st.set_normal(normal); st.set_uv(Vector2(v.x, v.z) * 0.25); st.add_vertex(v)
+			prev = ring
+		var mi := MeshInstance3D.new()
+		mi.mesh = st.commit()
+		mi.material_override = grass
+		parent.add_child(mi)
+		# Abutment: a concrete wall under the deck end, wing walls along the ramp's first metres.
+		C.box(parent, world, Vector3(x, (DECK_Y - 1.2) * 0.5, start - end * 0.4), Vector3(HALF + 0.6, (DECK_Y - 1.2) * 0.5, 0.6), Vector3.ZERO, concrete, 0.7)
+		for side: float in [-1.0, 1.0]:
+			C.box(parent, world, Vector3(x + side * (HALF + 0.3), DECK_Y * 0.5, start + end * 3.0), Vector3(0.3, DECK_Y * 0.5, 3.0), Vector3.ZERO, concrete, 0.7, false)
 
 
 static func _service_area(parent: Node3D, world: SBWorld, concrete: Material, metal: Material) -> PackedVector3Array:
