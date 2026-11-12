@@ -487,7 +487,7 @@ func _diagnostics(canvas: Vector2) -> void:
 	_text(p + Vector2(22, 405), "Hauptthread: warten %.1f · kopieren %.1f · Verformung %.1f · gesamt %.1f ms" % [float(_stats.get("sync_wait_ms", 0)), float(_stats.get("sync_copy_ms", 0)), float(_stats.get("sync_mesh_ms", 0)), Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0], 11, MUTED)
 
 func _help(canvas: Vector2) -> void:
-	var p := _overlay(canvas, Vector2(640, 500), "STEUERUNG", "F1  Schließen")
+	var p := _overlay(canvas, Vector2(640, 528), "STEUERUNG", "F1  Schließen")
 	if DriverPrompts.using_gamepad:
 		draw_multiline_string(font, p + Vector2(24, 82), DriverPrompts.control_summary(), HORIZONTAL_ALIGNMENT_LEFT, 590, 18, -1, TEXT)
 		draw_multiline_string(font, p + Vector2(24, 368), "Start öffnet auch Aktivitäten, Wetter und Bergung.\nTanken und Reparatur: im markierten Servicebereich anhalten,\nMotor ausschalten und D-Pad halten.", HORIZONTAL_ALIGNMENT_LEFT, 590, 15, -1, MUTED)
@@ -501,6 +501,7 @@ func _help(canvas: Vector2) -> void:
 		[["K", "N", "F2"], "Karte  ·  Minikarte  ·  Fahrzeugdiagnose"],
 		[["F3", "F4"], "Aktivität wählen  ·  Start / Abbruch"],
 		[["J", "P", "Tab", "B"], "Zeitlupe  ·  Physikpause  ·  Fahrzeug  ·  Node-Beam-Ansicht"],
+		[["Strg", "LMT"], "Node greifen und ziehen (halten, Mausrad: Abstand)"],
 		[["L", ",", ".", "H", "⇧H"], "Licht  ·  Blinker  ·  Warnblinker  ·  Blaulicht"],
 		[["X", "O", "⏎"], "Scheibenwischer  ·  Haube entriegeln  ·  Hupe"],
 		[["V", "^"], "Tempomat an (ab 30 km/h) / aus  ·  Rückblick (halten)"],

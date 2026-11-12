@@ -101,6 +101,13 @@ public:
     Dictionary get_telemetry() const;
     Dictionary get_effect_anchors() const;
     void puncture_tire(int wheel, double leak_psi_per_second);
+    /// Node grabber (BeamNG's mouse grab): the node nearest to a ray (within `radius` of it, front-
+    /// most first), -1 if none. Uses the last synced positions.
+    int pick_node(const Vector3& origin, const Vector3& direction, double radius) const;
+    Vector3 get_node_position(int node) const;
+    /// Pulls `node` towards `target` with a capped spring-damper until release_grab().
+    void set_grab(int node, const Vector3& target);
+    void release_grab();
     Dictionary get_info() const;
     Vector3 get_position_ws() const;   ///< Centre between the axles at floor level
     Vector3 get_chase_target() const;
@@ -215,6 +222,8 @@ private:
         bool reset = false;      // one-shot
         int puncture = -1;
         double punctureLeak = 4.0;
+        int grabNode = -1;       // node held by the mouse grabber
+        Vector3 grabTarget;
         Transform3D resetXform;
     };
     Controls ctl_, phys_;

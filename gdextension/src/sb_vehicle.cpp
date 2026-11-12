@@ -117,6 +117,10 @@ void SBVehicle::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_wheel_load"), &SBVehicle::get_wheel_load);
     ClassDB::bind_method(D_METHOD("get_effect_anchors"), &SBVehicle::get_effect_anchors);
     ClassDB::bind_method(D_METHOD("puncture_tire", "wheel", "leak_psi_per_second"), &SBVehicle::puncture_tire);
+    ClassDB::bind_method(D_METHOD("pick_node", "origin", "direction", "radius"), &SBVehicle::pick_node);
+    ClassDB::bind_method(D_METHOD("get_node_position", "node"), &SBVehicle::get_node_position);
+    ClassDB::bind_method(D_METHOD("set_grab", "node", "target"), &SBVehicle::set_grab);
+    ClassDB::bind_method(D_METHOD("release_grab"), &SBVehicle::release_grab);
     ClassDB::bind_method(D_METHOD("take_impact"), &SBVehicle::take_impact);
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "debug_view"), "set_debug_view", "get_debug_view");
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "tcs"), "set_tcs", "get_tcs");
@@ -882,6 +886,19 @@ void SBVehicle::pre_step(double dt) {
     if (phys_.puncture >= 0 && static_cast<std::size_t>(phys_.puncture) < body.wheels().size()) {
         body.wheels()[static_cast<std::size_t>(phys_.puncture)].puncture(phys_.punctureLeak);
         phys_.puncture = -1;
+    }
+    if (phys_.grabNode >= 0 && static_cast<std::size_t>(phys_.grabNode) < body.positions().size()) {
+        // Mouse grab: a spring-damper (5 kN/m) towards the target, capped at 9 kN: enough to lift a
+        // corner off the ground or drag a car about, not to fling it.
+        const auto i = static_cast<std::size_t>(phys_.grabNode);
+        const double invMass = body.invMasses()[i];
+        if (invMass > 0.0) {
+            const sb::Vec3 toTarget = toS(phys_.grabTarget) - body.positions()[i];
+            sb::Vec3 force = toTarget * 5000.0 - body.velocities()[i] * 300.0;
+            const double f = sb::length(force);
+            if (f > 9000.0) force = force * (9000.0 / f);
+            body.velocities()[i] += force * (dt * invMass);
+        }
     }
     c.throttle = phys_.throttle;
     c.brake = phys_.brake;
@@ -2050,6 +2067,41 @@ Dictionary SBVehicle::get_telemetry() const {
     d["brake_temps"] = brakes;
     d["suspension_damage"] = susp;
     return d;
+}
+
+int SBVehicle::pick_node(const Vector3& origin, const Vector3& direction, double radius) const {
+    if (pos_.empty() || direction.length_squared() < 1e-12) return -1;
+    const Vector3 d = direction.normalized();
+    int best = -1;
+    double bestScore = 1e18;
+    for (std::size_t i = 0; i < pos_.size(); ++i) {
+        const Vector3 p = toG(pos_[i]);
+        const double along = (p - origin).dot(d);
+        if (along < 0.3) continue;
+        const double off = ((p - origin) - d * along).length();
+        // A cone around the cursor ray (~3 degrees), at least `radius` wide: a node a few pixels
+        // off the cursor is picked at any distance, also where the body nodes are sparse.
+        const double limit = std::max(radius, along * 0.05);
+        if (off > limit) continue;
+        // Prefer nodes close to the ray, then the nearer ones (the surface facing the camera).
+        const double score = off / limit + along * 0.02;
+        if (score < bestScore) { bestScore = score; best = static_cast<int>(i); }
+    }
+    return best;
+}
+
+Vector3 SBVehicle::get_node_position(int node) const {
+    if (node < 0 || static_cast<std::size_t>(node) >= pos_.size()) return Vector3();
+    return toG(pos_[static_cast<std::size_t>(node)]);
+}
+
+void SBVehicle::set_grab(int node, const Vector3& target) {
+    ctl_.grabNode = node;
+    ctl_.grabTarget = target;
+}
+
+void SBVehicle::release_grab() {
+    ctl_.grabNode = -1;
 }
 
 void SBVehicle::puncture_tire(int wheel, double leak) {

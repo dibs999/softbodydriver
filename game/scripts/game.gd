@@ -14,6 +14,7 @@ const RoadMarks := preload("res://scripts/road_marks.gd")
 const DrivingActivity := preload("res://scripts/driving_activity.gd")
 const DriverPrompts := preload("res://scripts/driver_prompts.gd")
 var equipment: Node3D
+var grabber: Node3D   # Ctrl + left mouse: pull a node of any car (node_grabber.gd)
 var weather: Node
 var wipers: Node3D
 var cabin_closure: Node3D
@@ -146,6 +147,10 @@ func _ready() -> void:
 	equipment = preload("res://scripts/vehicle_equipment.gd").new()
 	add_child(equipment)
 	equipment.configure(self, map_data["spawns"][0])
+	grabber = preload("res://scripts/node_grabber.gd").new()
+	grabber.name = "NodeGrabber"
+	grabber.game = self
+	add_child(grabber)
 	cam.equipment = equipment
 
 	var ui := CanvasLayer.new()
