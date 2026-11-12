@@ -10,13 +10,42 @@ instance uniform float rim_radius = 0.0;
 uniform vec4 rubber : source_color = vec4(0.035, 0.035, 0.037, 1.0);
 global uniform float road_wetness;
 
+// Sidewall lettering: a 5 x 5 pixel font (rows top to bottom, 5 bits each, leftmost bit high)
+// and the texts as glyph indices.
+const int GLYPHS[19] = int[](0, 18400580, 33061407, 17318431, 32641156, 32045714, 15269425, 16267326, 32045584, 15255086, 31504927, 15324974, 33060926, 1118480, 4591758, 15235630, 15252526, 18732593, 145536);
+const int TEXT_BRAND[12] = int[](1, 2, 3, 4, 5, 6, 0, 7, 8, 9, 5, 4);
+const int TEXT_SIZE[14] = int[](10, 11, 12, 13, 12, 12, 0, 5, 14, 15, 0, 16, 14, 1);
+const int TEXT_MS[3] = int[](17, 18, 7);
+
 varying vec3 local_pos;
 varying vec3 local_normal;
 
 float hash(vec2 p) {
+	p = mod(p, 512.0);   // world coordinates of a few km would leave the fract below without precision
 	p = fract(p * vec2(123.34, 456.21));
 	p += dot(p, p + 45.32);
 	return fract(p.x * p.y);
+}
+
+
+// 1 inside a raised pixel of character `ch` at cell coordinates f (0..1, y = 0 at the top).
+float glyph_pixel(int ch, vec2 f) {
+	if (f.x < 0.0 || f.x >= 1.0 || f.y < 0.0 || f.y >= 1.0) return 0.0;
+	int col = int(f.x * 6.0);          // 5 pixel columns plus one column of spacing
+	int row = int(f.y * 5.0);
+	if (col > 4) return 0.0;
+	int bits = GLYPHS[ch];
+	return float((bits >> ((4 - row) * 5 + (4 - col))) & 1);
+}
+
+// The text at arc position s (metres from the start of the run), cell width cw: the glyph pixel.
+float text_at(float s, float fy, float cw, int which) {
+	int n = which == 0 ? 12 : (which == 1 ? 14 : 3);
+	float ci = floor(s / cw);
+	if (ci < 0.0 || ci >= float(n)) return 0.0;
+	int k = int(ci);
+	int ch = which == 0 ? TEXT_BRAND[k] : (which == 1 ? TEXT_SIZE[k] : TEXT_MS[k]);
+	return glyph_pixel(ch, vec2(fract(s / cw), fy));
 }
 
 void vertex() {
@@ -43,22 +72,23 @@ void fragment() {
 		float side = smoothstep(0.6, 0.85, axial);
 		float t = (r - rim_radius) / max(tire_radius - rim_radius, 0.01);
 		float protector = smoothstep(0.10, 0.13, t) * (1.0 - smoothstep(0.16, 0.19, t));
-		// Lettering: two words per side, each a row of 2 cm character cells with random strokes.
-		float band = smoothstep(0.46, 0.49, t) * (1.0 - smoothstep(0.70, 0.73, t));
-		float turn = fract(ang / 6.2831853 * 2.0);
-		float word = step(0.06, turn) * step(turn, 0.34) + step(0.56, turn) * step(turn, 0.70);
-		float cell_u = ang * r / 0.02;
-		vec2 cell = vec2(floor(cell_u), floor(ang / 3.14159265));
-		vec2 f = vec2(fract(cell_u), (t - 0.49) / 0.21);
-		float strokes = 0.0;
-		for (int k = 0; k < 3; k++) {
-			float h = hash(cell + float(k) * 7.1);
-			// vertical, horizontal or diagonal stroke in the cell
-			float d = h < 0.4 ? abs(f.x - (0.2 + 0.6 * hash(cell + float(k) * 3.3)))
-				: h < 0.75 ? abs(f.y - (0.15 + 0.7 * hash(cell + float(k) * 5.9))) * 0.6
-				: abs((f.x - 0.5) - (f.y - 0.5) * (hash(cell + 2.0) > 0.5 ? 1.0 : -1.0)) * 0.7;
-			strokes = max(strokes, 1.0 - smoothstep(0.09, 0.14, d));
-		}
+		// Lettering round each sidewall: the brand in large letters, then the size and load index
+		// and an M+S mark in smaller ones; read the right way round on both sides.
+		float rm = rim_radius + 0.6 * (tire_radius - rim_radius);
+		float a = local_pos.z < 0.0 ? ang : -ang;
+		float s_arc = fract(a / 6.2831853) * 6.2831853 * rm;   // metres along the sidewall
+		float big_lo = 0.40, big_hi = 0.80, small_lo = 0.50, small_hi = 0.72;
+		float fy_big = 1.0 - (t - big_lo) / (big_hi - big_lo);
+		float fy_small = 1.0 - (t - small_lo) / (small_hi - small_lo);
+		float cw_big = (big_hi - big_lo) * (tire_radius - rim_radius) * 1.15;
+		float cw_small = (small_hi - small_lo) * (tire_radius - rim_radius) * 1.15;
+		float strokes = text_at(s_arc - 0.04, fy_big, cw_big, 0);
+		float size_start = 0.04 + 13.0 * cw_big;
+		strokes = max(strokes, text_at(s_arc - size_start, fy_small, cw_small, 1));
+		strokes = max(strokes, text_at(s_arc - size_start - 16.0 * cw_small, fy_small, cw_small, 2));
+		float cell_u = s_arc / cw_small;
+		float band = 1.0;
+		float word = 1.0;
 		// Fade the lettering out where a character cell shrinks below a few pixels (no shimmer).
 		float detail = 1.0 - smoothstep(0.15, 0.35, fwidth(cell_u));
 		float lettering = strokes * band * word * detail;

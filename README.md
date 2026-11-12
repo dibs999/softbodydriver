@@ -266,6 +266,15 @@ Details und verbleibende Release-Abnahmen: [Linux-Paketierung](docs/RELEASE_LINU
 - **Wüste**: 1 km² Dünen und Tafelberge, Schotterpiste mit Sprüngen, Felsbrocken und Kakteen
 - **Hügelland**: prozedurales Terrain mit kurviger Landstraße über Kuppen und durch Senken, dazu Wald
 
+Der Asphalt altert sichtbar: polierte, leicht wandernde Rollspuren, Netzrisse vor allem in den
+Rollspuren und am Rand, vergossene Risse, Flicken, Längsnähte zwischen den Fertigerbahnen,
+vereinzelte Bremsspuren, Ölflecken und angeschwemmte Erde am Rand. Aus der Nähe bleibt das
+Gesteinskorn sichtbar, auf mittlere Distanz wird der Belag fleckig statt einfarbig. Landstraßen
+und Autobahn haben ein Bankett aus Splitt, Erde, Asphaltbrocken und einwachsendem Gras.
+Die prozeduralen Räder haben gegossene, verjüngte Alu-Speichen, die Reifenflanken erhabene
+Beschriftung (Marke, Größe, M+S), die SUVs glatte Kunststoff-Radlaufverbreiterungen; Laubbäume
+bilden Blattbüschel mit schattigem Kroneninneren.
+
 Statische Hindernisse laufen über eine Broadphase. Deshalb bremsen auch Karten mit über 600 Kollisionsobjekten (Leitplanken, Gebäude) die 2000-Hz-Physik nicht aus.
 
 ### HUD

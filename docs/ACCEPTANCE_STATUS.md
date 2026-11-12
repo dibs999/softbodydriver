@@ -27,7 +27,10 @@ konkrete Teilergebnisse und erklärt das Gesamtprodukt noch nicht für fertig.
   Verbindung über ihrer Bruchkraft reißt. `trailer_test.gd`: ankuppeln (Stützlast ~800 N,
   Kupplungsspalt < 0,1 m), mit 60 km/h ziehen (Spalt 0,005 m), gemeinsam bremsen,
   abkuppeln und wegfahren, Kuppeln nur im Stand, aus der Ferne zurückholen, Zurücksetzen
-  kuppelt ab. Fahrgefühl beim Ziehen und Pendeln bei hohem Tempo sind nicht von Hand abgenommen.
+  kuppelt ab. Pendeln: Nach einem Lenkimpuls (eine Sinusperiode, gut 1° am Rad) bei 120 km/h
+  knickt der Anhänger um etwa 2° ein, zwei Sekunden später ist die Schwingung unter 0,05°
+  abgeklungen (Kerntest). Ein scharfer Spurwechsel an der Haftgrenze kann das Gespann dagegen
+  ins Schleudern bringen. Das Fahrgefühl beim Ziehen ist nicht von Hand abgenommen.
 * Alle sieben `cartest … --quick`-Prüfstände: `RESULT: OK`.
 * Erweiterter Headless-Belastungstest: **30 Minuten 1,75 Sekunden simuliert**
   in **5 Minuten 5,753 Sekunden Laufzeit**. **51 vollständige Zyklen** mit echter
