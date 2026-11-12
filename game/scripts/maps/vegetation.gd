@@ -65,9 +65,18 @@ static func plant(parent: Node3D, kind: String, ground: Array[Vector3], seed := 
 		if list.is_empty():
 			continue
 		# Spatial chunks with a detailed mesh near the camera and a few large cards beyond.
+		# Sparse rows (trees every 20 m along a berm) left one or two trees per 160 m cell, each
+		# cell a near and a far draw call: grow the cells until they hold ~8 trees on average.
+		var lo := Vector2(INF, INF)
+		var hi := Vector2(-INF, -INF)
+		for xf: Transform3D in list:
+			lo = lo.min(Vector2(xf.origin.x, xf.origin.z))
+			hi = hi.max(Vector2(xf.origin.x, xf.origin.z))
+		var area := maxf(1.0, (hi.x - lo.x + 1.0) * (hi.y - lo.y + 1.0))
+		var cell_size := 600.0 if backdrop else clampf(sqrt(area * 8.0 / list.size()), 160.0, 600.0)
 		var chunks: Dictionary = {}
 		for xf in list:
-			var size := 600.0 if backdrop else 160.0
+			var size := cell_size
 			var key := Vector2i(floori(xf.origin.x / size), floori(xf.origin.z / size))
 			if not chunks.has(key):
 				var arr: Array[Transform3D] = []

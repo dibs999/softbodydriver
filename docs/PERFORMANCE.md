@@ -76,6 +76,16 @@ bleiben also keine unsichtbaren Hindernisse zurück.
     und elastische Energie über alle Knoten und Beams summierte – unter der Sperre; sie zählt
     jetzt nur noch.
 
+* **Zeichenaufrufe auf dem Testgelände (12. November 2026):** Bei *Sehr niedrig* hatte das
+  Testgelände 1257 Zeichenaufrufe (Offroad/Hügelland ~420). Die Umzäunung war ein Mesh je
+  Pfosten und Holm (~580), jetzt zwei räumlich gestückelte MultiMeshes (Kollider bleiben je
+  Teil); Baumreihen mit 20 m Abstand ergaben je 160-m-Zelle nur ein, zwei Bäume (je ein Nah-
+  und ein Fernaufruf), die Zellen wachsen jetzt, bis sie im Mittel ~8 Bäume halten (160–600 m).
+  Ergebnis 1257 → 1017. Der Rest sind vor allem die KI-Verkehrsautos (je ~110 Flächen).
+* **Hinweis bei überlasteter Physik:** Liegt die Physik 8 s lang unter 85 % Echtzeit, während
+  KI-Verkehr fährt, weist das Spiel einmal darauf hin, dass das Ausschalten des Verkehrs
+  (Fahrhilfen) die CPU entlastet – jeder Verkehrswagen ist ein vollständiger Soft-Body.
+
 * **Bäume mit Detailstufen:**
   * Jede Baumart hat neben dem Nahmodell ein Fernmodell mit ~22 % der Blattkarten
     (größere Karten, einfacher Stamm).

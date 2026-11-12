@@ -76,14 +76,28 @@ static func flat(parent: Node3D, rect: Rect2, y: float, material: Material) -> v
 	surface.material_override = material
 	parent.add_child(surface)
 
+## Perimeter rail: posts every 8 m with a beam between them. Drawn as two spatially chunked
+## multimeshes (each piece used to be its own mesh: ~580 draw calls round the test pad); every
+## piece keeps its own collider.
 static func rail(parent: Node3D, world: SBWorld, a: Vector3, b: Vector3, metal: Material, post: Material) -> void:
 	var count := ceili(a.distance_to(b) / 8)
 	var step := (b - a) / count
 	var yaw := atan2(-step.z, step.x)
+	var posts: Array[Transform3D] = []
+	var beams: Array[Transform3D] = []
 	for i in count:
 		var p := a + step * i
-		C.box(parent, world, p + Vector3.UP * 0.55, Vector3(0.09, 0.55, 0.09), Vector3.ZERO, post)
-		C.box(parent, world, p + step * 0.5 + Vector3.UP * 0.78, Vector3(step.length() * 0.5, 0.16, 0.065), Vector3(0, yaw, 0), metal)
+		var pc := p + Vector3.UP * 0.55
+		var bc := p + step * 0.5 + Vector3.UP * 0.78
+		var beam_half := Vector3(step.length() * 0.5, 0.16, 0.065)
+		world.add_box(pc, Vector3(0.09, 0.55, 0.09), Vector3.ZERO, 0.8)
+		world.add_box(bc, beam_half, Vector3(0, yaw, 0), 0.8)
+		posts.append(Transform3D(Basis.from_scale(Vector3(0.18, 1.1, 0.18)), pc))
+		beams.append(Transform3D(Basis(Vector3.UP, yaw).scaled_local(beam_half * 2.0), bc))
+	var unit := BoxMesh.new()
+	unit.size = Vector3.ONE
+	C.scatter_multimesh(parent, unit, post, posts)
+	C.scatter_multimesh(parent, unit, metal, beams)
 
 static func _trees(parent: Node3D, world: SBWorld, points: Array[Vector3]) -> void:
 	var random := RandomNumberGenerator.new()

@@ -393,6 +393,21 @@ func _set_player(v: SBVehicle) -> void:
 var _replay_frames := 0
 var _replay_time := 0.0
 var _replay_paused_before := false
+var _slow_physics := 0.0      # seconds the physics has lagged behind real time
+var _slow_hint_given := false
+
+## On a slow CPU the soft-body physics falls behind real time (the F2 page shows it as
+## "Physik % Echtzeit"); every traffic car is a full soft body. After 8 s below 85 % with
+## traffic on, say once where to switch it off.
+func _watch_physics_load(delta: float) -> void:
+	if _slow_hint_given or world.paused or world.time_scale < 0.99 or not Game.settings["traffic"] or ai.is_empty():
+		return
+	var rt := float(world.get_stats().get("realtime_factor", 1.0))
+	_slow_physics = _slow_physics + delta if rt < 0.85 else maxf(0.0, _slow_physics - delta)
+	if _slow_physics > 8.0:
+		_slow_hint_given = true
+		hud.toast("Die Physik schafft nur %d %% Echtzeit · KI-Verkehr unter Einstellungen › Fahrhilfen ausschalten entlastet die CPU" % int(rt * 100.0))
+
 
 func toggle_replay() -> void:
 	if _replay_frames > 0:
@@ -420,6 +435,7 @@ func _process(delta: float) -> void:
 		player.replay_show(int(_replay_time * 30.0))
 	if not pause_menu.visible:
 		_drive_player(delta)
+	_watch_physics_load(delta)
 	if wipers:
 		wipers.update(0.0 if world.paused else delta * world.time_scale, weather.weather_index == 2, weather.wetness)
 	for v in ai.keys():
