@@ -293,7 +293,7 @@ bedienbare Fahrzeugausrüstung:
 | `U` / `Shift`+`U` | Kestrel: Fahrer-/Beifahrertür im Stand öffnen oder schließen; auch im Pausenmenü |
 | `F` halten | Am markierten Serviceplatz tanken; anhalten und Motor mit `I` abstellen |
 | `G` halten | Am Serviceplatz vier Simulationssekunden reparieren; Tankinhalt bleibt erhalten |
-| `F7` | Klar, bedeckt, Regen |
+| `F7` | Klar, bedeckt, Regen, Nebel |
 | `F8` | Mittag, Abend, Nacht, Morgen |
 | `Shift` + `F8` | Automatischen Tagesablauf ein/aus |
 

@@ -483,8 +483,10 @@ func _process(delta: float) -> void:
 		recovery.record(player, float(world.get_stats()["sim_time"]))
 	_watch_physics_load(delta)
 	if wipers:
-		wipers.update(0.0 if world.paused else delta * world.time_scale, weather.weather_index == 2, weather.wetness)
+		wipers.update(0.0 if world.paused else delta * world.time_scale, weather.weather_index == weather.RAIN, weather.wetness)
+	var weather_speed: float = weather.TRAFFIC_SPEED[weather.weather_index]
 	for v in ai.keys():
+		ai[v].weather_speed = weather_speed
 		ai[v].update(delta)
 	for v in vehicles:
 		var imp: float = v.take_impact()

@@ -173,6 +173,8 @@ func state_for(v: SBVehicle) -> Dictionary:
 		light.spot_attenuation = 0.65
 		light.shadow_enabled = false   # set per frame: only the player's car (see _process)
 		light.light_color = Color(1.0, 0.95, 0.82)
+		# Into volumetric fog only a little of the beam: at full energy the mist glowed like a wall.
+		light.light_volumetric_fog_energy = 0.06
 		rig.add_child(light)
 		headlights.append(light)
 		for end in [-1, 1]:

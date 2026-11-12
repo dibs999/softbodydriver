@@ -1402,9 +1402,11 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             const real halfZ = sec.z[8] * 0.94;
             const real c = std::cos(0.16), s = std::sin(0.16);
             const Vec3 ax{-c, -s, 0}, ay{s, -c, 0};
-            vb.bevelBox("trim", {prof.xRwTop - 0.03, top + 0.006, 0}, {0.11, 0.016, halfZ}, 0.012, lidNodes, ax, ay, {0, 0, 1});
+            // 17 cm deep, overhanging the glass by ~9 cm like a factory hatch spoiler (it was 22 cm
+            // and reached 14 cm past the glass: a black plank from behind).
+            vb.bevelBox("trim", {prof.xRwTop - 0.01, top + 0.006, 0}, {0.085, 0.014, halfZ}, 0.012, lidNodes, ax, ay, {0, 0, 1});
             for (real side : {-1.0, 1.0})
-                vb.bevelBox("trim", {prof.xRwTop - 0.02, top - 0.010, side * (halfZ - 0.012)}, {0.09, 0.022, 0.012}, 0.008,
+                vb.bevelBox("trim", {prof.xRwTop - 0.005, top - 0.008, side * (halfZ - 0.012)}, {0.07, 0.019, 0.012}, 0.008,
                             lidNodes, ax, ay, {0, 0, 1});
         }
         if (bd.style == BodyStyle::Hatchback || bd.style == BodyStyle::SUV) {
@@ -1429,7 +1431,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             if (bd.style == BodyStyle::Hatchback || bd.style == BodyStyle::SUV) {
                 const real c = std::cos(0.16), s = std::sin(0.16);
                 const Vec3 ax{-c, -s, 0}, ay{s, -c, 0};
-                vb.box("taillight", {prof.xRwTop - 0.125, top - 0.002, 0}, {0.006, 0.006, 0.13}, lidNodes, ax, ay, {0, 0, 1});
+                vb.box("taillight", {prof.xRwTop - 0.085, top - 0.002, 0}, {0.006, 0.006, 0.13}, lidNodes, ax, ay, {0, 0, 1});
             } else {
                 const auto glass = prof.section(prof.xRwTop - 0.05);
                 vb.box("grille", {prof.xRwTop - 0.05, glass.y[10] - 0.028, 0}, {0.016, 0.012, 0.135}, bodyNodes);
