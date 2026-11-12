@@ -200,15 +200,29 @@ static func _broadleaf(rng: RandomNumberGenerator, width: float, tall: float, de
 			_limb(trunk, mid, c, 0.10 * width + 0.02, 0.04, 4)
 	var cards := maxi(14, int(150 * (0.55 + 0.45 * width) * detail))
 	var grow := 1.0 / sqrt(maxf(detail, 0.05)) * (0.75 if detail < 1.0 else 1.0)
+	# Leaf clusters: each lobe breaks up into a few clumps on twigs, so the crown shows lit
+	# clusters with shaded hollows and some sky between them instead of an even ball of leaves.
+	var clumps: Array[Vector3] = []
+	var clump_r: Array[float] = []
+	for c in lobe_centers:
+		for k in (3 if detail >= 1.0 else 1):
+			var off := Vector3(rng.randfn(), rng.randfn() * 0.7 + 0.2, rng.randfn()).normalized() * crown_r.x * rng.randf_range(0.22, 0.48)
+			clumps.append(c + off)
+			clump_r.append(crown_r.x * rng.randf_range(0.34, 0.48))
+			if detail >= 1.0:
+				_limb(trunk, c, c + off, 0.035, 0.015, 3)
 	for i in cards:
-		var c: Vector3 = lobe_centers[rng.randi() % lobe_centers.size()]
-		var lobe_r := crown_r * rng.randf_range(0.55, 0.72)
-		var dir := Vector3(rng.randfn(), rng.randfn() * 0.8 + 0.15, rng.randfn()).normalized()
-		var p := c + dir * lobe_r * pow(rng.randf_range(0.2, 1.0), 0.4)
+		var ci := rng.randi() % clumps.size()
+		var c: Vector3 = clumps[ci]
+		var dir := Vector3(rng.randfn(), rng.randfn() * 0.8 + 0.25, rng.randfn()).normalized()
+		var depth := pow(rng.randf_range(0.15, 1.0), 0.5)
+		var p := c + dir * clump_r[ci] * depth if detail >= 1.0 else c + dir * crown_r.x * 0.6 * depth
 		var rel := (p - crown_c) / crown_r
 		var outward := (rel + Vector3(0, 0.35, 0)).normalized()
 		var facing := (outward + Vector3(rng.randfn(), rng.randfn(), rng.randfn()) * 0.7).normalized()
-		var ao := clampf(0.35 + 0.55 * rel.length() + 0.25 * rel.y, 0.3, 1.0)
+		# Shade: deep inside the crown, on a clump's underside and on its inner face.
+		var clump_lit := clampf(0.55 + 0.45 * dir.dot((rel + Vector3(0, 0.6, 0)).normalized()), 0.0, 1.0)
+		var ao := clampf((0.25 + 0.6 * rel.length() + 0.25 * rel.y) * (0.55 + 0.45 * clump_lit) * (0.75 + 0.25 * depth), 0.25, 1.0)
 		var sz := rng.randf_range(1.8, 2.5) * (0.75 + 0.25 * width) * grow
 		_card(leaves, p, facing, Vector3(rng.randfn(), 1.0, rng.randfn()).normalized(), Vector2(sz, sz), outward, ao, rng.randf())
 	return _finish(trunk, leaves, _leaf_material("broadleaf", Color(0.95, 1.0, 0.9), Color(0.78, 0.9, 0.62)))
@@ -293,6 +307,8 @@ static func _leaf_material(texture: String, a: Color, b: Color) -> ShaderMateria
 		m.set_shader_parameter("leaf_tex", _leaf_texture(texture))
 		m.set_shader_parameter("tint_a", a)
 		m.set_shader_parameter("tint_b", b)
+		if texture == "broadleaf":
+			m.set_shader_parameter("shade_floor", 0.34)
 		if texture == "needle":
 			m.set_shader_parameter("autumn_amount", 0.0)
 			m.set_shader_parameter("wind_strength", 0.6)

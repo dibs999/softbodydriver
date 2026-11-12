@@ -11,7 +11,8 @@ uniform float autumn_amount = 0.12;     // share of trees with yellowish foliage
 uniform float alpha_cut = 0.42;
 uniform float wind_strength = 1.0;
 uniform float translucency = 0.55;
-uniform bool ground_ao = false;     // grass: darker towards the roots, rooted base
+uniform bool ground_ao = false;
+uniform float shade_floor = 0.42;   // albedo factor of the most shaded (inner) cards     // grass: darker towards the roots, rooted base
 
 varying vec3 view_normal;
 varying float tree_rand;
@@ -47,7 +48,7 @@ void fragment() {
 	vec3 tint = mix(tint_a.rgb, tint_b.rgb, COLOR.g);
 	tint = mix(tint, tint * autumn.rgb * 1.25, step(1.0 - autumn_amount, tree_rand));
 	tint *= mix(0.88, 1.12, fract(tree_rand * 7.31));
-	vec3 col = tex.rgb * tint * mix(0.42, 1.0, COLOR.r);
+	vec3 col = tex.rgb * tint * mix(shade_floor, 1.0, COLOR.r);
 	if (ground_ao) {
 		col *= mix(1.0, 0.45, UV.y * UV.y);
 	}

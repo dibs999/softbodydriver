@@ -512,6 +512,42 @@ struct LocalMesh {
                 else { t(a, d, c); t(a, b, d); }
             }
     }
+    /// A cast-alloy spoke at angle `a` round the wheel axis: tapered from the hub (r0, width w0, face
+    /// height z0) to the rim (r1, w1, z1), with a crowned, bevelled face and a shallower back. The
+    /// cross-section shares its vertices along the length so the crown shades smoothly.
+    void spoke(real a, real r0, real r1, real z0, real z1, real w0, real w1, real thick) {
+        const Vec3 dir{std::cos(a), std::sin(a), 0.0}, tan{-std::sin(a), std::cos(a), 0.0};
+        // Cross-section (tangential factor of the half width, axial offset factor of the thickness).
+        static const real cs[8][2] = {{-1.0, -0.9}, {-1.0, 0.25}, {-0.82, 0.78}, {-0.35, 1.0},
+                                      {0.35, 1.0}, {0.82, 0.78}, {1.0, 0.25}, {1.0, -0.9}};
+        const int steps = 6;
+        std::vector<std::uint32_t> ids;
+        std::vector<Vec3> pts;
+        for (int i = 0; i <= steps; ++i) {
+            const real u = static_cast<real>(i) / steps;
+            const real r = r0 + (r1 - r0) * u;
+            // A slight S along the face: it leaves the hub flat and dips into the rim bed.
+            const real z = z0 + (z1 - z0) * (u * u * (3.0 - 2.0 * u));
+            const real w = w0 + (w1 - w0) * u;
+            for (const auto& c : cs) {
+                const Vec3 p = dir * r + tan * (w * c[0]) + Vec3{0.0, 0.0, z + thick * c[1]};
+                ids.push_back(v(p));
+                pts.push_back(p);
+            }
+        }
+        for (int i = 0; i < steps; ++i)
+            for (int k = 0; k < 8; ++k) {
+                const int k1 = (k + 1) % 8;
+                const std::uint32_t a0 = ids[static_cast<std::size_t>(i * 8 + k)], a1 = ids[static_cast<std::size_t>(i * 8 + k1)];
+                const std::uint32_t b0 = ids[static_cast<std::size_t>((i + 1) * 8 + k)], b1 = ids[static_cast<std::size_t>((i + 1) * 8 + k1)];
+                // Face outward from the spoke's centre line.
+                const Vec3 centre = dir * (r0 + (r1 - r0) * (i + 0.5) / steps) + Vec3{0.0, 0.0, z0 + (z1 - z0) * (i + 0.5) / steps};
+                const Vec3 pa = pts[static_cast<std::size_t>(i * 8 + k)], pb = pts[static_cast<std::size_t>((i + 1) * 8 + k1)];
+                const Vec3 n = cross(pts[static_cast<std::size_t>((i + 1) * 8 + k)] - pa, pts[static_cast<std::size_t>(i * 8 + k1)] - pa);
+                if (dot(n, (pa + pb) * 0.5 - centre) >= 0) { t(a0, b0, b1); t(a0, b1, a1); }
+                else { t(a0, b1, b0); t(a0, a1, b1); }
+            }
+    }
     void boxLocal(const Vec3& c, const Vec3& h, real rotZ) {
         const real cs = std::cos(rotZ), sn = std::sin(rotZ);
         auto rot = [&](const Vec3& p) { return Vec3{p.x * cs - p.y * sn, p.x * sn + p.y * cs, p.z}; };
@@ -562,10 +598,11 @@ std::vector<MeshSurface> buildWheelMeshes(const TireDef& tire, BodyStyle style) 
         const real spokeHalf = style == BodyStyle::SUV ? 0.031 : (style == BodyStyle::Sedan ? 0.016 : 0.023);
         for (int s = 0; s < spokes; ++s) {
             const real a = 2.0 * kPi * s / spokes;
-            const real len = Rr - 0.05 - 0.07;
-            lm.boxLocal({0.07 + 0.5 * len, 0.0, hwid * 0.66}, {0.5 * len, spokeHalf, 0.016}, a);
+            // Wider at the hub, slimmer where it meets the rim bed; the face falls from the hub
+            // towards the lip.
+            lm.spoke(a, 0.066, Rr - 0.035, hwid * 0.70, hwid * 0.60, spokeHalf * 1.25, spokeHalf * 0.8, 0.015);
             if (style == BodyStyle::Coupe)
-                lm.boxLocal({0.07 + 0.5 * len, 0.0, hwid * 0.66}, {0.5 * len, 0.011, 0.016}, a + kPi / spokes);
+                lm.spoke(a + kPi / spokes, 0.066, Rr - 0.035, hwid * 0.70, hwid * 0.60, 0.013, 0.009, 0.013);
         }
     }
     {
@@ -1038,8 +1075,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             if (xm < 0.32 && ym < yB + 0.15) return "trim";
             // SUV cladding: only the sill band, not the whole lower half of the side.
             if (bd.style == BodyStyle::SUV && seg <= 3) return "trim";
-            // ...plus black flares round the wheel arches.
-            if (bd.style == BodyStyle::SUV && prof.archY(xm) > 0.0 && ym < prof.archY(xm) + 0.08) return "trim";
+            // (The black arch flares are their own mesh, see below: grid cells gave them a stepped edge.)
             const bool inDoorBand = ym > prof.ySill(xm) + 0.02 && ym < yBe - 0.015;
             for (real seam : {prof.xFD0, prof.xB, prof.xRD1})
                 if (std::abs(xm - seam) < 0.004 && inDoorBand && (bd.doors >= 4 || seam != prof.xRD1)) return "seam";
@@ -1126,6 +1162,60 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                         VisBuilder::tri(m, v00, v01, v11);
                     }
                 }
+            }
+        }
+    }
+
+    // SUV: moulded plastic flares round the wheel arches, a band that follows the arch circle and
+    // stands proud of the paint with a rounded outer face and a return into the opening.
+    if (bd.style == BodyStyle::SUV) {
+        MeshSurface& fm = vb.surf("trim");
+        const auto& trimNodes = surfaceNodes("trim");
+        auto sideZ = [&](real x, real y) {
+            const auto sm = samples(x);
+            for (std::size_t k = 0; k + 1 < sm.size(); ++k) {
+                const int sg = segOf[std::min<std::size_t>(k, segOf.size() - 1)];
+                if (sg < 3 || sg > 6) continue;
+                const real y0 = sm[k].second, y1 = sm[k + 1].second;
+                if ((y >= y0 && y <= y1) || (y <= y0 && y >= y1)) {
+                    const real u = std::abs(y1 - y0) > 1e-6 ? (y - y0) / (y1 - y0) : 0.0;
+                    return lerp(sm[k].first, sm[k + 1].first, u);
+                }
+            }
+            return prof.halfW(x);
+        };
+        // Radial profile of the band: (radius offset from the arch, outward offset from the paint).
+        static const real band[5][2] = {{0.0, -0.004}, {0.0, 0.020}, {0.022, 0.027}, {0.055, 0.022}, {0.082, 0.004}};
+        const int steps = 36;
+        for (real xa : {prof.xFA, prof.xRA}) {
+            // The band ends where the arch meets the body's lower edge (higher of its two sides).
+            const real yb = std::max(prof.yBottom(xa - prof.Ra), prof.yBottom(xa + prof.Ra)) + 0.01;
+            const real th0 = std::asin(std::clamp((yb - prof.hubY) / prof.Ra, -1.0, 1.0));
+            for (int side = 0; side < 2; ++side) {
+                const real sz = side == 0 ? -1.0 : 1.0;
+                std::vector<std::uint32_t> ids;
+                for (int i = 0; i <= steps; ++i) {
+                    const real th = th0 + (kPi - 2.0 * th0) * i / steps;
+                    for (const auto& b : band) {
+                        const real r = prof.Ra + b[0];
+                        const real x = xa + r * std::cos(th);
+                        const real y = std::max(std::max(yb, prof.yBottom(x) + 0.01), prof.hubY + r * std::sin(th));
+                        const Vec3 p{x, y, sz * (sideZ(x, y) + b[1])};
+                        ids.push_back(vb.vertex(fm, p, vb.skinNearest(p, trimNodes)));
+                    }
+                }
+                for (int i = 0; i < steps; ++i)
+                    for (int k = 0; k < 4; ++k) {
+                        const std::uint32_t a = ids[static_cast<std::size_t>(i * 5 + k)], b = ids[static_cast<std::size_t>(i * 5 + k + 1)];
+                        const std::uint32_t c = ids[static_cast<std::size_t>((i + 1) * 5 + k)], d = ids[static_cast<std::size_t>((i + 1) * 5 + k + 1)];
+                        const Vec3 pa{fm.positions[a * 3], fm.positions[a * 3 + 1], fm.positions[a * 3 + 2]};
+                        const Vec3 pb{fm.positions[b * 3], fm.positions[b * 3 + 1], fm.positions[b * 3 + 2]};
+                        const Vec3 pc{fm.positions[c * 3], fm.positions[c * 3 + 1], fm.positions[c * 3 + 2]};
+                        // The return (k = 0) faces into the opening, the band outwards.
+                        const Vec3 want = k == 0 ? Vec3{xa, prof.hubY, sz * pa.z * sz} - pa : Vec3{0.0, 0.0, sz};
+                        if (dot(cross(pb - pa, pc - pa), want) >= 0) { VisBuilder::tri(fm, a, b, d); VisBuilder::tri(fm, a, d, c); }
+                        else { VisBuilder::tri(fm, a, d, b); VisBuilder::tri(fm, a, c, d); }
+                    }
             }
         }
     }
