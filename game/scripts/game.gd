@@ -128,6 +128,7 @@ func _ready() -> void:
 				ai[v] = AIDriver.new(v, routes[i]["waypoints"], routes[i]["speeds"], 0.9)
 				ai[v].others = vehicles
 				ai[v].signals = map_data.get("traffic_signals")
+				ai[v].reacts_to_crashes = true
 
 	cam = CameraRig.new()
 	cam.current = true
@@ -147,6 +148,9 @@ func _ready() -> void:
 	equipment = preload("res://scripts/vehicle_equipment.gd").new()
 	add_child(equipment)
 	equipment.configure(self, map_data["spawns"][0])
+	for v in ai:
+		ai[v].lamps = equipment.state_for(v)
+		ai[v].player = player
 	grabber = preload("res://scripts/node_grabber.gd").new()
 	grabber.name = "NodeGrabber"
 	grabber.game = self
@@ -478,6 +482,8 @@ func _process(delta: float) -> void:
 		ai[v].update(delta)
 	for v in vehicles:
 		var imp: float = v.take_impact()
+		if ai.has(v):
+			ai[v].on_impact(imp)
 		if imp > 2.0 and v == player:
 			audio.impact(clampf(imp / 120.0, 0.05, 1.5))
 			activity.on_impact(imp)

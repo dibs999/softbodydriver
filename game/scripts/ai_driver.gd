@@ -25,6 +25,19 @@ var pursue_speed := 1.3
 var dir := 1
 var _dir_timer := 0.0
 const CHASE_RANGE := 60.0
+## Traffic only: after a hard crash or a breakdown (flat tyre, stalled engine, broken driveshaft)
+## the car stops on the brakes with its hazard lights on instead of carrying on as a wreck. Once
+## the player is well away it is towed: repaired and put back on its route.
+var reacts_to_crashes := false
+var lamps: Dictionary = {}       # this car's lamp state in vehicle_equipment (hazards, indicators)
+var player: SBVehicle
+var crashed := false
+var _crash_t := 0.0
+var _check_t := 0.0
+var _was_running := false
+const CRASH_IMPACT := 30.0       # take_impact() units: deformed beams + 6 per broken beam
+const TOW_AFTER := 45.0
+const TOW_DISTANCE := 120.0
 
 
 func _init(v: SBVehicle, wp: PackedVector3Array, sp: PackedFloat32Array, scale := 1.0) -> void:
@@ -48,12 +61,56 @@ func _nearest() -> int:
 	return best
 
 
+func on_impact(amount: float) -> void:
+	if reacts_to_crashes and amount > CRASH_IMPACT:
+		_stop()
+
+
+func _stop() -> void:
+	if crashed:
+		return
+	crashed = true
+	_crash_t = 0.0
+	if not lamps.is_empty():
+		lamps["hazards"] = true
+		lamps["signal"] = 0
+
+
+## A breakdown counts like a crash: a car with a burst tyre, a dead engine or no drive stops.
+func _check_breakdown() -> void:
+	var t: Dictionary = vehicle.get_telemetry()
+	var running := bool(t.get("running", true))
+	if _was_running and not running:
+		_stop()
+	_was_running = _was_running or running
+	if bool(t.get("driveshaft_broken", false)):
+		_stop()
+	for b in t.get("wheel_burst", []):
+		if b:
+			_stop()
+	for psi in t.get("tire_pressure", []):
+		if float(psi) < 8.0:   # flat (a puncture leaks it down without tearing the tyre)
+			_stop()
+
+
 func update(delta: float) -> void:
 	if waypoints.is_empty() or not is_instance_valid(vehicle):
 		return
 	if hold:
 		vehicle.set_input(0.0, 1.0, 0.0, 1.0)
 		return
+	if reacts_to_crashes:
+		_check_t += delta
+		if _check_t > 0.5:
+			_check_t = 0.0
+			_check_breakdown()
+		if crashed:
+			_crash_t += delta
+			vehicle.set_input(0.0, 1.0, 0.0, 1.0)
+			var far := not is_instance_valid(player) or player.get_position_ws().distance_to(vehicle.get_position_ws()) > TOW_DISTANCE
+			if _crash_t > TOW_AFTER and far:
+				tow()
+			return
 	var p := vehicle.get_position_ws()
 	var n := waypoints.size()
 	if is_instance_valid(pursue):
@@ -162,6 +219,15 @@ func update(delta: float) -> void:
 		reset_on_path()
 		return
 	vehicle.set_input(throttle, brake, steer, 0.0)
+	# Town traffic indicates before turning off at a junction (city routes have signals; rural
+	# bends are not junctions).
+	if reacts_to_crashes and is_instance_valid(signals) and not lamps.is_empty():
+		var turn := turn_ahead(waypoints, idx, dir, 30.0)
+		var sig := int(lamps.get("signal", 0))
+		if absf(turn) > deg_to_rad(30.0):
+			lamps["signal"] = 1 if turn < 0.0 else -1
+		elif sig != 0 and absf(turn) < deg_to_rad(12.0):
+			lamps["signal"] = 0
 
 
 ## Route direction towards the fugitive: the shorter way round the loop, re-chosen every 2 s.
@@ -181,6 +247,42 @@ func _choose_direction(delta: float) -> void:
 			best = i
 	var ahead := posmod(best - idx, n)
 	dir = 1 if ahead <= n / 2 else -1
+
+
+## Signed heading change (rad) of the route over the next `metres` from waypoint i in direction
+## step: negative turns right, positive turns left (seen from above, y up).
+static func turn_ahead(wp: PackedVector3Array, i: int, step: int, metres: float) -> float:
+	var n := wp.size()
+	if n < 3:
+		return 0.0
+	var a := wp[posmod(i, n)]
+	var b := wp[posmod(i + step, n)]
+	var d0 := Vector3(b.x - a.x, 0.0, b.z - a.z).normalized()
+	var travelled := 0.0
+	var k := i + step
+	var d1 := d0
+	for _j in 64:
+		var p := wp[posmod(k, n)]
+		var q := wp[posmod(k + step, n)]
+		var seg := Vector3(q.x - p.x, 0.0, q.z - p.z)
+		travelled += seg.length()
+		if seg.length_squared() > 1e-6:
+			d1 = seg.normalized()
+		if travelled >= metres:
+			break
+		k += step
+	return atan2(d0.cross(d1).y, d0.dot(d1))
+
+
+## Recovered out of sight: repaired, back on the route, lights back to normal.
+func tow() -> void:
+	crashed = false
+	_crash_t = 0.0
+	_was_running = false
+	if not lamps.is_empty():
+		lamps["hazards"] = false
+		lamps["signal"] = 0
+	reset_on_path()
 
 
 func reset_on_path() -> void:
