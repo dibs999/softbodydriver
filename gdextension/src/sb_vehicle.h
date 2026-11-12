@@ -143,7 +143,17 @@ private:
         bool damageMask = false;
         uint32_t attrStride = 0, colorOffset = 0;
         PackedByteArray attrBuffer;
+        // Shape tracking: the nodes this surface is skinned to, where they were (in the car's own
+        // frame) and the car's pose when it was last deformed. Until one of them moves by more
+        // than the tolerance relative to the car, the surface is moved rigidly instead.
+        std::vector<std::uint32_t> shapeNodes;
+        std::vector<Vector3> shapeRef;
+        Transform3D shapeFrame, shapeSteer;
+        bool shapeKnown = false, shapeValid = false, alwaysDeform = false;
     };
+    void prepareShape(SurfaceGpu& g, const sb::MeshSurface& s);
+    bool shapeChanged(const SurfaceGpu& g, const Transform3D& carInverse) const;
+    void recordShape(SurfaceGpu& g, const Transform3D& carNow, const Transform3D& carInverse, const Transform3D& steer);
     std::deque<std::vector<float>> replay_;
     double lastRecordTime_ = -1.0;
     bool replaying_ = false;
@@ -182,9 +192,9 @@ private:
     static void deformJobEntry(void* self, uint32_t index);
     void deformJob(uint32_t index);
     int visualInterval_ = 1, visualCounter_ = 0;
-    bool lodFrameValid_ = false, lodMoved_ = false;
+    bool lodFrameValid_ = false;
+    std::vector<uint8_t> skipSurface_;   ///< per surface, this frame: moved rigidly, not deformed
     std::size_t lodDamageSeen_ = 0;
-    Transform3D lodFrame_, lodSteering_;
     std::vector<sb::Vec3> lodPositions_;   ///< renderPos_ at the last deformation
     Transform3D rigidVisualFrame() const;   ///< position and heading of renderPos_
     bool visualResetPending_ = false; // Set by physics under the world lock.

@@ -65,6 +65,18 @@ bleiben also keine unsichtbaren Hindernisse zurück.
     Skriptzeit. Gemessen (ohne Darstellung, 2–4 Autos): Warten 0,1–0,7 ms, Kopieren 0,2–0,5 ms,
     Verformung 7–8 ms; Stichproben des Hauptthreads liegen sonst überwiegend im Leerlauf.
 
+* **Karosserieflächen nur bei echter Formänderung verformen (13. November 2026):**
+  * Die Hauptthread-Aufschlüsselung zeigte 7–9 ms je Bild für das Verformen der Fahrzeugmeshes;
+    nahe Autos verformten bisher jedes Bild alle ihre ~110–160 Flächen.
+  * Jede Fläche merkt sich, wo ihre Knoten bei der letzten Verformung relativ zur Fahrgastzelle
+    lagen (beste Starrkörperpassung der Zelle, nicht die vier Referenzknoten an den Rädern, die mit
+    der Federung nicken). Hat sich keiner um mehr als 3 mm gegenüber der Zelle bewegt, wird die
+    Fläche nur starr mitbewegt. Reifen und Lenkrad verformen weiter jedes Bild; frischer Schaden,
+    Zurücksetzen und die Node-Beam-Ansicht verformen alles sofort.
+  * Gemessen nach dem Einschwingen (`SETTLE=600`): Verformung 0,2–1,4 ms statt 7–9 ms, gesamte
+    Skriptzeit je Bild 7–19 ms statt 23–34 ms. Auf der Autobahn verformen beim Fahren 12 von 161
+    Flächen des Meridian.
+
 * **Kontakt zwischen Fahrzeugen über ein Raster (12. November 2026):**
   * Eine zehnminütige Fahrt mit vier verunfallten Autos kostete nach einem Zusammenstoß
     4–6-mal so viel Rechenzeit je simulierter Sekunde: der Auto-gegen-Auto-Kontakt prüfte jedes

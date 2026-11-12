@@ -1,6 +1,7 @@
 extends SceneTree
 ## Rendering / CPU cost per map: godot -s res://tests/perf_probe.gd [-- <map_id> ...]
 ## Prints draw calls, visible objects, primitives, process time, physics load and extra viewports.
+## SETTLE=<frames> waits that long after loading before sampling (default 60).
 var maps: Array = []
 var wait := -1
 var samples: Array = []
@@ -44,12 +45,13 @@ func _process(delta: float) -> bool:
 	if wait < 0 or scene == null or not scene.get("player"):
 		return false
 	wait += 1
-	if wait > 60 and wait <= 90:
+	var settle := int(OS.get_environment("SETTLE")) if OS.has_environment("SETTLE") else 60
+	if wait > settle and wait <= settle + 30:
 		samples.append([RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
 			RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME),
 			RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME),
 			Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0])
-	if wait == 91:
+	if wait == settle + 31:
 		var s := [0.0, 0.0, 0.0, 0.0]
 		for row in samples:
 			for k in 4: s[k] += row[k] / samples.size()
