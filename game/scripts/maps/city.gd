@@ -51,6 +51,8 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var metal := C.mat(Color(0.3, 0.32, 0.34), 0.4, 0.8)
 	var size := BLOCKS * PITCH + STREET
 	var origin := -size * 0.5
+	# The carriageway quad wears like a town street along the grid (see ground.gdshader).
+	asphalt.set_shader_parameter("street_grid", Vector4(origin, origin, PITCH, STREET))
 	C.quad(parent, Vector3(0, -0.01, 0), Vector2(size + 600, size + 600), asphalt)
 
 	var facades: Array[Material] = [
