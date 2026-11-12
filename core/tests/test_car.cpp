@@ -342,6 +342,7 @@ TEST_CASE("Concept GT holds rear toe through highway lane changes in both direct
             CHECK(world.stats().deformedBeams == 0);
             // Much tighter than the extreme full-lock test: <=5.7 deg at the
             // high lateral-load 100 km/h corner, <=2 deg on the 200 km/h lane change.
+            MESSAGE("peak rear toe " << peakToe);
             CHECK(peakToe < (initialKmh == 100.0 ? 0.10 : 0.035));
         }
     }
