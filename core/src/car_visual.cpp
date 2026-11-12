@@ -1301,14 +1301,23 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         const real housingH = sport ? 0.06 : 0.085;
         // The top stays just under the nose line: above it the face already curves back into the
         // bonnet and the paint would cover the unit's upper corners.
-        const real yH = bd.noseHeight - 0.012 - housingH;
+        // With the crisp bonnet line the face above the nose is a short raked panel up to the
+        // bonnet edge: the units move up into it (top at 60 % of its height) and lean back with it,
+        // so they sit right under the bonnet edge instead of below a strip of paint.
+        real lift = 0.0, rake = 0.0;
+        if (prof.crispHood) {
+            const real yEdge = bd.noseHeight + 0.4 * (bd.hoodHeight - bd.noseHeight);
+            lift = 0.6 * (yEdge - bd.noseHeight);
+            rake = 0.5;   // run back 0.5 m per metre up (~27 degrees)
+        }
+        const real yH = bd.noseHeight - 0.012 - housingH + lift;
         const real rcF = prof.b.cornerRadiusFront;
         const real zLampIn = 0.40 * hwF, zLampOut = hwF - 0.18 * rcF;
         for (int side = 0; side < 2; ++side) {
             const real sg = side ? 1.0 : -1.0;
             lampStrip(true, sg, sg * zLampIn, sg * zLampOut, 6, [&](const Vec3& c, const Vec3& n, const Vec3& t, real hl, int k) {
-                const Vec3 up{0, 1, 0};
-                const Vec3 base = c + Vec3{0, yH, 0};
+                const Vec3 up = normalize(Vec3{0, 1, 0} - n * rake);
+                const Vec3 base = c + Vec3{0, yH, 0} - n * (rake * std::max<real>(0.0, yH - bd.noseHeight + housingH * 0.3));
                 const real len = hl * 1.12;   // overlap: no gaps at the joints
                 vb.box("grille", base - n * 0.020, {0.026, housingH, len}, bodyNodes, n, up, t);
                 vb.box("chrome", base + n * 0.004, {0.006, housingH - 0.012, len * 0.99}, bodyNodes, n, up, t);
