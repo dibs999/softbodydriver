@@ -1067,7 +1067,7 @@ static func _hill_village(world: SBWorld, parent: Node3D, road: PackedVector3Arr
 				var bl := rng.randf_range(8.0, 10.0)
 				if not steep.call(back, byaw, bl, 7.5):
 					village.house(world, floor_at.call(back, byaw, bl, 7.5), byaw, bl, 7.5, 1, rng)
-	_village_frontages(parent, frontages, half_w, height)
+	_village_frontages(parent, world, frontages, half_w, height)
 	# Church behind the row, tower towards the road.
 	var f0: Array = frame.call(VILLAGE_AT)
 	var cd: Vector3 = f0[0]
@@ -1263,9 +1263,10 @@ static func proving_shelters() -> Array[Dictionary]:
 ## Lindenau's front gardens: a gravel path from each front door to the road edge (every other
 ## house a wider drive), and the garden boundary along the road as a hedge or a picket fence with
 ## a gap for the path, following the slope.
-static func _village_frontages(parent: Node3D, frontages: Array[Dictionary], half_w: float, height: Callable) -> void:
+static func _village_frontages(parent: Node3D, world: SBWorld, frontages: Array[Dictionary], half_w: float, height: Callable) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 3101
+	var parked: Array[Transform3D] = []
 	var gravel := C.road_material(1, 2.0, 12.0, "dirt")
 	var hedges: Array[Transform3D] = []
 	var rails: Array[Transform3D] = []
@@ -1290,6 +1291,28 @@ static func _village_frontages(parent: Node3D, frontages: Array[Dictionary], hal
 			var q := door.lerp(edge, k / 4.0)
 			path.append(Vector3(q.x, height.call(q.x, q.z), q.z))
 		parent.add_child(C.road_mesh(path, 1.4 if drive else 0.7, gravel, false, 0.05, 12.0, height))
+		# Most drives have the family car on them, nose to the house.
+		if drive and rng.randf() < 0.7:
+			var heading := (door - edge)
+			heading.y = 0.0
+			heading = heading.normalized()
+			heading = heading.rotated(Vector3.UP, rng.randf_range(-0.04, 0.04))
+			var spot := door.lerp(edge, 0.5)
+			# Sit on the sloping drive: pitch from the axle heights, roll from the track sides.
+			var lateral := Vector3(-heading.z, 0.0, heading.x)
+			var front := spot + heading * 1.35
+			var back := spot - heading * 1.35
+			var lft := spot + lateral * 0.75
+			var rgt := spot - lateral * 0.75
+			front.y = height.call(front.x, front.z)
+			back.y = height.call(back.x, back.z)
+			lft.y = height.call(lft.x, lft.z)
+			rgt.y = height.call(rgt.x, rgt.z)
+			var fwd := (front - back).normalized()
+			var up := fwd.cross((lft - rgt).normalized()).normalized()
+			if up.y < 0.0: up = -up
+			spot.y = (front.y + back.y + lft.y + rgt.y) * 0.25
+			parked.append(Transform3D(Basis.looking_at(-fwd, up), spot))
 		# Boundary 3 m in from the road edge, either side of the path, as long as the frontage.
 		var fence_mid := on_road - toward * (half_w + 3.2)
 		var gap := 1.8 if drive else 1.0
@@ -1318,6 +1341,7 @@ static func _village_frontages(parent: Node3D, frontages: Array[Dictionary], hal
 	var picket := BoxMesh.new()
 	picket.size = Vector3(0.025, 1.0, 0.07)
 	C.scatter_multimesh(parent, picket, C.mat(Color(0.86, 0.85, 0.80), 0.8), pickets, false)
+	preload("res://scripts/maps/parked_cars.gd").place(parent, world, parked, 31)
 
 
 ## Village church nave (18 x 9.5 m, long axis along the yaw's x): a tall single space on a stone
