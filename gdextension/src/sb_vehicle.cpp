@@ -1247,8 +1247,10 @@ void SBVehicle::update_visual(double delta) {
                 float d = 0.0f;
                 for (int k = 0; k < 4; ++k)
                     if (s.skin[i].node[k] < nodeDamage_.size()) d += s.skin[i].weight[k] * nodeDamage_[s.skin[i].node[k]];
-                // Paint survives small dents; it cracks from ~3 % crush and is gone by ~13 %.
-                const float v = std::clamp((d - 0.03f) / 0.10f, 0.0f, 1.0f);
+                // Paint survives small dents; it starts to crack from ~4 % crush and reaches the
+                // full wear look (still mostly painted, see car_paint.gdshader) only at ~30 %, at
+                // the tight folds: a crumpled bonnet used to be speckled all over from 13 %.
+                const float v = std::clamp((d - 0.04f) / 0.26f, 0.0f, 1.0f);
                 attr[i * g.attrStride + g.colorOffset] = static_cast<uint8_t>(std::lround(255.0f * (1.0f - v)));
             }
             g.mesh->surface_update_attribute_region(0, 0, g.attrBuffer);
