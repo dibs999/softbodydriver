@@ -506,9 +506,9 @@ static func label3d(parent: Node3D, text: String, pos: Vector3, yaw: float, size
 ## Unpaved verges on both sides of a road built with road_mesh (same points, closed flag and
 ## height function): strips from just under the asphalt edge out to `width` metres beyond it, UV.x 0
 ## at the asphalt and 1 outside. The inner edge sits slightly below the road surface so the asphalt
-## edge stays crisp; the outer edge meets the terrain.
+## edge stays crisp; the outer edge meets the terrain. `sides` picks the left (-1) and/or right (+1) strip.
 static func verge_mesh(points: PackedVector3Array, half_w: float, width: float, material: Material, closed := true,
-		road_lift := 0.04, v_scale := 12.0, height_at := Callable()) -> MeshInstance3D:
+		road_lift := 0.04, v_scale := 12.0, height_at := Callable(), sides: Array = [-1.0, 1.0]) -> MeshInstance3D:
 	if height_at.is_valid() and points.size() >= 2:
 		var samples := PackedVector3Array()
 		var segments := points.size() if closed else points.size() - 1
@@ -540,7 +540,7 @@ static func verge_mesh(points: PackedVector3Array, half_w: float, width: float, 
 		var na := Vector3(-da.z, 0, da.x).normalized()
 		var nb := Vector3(-db.z, 0, db.x).normalized()
 		var v2 := v + a.distance_to(b) / v_scale
-		for side: float in [-1.0, 1.0]:
+		for side: float in sides:
 			var ai := a + na * (inner * side)
 			var ao := a + na * (outer * side)
 			var bi := b + nb * (inner * side)

@@ -29,6 +29,7 @@ global uniform float road_wetness;  // set by the weather (darker, glossier)
 varying vec3 world_pos;
 
 float hash(vec2 p) {
+	p = mod(p, 512.0);   // world coordinates of a few km would leave the fract below without precision
 	p = fract(p * vec2(123.34, 456.21));
 	p += dot(p, p + 45.32);
 	return fract(p.x * p.y);
@@ -140,16 +141,61 @@ void fragment() {
 		base = mix(base, base * 1.15, rim * 0.5);
 	} else {
 		float u = UV.x;
+		float along_m = UV.y * v_metres;
+		float across_m = (u - 0.5) * road_width;
 		base *= mix(0.84, 1.10, macro) * mix(0.95, 1.04, fine);
+		// Mid-distance mottling (where the aggregate texture has already blurred into its mean):
+		// blotches of a few metres, slightly stretched along the road by the paver.
+		float mottle = fbm(vec2(along_m * 0.11, across_m * 0.32) + vec2(3.1, 8.7));
+		base *= mix(0.91, 1.08, mottle);
+		// Aggregate contrast that survives the mipmaps: a second, rotated sample of the texture at
+		// another scale, only in the near field where it can still be resolved.
+		float cam_dist = length(world_pos - CAMERA_POSITION_WORLD);
+		vec2 ruv = mat2(vec2(0.8, 0.6), vec2(-0.6, 0.8)) * surface_uv * 2.37;
+		vec3 grain = texture(surface_color, ruv).rgb;
+		float grain_l = dot(grain, vec3(0.333)) / max(dot(base, vec3(0.333)), 0.01);
+		base *= mix(1.0, clamp(0.55 + 0.45 * grain_l * 1.6, 0.7, 1.4), (1.0 - smoothstep(4.0, 22.0, cam_dist)) * 0.6);
 		// Polished wheel tracks: each lane carries two darker, smoother bands.
 		float lane_pos = fract(u * float(lanes));
 		float lane_w = road_width / float(lanes);
 		float track_off = 0.78 / lane_w;   // tyres ~0.78 m either side of the lane centre
 		float d1 = abs(lane_pos - (0.5 - track_off)), d2 = abs(lane_pos - (0.5 + track_off));
-		float tracks = (1.0 - smoothstep(0.12 / lane_w, 0.36 / lane_w, min(d1, d2))) * wear;
-		tracks *= mix(0.6, 1.0, vnoise(vec2(world_pos.x + world_pos.z, 0.0) * 0.08));
-		base *= mix(1.0, 0.88, tracks);
-		rough = mix(rough, 0.7, tracks);
+		// The tracks wander a little and are fainter or stronger along the road, with soft edges.
+		float wander = (vnoise(vec2(along_m * 0.03, 1.0 + floor(u * float(lanes)))) - 0.5) * 0.25 / lane_w;
+		d1 = abs(lane_pos - wander - (0.5 - track_off));
+		d2 = abs(lane_pos - wander - (0.5 + track_off));
+		float tracks = (1.0 - smoothstep(0.08 / lane_w, 0.42 / lane_w, min(d1, d2))) * wear;
+		tracks *= mix(0.35, 1.0, vnoise(vec2(along_m * 0.045, 7.0 + floor(u * float(lanes)) * 3.0)));
+		tracks *= mix(0.75, 1.0, vnoise(vec2(along_m * 0.9, across_m * 2.5)));
+		base *= mix(1.0, 0.91, tracks);
+		rough = mix(rough, 0.76, tracks);
+		// Longitudinal construction joint between paver lanes (on the lane lines and at the
+		// centre of single-lane halves): a thin darker seam with a sealed, glossy strip.
+		float joint_d = abs(fract(u * float(lanes) + 0.5) - 0.5) * lane_w + 0.18;   // 18 cm beside the line
+		float joint_px = max(fwidth(joint_d), 0.002);
+		float joint = (1.0 - smoothstep(0.012, 0.012 + joint_px, abs(joint_d - 0.18 - 0.18)))
+			* step(0.10, u) * step(u, 0.90) * wear;
+		joint *= 0.55 + 0.45 * vnoise(vec2(along_m * 0.6, 3.0));
+		base = mix(base, base * 0.6, joint * 0.7);
+		float joint_seal = (1.0 - smoothstep(0.03, 0.09, abs(joint_d - 0.36))) * step(0.10, u) * step(u, 0.90)
+			* smoothstep(0.55, 0.7, vnoise(vec2(along_m * 0.02, 9.0))) * wear;
+		base = mix(base, base * 0.55, joint_seal * 0.6);
+		rough = mix(rough, 0.62, joint_seal * 0.6);
+		// Skid marks: now and then a pair of dark rubber streaks in a lane, fading out at both ends.
+		float skid_cell = floor(along_m / 60.0);
+		float skid_lane = floor(u * float(lanes));
+		float has_skid = step(0.80, hash(vec2(skid_cell, skid_lane + 17.0))) * wear;
+		float skid_start = hash(vec2(skid_cell, skid_lane + 3.0)) * 30.0;
+		float skid_len = 9.0 + hash(vec2(skid_cell, skid_lane + 5.0)) * 22.0;
+		float skid_t = (along_m - skid_cell * 60.0 - skid_start) / skid_len;
+		float skid_along = smoothstep(0.0, 0.15, skid_t) * (1.0 - smoothstep(0.55, 1.0, skid_t));
+		float skid_drift = (hash(vec2(skid_cell, skid_lane + 9.0)) - 0.5) * 0.6 * skid_t / lane_w;
+		float s1 = abs(lane_pos - skid_drift - (0.5 - track_off * 1.05));
+		float s2 = abs(lane_pos - skid_drift - (0.5 + track_off * 1.05));
+		float skid = (1.0 - smoothstep(0.07 / lane_w, 0.11 / lane_w, min(s1, s2))) * skid_along * has_skid;
+		skid *= 0.6 + 0.4 * vnoise(vec2(along_m * 3.0, across_m * 8.0));
+		base = mix(base, base * 0.42, skid * 0.75);
+		rough = mix(rough, 0.68, skid * 0.6);
 		// Repair patches: irregular darker rectangles of fresher asphalt.
 		vec2 cell = floor(vec2(UV.x * float(lanes) * 1.0, UV.y * 0.18));
 		float pick = hash(cell + 3.7);
@@ -161,9 +207,15 @@ void fragment() {
 		// cracks, longitudinal cracks and grit along the edges, oil drips in the lane centres.
 		vec2 wp = world_pos.xz;
 		float aged = smoothstep(0.52, 0.72, fbm(wp * 0.018 + vec2(41.0, 7.0))) * wear;
-		float ce = cell_edge(wp / 1.6) * 1.6;
+		// Fatigue (alligator) cracking: small irregular cells, warped so no polygon shows, mostly in
+		// the wheel tracks and along the edge where the loads are; faded out with distance before
+		// the lines alias into a net.
+		vec2 warp = vec2(fbm(wp * 1.3 + 3.0), fbm(wp * 1.3 + 17.0)) - 0.5;
+		float ce = cell_edge((wp + warp * 0.35) / 0.55) * 0.55;
 		float cw = max(fwidth(ce), 0.001);
-		float crack = (1.0 - smoothstep(0.004, 0.004 + cw, ce)) * aged * step(0.25, vnoise(wp * 0.7));
+		float load_zone = max(tracks * 1.3, 1.0 - smoothstep(0.4, 1.1, min(u, 1.0 - u) * road_width));
+		float crack = (1.0 - smoothstep(0.0025, 0.0025 + cw, ce)) * aged * clamp(load_zone, 0.0, 1.0)
+			* step(0.3, vnoise(wp * 1.1)) * (1.0 - smoothstep(12.0, 35.0, cam_dist));
 		float seal_zone = smoothstep(0.68, 0.78, vnoise(wp * 0.04 + 13.0)) * wear;
 		float seal_line = cell_edge(wp / 4.5 + 7.0) * 4.5 + 0.05 * (vnoise(wp * 3.0) - 0.5);
 		float seal = (1.0 - smoothstep(0.014, 0.014 + cw * 1.5, seal_line)) * seal_zone * step(0.55, vnoise(wp * 0.45 + 5.0));
@@ -177,6 +229,11 @@ void fragment() {
 		base = mix(base, vec3(0.018), seal * 0.9);
 		rough = mix(rough, 0.6, seal);
 		base = mix(base, base * vec3(1.25, 1.18, 1.05) + vec3(0.03, 0.025, 0.015), grit * 0.6);
+		// Soil and leaf litter washed onto the last few decimetres, in irregular tongues.
+		float spill_w = 0.12 + 0.35 * fbm(vec2(along_m * 0.35, 5.0));
+		float spill = (1.0 - smoothstep(spill_w * 0.4, spill_w, edge_u)) * wear * (shoulder_m > 0.0 ? 0.6 : 1.0);
+		base = mix(base, vec3(0.20, 0.17, 0.12) * mix(0.8, 1.2, fine), spill * 0.55);
+		rough = mix(rough, 0.95, spill);
 		base = mix(base, base * 0.7, oil * 0.6);
 		rough = mix(rough, 0.55, oil * 0.5);
 		// Markings, slightly worn and dirtier at the wheel tracks.

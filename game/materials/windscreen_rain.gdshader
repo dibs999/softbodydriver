@@ -24,6 +24,7 @@ uniform float flow_b = 0.0;
 uniform float stretch = 0.0;
 
 float hash(vec2 p) {
+	p = mod(p, 512.0);   // world coordinates of a few km would leave the fract below without precision
 	p = fract(p * vec2(123.34, 456.21));
 	p += dot(p, p + 45.32);
 	return fract(p.x * p.y);

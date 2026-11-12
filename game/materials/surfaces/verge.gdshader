@@ -15,6 +15,7 @@ global uniform float road_wetness;
 varying vec3 world_pos;
 
 float hash(vec2 p) {
+	p = mod(p, 512.0);   // world coordinates of a few km would leave the fract below without precision
 	p = fract(p * vec2(123.34, 456.21));
 	p += dot(p, p + 45.32);
 	return fract(p.x * p.y);
@@ -48,7 +49,12 @@ void fragment() {
 	float grain = vnoise(wp * 22.0);
 	float soil = smoothstep(0.35, 0.7, fbm(wp * 0.9 + 3.0));
 	vec3 base = mix(grit_color.rgb, soil_color.rgb, soil * 0.85);
-	base *= 0.80 + 0.30 * grain + 0.16 * (fbm(wp * 6.0) - 0.5);
+	// Grain at two sizes (pea gravel and grit), so it stays crisp close up instead of blotchy.
+	// Each octave fades out once a pixel covers its features (else it smears into streaks).
+	float px = length(fwidth(wp));
+	float fine_a = 1.0 - smoothstep(0.006, 0.016, px);
+	float grain_a = 1.0 - smoothstep(0.02, 0.05, px);
+	base *= 0.80 + 0.17 * mix(0.5, grain, grain_a) + 0.16 * mix(0.5, vnoise(wp * 61.0 + 5.0), fine_a) + 0.16 * (fbm(wp * 6.0) - 0.5);
 	// Stones of a few centimetres, light and dark.
 	vec2 sp = wp * 16.0;
 	vec2 sc = floor(sp);
@@ -59,11 +65,20 @@ void fragment() {
 	vec2 ap = wp * 4.0;
 	vec2 ac = floor(ap);
 	vec2 af = fract(ap) - 0.5;
-	float chunk = (1.0 - smoothstep(0.14, 0.24, length(af * vec2(1.0, 1.4)) + 0.1 * (vnoise(ap * 5.0) - 0.5)))
-		* step(0.80, hash(ac + 1.3)) * (1.0 - smoothstep(0.08, 0.32, across));
-	base = mix(base, vec3(0.07, 0.07, 0.075), chunk);
+	// Angular outline (a rotated box with a wobble), so a piece reads as broken asphalt, not a hole.
+	float ang = hash(ac + 6.1) * 3.1416;
+	vec2 rf = mat2(vec2(cos(ang), sin(ang)), vec2(-sin(ang), cos(ang))) * (af - (vec2(hash(ac + 2.2), hash(ac + 3.3)) - 0.5) * 0.4);
+	float box = max(abs(rf.x) * 1.0, abs(rf.y) * 1.6) + 0.05 * (vnoise(ap * 9.0) - 0.5);
+	float chunk = (1.0 - smoothstep(0.08, 0.11, box))
+		* step(0.82, hash(ac + 1.3)) * (1.0 - smoothstep(0.08, 0.32, across));
+	base = mix(base, vec3(0.085, 0.085, 0.09) * (0.8 + 0.4 * vnoise(ap * 20.0)), chunk * 0.9);
 	// Grass: tufted, yellower in dry patches, darker blades.
 	vec3 g = grass_color.rgb * (0.78 + 0.4 * vnoise(wp * 7.0));
+	// Blades: fine streaky light/dark variation (stretched noise in two directions), faded with
+	// distance like the grit, with dark soil showing through between the tufts.
+	float blades = max(vnoise(vec2(wp.x * 90.0, wp.y * 30.0)), vnoise(vec2(wp.x * 30.0 + 7.0, wp.y * 90.0)));
+	g *= mix(1.0, 0.62 + 0.6 * blades, fine_a);
+	g = mix(g, soil_color.rgb * 0.8, (1.0 - smoothstep(0.25, 0.5, vnoise(wp * 13.0))) * 0.45 * grain_a);
 	g = mix(g, g * vec3(1.25, 1.15, 0.7), smoothstep(0.55, 0.8, fbm(wp * 0.25)));
 	float tufts = smoothstep(0.35, 0.6, vnoise(wp * 5.5) + grass * 0.6);
 	base = mix(base, g, clamp(grass * tufts + grass * 0.5, 0.0, 1.0));

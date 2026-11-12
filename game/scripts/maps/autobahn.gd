@@ -94,6 +94,16 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var inner_rail := _offset(center, -(CARRIAGE_OFFSET + CARRIAGE_HALF + 1.0))
 	inner_rail.append(inner_rail[0])
 	R.rail(parent, inner_rail, 1.0)
+	# Bankett: a strip of grit and grass between the asphalt and the guard rails on both sides of
+	# each carriageway (not across the service area's slip roads).
+	var verge := C.verge_material(0.85, 14.0)
+	verge.set_shader_parameter("grass_color", Color(0.56, 0.68, 0.34))
+	var a_outer := PackedVector3Array()
+	for i in range(open_end, center.size() + open_start + 1):
+		a_outer.append(a_center[i % center.size()])
+	parent.add_child(C.verge_mesh(a_center, CARRIAGE_HALF, 0.85, verge, true, 0.004, 14.0, Callable(), [-1.0]))
+	parent.add_child(C.verge_mesh(a_outer, CARRIAGE_HALF, 0.85, verge, false, 0.004, 14.0, Callable(), [1.0]))
+	parent.add_child(C.verge_mesh(b_center, CARRIAGE_HALF, 0.85, verge, true, 0.004, 14.0))
 	var service_road := _service_area(parent, world, concrete, metal)
 	# Rail posts (visual).
 	var post := BoxMesh.new()
