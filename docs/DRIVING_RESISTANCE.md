@@ -268,31 +268,41 @@ Prüfungen in `core/tests/test_car.cpp`:
 * `rolling resistance stays like a real tyre…` (c_rr 0,005–0,02 bei 30/60/100/130 km/h)
 * `an unbraked parked car comes to rest…`
 
+## Siebte Iteration: weicherer Laufflächenkontakt
+
+Stand: 12. November 2026.
+
+**Befund.** Jedes Auto hatte genau einen Rollwiderstandsbuckel von c_rr 0,020–0,022 (Fastback 80,
+Kestrel 85, Aurora und Meridian 90, Basalt 95, Concept 100 km/h). Umgerechnet auf die
+Node-Durchlauffrequenz (20 × Raddrehzahl) liegen alle bei ~240 Hz.
+
+**Verworfen.**
+
+* Mehr Kontaktdämpfung (ζ 0,02 → 0,08 / 0,2) hebt die Verluste überall; der Buckel bleibt.
+* „Runder Kontakt" (Laufflächen-Nodes nahe der Unterseite greifen wie ein Kreis tiefer) verdoppelt
+  die Verluste mit Auslauf und speist mit scharfem Fenster Energie ein (c_rr negativ).
+* Membranvorspannung und Gürtelsteifigkeit verschieben den Buckel nicht.
+
+**Ursache und Änderung.** Die Kontaktsteifigkeit der Lauffläche setzt die Resonanz: 4,5e5 N/m je
+Node (bei 16 Nodes, auf die Node-Zahl umgerechnet). Mit 0,5 × verschwindet der Buckel ganz. Dann
+verhakt sich aber ein Ast bei 70 km/h im Radhaus (−18,7 km/h), und Leitkegel bremsen etwas mehr.
+**0,6 × (2,7e5 N/m)** besteht alle 102 Kernprüfungen (Kegel im Mittel 0,67 km/h, Ast höchstens
+2,1 km/h) und lässt nur noch flache Werte:
+
+| c_rr | 30 | 60 | 75 | 80 | 85 | 90 | 95 | 100 | 130 | 150 km/h |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Kestrel vorher | 0,007 | 0,013 | 0,013 | 0,015 | **0,022** | 0,018 | 0,012 | 0,012 | 0,019 | |
+| Kestrel jetzt | 0,007 | 0,013 | 0,012 | 0,013 | 0,014 | 0,011 | 0,010 | 0,010 | 0,014 | 0,015 |
+| Fastback jetzt | 0,007 | 0,014 | 0,014 | 0,012 | 0,010 | 0,009 | 0,010 | 0,010 | 0,012 | 0,015 |
+| Aurora jetzt | 0,006 | 0,013 | 0,013 | 0,012 | 0,013 | 0,010 | 0,009 | 0,009 | 0,011 | 0,012 |
+| Meridian jetzt | 0,006 | 0,011 | 0,012 | 0,012 | 0,013 | 0,012 | 0,010 | 0,009 | 0,011 | 0,012 |
+| Basalt jetzt | 0,006 | 0,013 | 0,014 | 0,013 | 0,011 | 0,012 | 0,010 | 0,009 | 0,010 | 0,011 |
+| Concept jetzt | 0,006 | 0,011 | 0,010 | 0,011 | 0,010 | 0,011 | 0,011 | 0,013 | 0,011 | 0,011 |
+| Vortex jetzt | 0,006 | 0,011 | 0,012 | 0,012 | 0,011 | 0,011 | 0,009 | 0,009 | 0,010 | 0,012 |
+
+Alle zwölf `cartest --quick` zeigen `RESULT: OK`. Die Prüfung `rolling resistance stays like a real
+tyre…` misst jetzt auch 75, 85 und 95 km/h und verlangt c_rr < 0,016 (vorher < 0,02).
+
 ## Offen
 
-* Einzelne Resonanzbuckel: Fastback bei 80 km/h (c_rr 0,021), Kestrel bei 130 km/h (0,019).
-  * Beim Fastback ist der Buckel schmal: 75 km/h 0,014, 80 km/h 0,021, 85 km/h 0,016, 90 km/h 0,012.
-  * Kein Radflattern (Achsresonanz): Die senkrechte Nabenbewegung wird von der
-    Node-Durchlauffrequenz (20 × Raddrehzahl, 180–235 Hz) bestimmt. Bei 80 km/h zeigt sie kein
-    Maximum (0,022 m/s gegenüber 0,044 bei 70 km/h).
-  * Wahrscheinlich eine Eigenform des Laufflächenrings. Dafür ist eine Modalanalyse des Reifens
-    nötig.
-  * Nachmessung 12.11.2026 (c_rr ohne Luft, 5-km/h-Raster): jedes Auto hat genau einen Buckel
-    von 0,020–0,022, Fastback 80, Kestrel 85, Aurora und Meridian 90, Basalt 95, Concept 100 km/h.
-    Umgerechnet auf die Node-Durchlauffrequenz (20 × Raddrehzahl) liegen alle bei ~240 Hz: eine
-    gemeinsame Eigenfrequenz des Reifens, angeregt durch das Abrollen des 20-Ecks
-    (Nabenhub r(1 − cos 9°) = 3,8 mm je Node).
-  * Verworfene Versuche:
-    * Mehr Kontaktdämpfung (ζ 0,02 → 0,08 / 0,2) hebt die Verluste überall (Kestrel 60 km/h
-      0,013 → 0,016 / 0,021). Der Buckel bleibt.
-    * „Runder Kontakt": Laufflächen-Nodes nahe der Unterseite greifen um r(1 − cos α) tiefer, wie ein
-      Kreis. Mit Auslauf über eine halbe Teilung verdoppeln sich die Verluste (30 km/h 0,013,
-      90 km/h 0,031): Zwei Nodes je Ring tragen abwechselnd. Auch nicht, wenn die Reibung auf den
-      Kreis-Aufstandspunkt umgerechnet wird (ω × (Boden − Node)). Mit scharfem Fenster (immer genau
-      ein Node) wird c_rr bei 90–100 km/h negativ: Der Wechsel zum nächsten Node speist Energie ein.
-    * Brauchbar wäre ein echtes Kontaktmodell für einen glatten Gürtel (z. B. Kontaktkraft über eine
-      Teilungsfunktion auf benachbarte Nodes verteilt, energiekonsistent). Das ist ein Umbau des
-      Reifenmodells, nicht nur des Bodenkontakts.
-  * Auswirkung im Spiel: höchstens ~80 N mehr Fahrwiderstand in einem 10-km/h-Fenster, beim Ausrollen
-    ~0,01 g. Beim Fahren nicht spürbar.
 * Spieler mit Tastatur/Gamepad und die Fahrhilfe korrigieren kleinere Abweichungen.

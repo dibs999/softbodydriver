@@ -1137,9 +1137,11 @@ CarBuild buildCar(const CarDefinition& def) {
         ws.spokeDamp = 20.0 * rayScale;
         ws.treadDamp = 22.5;
         // Compliant tread contact: the rubber stores the leading-edge impact of each tread node
-        // instead of a rigid projection destroying it: ~35 % less rolling loss at 100 km/h. Softer
-        // contact saves more but lets the tread chatter at the grip limit (rear toe flutter).
-        ws.contactStiffness = 4.5e5 * 16.0 / static_cast<real>(tire.rays);
+        // instead of a rigid projection destroying it. 2.7e5 N/m per node at 16 rays (scaled to the
+        // ray count): at 4.5e5 every node strike excited a ~240 Hz tread resonance and c_rr peaked
+        // at 0.021 somewhere in 80-100 km/h on every car (0.012 either side); now 0.006-0.015 from
+        // 30 to 150 km/h. Half the old stiffness let a fallen branch snag a wheel arch at 70 km/h.
+        ws.contactStiffness = 2.7e5 * 16.0 / static_cast<real>(tire.rays);
         // Inflated tread membrane at twice the bare p*w*R hoop tension: the factor stands in for the
         // belt's bending stiffness, which the skip-two chord beams only partly provide. Removes the
         // tread standing wave that peaked rolling loss around 145 km/h.
