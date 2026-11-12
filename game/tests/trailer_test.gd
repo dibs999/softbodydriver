@@ -1,13 +1,15 @@
 extends SceneTree
 ## Box trailer: the pause menu entry hangs it on the tow bar behind the car, it follows on its own
 ## wheels and brakes with the car, unhitched it stays parked, asked again from afar it is fetched
-## back coupled, and a reset unhitches it instead of dragging it along.
+## back coupled, and a reset unhitches it instead of dragging it along. Cargo on the deck raises the
+## tongue load.
 var failures := 0
 var scene: Node
 var phase := 0
 var mark := 0.0
 var wheel_x0 := Vector3.ZERO
 var parked_at := Vector3.ZERO
+var empty_tongue := 0.0
 
 func check(value: bool, label: String) -> void:
 	print(label, ": ", value)
@@ -49,6 +51,20 @@ func _process(_d: float) -> bool:
 			var f: float = scene.world.get_coupling(scene.trailer)["force"]
 			check(f < 1500.0, "Standing, the hitch carries only the tongue load (%.0f N)" % f)
 			check(_gap() < 0.1, "The hitch head sits on the tow ball (%.3f m)" % _gap())
+			empty_tongue = f
+			print("  ", scene.cycle_trailer_load())
+			print("  ", scene.cycle_trailer_load())
+			mark = _sim()
+			phase = 10
+		10:
+			# 500 kg of crates on the deck, slightly ahead of the axle.
+			if _sim() - mark < 1.5: return false
+			var f: float = scene.world.get_coupling(scene.trailer)["force"]
+			check(is_equal_approx(scene.trailer.get_load(), 500.0) and scene.trailer.get_node("TrailerVisual").get_node_or_null("Cargo") != null, "Loaded with 500 kg of crates")
+			check(f > empty_tongue + 120.0 and f < 2500.0, "The tongue load grows with the cargo (%.0f N -> %.0f N)" % [empty_tongue, f])
+			check(not bool(scene.world.get_coupling(scene.trailer)["broken"]), "and the coupling holds it")
+			print("  ", scene.cycle_trailer_load())
+			check(scene.trailer.get_load() == 0.0, "Unloaded again")
 			wheel_x0 = (scene.trailer.get_wheel_transforms()[0] as Transform3D).basis.x
 			Input.action_press("throttle", 0.6)
 			mark = _sim()

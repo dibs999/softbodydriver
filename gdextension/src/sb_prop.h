@@ -32,6 +32,9 @@ public:
     Vector3 get_hitch_position() const { return hitchPos_; }
     /// Trailer: its brakes (0..1), the overrun brake the game sets from the towing car's.
     void set_brake(double brake);
+    /// Trailer: cargo of this many kg spread over the deck nodes (0 = empty).
+    void set_load(double kg);
+    double get_load() const { return load_; }
     int hitch_node() const { return hitch_; }
 
     // Internal (SBWorld).
@@ -54,6 +57,8 @@ private:
     Basis subRestInverse_;
     Vector3 subRestOrigin_;
     std::vector<sb::Vec3> spawn_;
+    std::vector<std::pair<std::uint32_t, double>> deckBase_;   // deck node, empty mass
+    double load_ = 0.0;
     Vector3 spawnFrameOrigin_;
     double damage_ = 0.0;
     int hitch_ = -1;

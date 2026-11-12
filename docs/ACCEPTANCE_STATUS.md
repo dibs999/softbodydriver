@@ -30,7 +30,10 @@ konkrete Teilergebnisse und erklärt das Gesamtprodukt noch nicht für fertig.
   kuppelt ab. Pendeln: Nach einem Lenkimpuls (eine Sinusperiode, gut 1° am Rad) bei 120 km/h
   knickt der Anhänger um etwa 2° ein, zwei Sekunden später ist die Schwingung unter 0,05°
   abgeklungen (Kerntest). Ein scharfer Spurwechsel an der Haftgrenze kann das Gespann dagegen
-  ins Schleudern bringen. Das Fahrgefühl beim Ziehen ist nicht von Hand abgenommen.
+  ins Schleudern bringen. Mit 500 kg Ladung (700 kg hinter 1,1 t) klingt die Schwingung bei
+  80 km/h ab (Kerntest), bei 100 km/h bleibt sie stehen, bei 130 km/h schaukelt sie sich auf; die
+  Stützlast steigt im Spiel von rund 780 auf 1190 N (`trailer_test`). Das Fahrgefühl beim Ziehen ist
+  nicht von Hand abgenommen.
 * Alle sieben `cartest … --quick`-Prüfstände: `RESULT: OK`.
 * Erweiterter Headless-Belastungstest: **30 Minuten 1,75 Sekunden simuliert**
   in **5 Minuten 5,753 Sekunden Laufzeit**. **51 vollständige Zyklen** mit echter

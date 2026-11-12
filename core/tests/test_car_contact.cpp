@@ -503,7 +503,12 @@ TEST_CASE("a tow bar fitted after the build leaves the body skin and its rigid p
         CHECK(after[12 + (n0 + 1) * 3 + p] == doctest::Approx(before[12 + n0 * 3 + p]).epsilon(1e-4));
 }
 
-TEST_CASE("a light trailer's sway after a steering pulse at 120 km/h dies down") {
+namespace {
+// Car and box trailer rolling at `kmh`, `load` kg of cargo on the deck (stacked towards the middle
+// as the game does), one sine of steering (about 1.3 deg at the road wheels) between 1.5 s and
+// 2.5 s. Returns the largest articulation in degrees during the next 1.5 s and after `settle` s.
+struct Sway { real during, after, kmh; bool broken, finite; };
+Sway trailerSway(real kmh, real load, real settle) {
     auto trailer = buildProp(PropKind::Trailer);
     auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
     World w;
@@ -512,15 +517,19 @@ TEST_CASE("a light trailer's sway after a steering pulse at 120 km/h dies down")
     const auto tow = static_cast<std::uint32_t>(addTowBar(w.body(ic), car.layout));
     trailer.body.translate(w.body(ic).positions()[tow] - trailer.body.positions()[static_cast<std::size_t>(trailer.hitch)]);
     const auto it = w.addBody(std::move(trailer.body));
+    auto& c = w.body(ic);
+    auto& t = w.body(it);
+    for (int i = 0; i < 3; ++i)
+        for (int sd = 0; sd < 2; ++sd) {
+            const auto n = static_cast<std::uint32_t>(t.findNode("up" + std::to_string(i) + std::to_string(sd)));
+            t.setNodeMass(n, t.masses()[n] + load * (i == 1 ? 0.6 : 0.2) * 0.5);
+        }
     BodyLink link;
     link.bodyA = ic; link.nodeA = tow; link.bodyB = it; link.nodeB = static_cast<std::uint32_t>(trailer.hitch);
     w.addLink(link);
-    auto& c = w.body(ic);
-    auto& t = w.body(it);
-    // Rolling at 120 km/h from the start (the tyres spin up within a few tenths of a second).
-    const real v0 = 120.0 / 3.6;
-    for (auto& v : c.velocities()) v = {v0, 0, 0};
-    for (auto& v : t.velocities()) v = {v0, 0, 0};
+    // Rolling from the start (the tyres spin up within a few tenths of a second).
+    for (auto& v : c.velocities()) v = {kmh / 3.6, 0, 0};
+    for (auto& v : t.velocities()) v = {kmh / 3.6, 0, 0};
     const std::size_t hitch = static_cast<std::size_t>(trailer.hitch);
     auto articulation = [&]() {   // trailer heading relative to the car's, in degrees
         const Vec3 cf = c.centerOfMass() - c.positions()[tow];
@@ -531,24 +540,45 @@ TEST_CASE("a light trailer's sway after a steering pulse at 120 km/h dies down")
         return a * 180.0 / 3.141592653589793;
     };
     VehicleControls ctl;
-    real time = 0, during = 0, after = 0;
+    Sway out{0, 0, 0, false, true};
+    real time = 0;
     const real dt = 0.02;
-    while (time < 6.0) {
-        ctl.throttle = c.telemetry().speedKmh < 120.0 ? 0.6 : 0.2;
-        // One full sine of steering (about 1.3 deg at the road wheels) between 1.5 s and 2.5 s, then straight.
+    while (time < 2.5 + settle + 1.0) {
+        ctl.throttle = c.telemetry().speedKmh < kmh ? 0.6 : 0.2;
         ctl.steer = time > 1.5 && time < 2.5 ? 0.06 * std::sin(2 * 3.141592653589793 * (time - 1.5)) : 0.0;
         c.setControls(ctl);
         w.simulate(dt);
         time += dt;
-        if (time > 1.5 && time < 3.0) during = std::max(during, std::abs(articulation()));
-        if (time > 4.5) after = std::max(after, std::abs(articulation()));
+        if (time > 1.5 && time < 3.0) out.during = std::max(out.during, std::abs(articulation()));
+        if (time > 2.5 + settle) out.after = std::max(out.after, std::abs(articulation()));
     }
-    REQUIRE(w.stats().finite);
-    CAPTURE(during);
-    CAPTURE(after);
-    CHECK(c.telemetry().speedKmh > 100.0);
-    CHECK(during > 0.5);    // the pulse does swing it
-    CHECK(during < 6.0);    // but only a little: 200 kg behind a 1.1 t car
-    CHECK(after < 0.3);     // and two seconds later the sway has died out
-    CHECK_FALSE(w.links()[0].broken);
+    out.kmh = c.telemetry().speedKmh;
+    out.broken = w.links()[0].broken;
+    out.finite = w.stats().finite;
+    return out;
+}
+}  // namespace
+
+TEST_CASE("a light trailer's sway after a steering pulse at 120 km/h dies down") {
+    const Sway s = trailerSway(120.0, 0.0, 2.0);
+    REQUIRE(s.finite);
+    CAPTURE(s.during);
+    CAPTURE(s.after);
+    CHECK(s.kmh > 100.0);
+    CHECK(s.during > 0.5);    // the pulse does swing it
+    CHECK(s.during < 6.0);    // but only a little: 200 kg behind a 1.1 t car
+    CHECK(s.after < 0.3);     // and two seconds later the sway has died out
+    CHECK_FALSE(s.broken);
+}
+
+TEST_CASE("loaded with 500 kg the trailer is stable at 80 km/h but sways for longer") {
+    // 700 kg behind a 1.1 t car: at the German towing limit of 80 km/h the sway dies out, more
+    // slowly than empty (faster, it can build up, as with real heavily loaded trailers).
+    const Sway s = trailerSway(80.0, 500.0, 5.5);
+    REQUIRE(s.finite);
+    CAPTURE(s.during);
+    CAPTURE(s.after);
+    CHECK(s.during < 8.0);
+    CHECK(s.after < 1.0);
+    CHECK_FALSE(s.broken);
 }

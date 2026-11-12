@@ -602,7 +602,7 @@ PropBuild buildTrailer() {
         ws.contactStiffness = 2.7e5;
         ws.membranePressure = 2.0;
         ws.rollingHysteresis = 0.004;
-        ws.ratedLoad = 1500.0;
+        ws.ratedLoad = 4300.0;   // load index 79 (437 kg): a loaded trailer must not "strike its rims" on every bump
         ws.braked = true;
         ws.handbraked = true;
         b.addWheel(ws);
