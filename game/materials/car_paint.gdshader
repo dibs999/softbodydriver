@@ -41,19 +41,21 @@ void fragment() {
 		vec2 uv = UV;
 		// Flaking: irregular islands that grow with the damage.
 		float flake_n = fbm(uv * 9.0) * 0.7 + vnoise(uv * 40.0) * 0.3;
-		float flaked = smoothstep(0.93, 1.02, dmg * 0.9 + flake_n * 0.55);
-		float primer_edge = smoothstep(0.82, 0.93, dmg * 0.9 + flake_n * 0.55) - flaked;
-		float bare = smoothstep(1.10, 1.22, dmg * 0.9 + flake_n * 0.6);
+		// Even a badly crushed panel keeps most of its paint: at full damage about a quarter flakes to
+		// primer and a tenth to bare steel, in islands (whole wings used to turn to bare metal).
+		float flaked = smoothstep(1.02, 1.08, dmg * 0.75 + flake_n * 0.55);
+		float primer_edge = smoothstep(0.92, 1.02, dmg * 0.75 + flake_n * 0.55) - flaked;
+		float bare = smoothstep(1.13, 1.20, dmg * 0.75 + flake_n * 0.6);
 		// Scratches: thin streaks along one panel direction, more of them with damage.
 		float streak = vnoise(vec2(uv.x * 3.0 + uv.y * 0.6, uv.y * 140.0));
-		float scratch = smoothstep(0.88 - 0.25 * dmg, 0.93 - 0.25 * dmg, streak) * smoothstep(0.15, 0.5, dmg);
+		float scratch = smoothstep(0.93 - 0.10 * dmg, 0.96 - 0.10 * dmg, streak) * smoothstep(0.15, 0.5, dmg);
 		vec3 primer = vec3(0.34, 0.34, 0.33);
 		vec3 steel = vec3(0.36, 0.36, 0.38) * (0.8 + 0.35 * vnoise(uv * 80.0));
 		base = mix(base, primer, clamp(primer_edge + flaked * 0.6, 0.0, 1.0));
 		base = mix(base, steel, max(bare, scratch * 0.8));
-		metal = mix(metal, 0.9, max(bare, scratch));
+		metal = mix(metal, 0.75, max(bare, scratch));
 		rough = mix(rough, 0.55, clamp(flaked + primer_edge + scratch, 0.0, 1.0));
-		rough = mix(rough, 0.45, bare);
+		rough = mix(rough, 0.55, bare);
 		// Cracked, dull clear coat and dirt in the creases.
 		coat *= 1.0 - smoothstep(0.1, 0.6, dmg);
 		base *= 1.0 - 0.25 * smoothstep(0.3, 1.0, dmg) * (0.5 + 0.5 * flake_n);
