@@ -808,7 +808,8 @@ static func _street_life(parent: Node3D, world: SBWorld, origin: float, metal: M
 					if parking_ok and not (axis == 0 and line == _works.x and j == _works.y and int(side) == _works.z):
 						var t := 9.0
 						while t < BLOCK - 9.0:
-							if rng.randf() < 0.30:
+							# About two in three bays taken, as on an inner-city street (it was one in three).
+							if rng.randf() < 0.65:
 								var p := centre + d * (t + rng.randf_range(-0.4, 0.4)) + side_v * side * (STREET * 0.5 - 1.25)
 								var heading := d * side   # right-hand traffic: cars face their direction of travel
 								parked.append(Transform3D(Basis.looking_at(-heading, Vector3.UP).rotated(Vector3.UP, rng.randf_range(-0.03, 0.03)), p))
