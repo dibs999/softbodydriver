@@ -1,6 +1,6 @@
 extends SceneTree
 ## Driver's-eye renders in rain with the wipers at several points of their cycle:
-## godot -s res://tests/rain_shots.gd -- <out_prefix> [car]
+## godot -s res://tests/rain_shots.gd -- <out_prefix> [car]   (SPEED=<km/h>: drops in the airflow)
 var frame := 0
 var scene: Node
 var cam: Camera3D
@@ -35,6 +35,10 @@ func _setup() -> void:
 	# Long unwiped exposure first, then a few frames into the sweep.
 	scene.wipers.mode = 1
 	scene.wipers.update(60.0, true, 1.0)
+	# SPEED=<km/h>: wipers parked and the drops shown as they run in that airflow.
+	if OS.has_environment("SPEED"):
+		scene.wipers.speed_override = float(OS.get_environment("SPEED"))
+		scene.wipers.mode = 1   # off
 
 func _process(_d: float) -> bool:
 	frame += 1
@@ -46,6 +50,9 @@ func _process(_d: float) -> bool:
 	if frame == 30 or frame == 36 or frame == 42:
 		root.get_viewport().get_texture().get_image().save_png("%s_%d.png" % [prefix, shot])
 		shot += 1
-		scene.wipers.mode = 2
-		scene.wipers.update(0.42, true, 1.0)
+		if OS.has_environment("SPEED"):
+			scene.wipers.update(1.0, true, 1.0)
+		else:
+			scene.wipers.mode = 2
+			scene.wipers.update(0.42, true, 1.0)
 	return shot >= 3

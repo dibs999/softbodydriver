@@ -15,6 +15,10 @@ var cycles := 0.0
 var off_time := 1000.0
 var _stopping := false
 var _vehicle: SBVehicle
+## Renders and tests: speed in km/h the drops react to instead of the car's (< 0: the car's).
+var speed_override := -1.0
+var _flow_a := 0.0
+var _flow_b := 0.0
 var _pane: MeshInstance3D
 var _material: ShaderMaterial
 var _arms: Array[MeshInstance3D] = []
@@ -129,6 +133,16 @@ func update(delta: float, raining: bool, wetness: float) -> void:
 		off_time += delta
 	_material.set_shader_parameter("cycles", cycles)
 	_material.set_shader_parameter("off_time", 0.0 if running else off_time)
+	# Drops run along the glass: large ones creep down under gravity when slow; from ~55 km/h the
+	# airflow pushes them up and out, faster the faster the car goes (small drops cling longer).
+	var kmh := speed_override if speed_override >= 0.0 else absf(_vehicle.get_speed_kmh())
+	var air := smoothstep(50.0, 130.0, kmh)
+	var run := (-0.010 + 0.34 * air) * delta * (1.0 if wetness > 0.01 else 0.0)
+	_flow_a = fposmod(_flow_a + run, 22.0)          # wrap on whole drop cells (0.022 m)
+	_flow_b = fposmod(_flow_b + run * 0.45, 11.0)   # (0.011 m)
+	_material.set_shader_parameter("flow_a", _flow_a)
+	_material.set_shader_parameter("flow_b", _flow_b)
+	_material.set_shader_parameter("stretch", smoothstep(55.0, 120.0, kmh))
 	_material.set_shader_parameter("rain", 1.0 if raining else 0.0)
 	_material.set_shader_parameter("wetness", wetness)
 	_update_transforms()
