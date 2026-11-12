@@ -247,6 +247,10 @@ void fragment() {
 		light *= mix(1.0, 0.4, blinds_m * lit);   // a lowered blind only glows
 		float fresnel = 0.04 + 0.96 * pow(1.0 - vt.z, 5.0);
 		float mullion = style == 2 ? 0.0 : clamp((0.03 - abs(glass.x - center.x)) / gfw.x + 0.5, 0.0, 1.0) * (1.0 - blinds_m);
+		if (style == 2) {
+			// Curtain wall: an aluminium mullion between the two panes of each bay.
+			mullion = clamp((0.025 - abs(glass.x - center.x)) / gfw.x + 0.5, 0.0, 1.0);
+		}
 		vec3 frame_col = frame_color.rgb * (style == 2 ? 0.6 : 1.0);
 		vec3 glass_albedo = mix(interior * 0.12 * (1.0 - fresnel), frame_col * 0.8, mullion);
 		vec3 reveal_col = wall_color.rgb * 0.55;
@@ -262,8 +266,17 @@ void fragment() {
 		if (style == 2) {
 			// Coated office glass: tinted mirror over a dim interior.
 			float coat = open * glass_m * (1.0 - mullion);
-			ALBEDO = mix(ALBEDO, vec3(0.30, 0.36, 0.40), coat);
+			// Each pane a touch different: tint, and a slight tilt (no pane sits perfectly flush), so
+			// the reflected sky steps from pane to pane like on a real curtain wall.
+			float pane = hash(vec2(floor((glass.x - center.x) / max(half_w.x, 0.01) + 2.0), room_rand * 91.0));
+			ALBEDO = mix(ALBEDO, vec3(0.30, 0.36, 0.40) * mix(0.9, 1.1, pane), coat);
 			METALLIC = 0.85 * coat;
+			if (coat > 0.5) {
+				vec3 tilt = n + t * (pane - 0.5) * 0.06 + vec3(0.0, 1.0, 0.0) * (fract(pane * 7.31) - 0.5) * 0.06;
+				NORMAL = normalize((VIEW_MATRIX * vec4(normalize(tilt), 0.0)).xyz);
+			}
+			ALBEDO = mix(ALBEDO, frame_color.rgb * 0.55, mullion * open);
+			METALLIC = mix(METALLIC, 0.6, mullion * open);
 		}
 		if (debug == 1) { ALBEDO = vec3(outer - open, open, glass_m); EMISSION = vec3(0.0); }
 		if (debug == 2) { ALBEDO = vec3(sill_m, blinds_m, mullion); EMISSION = vec3(0.0); }
