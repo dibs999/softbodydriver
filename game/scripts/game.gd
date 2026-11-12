@@ -38,6 +38,7 @@ var minimap: Minimap
 var _paused_before_map := false
 var _paused_before_menu := false
 var audio: Node
+var traffic_audio: Node3D   # 3D engine and tyre sound of the other cars
 var _pause_first_button: Button
 var pause_menu: Control
 var _loading_overlay: CanvasLayer
@@ -132,6 +133,7 @@ func _ready() -> void:
 
 	cam = CameraRig.new()
 	cam.current = true
+	cam.doppler_tracking = Camera3D.DOPPLER_TRACKING_IDLE_STEP   # passing cars change pitch
 	cam.far = Game.view_distance()
 	add_child(cam)
 	cam.target = player
@@ -182,6 +184,10 @@ func _ready() -> void:
 	audio.dirt = Game.selected_map == "desert"
 	add_child(audio)
 	audio.set_process(false)
+	traffic_audio = preload("res://scripts/traffic_audio.gd").new()
+	traffic_audio.name = "TrafficAudio"
+	traffic_audio.game = self
+	add_child(traffic_audio)
 	world.sync_visuals()
 	activity = DrivingActivity.new()
 	activity.world = world
