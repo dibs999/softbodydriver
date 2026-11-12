@@ -40,6 +40,13 @@ uniform vec4 street_grid = vec4(0.0);
 uniform vec2 paving = vec2(0.0);
 uniform vec4 kerb_grid = vec4(0.0);
 uniform float kerb_top = 0.16;
+// Street lamps lighting the ground (street_lighting.gd): the nearest lamps as xyz = light source,
+// w = energy. Computed here instead of with real lights, which the Mobile and Compatibility
+// renderers cap at 8 per object (a whole street is one object); spot cone and falloff as the
+// pooled SpotLight3D (range 20 m, 62 deg, attenuation 0.9).
+uniform vec4 lamp_pool[48];
+uniform int lamp_count = 0;
+uniform vec4 lamp_color : source_color = vec4(1.0, 0.84, 0.62, 1.0);
 uniform float street_lane = 4.0;
 global uniform float road_wetness;
 
@@ -342,6 +349,22 @@ void fragment() {
 	float wet = clamp(road_wetness * wet_response, 0.0, 1.0);
 	col *= mix(1.0, 0.66, wet);
 	ALBEDO = col;
+	if (lamp_count > 0) {
+		vec3 lamp_light = vec3(0.0);
+		for (int i = 0; i < 48; i++) {
+			if (i >= lamp_count) break;
+			vec4 lamp = lamp_pool[i];
+			vec3 d = lamp.xyz - world_pos;
+			float dist = length(d);
+			if (dist > 20.0 || d.y <= 0.0) continue;
+			vec3 l = d / dist;
+			float window = pow(clamp(1.0 - pow(dist / 20.0, 4.0), 0.0, 1.0), 2.0);
+			float cone = pow(clamp((l.y - cos(radians(62.0))) / (1.0 - cos(radians(62.0))), 0.0, 1.0), 1.0 / 1.6);
+			lamp_light += vec3(lamp.w * window * cone * pow(dist, -0.9) * max(dot(n, l), 0.0));
+		}
+		// Diffuse as Godot lights it (energy already includes the Lambert normalisation).
+		EMISSION = col * lamp_color.rgb * lamp_light * 2.5;
+	}
 	ROUGHNESS = mix(roughness * mix(0.96, 1.04, fine) * (1.0 - street_gloss), 0.18 + 0.3 * fine, wet * 0.85);
 	SPECULAR = mix(0.5, 0.62, wet);
 	if (has_normal) {

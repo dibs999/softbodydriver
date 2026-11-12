@@ -276,6 +276,9 @@ Beschriftung (Marke, Größe, M+S), die SUVs glatte Kunststoff-Radlaufverbreiter
 bilden Blattbüschel mit schattigem Kroneninneren.
 In der Stadt liegen die Gehwege als 40 × 40 cm Betonplatten im Verband (mit Fugen, Farbunterschieden,
 ausgetauschten und gesprungenen Platten, Flecken und Kaugummis) hinter Granit-Bordsteinen in Meterlängen.
+Nachts werfen alle Straßenlaternen der Stadt Lichtkegel auf Fahrbahn und Gehweg; der Boden-Shader
+rechnet die 48 nächsten Laternen selbst, weil der Mobile-Renderer echte Lichter auf 8 pro Objekt
+begrenzt (eine ganze Straße ist ein Objekt). Echte Spotlichter beleuchten weiter Autos und Gegenstände.
 
 Statische Hindernisse laufen über eine Broadphase. Deshalb bremsen auch Karten mit über 600 Kollisionsobjekten (Leitplanken, Gebäude) die 2000-Hz-Physik nicht aus.
 
