@@ -26,6 +26,9 @@ var clock := 0.0
 
 func configure(scene: Node3D, spawn: Transform3D) -> void:
 	game = scene
+	# Build the beam images while the map loads, not on the first switch of the lights.
+	beam_texture(false)
+	beam_texture(true)
 	bay = spawn.origin + spawn.basis.z.normalized() * 8.0
 	_bay_transform = Transform3D(spawn.basis, bay)
 	_last_sim_time = float(game.world.get_stats()["sim_time"])
@@ -349,6 +352,50 @@ func hud_state() -> Dictionary:
 	return {"light_mode": int(s["light_mode"]), "signal": int(s["signal"]), "hazards": bool(s["hazards"]),
 		"blink": fmod(clock, 0.8) < 0.4, "door": door, "prompt": prompt}
 
+
+## Headlight beam patterns as spot-light projector images (rows: elevation, columns: azimuth over
+## the 80 degree cone). Low beam: a sharp cut-off 0.6 degrees below the horizon, raised by 1.6
+## degrees beyond 15 degrees towards the kerb side (asymmetric European low beam), brightest just
+## under the cut-off so the road is lit far ahead, a much weaker foreground and only a faint glow
+## above, which leaves facades, signs and the driver ahead in the dark. High beam: a hot spot on
+## the horizon with a wide fringe. Built once while the map loads (about 35 ms) and shared by every car.
+static var _beams := {}
+const BEAM_ENERGY_LOW := 400.0
+const BEAM_ENERGY_HIGH := 600.0
+static func beam_texture(high: bool) -> ImageTexture:
+	if _beams.has(high):
+		return _beams[high]
+	const N := 256
+	var img := Image.create(N, N, false, Image.FORMAT_L8)
+	var half_tan := tan(deg_to_rad(40.0))
+	var azimuths := PackedFloat32Array()
+	for x in N:
+		azimuths.append(rad_to_deg(atan((2.0 * (x + 0.5) / N - 1.0) * half_tan)))
+	for y in N:
+		var elev := rad_to_deg(atan((1.0 - 2.0 * (y + 0.5) / N) * half_tan))   # image row 0 is the top of the beam
+		for x in N:
+			var az := azimuths[x]
+			var i := 0.0
+			# Real lamps put 20-40 times more candela into the hot spot just under the horizon than
+			# into the foreground: the far road gets its light at a grazing angle and from far away,
+			# so a flat pattern leaves it black next to a glaring pool in front of the bumper.
+			if high:
+				var r := sqrt(pow((elev + 0.4) / 1.6, 2.0) + pow(az / 4.5, 2.0))
+				i = 1.0 / (1.0 + pow(r, 1.7))
+				i = maxf(i, 0.12 * exp(-pow(az / 28.0, 2.0)) * (1.0 - smoothstep(1.0, 6.0, elev)))
+			else:
+				var kerb := clampf(az / 15.0, 0.0, 1.0)
+				var cut := -0.6 + 1.6 * kerb   # 15 degree step up on the kerb side (right-hand traffic)
+				var below := cut - elev
+				var lit := smoothstep(-0.12, 0.35, below)
+				var spread := 0.15 + 0.85 * exp(-pow(az / (12.0 + 10.0 * kerb), 2.0))
+				var depth := 1.0 / (1.0 + pow(maxf(below - 0.8, 0.0) / 1.2, 2.2))
+				i = 0.004 + lit * spread * depth
+			img.set_pixel(x, y, Color(i, i, i).linear_to_srgb())   # projector images are read as sRGB
+	_beams[high] = ImageTexture.create_from_image(img)
+	return _beams[high]
+
+
 func _process(delta: float) -> void:
 	if not game: return
 	# Only the player's headlights cast shadows: every shadowed lamp renders the scene once more
@@ -385,11 +432,22 @@ func _process(delta: float) -> void:
 			var light: SpotLight3D = s["headlights"][i]
 			light.visible = s["lights"] and not broken.get("head_left" if i == 0 else "head_right", false)
 			var high: bool = s["light_mode"] == 2
-			light.spot_range = 140.0 if high else 70.0
-			light.spot_angle = 32.0 if high else 44.0
-			light.light_energy = 30.0 if high else 16.0
-			light.rotation_degrees.x = -0.5 if high else -2.0
-			light.shadow_enabled = v == game.player and _headlight_shadows
+			# Godot only maps a spot light's projector while the light casts shadows, so the
+			# shaped beam is for the player's car with shadows on; everything else keeps the
+			# plain cone, tilted down for the low beam.
+			var shaped: bool = v == game.player and _headlight_shadows
+			light.shadow_enabled = shaped
+			light.light_projector = beam_texture(high) if shaped else null
+			if shaped:
+				light.spot_range = 160.0 if high else 90.0
+				light.spot_angle = 40.0
+				light.light_energy = BEAM_ENERGY_HIGH if high else BEAM_ENERGY_LOW
+				light.rotation_degrees.x = 0.0
+			else:
+				light.spot_range = 140.0 if high else 70.0
+				light.spot_angle = 32.0 if high else 44.0
+				light.light_energy = 30.0 if high else 16.0
+				light.rotation_degrees.x = -0.5 if high else -2.0
 		for lamp in s["left"]: lamp.visible = blink and (s["hazards"] or s["signal"] == -1) and not broken.get(lamp.get_meta("corner"), false)
 		for lamp in s["right"]: lamp.visible = blink and (s["hazards"] or s["signal"] == 1) and not broken.get(lamp.get_meta("corner"), false)
 		for signal_material in s["authored_signals"]:

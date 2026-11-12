@@ -1,7 +1,7 @@
 extends SceneTree
 ## Map renders without driving: godot -s res://tests/map_shots.gd -- <map_id> <out_prefix> [car] [night]
 ## Places the camera at five points along the map's route (eye height, looking ahead) plus one overview.
-## AT=<i,j,...> picks the route waypoints to look ahead from. PROP_VIEWS=<kind> adds close views
+## HIGH_BEAM=1 switches the player's lamps to high beam. AT=<i,j,...> picks the route waypoints to look ahead from. PROP_VIEWS=<kind> adds close views
 ## of the first three props of that kind.
 
 var frame := 0
@@ -35,6 +35,12 @@ func _setup() -> void:
 		scene.weather._apply_lighting()
 	if scene.get("hud"):
 		scene.hud.visible = false
+	# HIGH_BEAM=1: the player switched to high beam.
+	if OS.has_environment("HIGH_BEAM") and scene.get("equipment"):
+		var ls: Dictionary = scene.equipment.state_for(scene.player)
+		ls["lights"] = true
+		ls["light_mode"] = 2
+		ls["manual_lights"] = true
 	# IGNITE=0|1: set the player car on fire (engine bay / tank) and let it burn for a while.
 	if OS.has_environment("IGNITE"):
 		scene.player.ignite(int(OS.get_environment("IGNITE")))
