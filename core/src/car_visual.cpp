@@ -1028,7 +1028,10 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         if (seg <= 5) {
             if (xm > L - 0.40 && ym < yB + 0.13) return "trim";
             if (xm < 0.32 && ym < yB + 0.15) return "trim";
-            if (bd.style == BodyStyle::SUV && seg <= 4) return "trim";
+            // SUV cladding: only the sill band, not the whole lower half of the side.
+            if (bd.style == BodyStyle::SUV && seg <= 3) return "trim";
+            // ...plus black flares round the wheel arches.
+            if (bd.style == BodyStyle::SUV && prof.archY(xm) > 0.0 && ym < prof.archY(xm) + 0.08) return "trim";
             const bool inDoorBand = ym > prof.ySill(xm) + 0.02 && ym < yBe - 0.015;
             for (real seam : {prof.xFD0, prof.xB, prof.xRD1})
                 if (std::abs(xm - seam) < 0.004 && inDoorBand && (bd.doors >= 4 || seam != prof.xRD1)) return "seam";
