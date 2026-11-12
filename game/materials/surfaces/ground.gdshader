@@ -29,6 +29,11 @@ uniform vec4 strata_light : source_color = vec4(0.92, 0.70, 0.52, 1.0);
 uniform vec4 strata_dark : source_color = vec4(0.52, 0.30, 0.21, 1.0);
 // Grass terrain: mid-scale lush/dry patches, clover clumps, wildflower clusters and molehills.
 uniform bool meadow = false;
+// City carriageway: a grid of streets (x/z origin, pitch, street width; pitch 0 = off) gets the
+// wear of a real town street: polished wheel tracks per lane, oil drips, utility trenches filled
+// with fresher asphalt, a crack network sealed with bitumen in places and a dirty gutter.
+uniform vec4 street_grid = vec4(0.0);
+uniform float street_lane = 4.0;
 global uniform float road_wetness;
 
 varying vec3 world_pos;
@@ -49,6 +54,72 @@ float fbm(vec2 p) {
 	float v = 0.0, a = 0.5;
 	for (int i = 0; i < 4; i++) { v += a * vnoise(p); p = p * 2.07 + vec2(11.3, 7.9); a *= 0.5; }
 	return v;
+}
+
+// Distance to the nearest Voronoi cell border (crack network).
+float cell_edge(vec2 x) {
+	vec2 n = floor(x), f = fract(x), mg = vec2(0.0), mr = vec2(0.0);
+	float md = 8.0;
+	for (int j = -1; j <= 1; j++)
+		for (int i = -1; i <= 1; i++) {
+			vec2 g = vec2(float(i), float(j));
+			vec2 o = vec2(hash(n + g), hash(n + g + 31.7));
+			vec2 r = g + o - f;
+			float d = dot(r, r);
+			if (d < md) { md = d; mr = r; mg = g; }
+		}
+	md = 8.0;
+	for (int j = -2; j <= 2; j++)
+		for (int i = -2; i <= 2; i++) {
+			vec2 g = mg + vec2(float(i), float(j));
+			vec2 o = vec2(hash(n + g), hash(n + g + 31.7));
+			vec2 r = g + o - f;
+			if (dot(mr - r, mr - r) > 0.00001) md = min(md, dot(0.5 * (mr + r), normalize(r - mr)));
+		}
+	return md;
+}
+
+// Street wear for one street direction. across: metres from the centre line; along: metres
+// along the street; street_id: which street of the grid. Returns (darken, gloss, lighten, oil).
+vec4 street_wear(float across, float along, float street_id, float width, float junction) {
+	float a = abs(across);
+	float half_w = width * 0.5;
+	vec4 r = vec4(0.0);
+	// Wheel tracks: each lane centre +-0.78 m, polished darker and smoother; faint at junctions.
+	float lane_c = mod(a, street_lane) - street_lane * 0.5;
+	float track_d = abs(abs(lane_c) - 0.78);
+	float tracks = (1.0 - smoothstep(0.12, 0.38, track_d)) * (1.0 - junction * 0.7);
+	tracks *= mix(0.6, 1.0, vnoise(vec2(along * 0.05, street_id * 3.1)));
+	r.x += tracks * 0.2;
+	r.y += tracks * 0.25;
+	// Oil drips down the lane centres, densest where cars queue before a junction.
+	vec2 oc = floor(vec2(along / 0.9, lane_c * 2.0 + street_id * 7.0));
+	vec2 of = fract(vec2(along / 0.9, 0.5)) - vec2(hash(oc), 0.5);
+	float oil = (1.0 - smoothstep(0.03, 0.13, length(vec2(of.x * 0.9, lane_c * 1.6 + (hash(oc + 4.0) - 0.5) * 0.4)))) * step(0.72 - junction * 0.25, hash(oc + 9.0));
+	r.w += oil;
+	// Utility trenches: long strips of fresher, darker asphalt along a lane (cables, pipes), with
+	// lighter sawn seams, and the odd transverse cut right across.
+	float seg = floor(along / 23.0);
+	float pick = hash(vec2(seg, street_id + 1.3));
+	float t_pos = (hash(vec2(seg, street_id + 5.1)) - 0.5) * (width - 2.5);
+	float t_w = 0.55 + 0.5 * hash(vec2(seg, street_id + 8.2));
+	float t_along = fract(along / 23.0);
+	float t_len = 0.25 + 0.6 * hash(vec2(seg, street_id + 2.7));
+	float in_len = step(0.05, t_along) * step(t_along, 0.05 + t_len);
+	float d_t = abs(across - t_pos) - t_w * 0.5;
+	float trench = (1.0 - smoothstep(-0.005, 0.005, d_t)) * in_len * step(0.62, pick);
+	float seam = (1.0 - smoothstep(0.0, 0.035, abs(d_t))) * in_len * step(0.62, pick);
+	float cross_cut = step(0.86, hash(vec2(seg, street_id + 11.0)));
+	float cut_d = abs(t_along - 0.7) * 23.0 - 0.45;
+	float cut = (1.0 - smoothstep(-0.005, 0.005, cut_d)) * step(a, half_w) * cross_cut;
+	float cut_seam = (1.0 - smoothstep(0.0, 0.035, abs(cut_d))) * cross_cut;
+	r.x += max(trench, cut) * 0.32;
+	r.y -= max(trench, cut) * 0.12;
+	r.z += max(seam, cut_seam) * 0.5;
+	// Gutter: the last ~40 cm before the kerb collects grit and water stains.
+	float gutter = 1.0 - smoothstep(0.1, 0.5, half_w - a);
+	r.z += gutter * 0.35 * smoothstep(0.0, 0.1, half_w - a);
+	return r;
 }
 
 void vertex() {
@@ -160,11 +231,49 @@ void fragment() {
 		float mole = (1.0 - smoothstep(mr * 0.6, mr, length(mf) + 0.05 * (vnoise(mq * 8.0) - 0.5))) * step(0.97, hash(mc + 2.2));
 		col = mix(col, vec3(0.13, 0.10, 0.07) * (0.85 + 0.3 * vnoise(q * 9.0)), mole * level);
 	}
+	float street_gloss = 0.0;
+	if (street_grid.z > 0.0) {
+		float pitch = street_grid.z, width = street_grid.w;
+		vec2 l = world_pos.xz - street_grid.xy;
+		vec2 lm = mod(l, pitch);
+		vec2 sid = floor(l / pitch);
+		bool along_x = lm.y < width;   // a street running along x (fixed z band)
+		bool along_z = lm.x < width;
+		float junction = along_x && along_z ? 1.0 : 0.0;
+		vec4 wear = vec4(0.0);
+		if (along_x) wear += street_wear(lm.y - width * 0.5, world_pos.x, sid.y + 0.37, width, junction);
+		if (along_z) wear += street_wear(lm.x - width * 0.5, world_pos.z, sid.x + 50.21, width, junction);
+		if (along_x || along_z) {
+			col *= 1.0 - clamp(wear.x, 0.0, 0.5);
+			col = mix(col, col * vec3(1.22, 1.17, 1.08) + vec3(0.025, 0.022, 0.016), clamp(wear.z, 0.0, 1.0) * 0.6);
+			col = mix(col, col * 0.5, clamp(wear.w, 0.0, 1.0) * 0.75);
+			// Ageing: a crack network in worn stretches, black bitumen sealing over some cracks.
+			vec2 wp = world_pos.xz;
+			float aged = smoothstep(0.42, 0.6, fbm(wp * 0.02 + vec2(41.0, 7.0)));
+			// Both networks cost ~30 noise lookups, so they only run where they can show.
+			float crack = 0.0;
+			float cw = max(length(fwidth(wp)) * 0.7, 0.001);   // derivatives outside the branches
+			if (aged > 0.0) {
+				vec2 warp = vec2(fbm(wp * 0.35), fbm(wp * 0.35 + 9.0)) - 0.5;
+				float ce = cell_edge((wp + warp * 1.4) / 1.3) * 1.3;
+				crack = (1.0 - smoothstep(0.005, 0.005 + cw, ce)) * aged * smoothstep(0.4, 0.55, vnoise(wp * 0.45 + 3.0));
+			}
+			float seal = 0.0;
+			float seal_zone = smoothstep(0.58, 0.7, vnoise(wp * 0.04 + 13.0)) * step(0.45, vnoise(wp * 0.45 + 5.0));
+			if (seal_zone > 0.0) {
+				float seal_line = cell_edge(wp / 4.0 + 7.0) * 4.0 + 0.05 * (vnoise(wp * 3.0) - 0.5);
+				seal = (1.0 - smoothstep(0.016, 0.016 + cw * 1.5, seal_line)) * seal_zone;
+			}
+			col = mix(col, col * 0.45, crack * 0.85);
+			col = mix(col, vec3(0.018), seal * 0.9);
+			street_gloss = clamp(wear.y, -0.2, 0.4) + seal * 0.15 + clamp(wear.w, 0.0, 1.0) * 0.2;
+		}
+	}
 	float fine = vnoise(world_pos.xz * 1.7);
 	float wet = clamp(road_wetness * wet_response, 0.0, 1.0);
 	col *= mix(1.0, 0.66, wet);
 	ALBEDO = col;
-	ROUGHNESS = mix(roughness * mix(0.96, 1.04, fine), 0.18 + 0.3 * fine, wet * 0.85);
+	ROUGHNESS = mix(roughness * mix(0.96, 1.04, fine) * (1.0 - street_gloss), 0.18 + 0.3 * fine, wet * 0.85);
 	SPECULAR = mix(0.5, 0.62, wet);
 	if (has_normal) {
 		NORMAL = normalize((VIEW_MATRIX * vec4(normalize(nrm), 0.0)).xyz);

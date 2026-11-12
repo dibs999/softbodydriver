@@ -258,13 +258,50 @@ static func _overpass(parent: Node3D, world: SBWorld, x: float, z: float, span: 
 	const HALF := 7.0            # half width of deck and ramp crown
 	const RAMP := 60.0
 	var deck_half := span * 0.5 + 6.0
-	C.box(parent, world, Vector3(x, DECK_Y - 0.6, z), Vector3(HALF, 0.6, deck_half), Vector3.ZERO, deck_mat, 0.8, false)
+	# Deck slab: drivable (the farm road can be driven over the motorway).
+	C.box(parent, world, Vector3(x, DECK_Y - 0.6, z), Vector3(HALF, 0.6, deck_half), Vector3.ZERO, deck_mat, 0.8, true)
+	var cap_mat := C.noise_mat(Color(0.70, 0.70, 0.68), 0.1, 0.4, 0.85, 0.12)
+	var steel := C.mat(Color(0.56, 0.58, 0.60), 0.45, 0.7)
+	var posts: Array[Transform3D] = []
 	for side: float in [-1.0, 1.0]:
-		C.box(parent, world, Vector3(x + side * (HALF - 0.2), DECK_Y + 0.5, z), Vector3(0.2, 0.5, deck_half), Vector3.ZERO, concrete, 0.8, false)
+		# Raised concrete cap with a service walkway, and the edge beam whose lighter face and
+		# drip line run along the outside of the deck (the bridge's visible "cornice").
+		C.box(parent, world, Vector3(x + side * (HALF - 0.45), DECK_Y + 0.1, z), Vector3(0.75, 0.1, deck_half), Vector3.ZERO, cap_mat, 0.8, false)
+		C.box(parent, world, Vector3(x + side * (HALF + 0.12), DECK_Y - 0.45, z), Vector3(0.18, 0.75, deck_half + 0.05), Vector3.ZERO, cap_mat, 0.8, false)
+		# Steel railing on the cap: posts every 2 m, a top handrail and two knee rails. It and a
+		# guard rail (Schutzplanke) at the kerb are one barrier for the physics.
+		for k in int(deck_half) + 1:
+			for dir: float in [-1.0, 1.0]:
+				if k == 0 and dir > 0.0: continue
+				posts.append(Transform3D(Basis.from_scale(Vector3(0.07, 1.0, 0.07)), Vector3(x + side * (HALF - 0.12), DECK_Y + 0.7, z + dir * k * 2.0)))
+		for rail_y: float in [1.18, 0.82, 0.5]:
+			C.box(parent, world, Vector3(x + side * (HALF - 0.12), DECK_Y + rail_y, z), Vector3(0.04 if rail_y < 1.0 else 0.06, 0.03 if rail_y < 1.0 else 0.04, deck_half), Vector3.ZERO, steel, 0.6, false)
+		C.box(parent, world, Vector3(x + side * (HALF - 1.25), DECK_Y + 0.55, z), Vector3(0.04, 0.17, deck_half - 0.5), Vector3.ZERO, steel, 0.6, false)
+		for k in int(deck_half / 2.0) + 1:
+			for dir: float in [-1.0, 1.0]:
+				if k == 0 and dir > 0.0: continue
+				posts.append(Transform3D(Basis.from_scale(Vector3(0.1, 0.75, 0.06)), Vector3(x + side * (HALF - 1.2), DECK_Y + 0.37, z + dir * k * 4.0)))
+		world.add_box(Vector3(x + side * (HALF - 1.1), DECK_Y + 0.6, z), Vector3(0.15, 0.6, deck_half), Vector3.ZERO, 0.4)
+	var post_mesh := BoxMesh.new()
+	post_mesh.size = Vector3.ONE
+	C.scatter_multimesh(parent, post_mesh, steel, posts, false)
+	# Round piers on three rows with a cap beam each, elastomer bearings under the deck.
+	var pier_mesh := CylinderMesh.new()
+	pier_mesh.top_radius = 0.55
+	pier_mesh.bottom_radius = 0.6
+	pier_mesh.height = DECK_Y - 1.8
+	pier_mesh.radial_segments = 20
+	var bearing := C.mat(Color(0.12, 0.12, 0.12), 0.8)
 	for pz: float in [z - span * 0.5 - 2.0, z, z + span * 0.5 + 2.0]:
 		for px: float in [-4.0, 4.0]:
-			C.box(parent, world, Vector3(x + px, (DECK_Y - 1.2) * 0.5, pz), Vector3(0.6, (DECK_Y - 1.2) * 0.5, 0.6), Vector3.ZERO, concrete, 0.7)
-		C.box(parent, world, Vector3(x, DECK_Y - 1.5, pz), Vector3(HALF - 0.4, 0.3, 0.8), Vector3.ZERO, concrete, 0.7, false)   # pier cap
+			var pier := MeshInstance3D.new()
+			pier.mesh = pier_mesh
+			pier.material_override = concrete
+			pier.position = Vector3(x + px, (DECK_Y - 1.8) * 0.5, pz)
+			parent.add_child(pier)
+			world.add_box(pier.position, Vector3(0.6, (DECK_Y - 1.8) * 0.5, 0.6), Vector3.ZERO, 0.7)
+			C.box(parent, world, Vector3(x + px, DECK_Y - 1.25, pz), Vector3(0.35, 0.05, 0.35), Vector3.ZERO, bearing, 0.8, false)
+		C.box(parent, world, Vector3(x, DECK_Y - 1.55, pz), Vector3(HALF - 0.6, 0.25, 0.75), Vector3.ZERO, concrete, 0.7, false)   # pier cap
 	# Road across the deck and both ramps as one strip (the ramps follow the slope).
 	var road_pts := PackedVector3Array()
 	var z0 := z - deck_half - RAMP - 40.0   # on into the fields a little way
@@ -309,6 +346,12 @@ static func _overpass(parent: Node3D, world: SBWorld, x: float, z: float, span: 
 		mi.mesh = st.commit()
 		mi.material_override = grass
 		parent.add_child(mi)
+		# The ramp crown is drivable: one inclined slab from the field up to the deck.
+		var theta := atan(DECK_Y / RAMP)
+		var slant := RAMP / cos(theta)
+		var top_mid := Vector3(x, DECK_Y * 0.5, start + end * RAMP * 0.5)
+		var normal := Vector3(0.0, cos(theta), end * sin(theta))
+		world.add_box(top_mid - normal * 0.5, Vector3(HALF, 0.5, slant * 0.5 + 0.3), Vector3(end * theta, 0.0, 0.0), 0.9)
 		# Abutment: a concrete wall under the deck end, wing walls along the ramp's first metres.
 		C.box(parent, world, Vector3(x, (DECK_Y - 1.2) * 0.5, start - end * 0.4), Vector3(HALF + 0.6, (DECK_Y - 1.2) * 0.5, 0.6), Vector3.ZERO, concrete, 0.7)
 		for side: float in [-1.0, 1.0]:
