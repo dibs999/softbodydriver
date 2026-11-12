@@ -389,7 +389,8 @@ Das Pausenmenü bietet Aktivitäten, Wetter und Tageszeit auch ohne Funktionstas
 aus allen Fahrzeugen lässt sich einbauen (mit dem eigenen Getriebe, dessen Schaltpunkte an den neuen
 Drehzahlbereich angepasst werden, oder mit dem des Spenderautos); das Leergewicht ändert sich um die
 Motormassen-Differenz. Dazu Kennfeld-Leistung (70–150 %), Ladedruck (bis +40 %, wirkt ab mittleren
-Drehzahlen), Drehzahlbegrenzer, Getriebeabstufung (eng/lang um den höchsten Gang), Achsübersetzung,
+Drehzahlen), Drehzahlbegrenzer, Getriebeabstufung (eng/lang um den höchsten Gang), jede Gangstufe einzeln
+(80–120 %), Achsübersetzung,
 Antrieb (Front, Heck, Allrad), Sperrdifferenzial, Federn, Dämpfer und Stabilisatoren je Achse,
 Fahrzeughöhe (−40 bis +60 mm), ein Heckflügel (12° oder 20°, bei den generierten Karosserien; ein
 echtes Bauteil aus Knoten und Balken, dessen Abtrieb und Luftwiderstand aus der Dreiecks-Aerodynamik

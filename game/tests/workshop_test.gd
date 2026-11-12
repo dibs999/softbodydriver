@@ -110,6 +110,8 @@ func _process(_d: float) -> bool:
 			var close := W.apply(def, {"gear_spread": 0.8}, cat)
 			check(close["engine"]["gears"][0] < def["engine"]["gears"][0] and is_equal_approx(close["engine"]["gears"][-1], def["engine"]["gears"][-1]), "Close-ratio box: shorter steps, same top gear")
 			check(W.apply(def, {"wing": 2}, cat)["body"]["rearWing"] == 20.0, "Wing on a generated body")
+			var g2 := W.apply(def, {"g2": 0.9}, cat)
+			check(is_equal_approx(g2["engine"]["gears"][1], def["engine"]["gears"][1] * 0.9) and is_equal_approx(g2["engine"]["gears"][0], def["engine"]["gears"][0]), "Single gear ratio: only 2nd gear changes")
 			check(not W.apply(W.read_definition("res://cars/meridian_sedan.car.json"), {"wing": 2}, cat)["body"].has("rearWing"), "but not on an imported model")
 			var msg: String = scene.rebuild_player({"power": 1.2})
 			check(msg == "Werkstatt: Leistung +20 %", "A plain engine tune rebuilds as well (%s)" % msg)
