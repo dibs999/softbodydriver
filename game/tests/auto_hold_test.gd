@@ -8,6 +8,8 @@ var failed := false
 var phase := 0
 var mark := 0.0
 var start_pos := Vector3.ZERO
+var stopped_at := -1.0
+var checked_stand := false
 
 func check(value: bool, caption: String) -> void:
 	print(caption, ": ", value)
@@ -62,6 +64,29 @@ func _process(_d: float) -> bool:
 			if now - mark > 4.0:
 				var moved := car.get_position_ws().distance_to(start_pos)
 				check(moved < 0.3, "After braking to a stop the car stays put (%.2f m)" % moved)
+				# A hard stop with the pedal held down: the car must stand, not roll straight back.
+				Input.action_press("throttle", 0.8)
+				mark = now
+				phase = 6
+		6:
+			if car.get_speed_kmh() > 45.0 or now - mark > 12.0:
+				Input.action_release("throttle")
+				Input.action_press("brake", 1.0)
+				stopped_at = -1.0
+				mark = now
+				phase = 7
+		7:
+			if stopped_at < 0.0 and absf(car.get_speed_kmh()) < 1.0:
+				stopped_at = now
+			if stopped_at >= 0.0 and now - stopped_at > 0.5 and not checked_stand:
+				checked_stand = true
+				check(int(car.get_telemetry()["gear"]) >= 0 and absf(car.get_speed_kmh()) < 1.0, "Braked to a stop with the pedal down, it stands (gear %d)" % int(car.get_telemetry()["gear"]))
+			if stopped_at >= 0.0 and now - stopped_at > 1.6:
+				check(int(car.get_telemetry()["gear"]) == -1, "Holding the brake on, reverse engages after a moment")
+				Input.action_release("brake")
+				phase = 5
+			elif now - mark > 15.0:
+				check(false, "The hard stop completes")
 				phase = 5
 		5:
 			print("TEST OK" if not failed else "TEST FAILED")
