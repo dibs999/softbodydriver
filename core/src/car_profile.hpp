@@ -37,6 +37,10 @@ struct Profile {
     real L, hw, xFA, xRA, xCowl, xWsTop, xRwTop, xRwBase, xB, xFD0, xRD1, Ra, hubY;
     // Physical door cages: front door rear/front edge and hinge line, rear door likewise.
     real xDoorFR, xDoorFF, xDoorFH, xDoorRR, xDoorRF, xDoorRH;
+    /// The visible skin's bonnet line (see yBelt). The physics rig keeps the softer, rounder nose:
+    /// its node layout is what the crash, prop and branch tests are calibrated on, and the skin
+    /// follows those nodes wherever it sits relative to them.
+    bool crispHood = false;
 
     Profile(const CarBodyDef& body, const TireDef& tire) : b(body), t(tire) {
         L = b.length;
@@ -83,7 +87,22 @@ struct Profile {
     /// Height of the "shoulder" / deck line at the outer edge (hood, belt line, trunk).
     real yBelt(real x) const {
         real y;
-        if (x >= xCowl) {
+        if (x >= xCowl && crispHood) {
+            // A nearly straight, gently crowned bonnet that drops ~60 % of the way to the nose,
+            // then a short rounded front face down to the nose. (A sine over the whole bonnet
+            // length rounded the front off like a cushion: 30 cm behind the nose it was already
+            // 0.13 m down on the Kestrel.)
+            const real run = std::min<real>(0.14, 0.25 * (L - xCowl));
+            const real yEdge = b.noseHeight + 0.4 * (b.hoodHeight - b.noseHeight);
+            const real front = L - run;
+            if (x <= front) {
+                const real u = clamp01((front - x) / std::max<real>(0.05, front - xCowl));   // 0 at the edge, 1 at the cowl
+                y = yEdge + (b.hoodHeight - yEdge) * (1.0 - std::pow(1.0 - u, 1.7));
+            } else {
+                const real v = clamp01((L - x) / run);   // 1 at the bonnet edge, 0 at the nose
+                y = b.noseHeight + (yEdge - b.noseHeight) * std::sin(v * kPi * 0.5);
+            }
+        } else if (x >= xCowl) {
             const real tt = clamp01((L - x) / std::max<real>(0.05, L - xCowl));
             y = b.noseHeight + (b.hoodHeight - b.noseHeight) * std::pow(std::sin(tt * kPi * 0.5), 0.7);
         } else if (x >= xRwBase) {

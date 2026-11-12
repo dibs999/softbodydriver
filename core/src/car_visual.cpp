@@ -1361,11 +1361,9 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                 } else {
                     vb.box("taillight", base + n * 0.007, {0.005, th - 0.010, len * 0.99}, tailNodes, n, up, t);
                 }
-                // Thin dark dividers break the lens into chambers like a real cluster.
-                for (real stripe : {-0.33, 0.30})
-                    vb.box("grille", base + n * 0.0125 + up * (stripe * th), {0.002, 0.0035, len * 0.99}, tailNodes, n, up, t);
-                if (k > 0)
-                    vb.box("grille", base + n * 0.0125 - t * (hl * 0.98), {0.002, th - 0.012, 0.0035}, tailNodes, n, up, t);
+                // One fine dark line splits the lens into a tail and a brake chamber. (Two lines plus
+                // a divider at every segment joint made a coarse grid of red squares.)
+                vb.box("grille", base + n * 0.0125 + up * (-0.12 * th), {0.0015, 0.002, len * 0.99}, tailNodes, n, up, t);
             });
         }
         vb.box("plate", {-0.020, yT - 0.145, 0.0}, {0.013, 0.046, 0.23}, yT - 0.145 > lidLatchY ? lidNodes : bodyNodes);
