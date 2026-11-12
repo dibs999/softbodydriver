@@ -277,4 +277,22 @@ Prüfungen in `core/tests/test_car.cpp`:
     Maximum (0,022 m/s gegenüber 0,044 bei 70 km/h).
   * Wahrscheinlich eine Eigenform des Laufflächenrings. Dafür ist eine Modalanalyse des Reifens
     nötig.
+  * Nachmessung 12.11.2026 (c_rr ohne Luft, 5-km/h-Raster): jedes Auto hat genau einen Buckel
+    von 0,020–0,022, Fastback 80, Kestrel 85, Aurora und Meridian 90, Basalt 95, Concept 100 km/h.
+    Umgerechnet auf die Node-Durchlauffrequenz (20 × Raddrehzahl) liegen alle bei ~240 Hz: eine
+    gemeinsame Eigenfrequenz des Reifens, angeregt durch das Abrollen des 20-Ecks
+    (Nabenhub r(1 − cos 9°) = 3,8 mm je Node).
+  * Verworfene Versuche:
+    * Mehr Kontaktdämpfung (ζ 0,02 → 0,08 / 0,2) hebt die Verluste überall (Kestrel 60 km/h
+      0,013 → 0,016 / 0,021). Der Buckel bleibt.
+    * „Runder Kontakt": Laufflächen-Nodes nahe der Unterseite greifen um r(1 − cos α) tiefer, wie ein
+      Kreis. Mit Auslauf über eine halbe Teilung verdoppeln sich die Verluste (30 km/h 0,013,
+      90 km/h 0,031): Zwei Nodes je Ring tragen abwechselnd. Auch nicht, wenn die Reibung auf den
+      Kreis-Aufstandspunkt umgerechnet wird (ω × (Boden − Node)). Mit scharfem Fenster (immer genau
+      ein Node) wird c_rr bei 90–100 km/h negativ: Der Wechsel zum nächsten Node speist Energie ein.
+    * Brauchbar wäre ein echtes Kontaktmodell für einen glatten Gürtel (z. B. Kontaktkraft über eine
+      Teilungsfunktion auf benachbarte Nodes verteilt, energiekonsistent). Das ist ein Umbau des
+      Reifenmodells, nicht nur des Bodenkontakts.
+  * Auswirkung im Spiel: höchstens ~80 N mehr Fahrwiderstand in einem 10-km/h-Fenster, beim Ausrollen
+    ~0,01 g. Beim Fahren nicht spürbar.
 * Spieler mit Tastatur/Gamepad und die Fahrhilfe korrigieren kleinere Abweichungen.
