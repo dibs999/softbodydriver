@@ -35,6 +35,11 @@ func _setup() -> void:
 		scene.weather._apply_lighting()
 	if scene.get("hud"):
 		scene.hud.visible = false
+	# WEATHER=<index>: 0 clear, 1 overcast, 2 rain, 3 fog.
+	if OS.has_environment("WEATHER"):
+		scene.weather.weather_index = int(OS.get_environment("WEATHER"))
+		scene.weather._apply_lighting()
+		scene.weather.wetness = float(scene.weather.WETNESS[scene.weather.weather_index])
 	# HIGH_BEAM=1: the player switched to high beam.
 	if OS.has_environment("HIGH_BEAM") and scene.get("equipment"):
 		var ls: Dictionary = scene.equipment.state_for(scene.player)

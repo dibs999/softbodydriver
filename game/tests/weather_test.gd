@@ -65,7 +65,17 @@ func run() -> void:
 	weather._process(30)
 	check(is_equal_approx(weather.hour, 1.25) and weather._rain.speed_scale == 0.25, "Slow motion scales clock and rain consistently")
 	world.time_scale = 1
+	# Fog: no rain, ~150 m visibility, a damp road, dark enough for the light sensor.
+	weather.hour = 13.0
+	var rain_fog := environment.fog_density
 	weather.cycle_weather()
+	check(weather.WEATHER_NAMES[weather.weather_index] == "Nebel" and not weather._rain.emitting, "Fog follows rain in the weather cycle, without rain")
+	check(environment.fog_density > rain_fog + 0.015 and 3.0 / environment.fog_density < 200.0, "Fog limits the visibility to ~150 m (%.0f m)" % (3.0 / environment.fog_density))
+	check(weather.daylight < 0.5, "In fog the light sensor sees dusk (daylight %.2f)" % weather.daylight)
+	weather._process(90)
+	check(weather.wetness > 0.25 and weather.wetness <= 0.3, "Mist leaves the road damp (wetness %.2f)" % weather.wetness)
+	weather.cycle_weather()
+	check(environment.fog_density < rain_fog, "Clear weather lifts the fog")
 	weather._process(90)
 	check(weather.wetness == 0 and not weather._rain.emitting, "Clear weather dries surfaces gradually")
 	host.queue_free()

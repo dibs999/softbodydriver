@@ -1,7 +1,19 @@
 extends Node3D
 ## Local precipitation and coherent sky/light presets. Weather affects all wheel contacts.
 const WeatherAudio := preload("res://scripts/weather_audio.gd")
-const WEATHER_NAMES := ["Klar", "Bedeckt", "Regen"]
+const WEATHER_NAMES := ["Klar", "Bedeckt", "Regen", "Nebel"]
+const RAIN := 2
+const FOG := 3
+## Per weather: cloud cover (sky, sun, ambient), daylight factor (the light sensor switches the
+## dipped beams on in fog), road wetness it settles at, extra exponential fog density. Fog: ~150 m
+## visibility (5 % contrast at 3 / density), the road damp from the mist.
+const CLOUD := [0.0, 0.5, 1.0, 0.8]
+const DAYLIGHT := [1.0, 0.75, 0.5, 0.42]
+const WETNESS := [0.0, 0.0, 1.0, 0.3]
+const FOG_EXTRA := [0.0, 0.0, 0.0, 0.02]
+const CLOUD_COVER := [0.32, 0.82, 1.0, 0.9]
+## How fast traffic drives in this weather (rain and fog: slower, longer gaps by the speed).
+const TRAFFIC_SPEED := [1.0, 1.0, 0.88, 0.7]
 const TIME_NAMES := ["Mittag", "Abend", "Nacht", "Morgen"]
 const TIME_HOURS := [13.0, 18.5, 0.0, 7.0]
 ## 0 at night .. 1 in clear daylight (overcast halves it); read by the cabin fill light.
@@ -22,6 +34,7 @@ var _day_top: Color
 var _day_horizon: Color
 var _day_energy := 1.25
 var _day_fog := 0.00035
+var _sky_fog := 0.12
 var _rain_material: ShaderMaterial
 var _shelters: Array = []
 var _sheltered_vehicle: SBVehicle
@@ -45,6 +58,7 @@ func configure(environment: Environment, sun: DirectionalLight3D, camera: Camera
 	_day_horizon = _sky.sky_horizon_color
 	_day_energy = sun.light_energy
 	_day_fog = environment.fog_density
+	_sky_fog = environment.fog_sky_affect
 	_build_rain()
 	audio = WeatherAudio.new()
 	add_child(audio)
@@ -179,7 +193,8 @@ func _process(delta: float) -> void:
 	var step := 0.0 if paused else delta * scale
 	if automatic_time:
 		hour = fposmod(hour + step / 30.0, 24.0)
-	wetness = move_toward(wetness, 1.0 if weather_index == 2 else 0.0, step / (20.0 if weather_index == 2 else 90.0))
+	var wet_target: float = WETNESS[weather_index]
+	wetness = move_toward(wetness, wet_target, step / (20.0 if wet_target > wetness else 90.0))
 	if _surfaces:
 		_surfaces.set("wetness", wetness)
 	RenderingServer.global_shader_parameter_set("road_wetness", wetness)
@@ -190,7 +205,7 @@ func _process(delta: float) -> void:
 	if audio and is_instance_valid(_camera):
 		var game := get_node_or_null("/root/Game")
 		var master := float(game.get("settings").get("master_volume", 0.8)) if game else 0.8
-		audio.set_conditions(1.0 if weather_index == 2 else 0.0, paused, scale,
+		audio.set_conditions(1.0 if weather_index == RAIN else 0.0, paused, scale,
 			is_cabin_sheltered(_camera.global_position), is_roof_sheltered(_camera.global_position), master)
 	if automatic_time and step > 0:
 		_apply_lighting()
@@ -200,10 +215,10 @@ func _apply_lighting() -> void:
 		return
 	var elevation := sin((hour - 6.0) * TAU / 24.0)
 	var daylight := smoothstep(-0.12, 0.35, elevation)
-	self.daylight = daylight * (1.0 - 0.5 * float(weather_index) / 2.0)
+	self.daylight = daylight * float(DAYLIGHT[weather_index])
 	RenderingServer.global_shader_parameter_set("city_night", 1.0 - smoothstep(-0.05, 0.2, elevation))
 	var dusk := (1.0 - smoothstep(0.0, 0.4, absf(elevation))) * daylight
-	var cloud := float(weather_index) / 2.0
+	var cloud: float = CLOUD[weather_index]
 	_sun.rotation_degrees.x = -maxf(8.0, elevation * 75.0) if elevation > 0 else -35.0
 	_sun.rotation_degrees.y = (hour - 12.0) * 15.0 - 35.0
 	_sun.light_energy = lerpf(0.045, _day_energy * (1.0 - cloud * 0.75), daylight)
@@ -212,15 +227,39 @@ func _apply_lighting() -> void:
 	_sky.sky_horizon_color = Color(0.025, 0.04, 0.075).lerp(_day_horizon.lerp(Color(0.44, 0.48, 0.52), cloud).lerp(Color(0.9, 0.40, 0.20), dusk * (1.0 - cloud)), daylight)
 	_sky.ground_horizon_color = _sky.sky_horizon_color.darkened(0.25)
 	_sky.ground_bottom_color = Color(0.03, 0.03, 0.04).lerp(Color(0.22, 0.21, 0.2), daylight)
-	_sky.cloud_coverage = [0.32, 0.82, 1.0][clampi(weather_index, 0, 2)]
+	_sky.cloud_coverage = CLOUD_COVER[weather_index]
 	_sky.cloud_light = Color(0.25, 0.27, 0.33).lerp(Color(1.0, 0.98, 0.95).lerp(Color(1.0, 0.72, 0.52), dusk), daylight)
 	_sky.cloud_shadow = Color(0.06, 0.07, 0.1).lerp(Color(0.56, 0.61, 0.69).lerp(Color(0.42, 0.45, 0.5), cloud), daylight)
 	_environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	_environment.ambient_light_color = Color(0.35, 0.45, 0.65).lerp(Color(0.78, 0.84, 0.94), daylight)
 	_environment.ambient_light_energy = lerpf(0.10, 0.72 - cloud * 0.16, daylight)
 	_environment.fog_light_color = _sky.sky_horizon_color
-	_environment.fog_density = _day_fog + cloud * 0.0012
-	_rain.emitting = weather_index == 2
+	_environment.fog_density = _day_fog + cloud * 0.0012 + float(FOG_EXTRA[weather_index]) * lerpf(0.6, 1.0, daylight)
+	_environment.fog_sky_affect = _sky_fog
+	# Volumetric mist after dark on the higher presets (Leuchteffekte on, Forward+): car lights then
+	# glow in the fog as real beams do. It takes over half of the plain fog density. By day the plain
+	# fog alone looks right (the volume greyed the scene).
+	var game_state := get_node_or_null("/root/Game")
+	var volumetric := weather_index == FOG and daylight < 0.4 and game_state != null and bool(game_state.get("graphics").get("glow", false)) \
+		and RenderingServer.get_current_rendering_method() == "forward_plus"
+	_environment.volumetric_fog_enabled = volumetric
+	if volumetric:
+		_environment.fog_density -= float(FOG_EXTRA[weather_index]) * lerpf(0.6, 1.0, daylight) * 0.5
+		_environment.volumetric_fog_density = 0.012
+		_environment.volumetric_fog_albedo = Color(0.85, 0.86, 0.88)
+		_environment.volumetric_fog_length = 80.0
+		_environment.volumetric_fog_anisotropy = 0.6   # forward scattering: beams glow towards the eye
+		_environment.volumetric_fog_ambient_inject = 0.15
+	if weather_index == FOG:
+		# Mist scatters the light: a flat pale grey sky and horizon, the sun only a glow. The
+		# fog also covers the sky, or the clouds stay sharp above a white-washed tree line.
+		_environment.fog_sky_affect = 0.95
+		var mist := Color(0.62, 0.64, 0.66).lerp(Color(0.05, 0.055, 0.065), 1.0 - daylight)
+		_sky.sky_top_color = _sky.sky_top_color.lerp(mist, 0.7)
+		_sky.sky_horizon_color = mist
+		_environment.fog_light_color = mist
+		_sun.light_energy *= 0.55
+	_rain.emitting = weather_index == RAIN
 
 func _build_rain() -> void:
 	_rain = CPUParticles3D.new()

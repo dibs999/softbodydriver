@@ -29,6 +29,8 @@ const CHASE_RANGE := 60.0
 ## the car stops on the brakes with its hazard lights on instead of carrying on as a wreck. Once
 ## the player is well away it is towed: repaired and put back on its route.
 var reacts_to_crashes := false
+## Traffic drives slower in rain and fog (set each frame by the game from the weather).
+var weather_speed := 1.0
 var lamps: Dictionary = {}       # this car's lamp state in vehicle_equipment (hazards, indicators)
 var player: SBVehicle
 var crashed := false
@@ -168,6 +170,8 @@ func update(delta: float) -> void:
 	var ang := atan2(to.dot(-right), to.dot(fwd))
 	var steer := clampf(ang * 1.6, -1.0, 1.0)
 	var target_v := speeds[posmod(idx + dir * (look / 2), n)] * speed_scale
+	if reacts_to_crashes:
+		target_v *= weather_speed
 	if is_instance_valid(pursue):
 		target_v *= pursue_speed
 		if chasing:
