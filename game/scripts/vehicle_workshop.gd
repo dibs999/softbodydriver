@@ -20,6 +20,8 @@ const DEFAULTS := {
 	"compound": 1,         # index into COMPOUNDS
 	"brakes": 1.0,         # brake torque factor (bigger discs and calipers)
 	"ballast": 0.0,        # kg added (negative: weight stripped out)
+	"ride_height": 0.0,    # ground clearance change, m (lowered / raised springs)
+	"tire_width": 1.0,     # tyre width factor (narrower / wider tyres on the same rims)
 }
 
 ## Tyre compounds: name and grip factor over the car's own tyres.
@@ -130,6 +132,10 @@ static func apply(definition: Dictionary, cfg: Dictionary, catalogue: Array) -> 
 		s["antiRollRate"] = float(s.get("antiRollRate", 6000.0)) * float(c["arb_f" if f else "arb_r"])
 	var tires: Dictionary = d.get("tires", {})
 	tires["friction"] = float(tires.get("friction", 1.0)) * float(COMPOUNDS[c["compound"]][1])
+	tires["width"] = float(tires.get("width", 0.22)) * float(c["tire_width"])
+	var body: Dictionary = d.get("body", {})
+	if c["ride_height"] != 0.0:
+		body["groundClearance"] = maxf(0.07, float(body.get("groundClearance", 0.14)) + float(c["ride_height"]))
 	chassis["curbMass"] = float(chassis.get("curbMass", 1200.0)) + float(c["ballast"])
 	return d
 
@@ -165,4 +171,5 @@ static func summary(cfg: Dictionary, catalogue: Array) -> String:
 	if c["layout"] != "": parts.append(c["layout"])
 	if c["compound"] != 1: parts.append(COMPOUNDS[c["compound"]][0])
 	if c["ballast"] != 0.0: parts.append("%+d kg" % int(c["ballast"]))
+	if c["ride_height"] != 0.0: parts.append("Höhe %+d mm" % int(round(c["ride_height"] * 1000.0)))
 	return "Serienstand" if parts.is_empty() else ", ".join(parts)

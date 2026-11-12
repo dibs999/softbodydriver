@@ -1172,8 +1172,10 @@ func _build_workshop(ws_page: VBoxContainer) -> void:
 	_ws["damp_r"] = _pause_slider(ws_page, "Dämpfer hinten", 60.0, 180.0, 5.0, "%.0f %%", note)
 	_ws["arb_f"] = _pause_slider(ws_page, "Stabilisator vorn", 0.0, 200.0, 10.0, "%.0f %%", note)
 	_ws["arb_r"] = _pause_slider(ws_page, "Stabilisator hinten", 0.0, 200.0, 10.0, "%.0f %%", note)
+	_ws["ride_height"] = _pause_slider(ws_page, "Fahrzeughöhe", -40.0, 60.0, 5.0, "%+.0f mm", note)
 	ws_page.add_child(UITheme.section("Räder, Bremsen, Gewicht"))
 	_ws["compound"] = _pause_choices(ws_page, "Reifen", Workshop.COMPOUNDS.map(func(c): return c[0]))
+	_ws["tire_width"] = _pause_slider(ws_page, "Reifenbreite", 85.0, 125.0, 5.0, "%.0f %%", note)
 	_ws["brakes"] = _pause_slider(ws_page, "Bremsanlage", 70.0, 150.0, 5.0, "%.0f %%", note)
 	_ws["ballast"] = _pause_slider(ws_page, "Gewicht", -150.0, 300.0, 10.0, "%+.0f kg", note)
 	for key in ["engine", "gearbox", "layout", "lsd", "compound"]:
@@ -1207,8 +1209,9 @@ func _workshop_load() -> void:
 	(_ws["layout"] as OptionButton).select(maxi(0, Workshop.LAYOUTS.map(func(l): return l[1]).find(cfg["layout"])))
 	(_ws["lsd"] as OptionButton).select(maxi(0, LSD_CHOICES.map(func(l): return l[1]).find(float(cfg["lsd"]))))
 	(_ws["compound"] as OptionButton).select(int(cfg["compound"]))
-	for key in ["power", "final_drive", "spring_f", "spring_r", "damp_f", "damp_r", "arb_f", "arb_r", "brakes"]:
+	for key in ["power", "final_drive", "spring_f", "spring_r", "damp_f", "damp_r", "arb_f", "arb_r", "brakes", "tire_width"]:
 		(_ws[key] as HSlider).value = float(cfg[key]) * 100.0
+	(_ws["ride_height"] as HSlider).value = float(cfg["ride_height"]) * 1000.0
 	(_ws["limiter"] as HSlider).value = float(cfg["limiter"])
 	(_ws["ballast"] as HSlider).value = float(cfg["ballast"])
 	for key in _ws.keys():
@@ -1227,8 +1230,9 @@ func _workshop_read() -> Dictionary:
 	cfg["layout"] = Workshop.LAYOUTS[(_ws["layout"] as OptionButton).selected][1]
 	cfg["lsd"] = LSD_CHOICES[(_ws["lsd"] as OptionButton).selected][1]
 	cfg["compound"] = (_ws["compound"] as OptionButton).selected
-	for key in ["power", "final_drive", "spring_f", "spring_r", "damp_f", "damp_r", "arb_f", "arb_r", "brakes"]:
+	for key in ["power", "final_drive", "spring_f", "spring_r", "damp_f", "damp_r", "arb_f", "arb_r", "brakes", "tire_width"]:
 		cfg[key] = (_ws[key] as HSlider).value / 100.0
+	cfg["ride_height"] = (_ws["ride_height"] as HSlider).value / 1000.0
 	cfg["limiter"] = (_ws["limiter"] as HSlider).value
 	cfg["ballast"] = (_ws["ballast"] as HSlider).value
 	return Workshop.normalized(cfg)
