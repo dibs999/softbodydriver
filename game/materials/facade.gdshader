@@ -194,6 +194,37 @@ void fragment() {
 					shelf = mix(shelf, vec3(0.85, 0.84, 0.8), step(0.9, fract(p.y / 0.38)));
 					float rack = step(0.15, p.y) * step(p.y, 2.4);
 					interior = mix(hit == tx.z ? wall_in : wall_in * 0.8, shelf * (hit == tx.z ? 1.0 : 0.85), rack);
+					// Not every shop is a grocer's: the unit's hash picks fashion, a cafe or an office.
+					float kind = fract(shop_rand * 13.7);
+					vec3 bright_wall = mix(vec3(0.86, 0.84, 0.8), vec3(0.78, 0.8, 0.82), fract(shop_rand * 3.9));
+					if (kind < 0.3) {
+						// Fashion: clothes on a rail, 0.9-1.7 m, in a few colours, pale walls.
+						float hang = floor(wall_u * 11.0);
+						vec3 cloth = mix(vec3(hash(vec2(hang, 2.0)), hash(vec2(hang, 5.0)), hash(vec2(hang, 9.0))), vec3(0.2), 0.35);
+						float garment = step(0.9, p.y) * step(p.y, 1.7 - 0.25 * hash(vec2(hang, 4.0))) * step(0.15, fract(wall_u * 11.0));
+						float rail = step(1.72, p.y) * step(p.y, 1.76);
+						interior = mix(bright_wall * (hit == tx.z ? 1.0 : 0.85), cloth, garment);
+						interior = mix(interior, vec3(0.6), rail);
+					} else if (kind < 0.52) {
+						// Cafe / bakery: a wooden counter, a warm display on it, a menu board above.
+						float counter = step(p.y, 1.0) * step(0.05, p.y);
+						vec3 wood = vec3(0.32, 0.2, 0.12) * mix(0.8, 1.1, hash(vec2(floor(wall_u * 3.0), 1.0)));
+						float display = step(1.0, p.y) * step(p.y, 1.3) * step(0.5, fract(wall_u * 4.0 + 0.2));
+						float board = step(1.65, p.y) * step(p.y, 2.25) * step(abs(fract(wall_u * 0.35) - 0.5), 0.32);
+						float lines = board * step(0.55, fract(p.y * 9.0)) * step(0.3, fract(wall_u * 3.3));
+						interior = mix(vec3(0.72, 0.62, 0.5) * (hit == tx.z ? 1.0 : 0.85), wood, counter);
+						interior = mix(interior, vec3(0.85, 0.6, 0.32), display * 0.8);
+						interior = mix(interior, vec3(0.08, 0.09, 0.08), board);
+						interior = mix(interior, vec3(0.8, 0.8, 0.75), lines * 0.8);
+					} else if (kind < 0.7) {
+						// Office / agency: desks at 0.75 m, a few large posters on a pale wall.
+						float desk = step(0.7, p.y) * step(p.y, 0.78) + step(p.y, 0.7) * step(0.6, fract(wall_u * 1.3)) * 0.6;
+						float poster_id = floor(wall_u * 0.8);
+						float poster = step(1.3, p.y) * step(p.y, 2.1) * step(abs(fract(wall_u * 0.8) - 0.5), 0.28);
+						vec3 poster_col = vec3(hash(vec2(poster_id, 11.0)), hash(vec2(poster_id, 12.0)), hash(vec2(poster_id, 13.0))) * 0.8 + 0.1;
+						interior = mix(bright_wall * (hit == tx.z ? 1.0 : 0.85), vec3(0.35, 0.33, 0.3), clamp(desk, 0.0, 1.0));
+						interior = mix(interior, poster_col, poster);
+					}
 				}
 			} else if (hit == tx.y) {
 				interior = dir.y < 0.0 ? vec3(0.32, 0.26, 0.2) * mix(0.7, 1.1, room_rand) : vec3(0.85, 0.85, 0.82);
