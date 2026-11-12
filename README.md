@@ -246,6 +246,7 @@ Details und verbleibende Release-Abnahmen: [Linux-Paketierung](docs/RELEASE_LINU
 | `F9` | Freie Kamera ein/aus: Fahrtasten bewegen, `Q`/`E` runter/hoch, `Umschalt` schneller, rechte Maustaste umsehen; das Auto steht solange still |
 | Rechte Maustaste, Mausrad | Umsehen auch im Cockpit, Zoom in Außenkameras |
 | `R` / `Pos1` / `Rücktaste` | Zurücksetzen an den Start / Zurückstellen auf die letzte Position auf allen vier Rädern (aufrecht, Schäden bleiben; nochmals drücken geht weiter zurück, auch im Pausenmenü) / an Ort und Stelle reparieren |
+| `Strg` + linke Maustaste (halten) | Node greifen: zieht den Node unter dem Mauszeiger mit einer Feder (bis 9 kN) zum Zeiger, Mausrad ändert den Abstand – Autos anheben, umkippen, wegziehen |
 | `B` | Node-Beam-Röntgenansicht (verformte Beams gelb bis rot) |
 | `J`, `P` | Zeitlupe (×0,5 / ×0,25 / ×0,1), Physik pausieren |
 | `F5` | Wiederholung der letzten 20 Sekunden (läuft in Schleife, jede Kamera inklusive freier Kamera; `F5` beendet) |
