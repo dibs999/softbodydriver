@@ -1441,7 +1441,9 @@ CarBuild buildCar(const CarDefinition& def) {
         build.layout.dragArea = cd * area;
     }
 
-    buildCarVisual(build, prof, rig);
+    Profile skin(bd, def.tires);
+    skin.crispHood = true;
+    buildCarVisual(build, skin, rig);
     setRigidParts(build.visual, {build.layout.bonnetNodes, build.layout.frontDoors[0].nodes, build.layout.frontDoors[1].nodes,
                                  build.layout.rearDoors[0].nodes, build.layout.rearDoors[1].nodes,
                                  build.layout.frontBumperNodes, build.layout.rearBumperNodes, build.layout.tailgateNodes});
