@@ -246,6 +246,49 @@ TEST_CASE("a felled log is shoved or climbed, never flung faster than the car") 
     CHECK(worstExcess < 1.5);
 }
 
+TEST_CASE("a fallen branch is run over or pushed aside without catching in a wheel arch") {
+    auto probe = buildProp(PropKind::Branch);
+    CHECK(probe.body.totalMass() == doctest::Approx(14.2).epsilon(0.02));
+    CHECK(probe.body.stabilityRatio(1.0 / 2000.0) < 0.9);
+    auto coast = [](bool withBranch, real kmh, real yawDeg, real dz) {
+        auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+        auto prop = buildProp(PropKind::Branch);
+        const real yaw = yawDeg * 3.14159265358979 / 180.0;
+        for (auto& p : prop.body.positions()) p = {p.x * std::cos(yaw) - p.z * std::sin(yaw), p.y, p.x * std::sin(yaw) + p.z * std::cos(yaw)};
+        prop.body.translate({car.def.body.length + 6.0, 0.0, dz});
+        World world;
+        world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+        const auto ic = world.addBody(std::move(car.body));
+        if (withBranch) world.addBody(std::move(prop.body));
+        VehicleControls c;
+        c.gear = 0;
+        world.body(ic).setControls(c);
+        world.simulate(1.0);
+        for (auto& v : world.body(ic).velocities()) v = {kmh / 3.6, 0, 0};
+        world.simulate(4.0);
+        REQUIRE(world.stats().finite);
+        return world.body(ic).telemetry().speedKmh;
+    };
+    // With bark at rubber-like friction a branch lying straight across at 70 km/h got its end
+    // dragged up into a front wheel arch, half-locked the wheel and cost the car 27 km/h.
+    for (const real kmh : {40.0, 70.0}) {
+        CAPTURE(kmh);
+        const real alone = coast(false, kmh, 0.0, 0.0);
+        real sum = 0.0, worst = 0.0;
+        int n = 0;
+        for (const real yaw : {90.0, 60.0, 30.0, 120.0})
+            for (const real dz : {-0.6, 0.0, 0.5}) {
+                const real loss = alone - coast(true, kmh, yaw, dz);
+                sum += loss;
+                worst = std::max(worst, loss);
+                ++n;
+            }
+        MESSAGE(kmh << " km/h over a branch: mean loss " << sum / n << " km/h, worst " << worst);
+        CHECK(sum / n < 1.6);
+        CHECK(worst < 4.0);
+    }
+}
+
 TEST_CASE("resting props fall asleep, a car wakes them, and they settle back to sleep") {
     auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
     auto cone = buildProp(PropKind::Cone);

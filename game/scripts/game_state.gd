@@ -509,6 +509,58 @@ static func _prop_mat(key: String, color: Color, rough := 0.6, metallic := 0.0) 
 	return _prop_mats[key]
 
 
+## The two halves of the fallen branch prop (built once): stem pieces resting on the ground with
+## the two twigs that carry physics nodes, plus visual-only spruce side shoots that thin out and
+## shorten towards the tip.
+static var _branch_mesh_cache: Array = []
+static func _branch_meshes() -> Array:
+	if not _branch_mesh_cache.is_empty():
+		return _branch_mesh_cache
+	var halves: Array[SurfaceTool] = [SurfaceTool.new(), SurfaceTool.new()]
+	for st in halves:
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var stick := func(h: int, a: Vector3, b: Vector3, ra: float, rb: float, segs: int) -> void:
+		var m := CylinderMesh.new()
+		m.bottom_radius = ra
+		m.top_radius = rb
+		m.height = a.distance_to(b)
+		m.radial_segments = segs
+		m.rings = 1
+		var up := (b - a).normalized()
+		var side := up.cross(Vector3.FORWARD if absf(up.z) < 0.9 else Vector3.RIGHT).normalized()
+		halves[h].append_from(m, 0, Transform3D(Basis(side, up, side.cross(up)).orthonormalized(), (a + b) * 0.5))
+	var pts := [Vector3(-1.21, 0.047, 0.0), Vector3(-0.55, 0.043, 0.03), Vector3(0.0, 0.040, -0.01),
+		Vector3(0.6, 0.035, 0.02), Vector3(1.22, 0.030, -0.02)]
+	var radii := [0.046, 0.041, 0.037, 0.032, 0.022]
+	for i in 4:
+		stick.call(0 if i < 2 else 1, pts[i], pts[i + 1], radii[i], radii[i + 1], 8)
+	# The twigs that carry the physics nodes.
+	stick.call(0, Vector3(-0.50, 0.05, 0.02), Vector3(-0.40, 0.24, 0.42), 0.017, 0.007, 5)
+	stick.call(1, Vector3(0.66, 0.045, -0.01), Vector3(0.80, 0.20, -0.46), 0.015, 0.006, 5)
+	# Herringbone side shoots, alternating sides, pointing towards the tip, lying low.
+	var k := 0
+	var x := -1.05
+	while x < 1.15:
+		var along := (x + 1.2) / 2.4
+		var sgn := 1.0 if k % 2 == 0 else -1.0
+		var length := lerpf(0.55, 0.22, along) * (0.8 + 0.4 * fmod(float(k) * 0.618, 1.0))
+		var base := Vector3(x, lerpf(0.05, 0.035, along), sgn * lerpf(0.035, 0.025, along))
+		var end := base + Vector3(length * 0.55, 0.02 + 0.05 * fmod(float(k) * 0.37, 1.0), sgn * length * 0.83)
+		var h := 0 if x < 0.0 else 1
+		stick.call(h, base, end, lerpf(0.011, 0.006, along), 0.003, 4)
+		# A pair of fine shoots off each side shoot.
+		for f: float in [0.45, 0.75]:
+			var at := base.lerp(end, f)
+			var tipv := at + Vector3(length * 0.22, 0.01, sgn * length * 0.08 * (1.0 if f < 0.6 else -1.0))
+			stick.call(h, at, tipv, 0.004, 0.002, 3)
+		k += 1
+		x += lerpf(0.17, 0.12, along)
+	for st in halves:
+		st.generate_normals()
+		_branch_mesh_cache.append(st.commit())
+	return _branch_mesh_cache
+
+
 static func _prop_part(parent: Node3D, mesh: Mesh, mat: Material, y: float) -> void:
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
@@ -650,6 +702,22 @@ func spawn_prop(world: SBWorld, kind: String, xform: Transform3D) -> SBProp:
 			wm.position = Vector3(-0.31, 0.10, side * 0.25)
 			wm.rotation = Vector3(PI * 0.5, 0, 0)
 			prop.add_child(wm)
+		return prop
+	if kind == "branch":
+		# Fallen dead spruce branch, 2.4 m, 9 -> 6 cm, with herringbone side shoots. The butt half
+		# and the tip half (the "Sub" part on its own frame, so a snapped branch lies in two
+		# pieces) are one shared mesh each: two draw calls per branch.
+		var meshes := _branch_meshes()
+		var bark := _prop_mat("branch_bark", Color(0.24, 0.19, 0.14), 0.95)
+		var butt := MeshInstance3D.new()
+		butt.mesh = meshes[0]
+		butt.material_override = bark
+		prop.add_child(butt)
+		var tip := MeshInstance3D.new()
+		tip.name = "Sub"
+		tip.mesh = meshes[1]
+		tip.material_override = bark
+		prop.add_child(tip)
 		return prop
 	if kind == "log":
 		# Felled trunk, 3 m x 0.4 m: dark furrowed bark, pale sawn end faces with a darker heart,

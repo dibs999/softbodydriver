@@ -1,7 +1,8 @@
 extends SceneTree
 ## Map renders without driving: godot -s res://tests/map_shots.gd -- <map_id> <out_prefix> [car] [night]
 ## Places the camera at five points along the map's route (eye height, looking ahead) plus one overview.
-## AT=<i,j,...> picks the route waypoints to look ahead from.
+## AT=<i,j,...> picks the route waypoints to look ahead from. PROP_VIEWS=<kind> adds close views
+## of the first three props of that kind.
 
 var frame := 0
 var scene: Node
@@ -71,6 +72,16 @@ func _setup() -> void:
 		for v in OS.get_environment("VIEWS").split(";"):
 			var f := v.split_floats(",")
 			views.append([Vector3(f[0], f[1], f[2]), Vector3(f[3], f[4], f[5])])
+	# PROP_VIEWS=<kind>: close views of the first three props of that kind ("branch", "log", ...).
+	if OS.has_environment("PROP_VIEWS"):
+		var count := 0
+		for pr: Dictionary in data.get("props", []):
+			if String(pr.get("kind", "")) != OS.get_environment("PROP_VIEWS") or count >= 3: continue
+			var at: Vector3 = pr["position"]
+			views.append([at + Vector3(2.6, 1.4, 2.2), at + Vector3(0, 0.1, 0)])
+			if count == 0: views.append([at + Vector3(0.9, 0.6, 0.7), at + Vector3(0, 0.05, 0)])
+			if count == 0: views.append([at + Vector3(0.0, 2.6, 0.02), at])
+			count += 1
 	var p: Vector3 = scene.player.get_position_ws()
 	# CAR_VIEWS=dx,dy,dz,tx,ty,tz;...: camera and target relative to the player car.
 	if OS.has_environment("CAR_VIEWS"):
