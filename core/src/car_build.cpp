@@ -1454,6 +1454,58 @@ CarBuild buildCar(const CarDefinition& def) {
         build.layout.dragArea = cd * area;
     }
 
+    // ------------------------------------------------------------------ rear wing (optional)
+    // Added after the drag calibration, so its drag and downforce come on top of the body's: a
+    // 1.3 m x 0.26 m plate (trailing edge raised by the angle of attack) on struts from the belt
+    // nodes of the two rearmost full stations, ~22 cm over the deck.
+    if (bd.rearWing > 0.0 && rig.stationX.size() > 3) {
+        std::size_t si = 0;
+        for (std::size_t i = 0; i < rig.stationX.size(); ++i)
+            if (std::abs(rig.stationX[i] - 0.30) < std::abs(rig.stationX[si] - 0.30)) si = i;
+        const std::size_t sj = std::min(si + 1, rig.stationX.size() - 1);
+        const std::int64_t m[4] = {rig.shell[si][3][0], rig.shell[sj][3][0], rig.shell[si][3][1], rig.shell[sj][3][1]};
+        if (m[0] >= 0 && m[1] >= 0 && m[2] >= 0 && m[3] >= 0 && si != sj) {
+            const auto& p = car.positions();
+            real deck = 0.0, halfZ = 0.0;
+            for (auto n : m) { deck = std::max(deck, p[static_cast<std::size_t>(n)].y); halfZ = std::max(halfZ, std::abs(p[static_cast<std::size_t>(n)].z)); }
+            const real span = std::min<real>(0.66, halfZ - 0.06);
+            const real chord = 0.26;
+            const real xc = 0.5 * (p[static_cast<std::size_t>(m[0])].x + p[static_cast<std::size_t>(m[1])].x) - 0.06;
+            const real yFront = deck + 0.22;
+            const real yRear = yFront + chord * std::sin(bd.rearWing * kPi / 180.0);
+            NodeParams wn;
+            wn.mass = 2.5;
+            wn.friction = 0.5;
+            wn.group = "wing";
+            const auto wFL = car.addNode("wing_fl", {xc + 0.5 * chord, yFront, -span}, wn);
+            const auto wFR = car.addNode("wing_fr", {xc + 0.5 * chord, yFront, span}, wn);
+            const auto wRL = car.addNode("wing_rl", {xc - 0.5 * chord, yRear, -span}, wn);
+            const auto wRR = car.addNode("wing_rr", {xc - 0.5 * chord, yRear, span}, wn);
+            const BeamParams plate = makeBeam(6.0e5, 90.0, 3.0e4, 6.0e4);
+            const std::uint32_t w[4] = {wFL, wFR, wRL, wRR};
+            for (int a = 0; a < 4; ++a)
+                for (int b = a + 1; b < 4; ++b) car.addBeam(w[a], w[b], plate);
+            const BeamParams strut = makeBeam(4.0e5, 70.0, 1.5e4, 3.5e4);
+            for (int side = 0; side < 2; ++side) {
+                const std::uint32_t front = side ? wFR : wFL, rear = side ? wRR : wRL;
+                const auto ma = static_cast<std::uint32_t>(m[side * 2]), mb = static_cast<std::uint32_t>(m[side * 2 + 1]);
+                const auto other = static_cast<std::uint32_t>(m[(1 - side) * 2]);
+                for (auto mount : {ma, mb}) {
+                    car.addBeam(front, mount, strut);
+                    car.addBeam(rear, mount, strut);
+                }
+                car.addBeam(front, other, strut);   // diagonal: keeps the wing from swaying sideways
+            }
+            ColTriParams wing;
+            wing.dragCoef = 3.0;   // ~400 N of downforce at 200 km/h at 12 degrees
+            wing.friction = 0.5;
+            car.addTriangle(wFL, wFR, wRR, wing);
+            car.addTriangle(wFL, wRR, wRL, wing);
+            build.layout.wingNodes = {wFL, wFR, wRL, wRR};
+            for (auto n : m) build.layout.wingMounts.push_back(static_cast<std::uint32_t>(n));
+        }
+    }
+
     Profile skin(bd, def.tires);
     skin.crispHood = true;
     buildCarVisual(build, skin, rig);

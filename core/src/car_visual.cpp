@@ -1477,6 +1477,34 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         }
     }
 
+    // Bolt-on rear wing (CarBodyDef::rearWing): the blade between its four nodes, endplates, and
+    // two struts down to the deck, skinned to the wing and mount nodes.
+    if (build.layout.wingNodes.size() == 4 && build.layout.wingMounts.size() == 4) {
+        const auto& P = body.positions();
+        const auto& W = build.layout.wingNodes;
+        const Vec3 fl = P[W[0]], fr = P[W[1]], rl = P[W[2]], rr = P[W[3]];
+        const std::vector<std::uint32_t> wing(W.begin(), W.end());
+        const Vec3 c = (fl + fr + rl + rr) * 0.25;
+        const Vec3 ax = normalize((fl + fr) * 0.5 - (rl + rr) * 0.5);   // along the chord, forward
+        const Vec3 az = normalize(fr - fl);
+        const Vec3 ay = normalize(cross(az, ax));
+        const real chord = length((fl + fr) * 0.5 - (rl + rr) * 0.5), span = length(fr - fl);
+        vb.bevelBox("trim", c, {chord * 0.5, 0.013, span * 0.5}, 0.009, wing, ax, ay, az);
+        for (real side : {-1.0, 1.0})
+            vb.box("trim", c + az * (side * (span * 0.5 + 0.004)) - ay * 0.035, {chord * 0.56, 0.075, 0.004}, wing, ax, ay, az);
+        std::vector<std::uint32_t> strutNodes = wing;
+        for (auto n : build.layout.wingMounts) strutNodes.push_back(n);
+        for (int side = 0; side < 2; ++side) {
+            const Vec3 mount = (P[build.layout.wingMounts[static_cast<std::size_t>(side * 2)]] +
+                                P[build.layout.wingMounts[static_cast<std::size_t>(side * 2 + 1)]]) * 0.5;
+            const Vec3 top = c + az * ((side ? 1.0 : -1.0) * span * 0.32) - ay * 0.012;
+            const Vec3 bottom{top.x - 0.03, mount.y - 0.02, top.z};
+            const Vec3 up = normalize(top - bottom);
+            vb.bevelBox("trim", (top + bottom) * 0.5, {0.045, length(top - bottom) * 0.5, 0.009}, 0.004, strutNodes,
+                        normalize(cross(up, az)), up, az);
+        }
+    }
+
     // Black rocker mouldings between the wheel arches, a roof spoiler over the tailgate of
     // hatchbacks and SUVs, and roof rails on SUVs: the parts that break up a smooth painted body.
     {

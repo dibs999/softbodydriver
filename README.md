@@ -388,9 +388,12 @@ Das Pausenmenü bietet Aktivitäten, Wetter und Tageszeit auch ohne Funktionstas
 **Werkstatt** (Pausenmenü): Teile und Tuning wie in BeamNGs Fahrzeugkonfiguration. Jeder Motor
 aus allen Fahrzeugen lässt sich einbauen (mit dem eigenen Getriebe, dessen Schaltpunkte an den neuen
 Drehzahlbereich angepasst werden, oder mit dem des Spenderautos); das Leergewicht ändert sich um die
-Motormassen-Differenz. Dazu Kennfeld-Leistung (70–150 %), Drehzahlbegrenzer, Achsübersetzung,
+Motormassen-Differenz. Dazu Kennfeld-Leistung (70–150 %), Ladedruck (bis +40 %, wirkt ab mittleren
+Drehzahlen), Drehzahlbegrenzer, Getriebeabstufung (eng/lang um den höchsten Gang), Achsübersetzung,
 Antrieb (Front, Heck, Allrad), Sperrdifferenzial, Federn, Dämpfer und Stabilisatoren je Achse,
-Fahrzeughöhe (−40 bis +60 mm), Reifenmischung (Eco, Serie, Sport, Semi-Slick), Reifenbreite,
+Fahrzeughöhe (−40 bis +60 mm), ein Heckflügel (12° oder 20°, bei den generierten Karosserien; ein
+echtes Bauteil aus Knoten und Balken, dessen Abtrieb und Luftwiderstand aus der Dreiecks-Aerodynamik
+kommen: bei 170 km/h rund 650 N mehr Last auf der Hinterachse), Reifenmischung (Eco, Serie, Sport, Semi-Slick), Reifenbreite,
 Bremsanlage und Zusatz- oder Minusgewicht. Die
 Ergebniszeile zeigt Leistung, Drehmoment, Drehzahlgrenze, Antrieb, Gewicht und Leistungsgewicht.
 „Übernehmen“ baut das Auto im Stand an Ort und Stelle neu auf; die Konfiguration wird je Fahrzeug

@@ -99,6 +99,18 @@ func _process(_d: float) -> bool:
 			print("  ", scene.rebuild_player({}))
 			check(str(scene.player.get_info()["engine"]) == base_engine, "Werkszustand brings the factory engine back")
 			check(root.get_node("Game").progress.get_config("kestrel_hatch").is_empty(), "and clears the stored configuration")
+			# Pure data checks of the remaining options.
+			var W := preload("res://scripts/vehicle_workshop.gd")
+			var def := W.read_definition("res://cars/kestrel_hatch.car.json")
+			var cat: Array = root.get_node("Game").engine_catalogue()
+			var boosted := W.apply(def, {"boost": 0.3}, cat)
+			var low: float = boosted["engine"]["torqueCurve"][0][1]
+			var mid: float = boosted["engine"]["torqueCurve"][3][1]
+			check(is_equal_approx(low, def["engine"]["torqueCurve"][0][1]) and mid > def["engine"]["torqueCurve"][3][1] * 1.25, "More boost: no gain off boost, +30 %% from mid revs (%.0f -> %.0f Nm)" % [def["engine"]["torqueCurve"][3][1], mid])
+			var close := W.apply(def, {"gear_spread": 0.8}, cat)
+			check(close["engine"]["gears"][0] < def["engine"]["gears"][0] and is_equal_approx(close["engine"]["gears"][-1], def["engine"]["gears"][-1]), "Close-ratio box: shorter steps, same top gear")
+			check(W.apply(def, {"wing": 2}, cat)["body"]["rearWing"] == 20.0, "Wing on a generated body")
+			check(not W.apply(W.read_definition("res://cars/meridian_sedan.car.json"), {"wing": 2}, cat)["body"].has("rearWing"), "but not on an imported model")
 			var msg: String = scene.rebuild_player({"power": 1.2})
 			check(msg == "Werkstatt: Leistung +20 %", "A plain engine tune rebuilds as well (%s)" % msg)
 			Input.action_press("throttle", 1.0)

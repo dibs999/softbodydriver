@@ -20,12 +20,18 @@ const DEFAULTS := {
 	"compound": 1,         # index into COMPOUNDS
 	"brakes": 1.0,         # brake torque factor (bigger discs and calipers)
 	"ballast": 0.0,        # kg added (negative: weight stripped out)
+	"boost": 0.0,          # extra charge pressure: torque gain from mid revs up (0.25 = +25 %)
+	"gear_spread": 1.0,    # gearbox spread (<1 close-ratio sport box, >1 long touring box)
+	"wing": 0,             # index into WINGS (procedural bodies only)
 	"ride_height": 0.0,    # ground clearance change, m (lowered / raised springs)
 	"tire_width": 1.0,     # tyre width factor (narrower / wider tyres on the same rims)
 }
 
 ## Tyre compounds: name and grip factor over the car's own tyres.
 const COMPOUNDS := [["Eco (leichtlaufend)", 0.93], ["Straße (Serie)", 1.0], ["Sport", 1.08], ["Semi-Slick", 1.18]]
+## Rear wings: name and angle of attack (sbcore CarBodyDef::rearWing). Downforce at ~170 km/h:
+## about 350 N at 12 degrees, 600 N at 20 degrees, with the drag that comes with it.
+const WINGS := [["Ohne", 0.0], ["Heckflügel (12°)", 12.0], ["Heckflügel steil (20°)", 20.0]]
 const LAYOUTS := [["Original", ""], ["Frontantrieb", "FWD"], ["Hinterradantrieb", "RWD"], ["Allrad", "AWD"]]
 
 ## Engine fields that travel with an engine swap (the brakes, tank and differential stay).
@@ -41,6 +47,7 @@ static func normalized(cfg: Variant) -> Dictionary:
 			if (cfg as Dictionary).has(k) and typeof(cfg[k]) == typeof(DEFAULTS[k]) or ((cfg as Dictionary).has(k) and (cfg[k] is float or cfg[k] is int) and (DEFAULTS[k] is float or DEFAULTS[k] is int)):
 				out[k] = cfg[k]
 	out["compound"] = clampi(int(out["compound"]), 0, COMPOUNDS.size() - 1)
+	out["wing"] = clampi(int(out["wing"]), 0, WINGS.size() - 1)
 	return out
 
 
@@ -110,6 +117,25 @@ static func apply(definition: Dictionary, cfg: Dictionary, catalogue: Array) -> 
 		for p in e.get("torqueCurve", []):
 			curve.append([p[0], float(p[1]) * float(c["power"])])
 		e["torqueCurve"] = curve
+	if c["boost"] != 0.0:
+		# More charge pressure: little off boost at low revs, the full gain from ~3500 rpm, tapering
+		# towards the redline where the turbo runs out of breath.
+		var redline := float(e.get("redlineRpm", 6000.0))
+		var boosted: Array = []
+		for p in e.get("torqueCurve", []):
+			var rpm := float(p[0])
+			var gain := smoothstep(1500.0, 3500.0, rpm) * (1.0 - 0.35 * smoothstep(redline - 1500.0, redline, rpm))
+			boosted.append([p[0], float(p[1]) * (1.0 + float(c["boost"]) * gain)])
+		e["torqueCurve"] = boosted
+	if c["gear_spread"] != 1.0:
+		# Spread round the top gear: each ratio's distance (in log) from the top gear scaled.
+		var gears: Array = e.get("gears", [])
+		if gears.size() > 1:
+			var top := float(gears[-1])
+			var spread: Array = []
+			for g in gears:
+				spread.append(top * pow(float(g) / top, float(c["gear_spread"])))
+			e["gears"] = spread
 	if c["limiter"] != 0.0:
 		e["redlineRpm"] = float(e.get("redlineRpm", 6000.0)) + float(c["limiter"])
 		e["shiftUpRpm"] = minf(float(e.get("shiftUpRpm", 5500.0)) + float(c["limiter"]), float(e["redlineRpm"]) - 300.0)
@@ -134,6 +160,9 @@ static func apply(definition: Dictionary, cfg: Dictionary, catalogue: Array) -> 
 	tires["friction"] = float(tires.get("friction", 1.0)) * float(COMPOUNDS[c["compound"]][1])
 	tires["width"] = float(tires.get("width", 0.22)) * float(c["tire_width"])
 	var body: Dictionary = d.get("body", {})
+	# Wings bolt onto the generated bodies; an imported model would hide the wing it carries.
+	if c["wing"] > 0 and not d.has("visualModel"):
+		body["rearWing"] = float(WINGS[c["wing"]][1])
 	if c["ride_height"] != 0.0:
 		body["groundClearance"] = maxf(0.07, float(body.get("groundClearance", 0.14)) + float(c["ride_height"]))
 	chassis["curbMass"] = float(chassis.get("curbMass", 1200.0)) + float(c["ballast"])
@@ -168,8 +197,11 @@ static func summary(cfg: Dictionary, catalogue: Array) -> String:
 			if entry["id"] == c["engine"]:
 				parts.append("Motor %s" % entry["name"])
 	if c["power"] != 1.0: parts.append("Leistung %+d %%" % int(round((c["power"] - 1.0) * 100.0)))
+	if c["boost"] != 0.0: parts.append("Ladedruck %+d %%" % int(round(c["boost"] * 100.0)))
+	if c["gear_spread"] != 1.0: parts.append("Getriebe %s" % ("eng" if c["gear_spread"] < 1.0 else "lang"))
 	if c["layout"] != "": parts.append(c["layout"])
 	if c["compound"] != 1: parts.append(COMPOUNDS[c["compound"]][0])
 	if c["ballast"] != 0.0: parts.append("%+d kg" % int(c["ballast"]))
+	if c["wing"] > 0: parts.append(WINGS[c["wing"]][0])
 	if c["ride_height"] != 0.0: parts.append("Höhe %+d mm" % int(round(c["ride_height"] * 1000.0)))
 	return "Serienstand" if parts.is_empty() else ", ".join(parts)
