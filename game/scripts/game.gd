@@ -1184,9 +1184,10 @@ func _build_workshop(ws_page: VBoxContainer) -> void:
 	_ws["wheels"] = _pause_choices(ws_page, "Räder", Workshop.WHEELS.map(func(w): return w[0]))
 	_ws["tire_width"] = _pause_slider(ws_page, "Reifenbreite", 85.0, 125.0, 5.0, "%.0f %%", note)
 	_ws["wing"] = _pause_choices(ws_page, "Heckflügel", Workshop.WINGS.map(func(w): return w[0]))
+	_ws["bullbar"] = _pause_choices(ws_page, "Rammschutz", ["Ohne", "Stahl-Rammschutz (30 kg)"])
 	_ws["brakes"] = _pause_slider(ws_page, "Bremsanlage", 70.0, 150.0, 5.0, "%.0f %%", note)
 	_ws["ballast"] = _pause_slider(ws_page, "Gewicht", -150.0, 300.0, 10.0, "%+.0f kg", note)
-	for key in ["engine", "gearbox", "layout", "lsd", "compound", "wing", "wheels"]:
+	for key in ["engine", "gearbox", "layout", "lsd", "compound", "wing", "wheels", "bullbar"]:
 		(_ws[key] as OptionButton).item_selected.connect(func(_i: int): _workshop_preview())
 	_ws_info = UITheme.label("", 14, UITheme.MUTED)
 	_ws_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1219,14 +1220,20 @@ func _workshop_load() -> void:
 	(_ws["compound"] as OptionButton).select(int(cfg["compound"]))
 	(_ws["wing"] as OptionButton).select(int(cfg["wing"]))
 	(_ws["wheels"] as OptionButton).select(int(cfg["wheels"]))
+	(_ws["bullbar"] as OptionButton).select(1 if cfg["bullbar"] else 0)
 	# Only as many gear sliders as the car's gearbox (or the donor's, if chosen) has gears.
 	var gear_count := int(player.get_info().get("gears", 6))
 	for g in 8:
 		(_ws["g%d" % (g + 1)] as HSlider).get_parent().visible = g < gear_count
 	# Wings only on the generated bodies (an imported model hides it).
 	var imported := not (Game.car_info(Game.car_path_for_id(str(player.get_info().get("id", "")))).get("visual_model", {}) as Dictionary).is_empty()
-	(_ws["wing"] as OptionButton).disabled = imported
-	(_ws["wing"] as OptionButton).tooltip_text = "Nur für Fahrzeuge ohne importiertes Modell" if imported else ""
+	var electric := bool(player.get_info().get("electric", false))
+	for part in ["engine", "gearbox"]:
+		(_ws[part] as OptionButton).disabled = electric
+		(_ws[part] as OptionButton).tooltip_text = "Elektroauto: Motor und Akku bleiben" if electric else ""
+	for part in ["wing", "bullbar"]:
+		(_ws[part] as OptionButton).disabled = imported
+		(_ws[part] as OptionButton).tooltip_text = "Nur für Fahrzeuge ohne importiertes Modell" if imported else ""
 	for key in ["power", "final_drive", "spring_f", "spring_r", "damp_f", "damp_r", "arb_f", "arb_r", "brakes", "tire_width", "boost", "gear_spread", "g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"]:
 		(_ws[key] as HSlider).value = float(cfg[key]) * 100.0
 	(_ws["ride_height"] as HSlider).value = float(cfg["ride_height"]) * 1000.0
@@ -1250,6 +1257,7 @@ func _workshop_read() -> Dictionary:
 	cfg["compound"] = (_ws["compound"] as OptionButton).selected
 	cfg["wing"] = (_ws["wing"] as OptionButton).selected
 	cfg["wheels"] = (_ws["wheels"] as OptionButton).selected
+	cfg["bullbar"] = (_ws["bullbar"] as OptionButton).selected == 1
 	for key in ["power", "final_drive", "spring_f", "spring_r", "damp_f", "damp_r", "arb_f", "arb_r", "brakes", "tire_width", "boost", "gear_spread", "g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"]:
 		cfg[key] = (_ws[key] as HSlider).value / 100.0
 	cfg["ride_height"] = (_ws["ride_height"] as HSlider).value / 1000.0

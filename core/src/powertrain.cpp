@@ -50,7 +50,7 @@ void Powertrain::repair() {
     engineOmega_ = rpmToRad(spec_.idleRpm);
     gear_ = 1;
     clutchEngagement_ = shiftTimer_ = cooldownTimer_ = 0.0;
-    lastEngineTorque_ = lastEnginePower_ = 0.0;
+    lastEngineTorque_ = lastEnginePower_ = lastRegenPower_ = 0.0;
     clutchTempC_ = 45.0;
     clutchWear_ = gearboxDamage_ = clutchSlipRpm_ = grind_ = 0.0;
     cond_ = {};
@@ -164,7 +164,7 @@ void Powertrain::step(const PowertrainInputs& in,
 
     // Idle governor + rev limiter.
     real idleAssist = 0.0;
-    if (running_ && rpm < spec_.idleRpm) {
+    if (running_ && !spec_.electric && rpm < spec_.idleRpm) {
         idleAssist = std::clamp((spec_.idleRpm - rpm) / 220.0, 0.0, 0.45);
     }
     real effThrottle = running_ ? std::max(throttle, idleAssist) : 0.0;
@@ -175,6 +175,14 @@ void Powertrain::step(const PowertrainInputs& in,
     const real lossTorque = spec_.engineFrictionNm + cond_.extraFrictionNm +
                             spec_.engineBraking * std::max<real>(0.0, engineOmega_);
     real netEngineTorque = grossTorque - (1.0 - 0.7 * effThrottle) * lossTorque;
+    // Recuperation: off the pedal the motor works as a generator, harder with the brake pedal
+    // pressed, fading out below ~10 km/h where it can no longer feed the battery.
+    lastRegenPower_ = 0.0;
+    if (spec_.electric && running_ && throttle < 0.05 && engineOmega_ > 0.0 && curRatio != 0.0) {
+        const real regen = spec_.regenTorqueNm * (1.0 + 1.5 * brake) * std::clamp(rpm / 900.0, 0.0, 1.0);
+        netEngineTorque -= regen;
+        lastRegenPower_ = regen * engineOmega_;
+    }
     // Friction never drives the crank backwards.
     if (engineOmega_ <= 0.0 && netEngineTorque < 0.0) netEngineTorque = 0.0;
     lastEngineTorque_ = netEngineTorque;
@@ -183,6 +191,9 @@ void Powertrain::step(const PowertrainInputs& in,
     // Clutch engagement: manual if >= 0, otherwise automatic launch curve.
     if (shiftTimer_ > 0.0 || clutchWear_ >= 1.0) {
         clutchEngagement_ = 0.0;
+    } else if (spec_.electric) {
+        // Direct drive: the motor is always coupled to the wheels while the car is ready.
+        clutchEngagement_ = (curRatio != 0.0 && running_ && !cond_.seized) ? 1.0 : 0.0;
     } else if (in.clutch >= 0.0) {
         clutchEngagement_ = std::clamp(in.clutch, 0.0, 1.0);
     } else if (cond_.seized || (!running_ && rpm < spec_.idleRpm * 0.5)) {
@@ -236,7 +247,7 @@ void Powertrain::step(const PowertrainInputs& in,
         engineOmega_ = 0.0;
     } else {
         engineOmega_ += ((netEngineTorque - clutchTorque) / spec_.engineInertia) * dt;
-        if (running_) {
+        if (running_ && !spec_.electric) {
             // A running engine can still be stalled by lugging it with the clutch engaged.
             if (engineOmega_ < rpmToRad(spec_.idleRpm * 0.30) && clutchEngagement_ > 0.6) running_ = false;
             const real minOmega = rpmToRad(spec_.idleRpm * 0.65);

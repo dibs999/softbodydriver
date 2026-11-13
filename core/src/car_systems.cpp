@@ -126,7 +126,7 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
     if (s.fuelL <= 0.0 && pt->running()) pt->setRunning(false);
     if (!pt->running() && ignition && starter && !s.seized && s.fuelL > 0.0 && s.fire < 0.4) {
         s.crankTimer += dt;
-        if (s.crankTimer > 0.7) {
+        if (s.crankTimer > (spec_.electric ? 0.15 : 0.7)) {
             pt->setRunning(true);
             s.crankTimer = 0.0;
         }
@@ -139,17 +139,28 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
     const real power = s.running ? pt->lastEnginePower() : 0.0;
     s.powerKw = power * 1e-3;
     real fuelKgPerS = 0.0;
-    if (s.running) {
-        fuelKgPerS = (s.powerKw * spec_.bsfcGPerKWh) / 3.6e6 + spec_.idleFuelLPerH * spec_.fuelDensity / 3600.0;
+    real electricHeat = 0.0;
+    if (spec_.electric) {
+        // Battery: motor and inverter at ~90 %, 0.4 kW for the car's electrics while ready;
+        // recuperation returns ~70 % of what the motor brakes.
+        const real draw = s.running ? power / 0.90 + 400.0 : 0.0;
+        const real regen = s.running ? pt->lastRegenPower() * 0.70 : 0.0;
+        s.fuelRateLPerH = (draw - regen) * 1e-3;
+        s.fuelL = std::clamp<real>(s.fuelL - (draw - regen) * dt / 3.6e6, 0.0, spec_.fuelCapacityL);
+        electricHeat = 0.08 * (power + pt->lastRegenPower());
+    } else {
+        if (s.running) {
+            fuelKgPerS = (s.powerKw * spec_.bsfcGPerKWh) / 3.6e6 + spec_.idleFuelLPerH * spec_.fuelDensity / 3600.0;
+        }
+        s.fuelRateLPerH = fuelKgPerS / spec_.fuelDensity * 3600.0;
+        real fuelLoss = fuelKgPerS / spec_.fuelDensity * dt;
+        if (s.fuelTankDamage > 0.05) fuelLoss += (0.02 + 0.3 * s.fuelTankDamage) * dt;
+        s.fuelL = std::max<real>(0.0, s.fuelL - fuelLoss);
     }
-    s.fuelRateLPerH = fuelKgPerS / spec_.fuelDensity * 3600.0;
-    real fuelLoss = fuelKgPerS / spec_.fuelDensity * dt;
-    if (s.fuelTankDamage > 0.05) fuelLoss += (0.02 + 0.3 * s.fuelTankDamage) * dt;
-    s.fuelL = std::max<real>(0.0, s.fuelL - fuelLoss);
 
     // ------------------------------------------------------------------ cooling circuit
     const real fuelPower = fuelKgPerS * kFuelLhv;
-    real heatIn = spec_.engineHeatFraction * fuelPower;
+    real heatIn = spec_.engineHeatFraction * fuelPower + electricHeat;
     if (s.headGasketBlown && s.running) heatIn *= 1.35;           // combustion gas into the coolant
     if (s.running && s.oilPressureBar < 0.5) heatIn += 6000.0 * (rpm / 3000.0);  // metal-on-metal friction
 
@@ -195,6 +206,7 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
         if (s.oilStarved) oilFactor *= std::max<real>(0.1, 1.0 - (s.horizontalG - threshold) * 2.5);
     }
     s.oilPressureBar = (rpm > 200.0) ? (0.8 + 4.2 * std::min<real>(rpm, 5500.0) / 5500.0) * oilFactor : 0.0;
+    if (spec_.electric) s.oilPressureBar = s.running ? 3.0 : 0.0;   // sealed reduction gear, no oil pump to fail
     const real load = clamp01(throttle);
     const real oilTarget = s.coolantTempC + 8.0 + 18.0 * load * clamp01(rpm / 6000.0);
     s.oilTempC += (oilTarget - s.oilTempC) * std::min<real>(1.0, 0.08 * dt);
@@ -211,7 +223,7 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
         // Rings scuff in an overheated bore and when the pistons are over-revved.
         if (s.coolantTempC > 118.0) s.pistonRingDamage += dt * 0.004 * (s.coolantTempC - 118.0);
         const real over = rpm / std::max<real>(1000.0, pt->spec().redlineRpm);
-        if (over > 1.15) s.pistonRingDamage += dt * 0.5 * (over - 1.15);
+        if (over > 1.15 && !spec_.electric) s.pistonRingDamage += dt * 0.5 * (over - 1.15);
         // Worn rings let oil past into the chambers: it burns (blue smoke) and the level drops.
         s.oilLevel = std::max<real>(0.0, s.oilLevel - dt * 0.004 * s.pistonRingDamage * std::max<real>(0.3, rpm / 3000.0));
     }
@@ -231,13 +243,13 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
         const real redline = std::max<real>(1000.0, pt->spec().redlineRpm);
         const real over = rpm / redline;
         s.peakOverRev = std::max(s.peakOverRev, over);
-        if (over > 1.10) s.overRevDamage = clamp01(s.overRevDamage + dt * 4.0 * (over - 1.10) * (over - 1.10));
+        if (over > 1.10 && !spec_.electric) s.overRevDamage = clamp01(s.overRevDamage + dt * 4.0 * (over - 1.10) * (over - 1.10));
         s.overRevTimer = over > 1.35 ? s.overRevTimer + dt : 0.0;
-        if (s.overRevTimer > 0.015 && !s.valvesBent) {
+        if (s.overRevTimer > 0.015 && !s.valvesBent && !spec_.electric) {
             s.valvesBent = true;
             s.overRevDamage = std::max<real>(s.overRevDamage, 0.6);
         }
-        if (over > 1.60 && s.overRevTimer > 0.03 && !s.rodBroken) {
+        if (over > 1.60 && s.overRevTimer > 0.03 && !s.rodBroken && !spec_.electric) {
             s.rodBroken = true;
             s.overRevDamage = 1.0;
             s.blockDamage = 1.0;                                   // rod through the block
@@ -278,7 +290,7 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
         }
     }
     s.wear = clamp01(s.wear);
-    if (spec_.intakeNode >= 0 && !s.hydrolocked && pt && pt->running() &&
+    if (spec_.intakeNode >= 0 && !spec_.electric && !s.hydrolocked && pt && pt->running() &&
         body.nodeWaterDepth(static_cast<std::size_t>(spec_.intakeNode)) > 0.03) {
         s.hydrolocked = true;
         s.status = "HYDROLOCK";
@@ -310,7 +322,7 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
         else if (s.hydrolocked) s.status = "HYDROLOCK";
         else if (s.rodBroken) s.status = "ENGINE BLOWN";
         else if (s.seized) s.status = "ENGINE SEIZED";
-        else if (s.fuelL <= 0.0) s.status = "OUT OF FUEL";
+        else if (s.fuelL <= 0.0) s.status = spec_.electric ? "BATTERY EMPTY" : "OUT OF FUEL";
         else if (s.driveshaftBroken) s.status = "DRIVESHAFT BROKEN";
         else if (s.headGasketBlown) s.status = "HEAD GASKET BLOWN";
         else if (s.valvesBent) s.status = "VALVES DAMAGED";

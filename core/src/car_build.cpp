@@ -1211,6 +1211,11 @@ CarBuild buildCar(const CarDefinition& def) {
     real peak = 0;
     for (auto& tq : pt.torqueCurve) peak = std::max(peak, tq.second);
     pt.clutchMaxTorque = peak * 1.7;
+    pt.electric = ed.type == "electric";
+    if (pt.electric) {
+        pt.clutchMaxTorque = peak * 3.0;   // a shaft, not a friction clutch
+        pt.regenTorqueNm = ed.regen * peak;
+    }
     pt.clutchStiffness = 18.0 * std::max<real>(1.0, peak / 250.0);
     pt.forwardGears = ed.gears;
     pt.reverseRatio = ed.reverse;
@@ -1362,6 +1367,7 @@ CarBuild buildCar(const CarDefinition& def) {
         sys.fuelCapacityL = ed.fuelCapacity;
         sys.fuelL = ed.fuelCapacity * 0.8;
         sys.bsfcGPerKWh = ed.bsfc;
+        sys.electric = ed.type == "electric";
         car.setSystems(sys);
     }
 
@@ -1507,12 +1513,51 @@ CarBuild buildCar(const CarDefinition& def) {
         }
     }
 
+    // ------------------------------------------------------------------ bull bar (optional)
+    // A steel tube frame 4-13 cm ahead of the front bumper, about 30 kg, bolted through to the
+    // chassis rails behind the bumper. It takes a low-speed knock (a post, a deer, a pushed car)
+    // before the bumper and the nose do; a hard crash bends it and tears its brackets out.
+    if (bd.bullbar) {
+        const real innerX = L + 0.04, outerX = L + 0.13;
+        const real y0 = prof.yBottom(L - 0.28) + 0.055;
+        const real y1 = std::max(y0 + 0.25, bd.noseHeight - 0.05);
+        const real halfZ = prof.halfW(L - 0.28) * 0.62;
+        auto& nodes = build.layout.bullbarNodes;
+        for (int ix = 0; ix < 2; ++ix)
+            for (int iy = 0; iy < 2; ++iy)
+                for (int iz = 0; iz < 2; ++iz) {
+                    NodeParams params;
+                    params.mass = 30.0 / 8.0;
+                    params.group = "bullbar";
+                    params.friction = 0.6;
+                    nodes.push_back(car.addNode("bullbar_" + std::to_string(ix * 4 + iy * 2 + iz),
+                        {ix ? outerX : innerX, iy ? y1 : y0, iz ? halfZ : -halfZ}, params));
+                }
+        connectAll(car, nodes, makeBeam(1.6e6, 130.0, 1.4e5, 3.5e5), nullptr);
+        // Brackets to the frame: the lower corners to the chassis rails, the upper ones to the
+        // mid-height side members, each over the two front stations of its side. Anchored on the
+        // nearest skin nodes instead, the bar pressed the knock straight into the nose panels.
+        BeamParams bracket = makeBeam(1.2e6, 110.0, 1.1e5, 1.3e5);
+        bracket.breakGroup = "bullbar_mounts";
+        const std::size_t NS = rig.stationX.size();
+        for (std::size_t corner = 0; corner < 4; ++corner) {
+            const std::size_t side = corner & 1u;           // iz: 0 = -z
+            const std::size_t slot = (corner & 2u) ? 2 : 0; // iy: upper corner -> mid member
+            for (std::size_t k = 1; k <= 2 && k <= NS; ++k) {
+                const std::int64_t anchor = rig.shell[NS - k][slot][side];
+                if (anchor >= 0) car.addBeam(nodes[corner], static_cast<std::uint32_t>(anchor), bracket);
+            }
+        }
+        addBoxCollision(nodes, 0.0);
+    }
+
     Profile skin(bd, def.tires);
     skin.crispHood = true;
     buildCarVisual(build, skin, rig);
     setRigidParts(build.visual, {build.layout.bonnetNodes, build.layout.frontDoors[0].nodes, build.layout.frontDoors[1].nodes,
                                  build.layout.rearDoors[0].nodes, build.layout.rearDoors[1].nodes,
-                                 build.layout.frontBumperNodes, build.layout.rearBumperNodes, build.layout.tailgateNodes});
+                                 build.layout.frontBumperNodes, build.layout.rearBumperNodes, build.layout.tailgateNodes,
+                                 build.layout.bullbarNodes});
     // In water a car floats on the air in its cabin and boot (mean density ~450 kg/m^3), floods
     // through door seals and vents in about a minute and then sinks (steel, glass, engine).
     car.setDisplacement(car.totalMass() / 450.0, car.totalMass() / 2600.0, 60.0);

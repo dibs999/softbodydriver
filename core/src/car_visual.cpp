@@ -1498,6 +1498,36 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         }
     }
 
+    // Bull bar (CarBodyDef::bullbar): uprights and a top hoop of 60 mm tube, a lower cross bar,
+    // two grille guards and the brackets back towards the bumper, skinned to its own nodes.
+    if (build.layout.bullbarNodes.size() == 8) {
+        const auto& P = body.positions();
+        const auto& B = build.layout.bullbarNodes;
+        const std::vector<std::uint32_t> bar(B.begin(), B.end());
+        const Vec3 i00 = P[B[0]], i01 = P[B[1]], i10 = P[B[2]], i11 = P[B[3]];
+        const Vec3 o00 = P[B[4]], o01 = P[B[5]], o10 = P[B[6]], o11 = P[B[7]];
+        const real r = 0.03;
+        // Rounded top corners: the uprights bend into the hoop over 9 cm.
+        const Vec3 dz = normalize(o11 - o10) * 0.09, dy = normalize(o10 - o00) * 0.09;
+        vb.tube("bullbar", o00, o10 - dy, r, bar, 12);
+        vb.tube("bullbar", o01, o11 - dy, r, bar, 12);
+        vb.tube("bullbar", o10 - dy, o10 + dz * 0.3 - dy * 0.3, r, bar, 12);
+        vb.tube("bullbar", o11 - dy, o11 - dz * 0.3 - dy * 0.3, r, bar, 12);
+        vb.tube("bullbar", o10 + dz * 0.3 - dy * 0.3, o10 + dz, r, bar, 12);
+        vb.tube("bullbar", o11 - dz * 0.3 - dy * 0.3, o11 - dz, r, bar, 12);
+        vb.tube("bullbar", o10 + dz, o11 - dz, r, bar, 12);
+        const Vec3 lowL = o00 + (o10 - o00) * 0.22, lowR = o01 + (o11 - o01) * 0.22;
+        vb.tube("bullbar", lowL, lowR, r * 0.9, bar, 12);
+        for (real f : {0.36, 0.64}) {
+            const Vec3 a = lowL + (lowR - lowL) * f, b = o10 + (o11 - o10) * f;
+            vb.tube("bullbar", a, b, r * 0.75, bar, 10);
+        }
+        for (real t : {0.3, 0.7}) {
+            vb.tube("bullbar", o00 + (o10 - o00) * t, i00 + (i10 - i00) * t, r * 0.8, bar, 10);
+            vb.tube("bullbar", o01 + (o11 - o01) * t, i01 + (i11 - i01) * t, r * 0.8, bar, 10);
+        }
+    }
+
     // Bolt-on rear wing (CarBodyDef::rearWing): the blade between its four nodes, endplates, and
     // two struts down to the deck, skinned to the wing and mount nodes.
     if (build.layout.wingNodes.size() == 4 && build.layout.wingMounts.size() == 4) {
@@ -2074,45 +2104,48 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         const real zt = -0.55 * hw;
         const real xTankF = tank.x + 0.34, xTankR = tank.x - 0.34;
         const real yP = yF - 0.012;
-        const std::vector<Vec3> path{
-            {prof.xFA + 0.05, prof.yBottom(prof.xFA) + 0.16, 0.10}, {prof.xFA - 0.12, yP + 0.02, 0.06},
-            {prof.xCowl - 0.30, yP, 0.03}, {xTankF + 0.10, yP, 0.03}, {xTankF - 0.05, yP, -0.42},
-            {xTankR - 0.02, yP, -0.42}, {archR + 0.02, yP, -0.40}, {prof.xRA + 0.05, yP + 0.09, -0.40},
-            {prof.xRA - prof.Ra - 0.02, yP + 0.05, -0.38}};
-        for (std::size_t i = 0; i + 1 < path.size(); ++i) {
-            const Vec3 d = normalize(path[i + 1] - path[i]);
-            vb.tube("exhaust", path[i] - d * 0.012, path[i + 1] + d * 0.012, 0.026, bodyNodes, 10);
-        }
-        for (std::size_t i = 1; i + 1 < path.size(); ++i) vb.oval("exhaust", path[i], {0.027, 0.027, 0.027}, bodyNodes);
-        {
-            const Vec3 a = path[1] + normalize(path[2] - path[1]) * 0.08;
-            vb.pillow("exhaust", a, a + normalize(path[2] - path[1]) * 0.34, {0, 0, 1}, {0, 1, 0}, [](real) {
-                std::vector<std::pair<real, real>> pts;
-                for (int i = 0; i < 14; ++i) { const real t = 2.0 * kPi * i / 14; pts.push_back({0.085 * std::cos(t), 0.045 * std::sin(t)}); }
-                return pts;
-            }, 0.05, bodyNodes, 3);  // catalytic converter
-            const Vec3 sc{0.5 * (xTankR + archR), yP, -0.41};
-            vb.pillow("exhaust", sc + Vec3{0.16, 0, 0}, sc - Vec3{0.16, 0, 0}, {0, 0, 1}, {0, 1, 0}, [](real) {
-                std::vector<std::pair<real, real>> pts;
-                for (int i = 0; i < 16; ++i) { const real t = 2.0 * kPi * i / 16; pts.push_back({0.075 * std::cos(t), 0.055 * std::sin(t)}); }
-                return pts;
-            }, 0.04, bodyNodes, 3);  // centre silencer
-        }
-        const real xBox = std::max<real>(0.22, prof.xRA - prof.Ra - 0.20);
-        const Vec3 boxC{xBox, prof.yBottom(xBox) + 0.04, zt * 0.55};
-        vb.pillow("exhaust", boxC + Vec3{0, 0, 0.24}, boxC - Vec3{0, 0, 0.24}, {1, 0, 0}, {0, 1, 0}, [](real) {
-            std::vector<std::pair<real, real>> pts;
-            for (int i = 0; i < 18; ++i) {
-                const real t = 2.0 * kPi * i / 18, c = std::cos(t), sn = std::sin(t);
-                pts.push_back({0.13 * std::copysign(std::pow(std::abs(c), 0.7), c), 0.06 * std::copysign(std::pow(std::abs(sn), 0.7), sn)});
+        // An electric car has no exhaust at all.
+        if (build.def.engine.type != "electric") {
+            const std::vector<Vec3> path{
+                {prof.xFA + 0.05, prof.yBottom(prof.xFA) + 0.16, 0.10}, {prof.xFA - 0.12, yP + 0.02, 0.06},
+                {prof.xCowl - 0.30, yP, 0.03}, {xTankF + 0.10, yP, 0.03}, {xTankF - 0.05, yP, -0.42},
+                {xTankR - 0.02, yP, -0.42}, {archR + 0.02, yP, -0.40}, {prof.xRA + 0.05, yP + 0.09, -0.40},
+                {prof.xRA - prof.Ra - 0.02, yP + 0.05, -0.38}};
+            for (std::size_t i = 0; i + 1 < path.size(); ++i) {
+                const Vec3 d = normalize(path[i + 1] - path[i]);
+                vb.tube("exhaust", path[i] - d * 0.012, path[i + 1] + d * 0.012, 0.026, bodyNodes, 10);
             }
-            return pts;
-        }, 0.05, bodyNodes, 4);  // rear silencer
-        vb.tube("exhaust", path.back(), boxC + Vec3{0.08, 0.0, 0.20}, 0.026, bodyNodes, 10);
-        const Vec3 tipA = boxC + Vec3{-0.06, -0.01, -0.21};
-        vb.tube("exhaust", tipA, {0.04, prof.yBottom(0.04) + 0.05, zt}, 0.026, bodyNodes, 10);
-        vb.tube("chrome", {0.075, prof.yBottom(0.04) + 0.05, zt}, {-0.012, prof.yBottom(0.04) + 0.05, zt}, 0.036, bodyNodes, 16);
-        vb.tube("seam", {-0.010, prof.yBottom(0.04) + 0.05, zt}, {-0.013, prof.yBottom(0.04) + 0.05, zt}, 0.030, bodyNodes, 16);
+            for (std::size_t i = 1; i + 1 < path.size(); ++i) vb.oval("exhaust", path[i], {0.027, 0.027, 0.027}, bodyNodes);
+            {
+                const Vec3 a = path[1] + normalize(path[2] - path[1]) * 0.08;
+                vb.pillow("exhaust", a, a + normalize(path[2] - path[1]) * 0.34, {0, 0, 1}, {0, 1, 0}, [](real) {
+                    std::vector<std::pair<real, real>> pts;
+                    for (int i = 0; i < 14; ++i) { const real t = 2.0 * kPi * i / 14; pts.push_back({0.085 * std::cos(t), 0.045 * std::sin(t)}); }
+                    return pts;
+                }, 0.05, bodyNodes, 3);  // catalytic converter
+                const Vec3 sc{0.5 * (xTankR + archR), yP, -0.41};
+                vb.pillow("exhaust", sc + Vec3{0.16, 0, 0}, sc - Vec3{0.16, 0, 0}, {0, 0, 1}, {0, 1, 0}, [](real) {
+                    std::vector<std::pair<real, real>> pts;
+                    for (int i = 0; i < 16; ++i) { const real t = 2.0 * kPi * i / 16; pts.push_back({0.075 * std::cos(t), 0.055 * std::sin(t)}); }
+                    return pts;
+                }, 0.04, bodyNodes, 3);  // centre silencer
+            }
+            const real xBox = std::max<real>(0.22, prof.xRA - prof.Ra - 0.20);
+            const Vec3 boxC{xBox, prof.yBottom(xBox) + 0.04, zt * 0.55};
+            vb.pillow("exhaust", boxC + Vec3{0, 0, 0.24}, boxC - Vec3{0, 0, 0.24}, {1, 0, 0}, {0, 1, 0}, [](real) {
+                std::vector<std::pair<real, real>> pts;
+                for (int i = 0; i < 18; ++i) {
+                    const real t = 2.0 * kPi * i / 18, c = std::cos(t), sn = std::sin(t);
+                    pts.push_back({0.13 * std::copysign(std::pow(std::abs(c), 0.7), c), 0.06 * std::copysign(std::pow(std::abs(sn), 0.7), sn)});
+                }
+                return pts;
+            }, 0.05, bodyNodes, 4);  // rear silencer
+            vb.tube("exhaust", path.back(), boxC + Vec3{0.08, 0.0, 0.20}, 0.026, bodyNodes, 10);
+            const Vec3 tipA = boxC + Vec3{-0.06, -0.01, -0.21};
+            vb.tube("exhaust", tipA, {0.04, prof.yBottom(0.04) + 0.05, zt}, 0.026, bodyNodes, 10);
+            vb.tube("chrome", {0.075, prof.yBottom(0.04) + 0.05, zt}, {-0.012, prof.yBottom(0.04) + 0.05, zt}, 0.036, bodyNodes, 16);
+            vb.tube("seam", {-0.010, prof.yBottom(0.04) + 0.05, zt}, {-0.013, prof.yBottom(0.04) + 0.05, zt}, 0.030, bodyNodes, 16);
+        }
         // Ribbed heat shield over the tunnel section of the pipe.
         {
             std::vector<std::vector<Vec3>> rows;

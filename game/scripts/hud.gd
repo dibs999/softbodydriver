@@ -47,7 +47,7 @@ const RED := Color("ff5a4f")
 const BG := Color(0.0, 0.0, 0.0, 0.52)
 const MESSAGE_SECONDS := 4.5
 const STATUS := {
-	"ENGINE SEIZED": "Motor festgelaufen", "OUT OF FUEL": "Tank leer",
+	"ENGINE SEIZED": "Motor festgelaufen", "OUT OF FUEL": "Tank leer", "BATTERY EMPTY": "Akku leer",
 	"HYDROLOCK": "Wasserschlag · Wasser im Ansaugtrakt, Motor zerstört",
 	"DRIVESHAFT BROKEN": "Antriebswelle gebrochen", "HEAD GASKET BLOWN": "Zylinderkopfdichtung defekt",
 	"OVERHEATING": "Motor überhitzt", "LOW OIL PRESSURE": "Öldruck zu niedrig",
@@ -323,7 +323,13 @@ func _gauge(c: Vector2) -> void:
 	draw_style_box(_chip_style, Rect2(c + Vector2(-20, -66), Vector2(40, 36)))
 	_centered(c + Vector2(0, -38), gear_text, 26, ACCENT, bold)
 	_text(c + Vector2(24, -40), "A" if vehicle.is_automatic() else "M", 11, MUTED)
-	_centered(c + Vector2(0, 56), "U/min ×1000", 9, MUTED)
+	if bool(info.get("electric", false)):
+		# Electric: battery charge and the power drawn (+) or recuperated (−) instead of revs.
+		var kw := float(_t.get("fuel_rate", 0.0))
+		var soc := clampf(float(_t["fuel_l"]) / maxf(1.0, float(info.get("fuel_capacity", 50.0))), 0.0, 1.0)
+		_centered(c + Vector2(0, 56), "Akku %d %%  ·  %+d kW" % [roundi(soc * 100.0), roundi(kw)], 9, GREEN if kw < -1.0 else MUTED)
+	else:
+		_centered(c + Vector2(0, 56), "U/min ×1000", 9, MUTED)
 	# Fuel and coolant arcs in the open bottom of the dial.
 	var capacity := maxf(1.0, float(info.get("fuel_capacity", 50.0)))
 	var fuel := clampf(float(_t["fuel_l"]) / capacity, 0.0, 1.0)

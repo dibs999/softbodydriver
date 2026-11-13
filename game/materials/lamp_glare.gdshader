@@ -21,7 +21,7 @@ void vertex() {
 	vec3 to_cam = cam - centre;
 	float dist = max(length(to_cam), 0.01);
 	float facing = dot(to_cam / dist, axis);
-	glare = strength * smoothstep(-0.05, narrow, facing) * mix(0.12, 1.0, city_night);
+	glare = strength * smoothstep(-0.05, narrow, facing) * mix(0.04, 1.0, city_night);
 	// A distant lamp keeps a visible point: the quad grows with distance (eye and lens blur).
 	float s = size * (1.0 + dist * 0.025);
 	vec4 v = VIEW_MATRIX * vec4(centre, 1.0);

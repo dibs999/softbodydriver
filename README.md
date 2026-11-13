@@ -33,6 +33,18 @@ Der Prüfstand unterscheidet hochfrequente Schwingungen, langsames Ausbrechen
 und ungültige Geschwindigkeitsfenster. Eine kleine RMS-Zahl allein bestätigt
 keine stabile Hochgeschwindigkeitsfahrt.
 
+### Elektroauto
+
+Der **Kestrel e:Hatch** fährt elektrisch: 150-kW-Heckmotor mit 310 Nm ab Stillstand und einer
+Untersetzung (0–100 km/h in rund 7 s), 58-kWh-Akku im Unterboden, 1.790 kg. Er hat keinen Leerlauf,
+keine Kupplung und kann nicht abgewürgt werden; beim Gaswegnehmen rekuperiert er spürbar (mit dem
+Bremspedal stärker) und lädt dabei den Akku. Der Akku leert sich mit der abgerufenen Leistung
+(Motor und Umrichter ~90 %, 0,4 kW Bordnetz). Das Kombiinstrument zeigt Ladestand und Leistung
+(grün beim Rekuperieren), am Serviceplatz wird geladen statt getankt (in der Karriere 0,49 €/kWh).
+Statt Motoraufnahmen hört man das Surren von Motor und Getriebe, lauter unter Last und beim
+Rekuperieren; Auspuff und Abgas gibt es nicht, Öl, Wasserschlag und Überdrehschäden auch nicht.
+Der E-Motor ist kein Tauschmotor in der Werkstatt (`electric_car_test`, Core-Test).
+
 ### Fahrgefühl, Aktivitäten und Darstellung
 
 - Reifenlast und Schlupf werden an den tatsächlichen Bodenkontakten gemessen. Ein
@@ -412,7 +424,9 @@ kommen: bei 170 km/h rund 650 N mehr Last auf der Hinterachse), Reifenmischung (
 Räder (Doppelspeichen-Sportfelgen 1 Zoll größer bei gleichem Außendurchmesser, geschmiedete
 konkave Leichtbaufelgen, Geländereifen 6 % größer auf Stahlfelgen mit Blockprofil, das auf
 Schotter, Sand und Gras deutlich besser greift und auf Asphalt etwas verliert, oder Straßenreifen
-für den 4×4; die Reifenflanke zeigt die Größe, die Ergebniszeile ebenso),
+für den 4×4; die Reifenflanke zeigt die Größe, die Ergebniszeile ebenso), ein Stahl-Rammschutz
+(rund 30 kg Rohr vor dem Stoßfänger an den Längsträgern, bei den generierten Karosserien: er hält
+bei einem Anstoß den Stoßfänger dran, gibt den Stoß aber hart an die Knautschzone weiter),
 Bremsanlage und Zusatz- oder Minusgewicht. Die
 Ergebniszeile zeigt Leistung, Drehmoment, Drehzahlgrenze, Antrieb, Gewicht, Leistungsgewicht und Reifengröße.
 „Übernehmen“ baut das Auto im Stand an Ort und Stelle neu auf; die Konfiguration wird je Fahrzeug

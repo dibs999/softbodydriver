@@ -661,3 +661,58 @@ TEST_CASE("water: a car fords shallow water, floats in deep water, floods, sinks
     CHECK(hydro);
     CHECK(floorY < -1.3);     // sinking towards the bottom
 }
+
+namespace {
+// Head-on hit on a wall at `kmh` with or without the bull bar: broken front bumper clips, bent
+// front bumper beams, bent body beams (outside bumper and bar), and whether the bar's brackets held.
+struct FrontalResult { int clips = 0, bumper = 0, body = 0; bool barHeld = true; };
+FrontalResult frontalHit(bool bullbar, real kmh) {
+    CarDefinition def = loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json");
+    def.body.bullbar = bullbar;
+    auto car = buildCar(def);
+    const std::vector<std::uint32_t> bar = car.layout.bullbarNodes, bumper = car.layout.frontBumperNodes;
+    const real L = car.def.body.length;
+    World world;
+    world.addCollider(StaticCollider::plane({0, 0, 0}, {0, 1, 0}));
+    world.addCollider(StaticCollider::box({L + 1.2, 1.0, 0.0}, {0.5, 1.0, 3.0}, {0, 0, 0}, 0.8));
+    const auto ic = world.addBody(std::move(car.body));
+    world.simulate(1.0);
+    for (auto& v : world.body(ic).velocities()) v = {kmh / 3.6, 0, 0};
+    VehicleControls c;
+    c.gear = 0;
+    world.body(ic).setControls(c);
+    world.simulate(1.5);
+    REQUIRE(world.stats().finite);
+    const SoftBody& body = world.body(ic);
+    const auto in = [](const std::vector<std::uint32_t>& set, std::uint32_t n) { return std::find(set.begin(), set.end(), n) != set.end(); };
+    FrontalResult r;
+    for (const Beam& b : body.beams()) {
+        const bool bent = b.broken || std::abs(b.restLength - b.baseRestLength) > 0.01 * b.baseRestLength;
+        const std::string group = b.breakGroup >= 0 ? body.breakGroupNames()[static_cast<std::size_t>(b.breakGroup)] : "";
+        if (b.broken && group.rfind("bumper_front_mounts", 0) == 0) ++r.clips;
+        if (in(bar, b.a) || in(bar, b.b)) {
+            if (b.broken && group == "bullbar_mounts") r.barHeld = false;
+        } else if (in(bumper, b.a) && in(bumper, b.b)) {
+            if (bent) ++r.bumper;
+        } else if (bent) {
+            ++r.body;
+        }
+    }
+    return r;
+}
+}  // namespace
+
+TEST_CASE("a bull bar keeps the bumper on in a knock but does not spare the crumple zone") {
+    const FrontalResult bare = frontalHit(false, 30.0), guarded = frontalHit(true, 30.0);
+    MESSAGE("30 km/h without bull bar: " << bare.clips << " clips torn, " << bare.bumper << " bumper beams bent, " << bare.body << " body beams bent");
+    MESSAGE("30 km/h with bull bar: " << guarded.clips << " clips torn, " << guarded.bumper << " bumper beams bent, " << guarded.body << " body beams bent");
+    CHECK(bare.clips > 0);
+    CHECK(guarded.clips == 0);
+    CHECK(guarded.bumper == 0);
+    CHECK(guarded.barHeld);
+    // The rigid bar passes the blow on to the rails: the structure behind still crumples.
+    CHECK(guarded.body > bare.body / 2);
+    const FrontalResult hard = frontalHit(true, 50.0);
+    MESSAGE("50 km/h with bull bar: " << hard.body << " body beams bent, brackets held: " << hard.barHeld);
+    CHECK(hard.body > 80);
+}

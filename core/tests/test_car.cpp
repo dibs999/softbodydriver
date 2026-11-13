@@ -1253,3 +1253,49 @@ TEST_CASE("rim designs give distinct rims inside the tyre") {
     std::sort(counts.begin(), counts.end());
     CHECK(std::adjacent_find(counts.begin(), counts.end()) == counts.end());
 }
+
+TEST_CASE("an electric car pulls from standstill, never stalls, recuperates and runs off its battery") {
+    CarBuild cb = buildCar(loadCarDefinition(carPath("kestrel_ev")));
+    World w = flatWorld();
+    w.addBody(std::move(cb.body));
+    SoftBody& car = w.body(0);
+    REQUIRE(car.hasSystems());
+    REQUIRE(car.powertrain().spec().electric);
+    w.simulate(1.0);
+    const real full = car.systems().state().fuelL;
+    // Ready at a standstill: no idle speed, nothing turning, but it does not count as stalled.
+    CHECK(car.powertrain().running());
+    CHECK(car.powertrain().engineRpm() < 50.0);
+    VehicleControls c;
+    c.throttle = 1.0;
+    car.setControls(c);
+    real t100 = -1.0;
+    for (int i = 0; i < 300 && t100 < 0.0; ++i) {
+        w.simulate(0.05);
+        if (car.telemetry().speedKmh >= 100.0) t100 = 0.05 * (i + 1);
+    }
+    MESSAGE("0-100 km/h: " << t100 << " s");
+    CHECK(t100 > 6.0);
+    CHECK(t100 < 10.0);
+    // Off the pedal it recuperates: it slows clearly faster than rolling in neutral would and the
+    // battery gains energy meanwhile.
+    c = {};
+    car.setControls(c);
+    const real e0 = car.systems().state().fuelL, v0 = car.telemetry().speedKmh;
+    w.simulate(3.0);
+    const real regenDrop = v0 - car.telemetry().speedKmh;
+    CHECK(car.systems().state().fuelL > e0);
+    CHECK(car.systems().state().fuelRateLPerH < 0.0);
+    MESSAGE("recuperating from " << v0 << " km/h: -" << regenDrop << " km/h in 3 s");
+    CHECK(regenDrop > 9.0);
+    // Down to a standstill on the brake: it stays ready, nothing stalls.
+    c.brake = 1.0;
+    car.setControls(c);
+    w.simulate(6.0);
+    CHECK(car.telemetry().speedKmh < 1.0);
+    CHECK(car.powertrain().running());
+    CHECK(car.systems().state().fuelL < full);
+    CHECK(car.systems().state().fuelL > full - 0.5);   // kWh: a sprint costs little
+    CHECK(car.systems().state().oilPressureBar > 1.0);
+    CHECK(w.stats().finite);
+}

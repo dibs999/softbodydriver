@@ -7,6 +7,7 @@ var world: SBWorld
 var dirt := false
 var surfaces: RefCounted
 var marks: MultiMeshInstance3D
+var _electric := false
 var _tread := ""   # the car's tyre tread pattern (get_info)
 var wheel_surfaces := ["asphalt", "asphalt", "asphalt", "asphalt"]
 var _surface_timer := 0.0
@@ -36,6 +37,8 @@ var splashes: Array[CPUParticles3D] = []   # water thrown up by each wheel (a fo
 func _ready() -> void:
 	if _smoke_mesh == null:
 		_make_meshes()
+	if vehicle:
+		_electric = bool(vehicle.get_info().get("electric", false))
 	for i in 4:
 		tires.append(_emitter(48, 2.8, false))
 		sparks.append(_emitter(10, 0.35, true))
@@ -402,7 +405,7 @@ func update_effects(t: Dictionary, anchors: Dictionary, slip: PackedFloat32Array
 	var rings := float(t.get("piston_ring_damage", 0.0))
 	var exhaust_level := 0.055 + (0.45 if bool(t["head_gasket"]) else 0.0) + oil_smoke + 0.5 * rings
 	exhaust.global_position = anchors["exhaust"]
-	exhaust.emitting = bool(t["running"])
+	exhaust.emitting = bool(t["running"]) and not _electric   # an electric car has no exhaust
 	exhaust.direction = -vehicle.get_forward() + Vector3.UP * 0.3
 	# Burnt oil from worn rings is blue-grey; steam from a head gasket white.
 	exhaust.color = Color(0.75, 0.79, 0.84, exhaust_level).lerp(Color(0.50, 0.56, 0.68, exhaust_level), clampf(rings * 2.0, 0.0, 1.0))

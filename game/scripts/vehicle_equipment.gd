@@ -352,9 +352,9 @@ func status_text() -> String:
 		if service_progress > 0.0:
 			result += "  |  Reparatur %d %% · %s halten" % [roundi(service_progress * 100.0), DriverPrompts.hint("service_repair")]
 		elif refueling:
-			result += "  |  Getankt %.1f l · %s halten" % [refuel_delivered_litres, DriverPrompts.hint("refuel")]
+			result += "  |  %s · %s halten" % [_delivered_text(), DriverPrompts.hint("refuel")]
 		else:
-			result += "  |  " + ("%s tanken · %s reparieren (halten)" % [DriverPrompts.hint("refuel"), DriverPrompts.hint("service_repair")] if can_refuel() else "Service: anhalten · %s Motor aus" % DriverPrompts.hint("ignition"))
+			result += "  |  " + ("%s %s · %s reparieren (halten)" % [DriverPrompts.hint("refuel"), _fill_verb(), DriverPrompts.hint("service_repair")] if can_refuel() else "Service: anhalten · %s Motor aus" % DriverPrompts.hint("ignition"))
 	return result
 
 ## Structured state for the HUD telltales and context prompt.
@@ -373,9 +373,9 @@ func hud_state() -> Dictionary:
 		if service_progress > 0.0:
 			prompt = "Reparatur %d %% · %s halten" % [roundi(service_progress * 100.0), DriverPrompts.hint("service_repair")]
 		elif refueling:
-			prompt = "Getankt %.1f l · %s halten" % [refuel_delivered_litres, DriverPrompts.hint("refuel")]
+			prompt = "%s · %s halten" % [_delivered_text(), DriverPrompts.hint("refuel")]
 		else:
-			prompt = "%s tanken · %s reparieren (halten)" % [DriverPrompts.hint("refuel"), DriverPrompts.hint("service_repair")] if can_refuel() else "Service: anhalten · %s Motor aus" % DriverPrompts.hint("ignition")
+			prompt = "%s %s · %s reparieren (halten)" % [DriverPrompts.hint("refuel"), _fill_verb(), DriverPrompts.hint("service_repair")] if can_refuel() else "Service: anhalten · %s Motor aus" % DriverPrompts.hint("ignition")
 	return {"light_mode": int(s["light_mode"]), "signal": int(s["signal"]), "hazards": bool(s["hazards"]),
 		"blink": fmod(clock, 0.8) < 0.4, "door": door, "prompt": prompt}
 
@@ -754,9 +754,10 @@ func update_service(sim_delta: float, repair_held: bool, fuel_held: bool) -> voi
 			_fuel_session = true
 		# Career: pay per litre as it flows (in half-litre steps); an empty account stops the pump.
 		var Career := preload("res://scripts/career.gd")
+		var price: float = Career.CHARGE_PRICE if _electric() else Career.FUEL_PRICE
 		if Game.settings.get("career", false) and _fuel_unpaid >= 0.5:
-			if not Game.progress.change_money(-_fuel_unpaid * Career.FUEL_PRICE):
-				if game.has_method("career_charge"): game.career_charge(_fuel_unpaid * Career.FUEL_PRICE, "Tanken")
+			if not Game.progress.change_money(-_fuel_unpaid * price):
+				if game.has_method("career_charge"): game.career_charge(_fuel_unpaid * price, "Laden" if _electric() else "Tanken")
 				return
 			_fuel_unpaid = 0.0
 		var added: float = game.player.refuel(maxf(0.0, sim_delta) * FUEL_RATE_LPS)
@@ -782,10 +783,22 @@ func cancel_service() -> void:
 ## Career: bill the fuel delivered since the last half-litre step when the nozzle is put back.
 func _settle_fuel() -> void:
 	if _fuel_unpaid > 0.0 and Game.settings.get("career", false):
-		var amount := _fuel_unpaid * preload("res://scripts/career.gd").FUEL_PRICE
+		var Career := preload("res://scripts/career.gd")
+		var amount: float = _fuel_unpaid * (Career.CHARGE_PRICE if _electric() else Career.FUEL_PRICE)
 		Game.progress.change_money(-minf(amount, Game.progress.get_money()))
-		if game and game.get("hud"): game.hud.toast("Getankt %.1f l · Konto %s" % [refuel_delivered_litres, preload("res://scripts/career.gd").money_text(Game.progress.get_money())])
+		if game and game.get("hud"): game.hud.toast("%s · Konto %s" % [_delivered_text(), Career.money_text(Game.progress.get_money())])
 	_fuel_unpaid = 0.0
+
+
+## The player's car runs on a battery: the service bay charges it instead of filling a tank.
+func _electric() -> bool:
+	return game != null and is_instance_valid(game.player) and bool(game.player.get_info().get("electric", false))
+
+func _fill_verb() -> String:
+	return "laden" if _electric() else "tanken"
+
+func _delivered_text() -> String:
+	return ("Geladen %.1f kWh" if _electric() else "Getankt %.1f l") % refuel_delivered_litres
 
 
 ## Towing only relocates the existing damaged car. It does not repair/refill it.

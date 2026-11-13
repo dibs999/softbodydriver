@@ -85,7 +85,8 @@ func _make_emitter(v: SBVehicle) -> Dictionary:
 	var root_node := Node3D.new()
 	add_child(root_node)
 	var players: Array[AudioStreamPlayer3D] = []
-	var rpms: Array = load_rpms + coast_rpms
+	# An electric car in traffic is heard by its tyres alone.
+	var rpms: Array = [] if cyl <= 0 else load_rpms + coast_rpms
 	for i in rpms.size():
 		var state := "load" if i < load_rpms.size() else "coast"
 		var source: AudioStreamWAV = load(VehicleAudio.RECORDINGS + "%s_%s_%d.wav" % [profile, state, rpms[i]])
