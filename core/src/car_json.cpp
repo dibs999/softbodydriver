@@ -136,6 +136,19 @@ CarDefinition parseCarDefinition(const std::string& text, const std::string& sou
                     if (kk == "tireMass") { d.tires.tireMass = vv.get<real>(); return true; }
                     if (kk == "rimMass") { d.tires.rimMass = vv.get<real>(); return true; }
                     if (kk == "rays") { d.tires.rays = vv.get<int>(); return true; }
+                    if (kk == "rimDesign") {
+                        d.tires.rimDesign = vv.get<std::string>();
+                        if (d.tires.rimDesign != "" && d.tires.rimDesign != "multispoke" && d.tires.rimDesign != "forged" &&
+                            d.tires.rimDesign != "steel")
+                            throw std::runtime_error("tires.rimDesign must be \"\", \"multispoke\", \"forged\" or \"steel\"");
+                        return true;
+                    }
+                    if (kk == "tread") {
+                        d.tires.tread = vv.get<std::string>();
+                        if (d.tires.tread != "road" && d.tires.tread != "offroad")
+                            throw std::runtime_error("tires.tread must be \"road\" or \"offroad\"");
+                        return true;
+                    }
                     return false;
                 });
                 return true;

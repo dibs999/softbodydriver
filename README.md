@@ -408,8 +408,12 @@ Antrieb (Front, Heck, Allrad), Sperrdifferenzial, Federn, Dämpfer und Stabilisa
 Fahrzeughöhe (−40 bis +60 mm), ein Heckflügel (12° oder 20°, bei den generierten Karosserien; ein
 echtes Bauteil aus Knoten und Balken, dessen Abtrieb und Luftwiderstand aus der Dreiecks-Aerodynamik
 kommen: bei 170 km/h rund 650 N mehr Last auf der Hinterachse), Reifenmischung (Eco, Serie, Sport, Semi-Slick), Reifenbreite,
+Räder (Doppelspeichen-Sportfelgen 1 Zoll größer bei gleichem Außendurchmesser, geschmiedete
+konkave Leichtbaufelgen, Geländereifen 6 % größer auf Stahlfelgen mit Blockprofil, das auf
+Schotter, Sand und Gras deutlich besser greift und auf Asphalt etwas verliert, oder Straßenreifen
+für den 4×4; die Reifenflanke zeigt die Größe, die Ergebniszeile ebenso),
 Bremsanlage und Zusatz- oder Minusgewicht. Die
-Ergebniszeile zeigt Leistung, Drehmoment, Drehzahlgrenze, Antrieb, Gewicht und Leistungsgewicht.
+Ergebniszeile zeigt Leistung, Drehmoment, Drehzahlgrenze, Antrieb, Gewicht, Leistungsgewicht und Reifengröße.
 „Übernehmen“ baut das Auto im Stand an Ort und Stelle neu auf; die Konfiguration wird je Fahrzeug
 im Profil gespeichert und gilt beim nächsten Start wieder (Verkehr und Gegner fahren Serie).
 „Werkszustand wiederherstellen“ setzt alles zurück (`workshop_test`; `workshop_extremes_test` baut

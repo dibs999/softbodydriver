@@ -201,7 +201,8 @@
     "friction": 1.08,
     "tireMass": 15.0,
     "rimMass": 13.0,
-    "rays": 20
+    "rays": 20,
+    "tread": "offroad"
   },
   "engine": {
     "name": "4.0 I6",

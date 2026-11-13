@@ -1,7 +1,8 @@
 extends SceneTree
 ## Werkstatt extremes: every car built twice at the ends of the ranges (lowered, wide, soft, no
-## anti-roll bars, the strongest engine, AWD, +50 % power, semi-slicks, -150 kg; and raised, narrow,
-## stiff, race differential, +300 kg, big brakes, short final drive) stays finite and drives off.
+## anti-roll bars, the strongest engine, AWD, +50 % power, semi-slicks, all-terrain tyres, -150 kg;
+## and raised, narrow, stiff, race differential, +300 kg, big brakes, short final drive, one inch
+## larger rims) stays finite and drives off.
 const W := preload("res://scripts/vehicle_workshop.gd")
 var world: SBWorld
 var queue: Array = []
@@ -16,8 +17,8 @@ func _go() -> void:
 	var cat: Array = W.engine_catalogue(game.cars)
 	var biggest: String = cat[-1]["id"]
 	for c in game.cars:
-		queue.append([c, {"engine": biggest, "layout": "AWD", "ride_height": -0.04, "tire_width": 1.25, "spring_f": 0.6, "spring_r": 0.6, "damp_f": 0.6, "damp_r": 0.6, "arb_f": 0.0, "arb_r": 0.0, "power": 1.5, "compound": 3, "ballast": -150.0}])
-		queue.append([c, {"ride_height": 0.06, "tire_width": 0.85, "spring_f": 1.8, "spring_r": 1.8, "damp_f": 1.8, "damp_r": 1.8, "arb_f": 2.0, "arb_r": 2.0, "lsd": 40.0, "ballast": 300.0, "brakes": 1.5, "final_drive": 1.25}])
+		queue.append([c, {"engine": biggest, "layout": "AWD", "ride_height": -0.04, "tire_width": 1.25, "spring_f": 0.6, "spring_r": 0.6, "damp_f": 0.6, "damp_r": 0.6, "arb_f": 0.0, "arb_r": 0.0, "power": 1.5, "compound": 3, "ballast": -150.0, "wheels": 3}])
+		queue.append([c, {"ride_height": 0.06, "tire_width": 0.85, "spring_f": 1.8, "spring_r": 1.8, "damp_f": 1.8, "damp_r": 1.8, "arb_f": 2.0, "arb_r": 2.0, "lsd": 40.0, "ballast": 300.0, "brakes": 1.5, "final_drive": 1.25, "wheels": 1}])
 	world = SBWorld.new()
 	root.add_child(world)
 	world.add_ground_plane(1.0)

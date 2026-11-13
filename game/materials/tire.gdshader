@@ -7,14 +7,19 @@ shader_type spatial;
 
 instance uniform float tire_radius = 0.0;
 instance uniform float rim_radius = 0.0;
+instance uniform float tire_width = 0.205;
+instance uniform float block_tread = 0.0;   // 1: all-terrain block tread, "TERRA" on the sidewall
 uniform vec4 rubber : source_color = vec4(0.035, 0.035, 0.037, 1.0);
 global uniform float road_wetness;
 
 // Sidewall lettering: a 5 x 5 pixel font (rows top to bottom, 5 bits each, leftmost bit high)
 // and the texts as glyph indices.
-const int GLYPHS[19] = int[](0, 18400580, 33061407, 17318431, 32641156, 32045714, 15269425, 16267326, 32045584, 15255086, 31504927, 15324974, 33060926, 1118480, 4591758, 15235630, 15252526, 18732593, 145536);
-const int TEXT_BRAND[12] = int[](1, 2, 3, 4, 5, 6, 0, 7, 8, 9, 5, 4);
-const int TEXT_SIZE[14] = int[](10, 11, 12, 13, 12, 12, 0, 5, 14, 15, 0, 16, 14, 1);
+// Glyphs: space V E L T R A S P O 2 0 5 / 1 6 9 M + 3 4 7 8.
+const int GLYPHS[23] = int[](0, 18400580, 33061407, 17318431, 32641156, 32045714, 15269425, 16267326, 32045584, 15255086, 31504927, 15324974, 33060926, 1118480, 4591758, 15235630, 15252526, 18732593, 145536,
+	31504446, 19496002, 32575752, 15252014);
+const int DIGIT[10] = int[](11, 14, 10, 19, 20, 12, 15, 21, 22, 16);
+const int TEXT_BRAND[12] = int[](1, 2, 3, 4, 5, 6, 0, 7, 8, 9, 5, 4);        // VELTRA SPORT
+const int TEXT_TERRA[12] = int[](1, 2, 3, 4, 5, 6, 0, 4, 2, 5, 5, 6);        // VELTRA TERRA
 const int TEXT_MS[3] = int[](17, 18, 7);
 
 varying vec3 local_pos;
@@ -38,13 +43,35 @@ float glyph_pixel(int ch, vec2 f) {
 	return float((bits >> ((4 - row) * 5 + (4 - col))) & 1);
 }
 
+// Character k of the size marking "WWW/PP RDD 91V", from the tyre's own dimensions: width in mm
+// (5 mm steps), profile in % of the width (5 % steps), rim diameter in inches.
+int size_char(int k) {
+	int w = int(round(tire_width * 200.0)) * 5;
+	int p = clamp(int(round((tire_radius - rim_radius) / max(tire_width, 0.05) * 20.0)) * 5, 10, 95);
+	int d = clamp(int(round(rim_radius * 2.0 / 0.0254)), 10, 24);
+	if (k == 0) return DIGIT[(w / 100) % 10];
+	if (k == 1) return DIGIT[(w / 10) % 10];
+	if (k == 2) return DIGIT[w % 10];
+	if (k == 3) return 13;
+	if (k == 4) return DIGIT[(p / 10) % 10];
+	if (k == 5) return DIGIT[p % 10];
+	if (k == 6) return 0;
+	if (k == 7) return 5;
+	if (k == 8) return DIGIT[(d / 10) % 10];
+	if (k == 9) return DIGIT[d % 10];
+	if (k == 10) return 0;
+	if (k == 11) return 16;
+	if (k == 12) return 14;
+	return 1;
+}
+
 // The text at arc position s (metres from the start of the run), cell width cw: the glyph pixel.
 float text_at(float s, float fy, float cw, int which) {
 	int n = which == 0 ? 12 : (which == 1 ? 14 : 3);
 	float ci = floor(s / cw);
 	if (ci < 0.0 || ci >= float(n)) return 0.0;
 	int k = int(ci);
-	int ch = which == 0 ? TEXT_BRAND[k] : (which == 1 ? TEXT_SIZE[k] : TEXT_MS[k]);
+	int ch = which == 0 ? (block_tread > 0.5 ? TEXT_TERRA[k] : TEXT_BRAND[k]) : (which == 1 ? size_char(k) : TEXT_MS[k]);
 	return glyph_pixel(ch, vec2(fract(s / cw), fy));
 }
 
@@ -66,7 +93,18 @@ void fragment() {
 		float along = ang * tire_radius;
 		float sipe = fract((along + abs(local_pos.z) * 0.55) / 0.032);
 		float groove = smoothstep(0.0, 0.07, sipe) * (1.0 - smoothstep(0.86, 0.93, sipe));
-		col *= mix(1.0, mix(0.45, 1.05, groove), tread);
+		if (block_tread > 0.5) {
+			// All-terrain: big staggered blocks (about 5.5 cm along, three rows across) with wide
+			// voids between them; the shoulder blocks reach round onto the sidewall.
+			float zr = local_pos.z / max(tire_width, 0.05) + 0.5;   // 0..1 across the tread
+			float row = floor(clamp(zr, 0.0, 0.999) * 3.0);
+			float u = fract((along + row * 0.018) / 0.055);
+			float v = fract(clamp(zr, 0.0, 0.999) * 3.0);
+			groove = smoothstep(0.0, 0.08, u) * (1.0 - smoothstep(0.66, 0.74, u)) * smoothstep(0.0, 0.1, v) * (1.0 - smoothstep(0.86, 0.96, v));
+			tread = max(tread, (1.0 - smoothstep(0.75, 0.95, axial)) * smoothstep(tire_radius - 0.045, tire_radius - 0.02, r)
+				* smoothstep(0.0, 0.08, u) * (1.0 - smoothstep(0.62, 0.7, u)));
+		}
+		col *= mix(1.0, mix(block_tread > 0.5 ? 0.25 : 0.45, 1.05, groove), tread);
 		rough = mix(rough, mix(0.97, 0.84, groove), tread);
 		// Sidewall: 0 at the rim, 1 at the shoulder.
 		float side = smoothstep(0.6, 0.85, axial);

@@ -1231,3 +1231,25 @@ TEST_CASE("oil on a hot engine can catch fire; a healthy hot engine does not") {
     CHECK_FALSE(burning.running);
     CHECK(burning.status == "ENGINE FIRE");
 }
+
+TEST_CASE("rim designs give distinct rims inside the tyre") {
+    std::vector<std::size_t> counts;
+    for (const char* design : {"", "multispoke", "forged", "steel"}) {
+        CarDefinition def = loadCarDefinition(carPath("kestrel_hatch"));
+        def.tires.rimDesign = design;
+        const CarBuild car = buildCar(def);
+        const MeshSurface& rim = car.visual.wheelFront[1];
+        REQUIRE(rim.material == "rim");
+        // Everything of the rim stays inside the tyre's inner radius and within its width.
+        real maxR = 0.0, maxZ = 0.0;
+        for (std::size_t i = 0; i + 2 < rim.positions.size(); i += 3) {
+            maxR = std::max<real>(maxR, std::hypot(rim.positions[i], rim.positions[i + 1]));
+            maxZ = std::max(maxZ, std::abs(static_cast<real>(rim.positions[i + 2])));
+        }
+        CHECK(maxR < def.tires.rimRadius + 0.02);
+        CHECK(maxZ < def.tires.width * 0.5);
+        counts.push_back(rim.positions.size());
+    }
+    std::sort(counts.begin(), counts.end());
+    CHECK(std::adjacent_find(counts.begin(), counts.end()) == counts.end());
+}

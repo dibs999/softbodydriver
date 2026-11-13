@@ -27,6 +27,7 @@ const DEFAULTS := {
 	"wing": 0,             # index into WINGS (procedural bodies only)
 	"ride_height": 0.0,    # ground clearance change, m (lowered / raised springs)
 	"tire_width": 1.0,     # tyre width factor (narrower / wider tyres on the same rims)
+	"wheels": 0,           # index into WHEELS
 }
 
 ## Tyre compounds: name and grip factor over the car's own tyres.
@@ -34,6 +35,19 @@ const COMPOUNDS := [["Eco (leichtlaufend)", 0.93], ["Straße (Serie)", 1.0], ["S
 ## Rear wings: name and angle of attack (sbcore CarBodyDef::rearWing). Downforce at ~170 km/h:
 ## about 350 N at 12 degrees, 600 N at 20 degrees, with the drag that comes with it.
 const WINGS := [["Ohne", 0.0], ["Heckflügel (12°)", 12.0], ["Heckflügel steil (20°)", 20.0]]
+## Wheels and tyres: name and changes over the car's own (radius / mass / grip factors, rim
+## radius added in m, tread pattern, rim design). A rim one inch larger keeps the outer diameter (lower
+## profile, stiffer and lighter tyre on a heavier rim, a little sharper grip); forged rims save
+## unsprung mass; all-terrain tyres are larger and heavier with a block tread that grips on gravel,
+## sand and grass (road_surface.gd) and loses some on tarmac; road tyres turn an off-roader the
+## other way.
+const WHEELS := [
+	["Serie", {}],
+	["Sportfelgen (Doppelspeichen), 1 Zoll größer", {"rim": 0.0127, "rim_mass": 1.15, "tire_mass": 0.9, "friction": 1.03, "design": "multispoke"}],
+	["Leichtbaufelgen (konkav), geschmiedet", {"rim_mass": 0.68, "design": "forged"}],
+	["Geländereifen auf Stahlfelgen, 6 % größer", {"radius": 1.06, "tire_mass": 1.35, "rim_mass": 1.2, "friction": 0.93, "psi": 0.88, "tread": "offroad", "design": "steel"}],
+	["Straßenreifen", {"friction": 1.06, "tire_mass": 0.85, "tread": "road"}],
+]
 const LAYOUTS := [["Original", ""], ["Frontantrieb", "FWD"], ["Hinterradantrieb", "RWD"], ["Allrad", "AWD"]]
 
 ## Engine fields that travel with an engine swap (the brakes, tank and differential stay).
@@ -50,6 +64,7 @@ static func normalized(cfg: Variant) -> Dictionary:
 				out[k] = cfg[k]
 	out["compound"] = clampi(int(out["compound"]), 0, COMPOUNDS.size() - 1)
 	out["wing"] = clampi(int(out["wing"]), 0, WINGS.size() - 1)
+	out["wheels"] = clampi(int(out["wheels"]), 0, WHEELS.size() - 1)
 	return out
 
 
@@ -165,6 +180,19 @@ static func apply(definition: Dictionary, cfg: Dictionary, catalogue: Array) -> 
 	var tires: Dictionary = d.get("tires", {})
 	tires["friction"] = float(tires.get("friction", 1.0)) * float(COMPOUNDS[c["compound"]][1])
 	tires["width"] = float(tires.get("width", 0.22)) * float(c["tire_width"])
+	var wheel: Dictionary = WHEELS[c["wheels"]][1]
+	if not wheel.is_empty():
+		var radius := float(tires.get("radius", 0.316)) * float(wheel.get("radius", 1.0))
+		tires["radius"] = radius
+		tires["rimRadius"] = minf(float(tires.get("rimRadius", 0.203)) + float(wheel.get("rim", 0.0)), radius * 0.82)
+		tires["tireMass"] = float(tires.get("tireMass", 9.5)) * float(wheel.get("tire_mass", 1.0))
+		tires["rimMass"] = float(tires.get("rimMass", 9.0)) * float(wheel.get("rim_mass", 1.0))
+		tires["friction"] = float(tires["friction"]) * float(wheel.get("friction", 1.0))
+		tires["pressurePsi"] = float(tires.get("pressurePsi", 33.0)) * float(wheel.get("psi", 1.0))
+		if wheel.has("tread"):
+			tires["tread"] = wheel["tread"]
+		if wheel.has("design"):
+			tires["rimDesign"] = wheel["design"]   # the look of a generated wheel; imported models keep theirs
 	var body: Dictionary = d.get("body", {})
 	# Wings bolt onto the generated bodies; an imported model would hide the wing it carries.
 	if c["wing"] > 0 and not d.has("visualModel"):
@@ -213,5 +241,6 @@ static func summary(cfg: Dictionary, catalogue: Array) -> String:
 	if c["compound"] != 1: parts.append(COMPOUNDS[c["compound"]][0])
 	if c["ballast"] != 0.0: parts.append("%+d kg" % int(c["ballast"]))
 	if c["wing"] > 0: parts.append(WINGS[c["wing"]][0])
+	if c["wheels"] > 0: parts.append(WHEELS[c["wheels"]][0])
 	if c["ride_height"] != 0.0: parts.append("Höhe %+d mm" % int(round(c["ride_height"] * 1000.0)))
 	return "Serienstand" if parts.is_empty() else ", ".join(parts)
