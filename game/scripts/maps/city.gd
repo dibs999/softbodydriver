@@ -57,7 +57,8 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	asphalt.set_shader_parameter("street_grid", Vector4(origin, origin, PITCH, STREET))
 	pavement.set_shader_parameter("kerb_grid", Vector4(origin, origin, PITCH, STREET))
 	pavement.set_shader_parameter("kerb_top", KERB)
-	C.quad(parent, Vector3(0, -0.01, 0), Vector2(size + 600, size + 600), asphalt)
+	# The street grid ends at the outer streets; beyond them the town's edge (see _outskirts).
+	C.quad(parent, Vector3(0, -0.01, 0), Vector2(size, size), asphalt)
 
 	var facades: Array[Material] = [
 		_facade_material(Color(0.62, 0.58, 0.51), Color(0.9, 0.89, 0.85), 0),
@@ -417,6 +418,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			break
 	props.append_array(bins)
 	_street_life(parent, world, origin, metal)
+	surface_regions.append_array(_outskirts(parent, world, size * 0.5, pavement, facades))
 	var speeds := C.speeds_from_curvature(route, 13.5, 6.0, 25.0)
 	var spawn_p := Vector3(origin + STREET * 0.5 + 5 * PITCH - 4.0, 0, origin + STREET * 0.5 + 5 * PITCH + 20.0)
 	var map_paths: Array[PackedVector3Array] = []
@@ -438,6 +440,87 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		"environment": {"sky_top": Color(0.3, 0.45, 0.7), "horizon": Color(0.7, 0.72, 0.76), "fog": Color(0.66, 0.68, 0.72),
 			"fog_density": 0.0012, "sun": Vector3(-35, 60, 0), "sun_energy": 1.2},
 	}
+
+
+## The edge of town: a footway along the outer streets, a meadow strip, then a wooded earth bank
+## all round (drivable, but no way out into an empty plain) and, beyond it, the blocks of the
+## suburbs as a skyline. Returns the surface regions (grass) of the bank.
+static func _outskirts(parent: Node3D, world: SBWorld, half: float, pavement: Material, facades: Array[Material]) -> Array[Dictionary]:
+	var regions: Array[Dictionary] = []
+	var grass := C.terrain_material("grass", 2.8)
+	# Footway (6 m) round the outside of the outer streets, raised like the blocks' kerbs.
+	for side in 4:
+		var horizontal := side < 2
+		var sgn := -1.0 if side % 2 == 0 else 1.0
+		var c := Vector3(0, KERB * 0.5, sgn * (half + 3.0)) if horizontal else Vector3(sgn * (half + 3.0), KERB * 0.5, 0)
+		var ext := Vector3(half * 2.0 + 12.0, KERB, 6.0) if horizontal else Vector3(6.0, KERB, half * 2.0 + 12.0)
+		C.box(parent, world, c, ext * 0.5, Vector3.ZERO, pavement, 0.9)
+	# Meadow beyond, out to the horizon.
+	C.quad(parent, Vector3(0, -0.03, 0), Vector2(half * 2.0 + 2400.0, half * 2.0 + 2400.0), C.surface_material("grass", 3.0, Color(0.62, 0.78, 0.52)))
+	# Earth bank: from 14 m outside the footway, 80 m deep, up to ~9 m high.
+	var inner := half + 20.0
+	var depth := 80.0
+	var tree_points: Array[Vector3] = []
+	for rect: Rect2 in [Rect2(-inner - depth, -inner - depth, (inner + depth) * 2.0, depth), Rect2(-inner - depth, inner, (inner + depth) * 2.0, depth),
+			Rect2(-inner - depth, -inner, depth, inner * 2.0), Rect2(inner, -inner, depth, inner * 2.0)]:
+		var along_x := rect.size.x > rect.size.y
+		var cell := 8.0
+		var nx := int(rect.size.x / cell) + 1
+		var nz := int(rect.size.y / cell) + 1
+		var heights := PackedFloat32Array()
+		heights.resize(nx * nz)
+		for x in nx:
+			for z in nz:
+				var px := rect.position.x + x * cell
+				var pz := rect.position.y + z * cell
+				# Distance out from the town (0 at the bank's inner foot, 1 at its outer edge).
+				var out := (maxf(absf(px), absf(pz)) - inner) / depth
+				var along := px if along_x else pz
+				var hgt := 9.0 + 3.0 * sin(along * 0.021) + 2.0 * cos(along * 0.047)
+				heights[x * nz + z] = maxf(0.0, hgt * smoothstep(0.0, 0.45, out) * (1.0 - 0.35 * smoothstep(0.6, 1.0, out)) - 0.02)
+		world.add_heightfield(rect.position.x, rect.position.y, cell, nx, nz, heights, 0.75)
+		parent.add_child(C.terrain_mesh(rect.position.x, rect.position.y, cell, nx, nz, heights, grass))
+		regions.append({"rect": rect, "surface": "grass"})
+		var count := int((rect.size.x if along_x else rect.size.y) / 14.0)
+		for i in count:
+			var t := (i + 0.5) / count
+			var jitter := sin(i * 2.31) * 0.5 + 0.5
+			var p := Vector3(rect.position.x + rect.size.x * t, 0, rect.position.y + rect.size.y * (0.25 + 0.6 * jitter)) if along_x \
+				else Vector3(rect.position.x + rect.size.x * (0.25 + 0.6 * jitter), 0, rect.position.y + rect.size.y * t)
+			p.y = C.sample(heights, nx, nz, rect.position.x, rect.position.y, cell, p.x, p.z)
+			tree_points.append(p)
+	var broadleaf: Array[Vector3] = []
+	var conifers: Array[Vector3] = []
+	for i in tree_points.size():
+		var p: Vector3 = tree_points[i]
+		if not V.keep(p): continue
+		(conifers if i % 3 == 0 else broadleaf).append(p)
+		world.add_box(p + Vector3.UP * 2.0, Vector3(0.22, 2.0, 0.22), Vector3.ZERO, 0.7)
+	V.plant(parent, "broadleaf", broadleaf, 7311, 0.9, 1.35)
+	V.plant(parent, "conifer", conifers, 7312, 0.85, 1.2)
+	# Suburbs beyond the bank: blocks of flats and offices at 650-950 m, seen over the trees.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4711
+	var box_mesh := BoxMesh.new()
+	var blocks: Array = [[], [], [], [], [], []]
+	var ring := 0
+	while ring < 110:
+		var a := rng.randf() * TAU
+		var r := rng.randf_range(half + 210.0, half + 500.0)
+		var c := Vector3(cos(a), 0, sin(a)) * r
+		# Square the ring to the town's outline.
+		c = c * (half + 230.0 + rng.randf() * 280.0) / maxf(absf(c.x), absf(c.z))
+		var w := rng.randf_range(18.0, 44.0)
+		var dpt := rng.randf_range(14.0, 26.0)
+		var hgt := rng.randf_range(12.0, 46.0) * (1.0 if rng.randf() < 0.8 else 1.6)
+		var basis := Basis(Vector3.UP, snappedf(rng.randf() * PI, PI * 0.5)).scaled(Vector3(w, hgt, dpt))
+		(blocks[rng.randi() % facades.size()] as Array).append(Transform3D(basis, Vector3(c.x, hgt * 0.5, c.z)))
+		ring += 1
+	for i in facades.size():
+		var typed: Array[Transform3D] = []
+		typed.assign(blocks[i])
+		C.scatter_multimesh(parent, box_mesh, facades[i], typed, false)
+	return regions
 
 
 static func _district(parent: Node3D, world: SBWorld, c: Vector3, block: Vector2i, asphalt: Material, pavement: Material, metal: Material) -> void:
