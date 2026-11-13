@@ -50,8 +50,15 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			var keep_from := 110.0 if near_shortcut else 18.0
 			var off_track := smoothstep(keep_from, keep_from + (80.0 if near_shortcut else 14.0), absf(Vector2(x, z / 0.90).length() - loop_r))
 			if m > 0.33:
+				# The cap rock only where the mask clears the threshold 12 m all round: a blob of the
+				# mask only a cell or two across stood as a smooth 35-46 m pyramid of 4 m triangles.
+				# Such small outcrops stay a talus mound.
+				var m_cap := m
+				if m > 0.38:
+					for o: Vector2 in [Vector2(12, 0), Vector2(-12, 0), Vector2(0, 12), Vector2(0, -12)]:
+						m_cap = minf(m_cap, mesa.get_noise_2d(x + o.x, z + o.y) + plateau * 0.58)
 				var soft := 46.0 * smoothstep(0.38, 0.49, m)
-				var butte := 11.0 * smoothstep(0.33, 0.40, m) + 35.0 * smoothstep(0.40, 0.415, m) + 3.0 * smoothstep(0.415, 0.6, m)
+				var butte := 11.0 * smoothstep(0.33, 0.40, m) + 35.0 * smoothstep(0.40, 0.415, m_cap) + 3.0 * smoothstep(0.415, 0.6, m_cap)
 				h += lerpf(soft, butte, off_track)
 			h += 65.0 * smoothstep(790.0, 950.0, maxf(absf(x), absf(z))) * (0.7 + 0.3 * ridges.get_noise_2d(x, z))
 			heights[ix * nz + iz] = h
@@ -185,7 +192,9 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var road_mat := C.road_material(2, half_w * 2.0, 12.0, "desert")
 	var shortcut_mat := C.road_material(2, 7.2, 12.0, "desert")
 	for m: ShaderMaterial in [road_mat, shortcut_mat]:
-		m.set_shader_parameter("ground_color", Color(0.74, 0.62, 0.47))
+		# The sand as it renders beside the road: the edge blends into it. (0.74, 0.62, 0.47) came out
+		# ~12 % lighter than the sand and drew a pale band with a frayed, cut-out outline.
+		m.set_shader_parameter("ground_color", Color(0.615, 0.50, 0.355))
 	parent.add_child(C.road_mesh(track, half_w, road_mat, true, 0.052, 12.0, ground_height))
 	parent.add_child(C.road_mesh(shortcut, 3.6, shortcut_mat, false, 0.043, 12.0, ground_height))
 	var mine := _mine(parent, world, shortcut, ground_height)
