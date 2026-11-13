@@ -21,6 +21,9 @@ func run() -> void:
 	profile.profile_path = "user://flow_test_%d_%d.json" % [Time.get_ticks_usec(), randi()]
 	for suffix in ["", ".bak", ".tmp", ".bak.tmp"]:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(profile.profile_path + suffix))
+	# The verdict before the teardown: if the engine hangs on quit, the suite runner sees a verdict
+	# and dumps the thread stacks instead of waiting out its timeout.
+	print("FIRST DRIVE FLOW TEST ", "OK" if failures == 0 else "FAILED")
 	game.progress = profile
 	game.selected_car = "res://cars/kestrel_hatch.car.json"
 	game.selected_map = "proving_grounds"
@@ -102,5 +105,4 @@ func run() -> void:
 	scene.queue_free()
 	await process_frame
 	await process_frame
-	print("FIRST DRIVE FLOW TEST ", "OK" if failures == 0 else "FAILED")
 	quit(1 if failures else 0)
