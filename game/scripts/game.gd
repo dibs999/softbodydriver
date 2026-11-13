@@ -34,6 +34,7 @@ var road_marks: RoadMarks
 var world: SBWorld
 var map_data: Dictionary
 var vehicles: Array[SBVehicle] = []
+var pedestrians: Node3D   # people on the city's footways (pedestrians.gd)
 var props: Array[SBProp] = []          # loose cones and drums of the map
 var _tune_front: HSlider
 var _tune_rear: HSlider
@@ -101,6 +102,12 @@ func _ready() -> void:
 		_:
 			map_data = MapBuilder.build_proving_grounds(world, maproot)
 	_apply_map_environment(map_data.get("environment", {}))
+	if not (map_data.get("pedestrian_loops", []) as Array).is_empty():
+		pedestrians = preload("res://scripts/pedestrians.gd").new()
+		pedestrians.name = "Pedestrians"
+		add_child(pedestrians)
+		pedestrians.visible_max = 90 if int(Game.graphics.get("effects", 1)) == 0 else 220
+		pedestrians.setup(self, map_data["pedestrian_loops"], 22)
 	for p: Dictionary in map_data.get("props", []):
 		var prop := Game.spawn_prop(world, String(p["kind"]), Transform3D(Basis(Vector3.UP, float(p.get("yaw", 0.0))), p["position"]))
 		if prop:
