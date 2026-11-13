@@ -1037,6 +1037,7 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 		return v
 
 	var vehicle_page: VBoxContainer = page.call("Fahrzeug")
+	_build_vehicle_picker(vehicle_page)
 	vehicle_page.add_child(UITheme.section("Türen und Ausstattung"))
 	for entry in [["Fahrertür öffnen / schließen", func():
 				equipment.toggle_door(0)
@@ -1310,6 +1311,107 @@ func rebuild_player(cfg: Dictionary) -> String:
 	return message
 
 
+## In-game vehicle selection (pause menu "Fahrzeug", as BeamNG's vehicle selector): the player's
+## car is exchanged for another model where it stands, or another car is parked in front of it
+## (to crash into, or to switch to with the vehicle-switch key). In the career only owned cars.
+var _pick_car: OptionButton
+var _pick_paths: Array = []
+var _parked: Array[SBVehicle] = []
+
+
+func _build_vehicle_picker(page_box: VBoxContainer) -> void:
+	page_box.add_child(UITheme.section("Fahrzeugauswahl"))
+	_pick_paths = []
+	var names: Array = []
+	for c: Dictionary in Game.cars:
+		_pick_paths.append(c["path"])
+		names.append("%s · %s · %.0f kW" % [c["name"], c["layout"], float(c["power"])])
+	_pick_car = _pause_choices(page_box, "Fahrzeug", names)
+	for entry in [["Mein Fahrzeug gegen dieses tauschen", func():
+				hud.toast(swap_player_car(_pick_paths[_pick_car.selected]))
+				_toggle_pause()],
+			["Dieses Fahrzeug vor mir abstellen", func():
+				hud.toast(park_car_ahead(_pick_paths[_pick_car.selected]))
+				_toggle_pause()],
+			["Abgestellte Fahrzeuge entfernen", func():
+				hud.toast(remove_parked_cars())
+				_toggle_pause()]]:
+		var b := Button.new()
+		b.text = entry[0]
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.pressed.connect(entry[1])
+		page_box.add_child(b)
+
+
+func swap_player_car(path: String) -> String:
+	if absf(player.get_speed_kmh()) > 5.0:
+		return "Zum Fahrzeugwechsel anhalten"
+	var info := Game.car_info(path)
+	if info.is_empty():
+		return "Fahrzeug nicht gefunden"
+	if Game.settings.get("career", false) and not Career.owns(Game.progress, str(info["id"])):
+		return "In der Karriere nur mit eigenen Fahrzeugen"
+	if str(info["id"]) == str(player.get_info().get("id", "")):
+		return "Dieses Fahrzeug fährst du schon"
+	uncouple_trailer()
+	var old := player
+	var xf := _here(old)
+	var i := vehicles.find(old)
+	vehicles.erase(old)
+	world.remove_vehicle(old)
+	var v := Game.spawn_vehicle(world, path, xf, true)
+	if v == null:
+		return "Fahrzeug ließ sich nicht aufbauen"
+	Game.selected_car = path   # "Neu starten" keeps the new choice
+	Game.apply_chosen_paint(v)
+	vehicles.insert(maxi(0, i), v)
+	_apply_settings(v)
+	_configure_effects(v)
+	_set_player(v)
+	for driver in ai.values():
+		driver.player = v
+	cam.snap()
+	return "Fahrzeug: %s" % info["name"]
+
+
+func park_car_ahead(path: String) -> String:
+	if _parked.size() >= 6:
+		return "Höchstens sechs abgestellte Fahrzeuge"
+	var f := player.get_forward()
+	f.y = 0.0
+	f = f.normalized() if f.length() > 0.1 else Vector3.RIGHT
+	var pos := player.get_position_ws() + f * 9.0 + Vector3.UP * 0.3
+	var v := Game.spawn_vehicle(world, path, MapBuilder.car_xform(pos, f))
+	if v == null:
+		return "Fahrzeug ließ sich nicht aufbauen"
+	v.set_input(0, 1, 0, 1)   # parked: handbrake on
+	vehicles.append(v)
+	_parked.append(v)
+	_configure_effects(v)
+	return "%s abgestellt · Fahrzeugwechsel mit der Wechseltaste" % Game.car_info(path).get("name", "Fahrzeug")
+
+
+func remove_parked_cars() -> String:
+	var n := 0
+	for v in _parked:
+		if is_instance_valid(v) and v != player:
+			vehicles.erase(v)
+			ai.erase(v)
+			world.remove_vehicle(v)
+			n += 1
+	_parked = _parked.filter(func(v): return is_instance_valid(v) and v == player)
+	if n == 0: return "Keine abgestellten Fahrzeuge"
+	return "1 abgestelltes Fahrzeug entfernt" if n == 1 else "%d abgestellte Fahrzeuge entfernt" % n
+
+
+## Where `car` stands, upright and facing its way, a little above the ground for the new build.
+func _here(car: SBVehicle) -> Transform3D:
+	var f := car.get_forward()
+	f.y = 0.0
+	f = f.normalized() if f.length() > 0.1 else Vector3.RIGHT
+	return MapBuilder.car_xform(car.get_position_ws() + Vector3.UP * 0.25, f)
+
+
 func _pause_slider(parent: VBoxContainer, caption: String, low: float, high: float, step: float, fmt: String,
 		changed: Callable) -> HSlider:
 	var row := HBoxContainer.new()
@@ -1388,6 +1490,8 @@ func _toggle_pause() -> void:
 		_pause_activity.select(maxi(0, activity.available_modes().find(activity.mode)))
 		_sync_tuning()
 		_workshop_load()
+		if _pick_car:
+			_pick_car.select(maxi(0, _pick_paths.find(Game.car_path_for_id(str(player.get_info().get("id", ""))))))
 		_pause_weather.select(weather.weather_index)
 		_pause_time.select(weather.time_index)
 		_pause_clock.set_pressed_no_signal(weather.automatic_time)

@@ -391,6 +391,11 @@ abgebremst, schwimmt zunächst auf der Luft in der Kabine, läuft in etwa einer 
 Gerät Wasser in den Ansaugtrakt eines laufenden Motors, gibt es Wasserschlag: Der Motor ist zerstört,
 bis repariert wird (`water_test`, Kerntest).
 
+**Fahrzeugauswahl** (Pausenmenü → Fahrzeug): jedes Auto an Ort und Stelle gegen das eigene tauschen
+(im Stand; in der Karriere nur eigene Fahrzeuge), weitere Autos vor sich abstellen (mit angezogener
+Handbremse, als Hindernis oder zum Umsteigen mit der Wechseltaste) und sie wieder entfernen
+(`vehicle_picker_test`).
+
 **Werkstatt** (Pausenmenü): Teile und Tuning wie in BeamNGs Fahrzeugkonfiguration. Jeder Motor
 aus allen Fahrzeugen lässt sich einbauen (mit dem eigenen Getriebe, dessen Schaltpunkte an den neuen
 Drehzahlbereich angepasst werden, oder mit dem des Spenderautos); das Leergewicht ändert sich um die
