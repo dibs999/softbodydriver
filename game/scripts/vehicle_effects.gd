@@ -28,6 +28,8 @@ var _levels := PackedFloat32Array([0, 0, 0, 0])
 static var _smoke_mesh: QuadMesh
 static var _spark_mesh: SphereMesh
 static var _streak_mesh: BoxMesh
+static var _drop_mesh: QuadMesh
+var splashes: Array[CPUParticles3D] = []   # water thrown up by each wheel (a ford, a puddle)
 
 
 func _ready() -> void:
@@ -36,6 +38,8 @@ func _ready() -> void:
 	for i in 4:
 		tires.append(_emitter(48, 2.8, false))
 		sparks.append(_emitter(10, 0.35, true))
+	for i in 4:
+		splashes.append(_splash_emitter())
 	body_sparks = _emitter(96, 0.42, true)
 	# Grinding steel throws white-hot streaks that cool to orange: thin rods stretched along their
 	# flight path, added onto the scene (they are light, not matter).
@@ -126,9 +130,66 @@ void fragment() {
 	streak_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	streak_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	streak_mat.albedo_color = Color(2.2, 2.0, 1.6)   # over-bright so glow picks the streaks up
+	# Water droplets: small bright billboards with a sharp edge and a highlight, stretched along
+	# their flight by the emitter's alignment.
+	var drop_shader := Shader.new()
+	drop_shader.code = """shader_type spatial;
+render_mode unshaded, cull_disabled, blend_mix, depth_draw_never;
+void vertex() {
+    mat4 facing = INV_VIEW_MATRIX;
+    facing[0] *= length(MODEL_MATRIX[0].xyz);
+    facing[1] *= length(MODEL_MATRIX[1].xyz);
+    facing[2] *= length(MODEL_MATRIX[2].xyz);
+    facing[3] = MODEL_MATRIX[3];
+    MODELVIEW_MATRIX = VIEW_MATRIX * facing;
+}
+void fragment() {
+    vec2 p = UV * 2.0 - 1.0;
+    p.y *= 0.45;   // elongated drop
+    float d = dot(p, p);
+    float body = 1.0 - smoothstep(0.55, 0.85, d);
+    float glint = 1.0 - smoothstep(0.0, 0.12, dot(p - vec2(-0.25, -0.1), p - vec2(-0.25, -0.1)));
+    ALBEDO = mix(COLOR.rgb, vec3(1.0), glint * 0.7);
+    ALPHA = clamp(COLOR.a, 0.0, 1.0) * body * 0.6;
+}
+"""
+	var drop_mat := ShaderMaterial.new()
+	drop_mat.shader = drop_shader
+	_drop_mesh = QuadMesh.new()
+	_drop_mesh.size = Vector2(0.028, 0.065)
+	_drop_mesh.material = drop_mat
 	_streak_mesh = BoxMesh.new()
 	_streak_mesh.size = Vector3(0.009, 0.13, 0.009)
 	_streak_mesh.material = streak_mat
+
+
+## Spray of a wheel in water: a fan of droplets thrown up and back, falling back under gravity.
+func _splash_emitter() -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	p.emitting = false
+	p.amount = 240
+	p.set_meta("budget", 240)
+	p.lifetime = 0.75
+	p.local_coords = false
+	p.mesh = _drop_mesh
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	p.particle_flag_align_y = true   # drops stretched along their flight
+	p.direction = Vector3.UP
+	p.spread = 40.0
+	p.flatness = 0.4
+	p.gravity = Vector3(0, -9.8, 0)
+	p.initial_velocity_min = 1.5
+	p.initial_velocity_max = 4.5
+	p.scale_amount_min = 0.4
+	p.scale_amount_max = 1.3
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	p.emission_sphere_radius = 0.18
+	var gradient := Gradient.new()
+	gradient.offsets = PackedFloat32Array([0.0, 0.1, 0.8, 1.0])
+	gradient.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 0.9), Color(1, 1, 1, 0.7), Color(1, 1, 1, 0)])
+	p.color_ramp = gradient
+	add_child(p)
+	return p
 
 
 func _emitter(count: int, duration: float, spark: bool) -> CPUParticles3D:
@@ -258,7 +319,6 @@ func update_effects(t: Dictionary, anchors: Dictionary, slip: PackedFloat32Array
 			var wet_depth: float = world.water_depth_at(contacts[i] + Vector3.UP * 0.05)
 			if wet_depth > 0.0:
 				splash = smoothstep(3.0, 25.0, speed) * clampf(wet_depth / 0.15, 0.3, 1.0)
-				intensity = maxf(intensity, splash)
 		if marks and refresh_surface:
 			marks.trace("%s:%d" % [vehicle.get_instance_id(), i], contacts[i], normals[i], intensity if not loose and contact > 0.15 else 0.0)
 		_levels[i] = lerpf(_levels[i], intensity, 1.0 - exp(-delta * 6.0))
@@ -266,16 +326,26 @@ func update_effects(t: Dictionary, anchors: Dictionary, slip: PackedFloat32Array
 		p.global_position = contacts[i] + normals[i] * 0.04 if contact > 0.05 else wheels[i] - Vector3.UP * radius
 		p.emitting = _levels[i] > 0.10
 		p.color = Color(0.67, 0.53, 0.35, _levels[i] * 0.85) if loose else Color(0.83, 0.86, 0.88, _levels[i])
+		var sp := splashes[i]
+		sp.emitting = splash > 0.05
 		if splash > 0.0:
-			p.color = Color(0.86, 0.9, 0.92, minf(1.0, _levels[i] * 1.2))
+			# Droplets thrown up and back off the tread; the bow wave pushes some forward too.
+			sp.global_position = contacts[i] + Vector3.UP * 0.08
+			var vel := vehicle.get_velocity()
+			sp.direction = (Vector3.UP * 1.2 - vel.normalized() * 0.35).normalized()
+			sp.initial_velocity_min = 1.0 + splash * 1.5
+			sp.initial_velocity_max = 2.5 + splash * 4.5
+			sp.color = Color(0.76, 0.81, 0.80, 1.0)
+			sp.speed_scale = 0.8 + 0.4 * splash
+			# A light mist round the droplets (the dust emitter, white and faint).
+			_levels[i] = lerpf(_levels[i], splash * 0.35, 1.0 - exp(-delta * 6.0))
+			p.emitting = _levels[i] > 0.05
+			p.color = Color(0.9, 0.93, 0.94, _levels[i] * 0.6)
 		# Airflow stretches the emitted wake; existing particles stay in world space.
 		p.direction = (normals[i] * 0.65 - vehicle.get_velocity() * 0.035).normalized()
 		p.gravity = breeze + Vector3.UP * (-0.12 if loose else 0.25)
 		p.initial_velocity_max = 0.6 + _levels[i] * 1.2
-		if splash > 0.0:   # heavy droplets: thrown up and out, falling back fast
-			p.direction = (normals[i] * 1.0 + vehicle.get_velocity().normalized() * 0.4).normalized()
-			p.gravity = Vector3.UP * -6.0
-			p.initial_velocity_max = 2.0 + splash * 4.0
+
 		p.scale_amount_max = 0.8 + _levels[i] * 1.1
 		var spark := sparks[i]
 		spark.global_position = p.global_position
