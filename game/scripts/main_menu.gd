@@ -275,7 +275,7 @@ func _build_ui() -> void:
 	var mv := VBoxContainer.new()
 	mv.add_theme_constant_override("separation", 10)
 	maps.add_child(mv)
-	mv.add_child(UITheme.section("Karte"))
+	mv.add_child(UITheme.section("Startort"))
 	var mscroll := ScrollContainer.new()
 	mscroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	mscroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -559,7 +559,7 @@ func _on_car_selected(i: int) -> void:
 
 func _on_map_selected(i: int) -> void:
 	Game.selected_map = Game.MAPS[i]["id"]
-	map_info.text = "KARTE: %s\n%s" % [Game.MAPS[i]["name"], Game.MAPS[i]["description"]]
+	map_info.text = "START: %s\n%s" % [Game.MAPS[i]["name"], Game.MAPS[i]["description"]]
 	if _career_on(): _refresh_garage()   # contract line, lock state and start button for this map
 
 

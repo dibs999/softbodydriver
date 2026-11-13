@@ -4,6 +4,7 @@ extends RefCounted
 
 const FACE_POS_X := 0.0           # yaw that makes a car (local +X forward) face world +X
 const C := preload("res://scripts/maps/common.gd")
+const Surroundings := preload("res://scripts/maps/proving_surroundings.gd")
 const V := preload("res://scripts/maps/vegetation.gd")
 
 
@@ -79,7 +80,7 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 	_flat_quad(parent, Vector3(0, -0.01, 0), Vector2(3000, 3000), grass)
 	_flat_quad(parent, Vector3(0, 0.0, 0), Vector2(750, 440), asphalt)
 
-	var landscape_regions: Array = preload("res://scripts/maps/proving_surroundings.gd").build(world, parent)
+	var landscape_regions: Array = Surroundings.build(world, parent)
 
 	# Oval track painted on the pad (straights along X).
 	var waypoints := PackedVector3Array()
@@ -266,7 +267,10 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 		"map_places": [{"name": "Sprung- und Crashbahn", "position": Vector3(124, 0, -40)},
 			{"name": "Fahrdynamik-Oval", "position": Vector3(20, 0, -130)},
 			{"name": "Handling-Parcours", "position": handling[3]},
-			{"name": "Werkstatt und Boxen", "position": workshop}],
+			{"name": "Werkstatt und Boxen", "position": workshop},
+			{"name": "Tunnel zur Stadt", "position": Surroundings.TUNNEL_MOUTH}],
+		"exits": [{"to": "city", "gate": Surroundings.tunnel["gate"], "width": Surroundings.tunnel["width"]}],
+		"entrances": {"city": Surroundings.tunnel["entrance"]},
 		"ai_spawns": [car_xform(waypoints[0], waypoints[1] - waypoints[0]), car_xform(waypoints[64], waypoints[65] - waypoints[64])]}
 
 
@@ -619,11 +623,49 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	C.carve_path(heights, nx, nz, ox, oz, cell, road, half_w + 0.75, 13.0, 0.05)
 	C.carve_path(heights, nx, nz, ox, oz, cell, chord, CHORD_HALF_W + 0.75, 11.0, 0.05, false)
 	var lake := _hill_lake(heights, nx, nz, ox, oz, cell, road, chord)
+	# Roads out: from the ring up through the woods to tunnels in the ridge, north to the forest
+	# and meadows (Wald & Weide) and west to the Autobahn. The points on the ring are clear of the
+	# farms, Lindenau and the junctions, on gentle bends.
+	var outs: Array[Dictionary] = []
+	var exit_before := heights.duplicate()
+	for spec: Array in EXITS:
+		var from := road[int(spec[0])]
+		var dir := Vector3(from.x, 0.0, from.z).normalized()
+		var foot: float = spec[1]
+		var way := C.exit_road(heights, nx, nz, ox, oz, cell, from, dir,
+			func(p: Vector3) -> bool: return Vector2(p.x, p.z).length() >= foot)
+		# The ring keeps its own level across the mouth of the new road.
+		var ring_part := PackedVector3Array()
+		for i in range(int(spec[0]) - 8, int(spec[0]) + 9):
+			ring_part.append(road[(i + n_road) % n_road])
+		C.carve_path(heights, nx, nz, ox, oz, cell, ring_part, half_w + 0.75, 13.0, 0.05, false)
+		outs.append({"road": way, "dir": dir, "mouth": way[way.size() - 1], "at": int(spec[0]), "to": spec[2], "sign": spec[3]})
+	var exit_ground := heights.duplicate()
+	for o: Dictionary in outs:
+		C.tunnel_cut(heights, nx, nz, ox, oz, cell, o["mouth"], o["dir"], 1.0, 75.0, 12.0, (o["mouth"] as Vector3).y - 0.5)
+	# Nothing grows or stands on the roads out, the tunnels' forecourts or right over their portals.
+	var exit_zone := func(x: float, z: float) -> bool:
+		var q := Vector2(x, z)
+		for o: Dictionary in outs:
+			var m: Vector3 = o["mouth"]
+			var d: Vector3 = o["dir"]
+			if C.tunnel_zone(q, Vector2(m.x, m.z), Vector2(d.x, d.z)):
+				return true
+			var way: PackedVector3Array = o["road"]
+			for j in way.size() - 1:
+				if q.distance_to(Geometry2D.get_closest_point_to_segment(q, Vector2(way[j].x, way[j].z), Vector2(way[j + 1].x, way[j + 1].z))) < 10.0:
+					return true
+		return false
 	# The roads are drawn 4-5 cm above the terrain; the physics ground is raised under them by the
 	# same amount so the wheels roll on the drawn asphalt instead of sinking into it.
-	var physical := C.raise_under_roads(heights, nx, nz, ox, oz, cell, [
+	var raised: Array = [
 		{"points": road, "half_w": half_w, "lift": 0.05, "closed": true},
-		{"points": chord, "half_w": CHORD_HALF_W, "lift": 0.044}])
+		{"points": chord, "half_w": CHORD_HALF_W, "lift": 0.044}]
+	for o: Dictionary in outs:
+		raised.append({"points": o["road"], "half_w": CHORD_HALF_W, "lift": 0.044})
+	var physical := C.raise_under_roads(heights, nx, nz, ox, oz, cell, raised)
+	for o: Dictionary in outs:
+		C.tunnel_cut_physical(physical, nx, nz, ox, oz, cell, o["mouth"], o["dir"])
 	world.add_heightfield(ox, oz, cell, nx, nz, physical, 1.0)
 	var grass := C.terrain_material("grass", 3.4)
 	var colors := PackedColorArray()
@@ -671,14 +713,34 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 			if wm > 0.0:
 				colors[ix * nz + iz] = colors[ix * nz + iz].lerp(Color(0.36, 0.42, 0.25), wm * 0.85)
 	C.terrain_tiles(parent, ox, oz, cell, nx, nz, heights, grass, colors)
+	# Things stand on the ground as it was before the tunnel's cut (over the tunnel: its earth cover).
 	var ground_height := func(x: float, z: float) -> float:
-		return C.sample(heights, nx, nz, ox, oz, cell, x, z)
+		return C.sample(exit_ground, nx, nz, ox, oz, cell, x, z)
 	parent.add_child(C.road_mesh(road, half_w, C.road_material(2, half_w * 2.0, 12.0, "rural"), true, 0.05, 12.0, ground_height))
 	parent.add_child(C.verge_mesh(road, half_w, 1.3, C.verge_material(1.3), true, 0.05, 12.0, ground_height))
 	# The district road sits a few millimetres below the main road, so the main road's surface and
 	# edge line run on across the junction mouth as they do on a priority road.
 	parent.add_child(C.road_mesh(chord, CHORD_HALF_W, C.road_material(2, CHORD_HALF_W * 2.0, 12.0, "rural"), false, 0.044, 12.0, ground_height))
 	parent.add_child(C.verge_mesh(chord, CHORD_HALF_W, 1.1, C.verge_material(1.1), false, 0.044, 12.0, ground_height))
+	var ground_colour := func(x: float, z: float) -> Color:
+		var fx := clampf((x - ox) / cell, 0.0, nx - 1.001)
+		var fz := clampf((z - oz) / cell, 0.0, nz - 1.001)
+		var ix := int(fx)
+		var iz := int(fz)
+		var c0 := colors[ix * nz + iz].lerp(colors[(ix + 1) * nz + iz], fx - ix)
+		var c1 := colors[ix * nz + iz + 1].lerp(colors[(ix + 1) * nz + iz + 1], fx - ix)
+		return c0.lerp(c1, fz - iz)
+	var exits: Array = []
+	var entrances := {}
+	for o: Dictionary in outs:
+		var way: PackedVector3Array = o["road"]
+		parent.add_child(C.road_mesh(way, CHORD_HALF_W, C.road_material(2, CHORD_HALF_W * 2.0, 12.0, "rural"), false, 0.044, 12.0, ground_height))
+		parent.add_child(C.verge_mesh(way, CHORD_HALF_W, 1.1, C.verge_material(1.1), false, 0.044, 12.0, ground_height))
+		var t := C.tunnel(parent, world, o["mouth"], o["dir"], o["sign"], 9.0, 5.4, 70.0,
+			C.portal_ground(exit_before, exit_ground, nx, nz, ox, oz, cell, o["mouth"], o["dir"]),
+			grass, ground_colour, 17.0, -0.045)
+		exits.append({"to": o["to"], "gate": t["gate"], "width": t["width"]})
+		entrances[o["to"]] = t["entrance"]
 	var markers: Array[Transform3D] = []
 	for i in range(3, n_road, 8):
 		var heading := (road[(i + 1) % n_road] - road[i - 1]).normalized()
@@ -687,13 +749,14 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 		for sign: float in [-1.0, 1.0]:
 			var p := road[i] + side * sign * (half_w + 0.8)
 			p.y = C.sample(heights, nx, nz, ox, oz, cell, p.x, p.z)
-			markers.append(Transform3D(basis, p))
+			if not exit_zone.call(p.x, p.z):
+				markers.append(Transform3D(basis, p))
 	C.roadside_markers(parent, markers)
 	# Road furniture: guardrails on bends and embankments, bend chevrons and warning signs, a
 	# power line along the road, and pasture fences, hay bales and boulders around the farms.
 	var R := preload("res://scripts/maps/roadside.gd")
 	# The loop has gentle bends (radius >= ~110 m): rails and chevrons mark its sharpest ones.
-	R.guardrails(parent, world, road, half_w, ground_height, true, 0.125)
+	R.guardrails(parent, world, road, half_w, ground_height, true, 0.125, 1.4, func(p: Vector3) -> bool: return exit_zone.call(p.x, p.z))
 	R.bend_signs(parent, road, half_w, ground_height, true, 0.145)
 	var farm_points := [road[12], road[194], road[410]]
 	var keep_clear := func(p: Vector3) -> bool:
@@ -707,6 +770,8 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 		for j in range(0, chord.size(), 2):
 			if Vector2(p.x - chord[j].x, p.z - chord[j].z).length() < 9.0:
 				return false
+		if exit_zone.call(p.x, p.z):
+			return false
 		return Vector2(p.x - road[0].x, p.z - road[0].z).length() > 30.0
 	R.utility_line(parent, world, road, -(half_w + 6.0), ground_height, true, 44.0, keep_clear)
 	var bale_rng := RandomNumberGenerator.new()
@@ -753,6 +818,8 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 			continue
 		if p.distance_to(Vector2(road[12].x, road[12].z)) < 42.0 or p.distance_to(Vector2(road[VILLAGE_AT].x, road[VILLAGE_AT].z)) < 120.0:
 			continue
+		if exit_zone.call(p.x, p.y):
+			continue
 		var near := false
 		for j in range(0, net.size(), 6):
 			if p.distance_to(Vector2(net[j].x, net[j].z)) < 14.0:
@@ -760,7 +827,7 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 				break
 		if near:
 			continue
-		var y := C.sample(heights, nx, nz, ox, oz, cell, p.x, p.y)
+		var y := C.sample(exit_ground, nx, nz, ox, oz, cell, p.x, p.y)
 		# Conifers cluster on the higher, shadier ground; broadleaf trees in the valleys.
 		(conifers if noise.get_noise_2d(p.x * 0.7 + 400.0, p.y * 0.7) > 0.05 else broadleaf).append(Vector3(p.x, y, p.y))
 	# Forest corridors: on a few stretches the road runs through dense woods with undergrowth.
@@ -793,6 +860,8 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	var near_road := func(p: Vector2, d: float) -> bool:
 		if not lake.is_empty() and p.distance_to(lake["xz"]) < float(lake["radius"]) + 7.0:
 			return true   # no tree colliders in the lake or on its shore
+		if exit_zone.call(p.x, p.y):
+			return true
 		if not road_cells.has(Vector2i(floori(p.x / 16.0), floori(p.y / 16.0))):
 			return false
 		for j in net.size():
@@ -845,6 +914,14 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	broadleaf = off_chord.call(broadleaf, 9.5)   # as far as the tree colliders keep off roads
 	conifers = off_chord.call(conifers, 9.5)
 	under = off_chord.call(under, CHORD_HALF_W + 3.0)
+	var off_exit := func(list: Array[Vector3]) -> Array[Vector3]:
+		var out: Array[Vector3] = []
+		for p in list:
+			if not exit_zone.call(p.x, p.z): out.append(p)
+		return out
+	broadleaf = off_exit.call(broadleaf)
+	conifers = off_exit.call(conifers)
+	under = off_exit.call(under)
 	V.plant(parent, "broadleaf", broadleaf, 31, 0.75, 1.25, false)
 	V.plant(parent, "conifer", conifers, 32, 0.6, 1.0, false)
 	V.plant(parent, "bush", under, 35, 0.7, 1.6, false)
@@ -858,9 +935,10 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 			if p.distance_to(road[0]) < 20.0:
 				continue   # keep the start and the service bay beside it clear
 			hedges.append(p)
-	V.plant(parent, "bush", off_chord.call(hedges, CHORD_HALF_W + 3.0), 33, 0.8, 2.0, false)
+	V.plant(parent, "bush", off_exit.call(off_chord.call(hedges, CHORD_HALF_W + 3.0)), 33, 0.8, 2.0, false)
 	V.roadside_grass(parent, road, true, half_w + 0.7, half_w + 16.0, 6.0, 34, ground_height,
 		func(p: Vector3) -> bool:
+			if exit_zone.call(p.x, p.z): return true
 			for j in range(0, mini(chord.size(), 12)):
 				if Vector2(p.x - chord[j].x, p.z - chord[j].z).length() < CHORD_HALF_W + 9.0: return true
 			for j in range(maxi(0, chord.size() - 12), chord.size()):
@@ -871,6 +949,15 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 			for j in range(0, n_road, 3):
 				if Vector2(p.x - road[j].x, p.z - road[j].z).length() < half_w + 1.5: return true
 			return false)
+	for o: Dictionary in outs:
+		var way: PackedVector3Array = o["road"]
+		var at: int = o["at"]
+		V.roadside_grass(parent, way.slice(2, way.size() - 3), false, CHORD_HALF_W + 0.6, CHORD_HALF_W + 12.0, 6.0, 37 + at, ground_height,
+			func(p: Vector3) -> bool:
+				for j in range(at - 8, at + 9):
+					var r := road[(j + n_road) % n_road]
+					if Vector2(p.x - r.x, p.z - r.z).length() < half_w + 1.5: return true
+				return false)
 	_junction_dressing(parent, world, road, chord, half_w, ground_height)
 	_hill_landmarks(world, parent, road, ground_height)
 	_hill_village(world, parent, road, half_w, ground_height)
@@ -924,7 +1011,8 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	]
 	return {"props": props.duplicate(), "spawns": [car_xform(s0, s1 - s0), car_xform(road[n_road - 6], road[n_road - 5] - road[n_road - 6])],
 		"waypoints": road, "speeds": speeds, "ai_routes": ai_routes,
-		"map_paths": [C.closed_route(road), chord, lookout],
+		"map_paths": [C.closed_route(road), chord, lookout] + outs.map(func(o: Dictionary) -> PackedVector3Array: return o["road"]),
+		"exits": exits, "entrances": entrances,
 		"map_places": [{"name": "Waldhof", "position": road[12]}, {"name": "Lindenau", "position": road[VILLAGE_AT]}, {"name": "Aussichtspunkt", "position": lookout[4]}, {"name": "Lindensee", "position": lake.get("centre", road[0])},
 			{"name": "Bergweide", "position": road[194]}, {"name": "Talblick", "position": road[410]}],
 		"ai_spawns": [car_xform(road[144], road[145] - road[144]), car_xform(road[320], road[321] - road[320])],
@@ -933,6 +1021,9 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 
 
 const VILLAGE_AT := 300
+## Roads out to tunnels in the ridge: ring point, the ridge's foot on that road (radius from the
+## valley's centre), the map beyond and the sign over the portal.
+const EXITS := [[444, 520.0, "offroad", "Wald & Weide  ›"], [234, 540.0, "autobahn", "Autobahn  ›"]]
 const CHORD_FROM := 335
 const CHORD_TO := 45
 const CHORD_HALF_W := 3.25   # 6.5 m district road

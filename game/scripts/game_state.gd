@@ -74,12 +74,12 @@ var settings := {
 }
 
 const MAPS := [
-	{"id": "offroad", "name": "Wald & Weide · Offroad", "description": "Feldwege statt Asphalt: große Rundstrecke, Waldpfade, Höhenweg und Geröllpassage. Hof, Holzlager und Weideland. SUV oder Rallye-Auto empfohlen."},
-	{"id": "proving_grounds", "name": "Testgelände", "description": "Über 1 km Oval, Handling-Parcours, Boxen, Sprungrampen und Crashwand."},
+	{"id": "offroad", "name": "Wald & Weide · Offroad", "description": "Feldwege statt Asphalt: große Rundstrecke, Waldpfade, Höhenweg und Geröllpassage. Hof, Holzlager und Weideland. SUV oder Rallye-Auto empfohlen. Im Osten führt ein Tunnel ins Hügelland."},
+	{"id": "proving_grounds", "name": "Testgelände", "description": "Über 1 km Oval, Handling-Parcours, Boxen, Sprungrampen und Crashwand. Durch das Wirtschaftstor im Westen führt ein Tunnel in die Stadt."},
 	{"id": "autobahn", "name": "Autobahn", "description": "8,5 km Autobahnring mit Raststätte, Lkw-Stellplatz, Windpark und Gegenverkehr."},
-	{"id": "city", "name": "Stadt", "description": "Altstadtgasse, Werkstatthöfe, Hochstraße, Parkdeck und Markt. Mit Zeitfahren, Drifts und Lieferfahrten (F3)."},
-	{"id": "desert", "name": "Wüste", "description": "Knapp 4 km Rallye-Schleife mit Sprüngen, Red-Mesa-Lager und Nebenroute zur alten Mine."},
-	{"id": "hill_roads", "name": "Hügelland", "description": "Rund 2,5 km Landstraße durch Wald und Wiesen mit Gehöften und Aussichtspunkt."},
+	{"id": "city", "name": "Stadt", "description": "Altstadtgasse, Werkstatthöfe, Hochstraße, Parkdeck und Markt. Mit Zeitfahren, Drifts und Lieferfahrten (F3). Ausfallstraßen führen durch Tunnel im Osten in die Wüste und im Westen zum Testgelände."},
+	{"id": "desert", "name": "Wüste", "description": "Knapp 4 km Rallye-Schleife mit Sprüngen, Red-Mesa-Lager und Nebenroute zur alten Mine. Eine Piste im Nordwesten führt durch einen Tunnel in die Stadt."},
+	{"id": "hill_roads", "name": "Hügelland", "description": "Rund 2,5 km Landstraße durch Wald und Wiesen mit Gehöften und Aussichtspunkt. Im Norden führt eine Straße durch einen Tunnel nach Wald & Weide."},
 ]
 
 

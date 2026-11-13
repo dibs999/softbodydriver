@@ -25,7 +25,7 @@ func run() -> void:
 	world.paused = true
 	var data: Dictionary = scene.map_data
 	check(data["offroad_length_m"] > 3000, "Main field-track circuit exceeds 3 km")
-	check(data["map_paths"].size() == 5 and scene.minimap._map.paths.size() == 5, "All five connected trails reach the minimap")
+	check(data["map_paths"].size() == 6 and scene.minimap._map.paths.size() == 6, "All five connected trails and the way out to the tunnel reach the minimap")
 	# No road cars on the trails: the only traffic is one 4x4 working its way round the loop.
 	var traffic: Array = scene.vehicles.filter(func(v): return v != scene.player)
 	check(traffic.size() == 1 and String(traffic[0].get_info().get("id", "")) == "trailhead_4x4", "Offroad traffic is a single 4x4, no commuter cars")
