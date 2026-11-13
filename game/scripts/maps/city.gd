@@ -78,6 +78,12 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var bands: Array[Transform3D] = []
 	var cornices: Array[Transform3D] = []
 	var parapets: Array[Transform3D] = []
+	var balconies: Array[Transform3D] = []
+	var balcony_fronts: Array[Transform3D] = []
+	# Separate dice for the balconies and setbacks, so the town's other random choices (heights,
+	# splits, facades) stay as they were.
+	var form_rng := RandomNumberGenerator.new()
+	form_rng.seed = 4711
 	var gables: Array[Transform3D] = []
 	var ac_units: Array[Transform3D] = []
 	var tanks: Array[Transform3D] = []
@@ -98,6 +104,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var surface_regions: Array[Dictionary] = []
 
 	# Keep collision at each address and batch repeated building geometry by material.
+	var pedestrian_loops: Array = []
 	for bx in BLOCKS:
 		for bz in BLOCKS:
 			var x0 := origin + STREET + bx * PITCH
@@ -106,6 +113,12 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			var block := Vector2i(bx, bz)
 			world.add_box(c, Vector3(BLOCK, KERB, BLOCK) * 0.5, Vector3.ZERO, 0.9)
 			pavements.append(Transform3D(Basis.from_scale(Vector3(BLOCK, KERB, BLOCK)), c))
+			# People walk round the footway of every block but the multi-storey car park and the
+			# freight yard: a ring 2.9 m in from the kerb, between the street trees and the houses.
+			if block != Vector2i(6, 5) and block != Vector2i(8, 7):
+				var inset := 2.9
+				pedestrian_loops.append(PackedVector3Array([Vector3(x0 + inset, KERB, z0 + inset), Vector3(x0 + BLOCK - inset, KERB, z0 + inset),
+					Vector3(x0 + BLOCK - inset, KERB, z0 + BLOCK - inset), Vector3(x0 + inset, KERB, z0 + BLOCK - inset)]))
 			if block in [Vector2i(1, 5), Vector2i(6, 3), Vector2i(7, 4)]:
 				_district(parent, world, c, block, asphalt, pavement, metal)
 				var district_name := "Werkstatthöfe" if bx == 1 else ("Altstadtgasse" if bx == 6 else "Hochstraße")
@@ -200,17 +213,72 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 					var hgt := rng.randf_range(6.0, 17.0) + urban * rng.randf_range(12.0, 67.0)
 					var half := Vector3(w * 0.5 - 1.5, hgt * 0.5, w * 0.5 - 1.5)
 					var pos := Vector3(bxc, KERB + hgt * 0.5, bzc)
-					var facade: Array[Transform3D] = buildings[rng.randi() % facades.size()]
-					facade.append(Transform3D(Basis.from_scale(half * 2.0), pos))
-					world.add_box(pos, half, Vector3.ZERO, 0.7)
+					var facade_i := rng.randi() % facades.size()
+					var facade: Array[Transform3D] = buildings[facade_i]
+					var style := int((facades[facade_i] as ShaderMaterial).get_shader_parameter("style"))
+					# Tall towers in the centre: a slimmer upper tower set back from a broad base with a
+					# roof terrace. The tower box reaches down inside the base, so its facade grid (and
+					# the shop floor the shader puts at the bottom of a tall box) stays hidden there.
+					var base_h := hgt
+					var tower_half := half
+					if hgt > 32.0 and urban > 0.4 and form_rng.randf() < 0.5:
+						base_h = snappedf(hgt * form_rng.randf_range(0.42, 0.62), 0.1)
+						tower_half = Vector3(half.x * 0.7, hgt * 0.5, half.z * 0.7)
+						var base_half := Vector3(half.x, base_h * 0.5, half.z)
+						var base_pos := Vector3(bxc, KERB + base_h * 0.5, bzc)
+						facade.append(Transform3D(Basis.from_scale(base_half * 2.0), base_pos))
+						world.add_box(base_pos, base_half, Vector3.ZERO, 0.7)
+						facade.append(Transform3D(Basis.from_scale(tower_half * 2.0), pos))
+						world.add_box(pos, tower_half, Vector3.ZERO, 0.7)
+						# Terrace: slab, cornice and parapet round the top of the base.
+						roofs.append(Transform3D(Basis.from_scale(Vector3(half.x * 2.02, 0.4, half.z * 2.02)), Vector3(bxc, KERB + base_h + 0.2, bzc)))
+						cornices.append(Transform3D(Basis.from_scale(Vector3(half.x * 2.0 + 0.5, 0.45, half.z * 2.0 + 0.5)), Vector3(bxc, KERB + base_h - 0.2, bzc)))
+						for side_x: float in [-1.0, 1.0]:
+							parapets.append(Transform3D(Basis.from_scale(Vector3(0.25, 1.1, half.z * 2.0)), Vector3(bxc + side_x * (half.x - 0.12), KERB + base_h + 0.95, bzc)))
+						for side_z: float in [-1.0, 1.0]:
+							parapets.append(Transform3D(Basis.from_scale(Vector3(half.x * 2.0, 1.1, 0.25)), Vector3(bxc, KERB + base_h + 0.95, bzc + side_z * (half.z - 0.12))))
+					else:
+						facade.append(Transform3D(Basis.from_scale(half * 2.0), pos))
+						world.add_box(pos, half, Vector3.ZERO, 0.7)
+					# Balconies on about half the plaster and brick blocks over 12 m (the shader gives
+					# those a 4.3 m shop floor, then 3.3 m storeys): a concrete slab with a solid
+					# parapet under the windows of every or every other bay, on the street sides.
+					if style != 2 and hgt > 12.0 and base_h == hgt and form_rng.randf() < 0.5:
+						var fh_set: Variant = (facades[facade_i] as ShaderMaterial).get_shader_parameter("floor_height")
+						var fh := 3.3 if fh_set == null else float(fh_set)   # the shader's default storey
+						var stride := 1 if form_rng.randf() < 0.5 else 2
+						var storeys := mini(int(floor((hgt - 5.4) / fh)), 10)
+						var sides: Array = []
+						for sd: Vector3 in [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]:
+							# Street sides: all four for a whole-block building, the two outer ones otherwise.
+							if split == 1 or (sd.x > 0.0 and sx == 1) or (sd.x < 0.0 and sx == 0) or (sd.z > 0.0 and sz == 1) or (sd.z < 0.0 and sz == 0):
+								sides.append(sd)
+						for sd: Vector3 in sides:
+							var along := Vector3(absf(sd.z), 0.0, absf(sd.x))
+							var width := 2.0 * (half.z if sd.x != 0.0 else half.x)
+							var face := 1.0 * (half.x if sd.x != 0.0 else half.z)
+							var usable := maxf(width - 1.6, 3.0)
+							var bays := maxi(1, int(floor(usable / 3.0)))
+							var bay := usable / bays
+							for b in bays:
+								if b % stride != 0: continue
+								var u := -width * 0.5 + 0.8 + (b + 0.5) * bay
+								for k in storeys:
+									var y0 := KERB + 4.3 + k * fh
+									var c0 := Vector3(bxc, y0, bzc) + sd * (face + 0.6) + along * u
+									balconies.append(Transform3D(Basis.from_scale(along * minf(bay * 0.78, 2.6) + sd.abs() * 1.2 + Vector3(0, 0.16, 0)), c0 + Vector3.UP * 0.08))
+									balcony_fronts.append(Transform3D(Basis.from_scale(along * minf(bay * 0.78, 2.6) + sd.abs() * 0.06 + Vector3(0, 0.95, 0)), c0 + sd * 0.57 + Vector3.UP * 0.62))
 					# Plinth, floor bands every two storeys and a cornice with parapet instead of a bare box.
 					# Buildings over 12 m have a shop ground floor (facade shader) and no stone plinth
 					# in front of its shop windows and glass doors.
+					var top_half := tower_half
 					if hgt <= 12.0:
 						plinths.append(Transform3D(Basis.from_scale(Vector3(half.x * 2.0 + 0.16, 0.9, half.z * 2.0 + 0.16)), Vector3(bxc, KERB + 0.45, bzc)))
 					var band := 6.4
 					while band < hgt - 2.0:
-						bands.append(Transform3D(Basis.from_scale(Vector3(half.x * 2.0 + 0.12, 0.16, half.z * 2.0 + 0.12)), Vector3(bxc, KERB + band, bzc)))
+						var bh := half if band < base_h else top_half
+						if absf(band - base_h) > 1.0:
+							bands.append(Transform3D(Basis.from_scale(Vector3(bh.x * 2.0 + 0.12, 0.16, bh.z * 2.0 + 0.12)), Vector3(bxc, KERB + band, bzc)))
 						band += 6.4
 					var pitched := hgt < 13.0 and urban < 0.35
 					if pitched:
@@ -221,20 +289,20 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 						var rise := minf(span * 0.9, 6.0)
 						gables.append(Transform3D(ridge.scaled_local(Vector3(span * 2.1, rise, maxf(half.x, half.z) * 2.05)), Vector3(bxc, KERB + hgt + rise * 0.5, bzc)))
 					else:
-						roofs.append(Transform3D(Basis.from_scale(Vector3(half.x * 2.02, 0.65, half.z * 2.02)), Vector3(bxc, KERB + hgt + 0.32, bzc)))
-						cornices.append(Transform3D(Basis.from_scale(Vector3(half.x * 2.0 + 0.5, 0.45, half.z * 2.0 + 0.5)), Vector3(bxc, KERB + hgt - 0.2, bzc)))
+						roofs.append(Transform3D(Basis.from_scale(Vector3(top_half.x * 2.02, 0.65, top_half.z * 2.02)), Vector3(bxc, KERB + hgt + 0.32, bzc)))
+						cornices.append(Transform3D(Basis.from_scale(Vector3(top_half.x * 2.0 + 0.5, 0.45, top_half.z * 2.0 + 0.5)), Vector3(bxc, KERB + hgt - 0.2, bzc)))
 						for side_x: float in [-1.0, 1.0]:
-							parapets.append(Transform3D(Basis.from_scale(Vector3(0.25, 0.9, half.z * 2.0)), Vector3(bxc + side_x * (half.x - 0.12), KERB + hgt + 1.0, bzc)))
+							parapets.append(Transform3D(Basis.from_scale(Vector3(0.25, 0.9, top_half.z * 2.0)), Vector3(bxc + side_x * (top_half.x - 0.12), KERB + hgt + 1.0, bzc)))
 						for side_z: float in [-1.0, 1.0]:
-							parapets.append(Transform3D(Basis.from_scale(Vector3(half.x * 2.0, 0.9, 0.25)), Vector3(bxc, KERB + hgt + 1.0, bzc + side_z * (half.z - 0.12))))
+							parapets.append(Transform3D(Basis.from_scale(Vector3(top_half.x * 2.0, 0.9, 0.25)), Vector3(bxc, KERB + hgt + 1.0, bzc + side_z * (top_half.z - 0.12))))
 						# Roof clutter: stair house, AC units, water tank, antenna.
-						rooftop_units.append(Transform3D(Basis.from_scale(Vector3(4.2, 3.0, 3.2)), Vector3(bxc + half.x * 0.35, KERB + hgt + 2.1, bzc - half.z * 0.3)))
+						rooftop_units.append(Transform3D(Basis.from_scale(Vector3(4.2, 3.0, 3.2)), Vector3(bxc + top_half.x * 0.35, KERB + hgt + 2.1, bzc - top_half.z * 0.3)))
 						for k in rng.randi_range(2, 5):
-							ac_units.append(Transform3D(Basis.from_scale(Vector3(1.4, 1.0, 1.0)), Vector3(bxc + rng.randf_range(-0.7, 0.7) * half.x, KERB + hgt + 1.15, bzc + rng.randf_range(-0.7, 0.7) * half.z)))
+							ac_units.append(Transform3D(Basis.from_scale(Vector3(1.4, 1.0, 1.0)), Vector3(bxc + rng.randf_range(-0.7, 0.7) * top_half.x, KERB + hgt + 1.15, bzc + rng.randf_range(-0.7, 0.7) * top_half.z)))
 						if rng.randf() < 0.4:
-							tanks.append(Transform3D(Basis.IDENTITY, Vector3(bxc - half.x * 0.4, KERB + hgt + 2.4, bzc + half.z * 0.35)))
+							tanks.append(Transform3D(Basis.IDENTITY, Vector3(bxc - top_half.x * 0.4, KERB + hgt + 2.4, bzc + top_half.z * 0.35)))
 						if hgt > 30.0 and rng.randf() < 0.5:
-							antennas.append(Transform3D(Basis.from_scale(Vector3(0.12, 9.0, 0.12)), Vector3(bxc - half.x * 0.2, KERB + hgt + 5.0, bzc - half.z * 0.2)))
+							antennas.append(Transform3D(Basis.from_scale(Vector3(0.12, 9.0, 0.12)), Vector3(bxc - top_half.x * 0.2, KERB + hgt + 5.0, bzc - top_half.z * 0.2)))
 	C.scatter_multimesh(parent, box_mesh, pavement, pavements, false)
 	C.scatter_multimesh(parent, box_mesh, roof_mat, roofs, false)
 	C.scatter_multimesh(parent, box_mesh, metal, rooftop_units, false)
@@ -244,6 +312,9 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	C.scatter_multimesh(parent, box_mesh, stone, bands, false)
 	C.scatter_multimesh(parent, box_mesh, stone, cornices)
 	C.scatter_multimesh(parent, box_mesh, stone, parapets, false)
+	var concrete := C.noise_mat(Color(0.72, 0.71, 0.68), 0.06, 2.0, 0.85)
+	C.scatter_multimesh(parent, box_mesh, concrete, balconies, false)
+	C.scatter_multimesh(parent, box_mesh, concrete, balcony_fronts, false)
 	var gable := PrismMesh.new()
 	gable.size = Vector3.ONE
 	C.scatter_multimesh(parent, gable, C.noise_mat(Color(0.48, 0.20, 0.13), 0.12, 3.0, 0.85), gables)
@@ -433,6 +504,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		"map_paths": map_paths, "map_places": places,
 		"surface_regions": surface_regions,
 		"traffic_signals": signals,
+		"pedestrian_loops": pedestrian_loops,
 		"ai_routes": [
 			{"waypoints": route, "speeds": speeds, "spawn": C.car_xform(route[3], route[4] - route[3])},
 			{"waypoints": route, "speeds": speeds, "spawn": C.car_xform(route[route.size() / 2], route[route.size() / 2 + 1] - route[route.size() / 2])},

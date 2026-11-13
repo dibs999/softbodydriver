@@ -58,7 +58,7 @@ void fragment() {
 		float width = abs(t.x) * box_size.x + abs(t.z) * box_size.z;
 		float u = dot(world_pos - box_origin, t) + width * 0.5;
 		float y = world_pos.y - (box_origin.y - box_size.y * 0.5);
-		float fh = floor_height * mix(0.95, 1.08, fract(b_rand * 13.7));
+		float fh = floor_height;   // one grid per material: the balconies (city.gd) line up with it
 		float usable = max(width - 1.6, bay_width);
 		float bays = max(1.0, floor(usable / bay_width));
 		float bay = usable / bays;
