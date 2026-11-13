@@ -7,6 +7,14 @@ render_mode blend_mix, cull_back, diffuse_burley, specular_schlick_ggx;
 // flakes off to grey primer and, where worst, to scratched bare steel; creases collect grime.
 
 uniform vec4 paint : source_color = vec4(0.62, 0.05, 0.04, 1.0);
+// Imported shells model the pillars with thickness, so their inner faces are body paint and the
+// A-pillars glared red from the driver's seat. When cabin_on, painted faces inside the cabin
+// (a box round the driver's eye in the car's axes) that face into it are drawn as dark trim.
+uniform bool cabin_on = false;
+uniform vec3 cabin_eye = vec3(0.0);
+uniform vec3 cabin_fwd = vec3(1.0, 0.0, 0.0);
+uniform vec3 cabin_up = vec3(0.0, 1.0, 0.0);
+uniform vec3 cabin_mid = vec3(0.0);   // a point on the car's centre line (lateral reference)
 uniform float paint_metallic = 0.5;
 uniform float paint_roughness = 0.28;
 uniform float clearcoat_amount = 1.0;
@@ -72,6 +80,24 @@ void fragment() {
 		rough = mix(rough, 0.92, mask);
 		metal = mix(metal, 0.0, mask);
 		coat *= 1.0 - mask;
+	}
+	if (cabin_on) {
+		vec3 wp = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+		vec3 wn = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+		vec3 right = normalize(cross(cabin_fwd, cabin_up));
+		vec3 d = wp - cabin_eye;
+		float along = dot(d, cabin_fwd), up = dot(d, cabin_up), side = dot(wp - cabin_mid, right);
+		// From behind the rear seats to the foot of the A-pillars, belt line to roof, full width.
+		bool inside = along > -1.7 && along < 0.95 && up > -0.24 && up < 0.6 && abs(side) < 0.98;
+		// Ahead of the eye only faces that are not mostly upward (pillars, not the scuttle/bonnet).
+		inside = inside && (along < 0.3 || dot(wn, cabin_up) < 0.45);
+		vec3 centre = cabin_eye - cabin_fwd * 0.45 + cabin_up * 0.05 + right * dot(cabin_mid - cabin_eye, right);
+		if (inside && dot(wn, centre - wp) > 0.0) {
+			base = vec3(0.085, 0.085, 0.09);
+			metal = 0.0;
+			rough = 0.92;
+			coat = 0.0;
+		}
 	}
 	ALBEDO = base;
 	METALLIC = metal;

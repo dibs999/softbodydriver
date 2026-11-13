@@ -419,6 +419,14 @@ func _process(delta: float) -> void:
 		var right: Vector3 = forward.cross(up).normalized()
 		up = right.cross(forward).normalized()
 		s["rig"].global_transform = Transform3D(Basis(forward, up, right), v.get_position_ws())
+		# Imported bodies: where the cabin is, for the paint shader's inner-pillar trim.
+		if v.has_meta("cabin_paint"):
+			var eye: Vector3 = v.get_driver_eye()
+			for m: ShaderMaterial in v.get_meta("cabin_paint"):
+				m.set_shader_parameter("cabin_eye", eye)
+				m.set_shader_parameter("cabin_fwd", forward)
+				m.set_shader_parameter("cabin_up", up)
+				m.set_shader_parameter("cabin_mid", v.get_position_ws())
 		_update_lamp_damage(v, s, delta)
 		_auto_lights(s)
 		var broken: Dictionary = s["broken"]

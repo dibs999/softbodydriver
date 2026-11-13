@@ -962,6 +962,10 @@ func apply_visual_model(v: SBVehicle, info: Dictionary) -> void:
 				worn.set_shader_parameter("paint", own.albedo_color)
 				worn.set_shader_parameter("paint_metallic", own.metallic)
 				worn.next_pass = inner
+				worn.set_shader_parameter("cabin_on", true)   # inner pillar faces as trim (vehicle_equipment)
+				var cabin: Array = v.get_meta("cabin_paint", [])
+				cabin.append(worn)
+				v.set_meta("cabin_paint", cabin)
 				overrides[k] = worn
 				continue
 			overrides[k] = own
