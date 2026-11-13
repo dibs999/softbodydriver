@@ -4,6 +4,11 @@ const V := preload("res://scripts/maps/vegetation.gd")
 ## Terrain render meshes and physics use the same sampled heights. Tree trunks and rails collide.
 const C := preload("res://scripts/maps/common.gd")
 const INFIELDS := [Rect2(-180, 58, 110, 64), Rect2(120, 70, 70, 62)]
+## The tunnel to the city: out through the service gate on the west into the berm.
+const TUNNEL_MOUTH := Vector3(-381.0, 0.0, -5.0)
+const TUNNEL_DIR := Vector3(-1.0, 0.0, 0.0)
+## The tunnel built by the last build(): {"gate", "entrance", "width"}.
+static var tunnel: Dictionary = {}
 
 static func build(world: SBWorld, parent: Node3D) -> Array:
 	var root := Node3D.new()
@@ -38,7 +43,27 @@ static func build(world: SBWorld, parent: Node3D) -> Array:
 				var longitudinal := float(x) / (nx - 1) if along_x else float(z) / (nz - 1)
 				var end_fade := smoothstep(0, 0.12, longitudinal) * smoothstep(0, 0.12, 1.0 - longitudinal)
 				heights[x * nz + z] = end_fade * pow(sin(transverse * PI), 2) * (11.0 + 4.0 * sin(along * 0.017) + 2.0 * cos(along * 0.033))
-		world.add_heightfield(rect.position.x, rect.position.y, cell, nx, nz, heights, 0.75)
+		var physical := heights
+		if rect.has_point(Vector2(TUNNEL_MOUTH.x - 30.0, TUNNEL_MOUTH.z)):
+			# The road from the service gate cut into the berm's toe, and the tunnel's cut.
+			var before := heights.duplicate()
+			C.carve_path(heights, nx, nz, rect.position.x, rect.position.y, cell,
+				PackedVector3Array([TUNNEL_MOUTH - TUNNEL_DIR * 8.0, TUNNEL_MOUTH + TUNNEL_DIR * 18.0]), 5.0, 12.0, 0.0, false)
+			var old := heights.duplicate()
+			physical = heights.duplicate()
+			C.tunnel_cut(heights, nx, nz, rect.position.x, rect.position.y, cell, TUNNEL_MOUTH, TUNNEL_DIR, 1.0, 75.0, 12.0, -0.5)
+			C.tunnel_cut_physical(physical, nx, nz, rect.position.x, rect.position.y, cell, TUNNEL_MOUTH, TUNNEL_DIR)
+			var berm := rect
+			var cover_ground := C.portal_ground(before, old, nx, nz, rect.position.x, rect.position.y, cell, TUNNEL_MOUTH, TUNNEL_DIR)
+			var ground := func(x: float, z: float) -> float:
+				if not berm.grow(-0.5).has_point(Vector2(x, z)):
+					return 0.0
+				return float(cover_ground.call(x, z))
+			var asphalt := C.road_material(2, 7.0, 12.0, "rural")
+			root.add_child(C.road_mesh(PackedVector3Array([Vector3(-366.0, 0.0, TUNNEL_MOUTH.z), TUNNEL_MOUTH]), 3.5, asphalt, false, 0.012, 12.0))
+			tunnel = C.tunnel(root, world, TUNNEL_MOUTH, TUNNEL_DIR, "Stadt  ›", 9.0, 5.4, 70.0, ground, C.terrain_material("grass", 3.1, Color(0.50, 0.66, 0.50)),
+				Color.WHITE, 17.0, 0.012)
+		world.add_heightfield(rect.position.x, rect.position.y, cell, nx, nz, physical, 0.75)
 		root.add_child(C.terrain_mesh(rect.position.x, rect.position.y, cell, nx, nz, heights, grass))
 		regions.append({"rect": rect, "surface": "grass"})
 		# Ground cover on the berms, denser along the toe facing the test pad.
@@ -54,6 +79,8 @@ static func build(world: SBWorld, parent: Node3D) -> Array:
 			var side := cos(i * 2.31) * 15.0
 			var p := Vector3(rect.position.x + (i + 0.5) * 20 + jitter if along_x else rect.get_center().x + side, 0,
 				rect.get_center().y + side if along_x else rect.position.y + (i + 0.5) * 20 + jitter)
+			if C.tunnel_zone(Vector2(p.x, p.z), Vector2(TUNNEL_MOUTH.x, TUNNEL_MOUTH.z), Vector2(TUNNEL_DIR.x, TUNNEL_DIR.z)):
+				continue
 			p.y = C.sample(heights, nx, nz, rect.position.x, rect.position.y, cell, p.x, p.z)
 			tree_points.append(p)
 	# Open 24 m service gate on the west. All circuit and pit access remains inside.

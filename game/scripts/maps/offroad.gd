@@ -6,6 +6,8 @@ const TRACK_SHADER := preload("res://materials/surfaces/field_track.gdshader")
 const COUNT := 513
 const CELL := 3.0
 const ORIGIN := -768.0
+const EXIT_AT := 220          # loop point of the way out to the tunnel (to the Hügelland)
+static var _tunnel_zone: Dictionary = {}
 
 static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var rolling := FastNoiseLite.new()
@@ -64,12 +66,29 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	# Pond and ford on the forest trail: a level clearing beside the trail, a bowl ~1.9 m deep and a
 	# channel from it across the trail (the ford, ~35 cm of water on the track).
 	var pond_info := _dig_pond(heights, forest, rock_path)
-	var paths: Array[PackedVector3Array] = [C.closed_route(loop), forest, ridge_path, access, rock_path]
+	# The way out: from the east of the loop straight on into the hills round the valley, through
+	# a tunnel to the Hügelland.
+	var exit_from := loop[EXIT_AT]
+	var exit_dir := Vector3(exit_from.x, 0.0, exit_from.z).normalized()
+	var exit_before := heights.duplicate()
+	var exit := C.exit_road(heights, COUNT, COUNT, ORIGIN, ORIGIN, CELL, exit_from, exit_dir,
+		func(p: Vector3) -> bool: return maxf(absf(p.x), absf(p.z)) >= 650.0)
+	var loop_part := PackedVector3Array()
+	for i in range(EXIT_AT - 8, EXIT_AT + 9):
+		loop_part.append(loop[(i + loop.size()) % loop.size()])
+	C.carve_path(heights, COUNT, COUNT, ORIGIN, ORIGIN, CELL, loop_part, 3.8, 9.0, 0.0, false)
+	var exit_ground := heights.duplicate()
+	var exit_mouth := exit[exit.size() - 1]
+	C.tunnel_cut(heights, COUNT, COUNT, ORIGIN, ORIGIN, CELL, exit_mouth, exit_dir, 1.0, 75.0, 12.0, exit_mouth.y - 0.5)
+	_tunnel_zone = {"m": Vector2(exit_mouth.x, exit_mouth.z), "d": Vector2(exit_dir.x, exit_dir.z)}
+	var paths: Array[PackedVector3Array] = [C.closed_route(loop), forest, ridge_path, access, rock_path, exit]
+	# Things stand on the ground as it was before the tunnel's cut (over the tunnel that is its
+	# earth cover).
 	var ground := func(x: float, z: float) -> float:
-		return C.sample(heights, COUNT, COUNT, ORIGIN, ORIGIN, CELL, x, z)
+		return C.sample(exit_ground, COUNT, COUNT, ORIGIN, ORIGIN, CELL, x, z)
 	# The tracks are drawn 5.5 cm above the terrain (the yard apron 6 cm); the physics ground is
 	# raised under them by the same amount so wheels and props rest on the drawn surface.
-	var widths := [3.2, 2.5, 2.5, 4.0, 2.15]
+	var widths := [3.2, 2.5, 2.5, 4.0, 2.15, 3.2]
 	var yard := PackedVector3Array([farm - forward * 15, farm + forward * 15])
 	var roads: Array = [{"points": yard, "half_w": 15.0, "lift": 0.06}]
 	for i in paths.size():
@@ -81,6 +100,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	for path in paths:
 		for i in path.size(): path[i].y = surface.call(path[i].x, path[i].z)
 	for i in loop.size(): loop[i].y = surface.call(loop[i].x, loop[i].z)
+	C.tunnel_cut_physical(physical, COUNT, COUNT, ORIGIN, ORIGIN, CELL, exit_mouth, exit_dir)
 	world.add_heightfield(ORIGIN, ORIGIN, CELL, COUNT, COUNT, physical, 0.94)
 	var colors := PackedColorArray()
 	colors.resize(heights.size())
@@ -98,7 +118,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	C.terrain_tiles(parent, ORIGIN, ORIGIN, CELL, COUNT, COUNT, heights, C.terrain_material("grass", 3.8), colors)
 	for i in paths.size():
 		var track := _track_material(widths[i] * 2, 0.75 if i != 4 else 0.25)
-		if i > 0:   # branches and dead ends fade out instead of stopping at a hard edge
+		if i > 0 and i < 5:   # branches and dead ends fade out instead of stopping at a hard edge
 			track.set_shader_parameter("length_uv", _path_length(paths[i]) / 9.0)
 		parent.add_child(C.road_mesh(paths[i], widths[i], track, false, 0.055, 9.0, ground))
 	# A ground-following apron instead of a floating horizontal yard slab.
@@ -108,6 +128,17 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	for i in paths.size():
 		V.roadside_grass(parent, paths[i], false, widths[i] + 0.3, widths[i] + 12.0, 4.5, 77 + i, ground,
 			func(p: Vector3) -> bool: return _near_paths(Vector2(p.x, p.z), paths, 3.2) or p.distance_to(yard[0]) < 30.0)
+	var ground_colour := func(x: float, z: float) -> Color:
+		var fx := clampf((x - ORIGIN) / CELL, 0.0, COUNT - 1.001)
+		var fz := clampf((z - ORIGIN) / CELL, 0.0, COUNT - 1.001)
+		var ix := int(fx)
+		var iz := int(fz)
+		var c0 := colors[ix * COUNT + iz].lerp(colors[(ix + 1) * COUNT + iz], fx - ix)
+		var c1 := colors[ix * COUNT + iz + 1].lerp(colors[(ix + 1) * COUNT + iz + 1], fx - ix)
+		return c0.lerp(c1, fz - iz)
+	var exit_tunnel := C.tunnel(parent, world, exit_mouth, exit_dir, "Hügelland  ›", 9.0, 5.4, 70.0,
+		C.portal_ground(exit_before, exit_ground, COUNT, COUNT, ORIGIN, ORIGIN, CELL, exit_mouth, exit_dir),
+		C.terrain_material("grass", 3.8), ground_colour, 17.0, -0.045)
 	_pond(parent, world, pond_info, ground)
 	_vegetation(parent, world, paths, ground, farm)
 	_farm(parent, world, farm, ground)
@@ -137,8 +168,9 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	_sign(parent, world, ridge_path[5] + Vector3(5,0,0), "HÖHENWEG  /  LANGSAM", ground)
 	_sign(parent, world, rock_path[5] + Vector3(0,0,4), "GERÖLLPFAD  /  4x4", ground)
 	var stones := _rock_garden(parent, world, rock_path, ground)
-	var props := _loose_logs(paths, surface, timber)
-	props.append_array(_fallen_branches(paths, surface, timber))
+	var trails := paths.slice(0, 5)   # nothing lying on the road out
+	var props := _loose_logs(trails, surface, timber)
+	props.append_array(_fallen_branches(trails, surface, timber))
 	# Nothing lying in the water.
 	var pond_c: Vector3 = pond_info["centre"]
 	props = props.filter(func(pr: Dictionary) -> bool: return Vector2((pr["position"] as Vector3).x - pond_c.x, (pr["position"] as Vector3).z - pond_c.z).length() > 36.0)
@@ -149,6 +181,8 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	return {"spawns": [C.car_xform(loop[0], loop[1]-loop[0]), C.car_xform(loop[-3], loop[-2]-loop[-3])],
 		"props": props, "waypoints": loop, "speeds": loop_speeds,
 		"activity_route": loop, "map_paths": paths,
+		"exits": [{"to": "hill_roads", "gate": exit_tunnel["gate"], "width": exit_tunnel["width"]}],
+		"entrances": {"hill_roads": exit_tunnel["entrance"]},
 		# One 4x4 works its way round the trail loop (no road cars on the trails).
 		"ai_routes": [{"waypoints": loop, "speeds": loop_speeds, "spawn": C.car_xform(loop[half], loop[half + 1] - loop[half]),
 			"car": "res://cars/trailhead_4x4.car.json"}],
@@ -374,6 +408,9 @@ static func _pond(parent: Node3D, world: SBWorld, info: Dictionary, ground: Call
 static func _near_paths(p: Vector2, paths: Array[PackedVector3Array], distance: float) -> bool:
 	# The pond and its banks count as taken: no trees, rocks or bushes in the water.
 	if paths.size() > 0 and p.distance_to(_pond_xz) < 25.0 + distance:
+		return true
+	# So does the forecourt of the tunnel and the earth right over its portal.
+	if paths.size() > 0 and not _tunnel_zone.is_empty() and C.tunnel_zone(p, _tunnel_zone["m"], _tunnel_zone["d"]):
 		return true
 	for path in paths:
 		for i in path.size()-1:

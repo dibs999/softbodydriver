@@ -15,6 +15,12 @@ const CARRIAGE_HALF := 6.9
 const SHOULDER_HIGH_U_A := true   # which UV side of carriageway A is its outer edge (checked in renders)
 const SERVICE_START := -990.0
 const SERVICE_END := -650.0
+## The wooded hill behind the rest area's lorry park, with the tunnel to the Hügelland: the road
+## leaves the lorry park inland (+z) into the portal at HILL_MOUTH; the hill rises round the tunnel.
+const HILL_MOUTH := Vector3((SERVICE_START + SERVICE_END) * 0.5 + 61.5, 0.0, -RADIUS + 125.0)   # between two rows of parked lorries
+const HILL_CENTRE := Vector2((SERVICE_START + SERVICE_END) * 0.5 + 61.5, -RADIUS + 200.0)
+const HILL_RADII := Vector2(150.0, 112.0)
+const HILL_HEIGHT := 19.0
 
 
 static func _loop(step := 10.0) -> PackedVector3Array:
@@ -180,6 +186,8 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			dist = absf(Vector2(q.x, p.z).length() - RADIUS)
 		if dist < 45.0 or (p.x > SERVICE_START and p.x < SERVICE_END and p.z < -RADIUS + 87.0):
 			continue
+		if _on_hill(p):
+			continue   # the hill plants its own woods
 		var conifer := rng.randf() < 0.35
 		# The village plants its own garden trees (checked after the draw: same sequence as before).
 		if p.x > VILLAGE.x + VILLAGE_MIN.x - 10.0 and p.x < VILLAGE.x + VILLAGE_MAX.x + 10.0 \
@@ -187,6 +195,8 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			continue
 		(conifers if conifer else trees).append(p)
 	_countryside(parent, world, center, trees, rng)
+	trees.assign(trees.filter(func(p: Vector3) -> bool: return not _on_hill(p)))
+	var hill := _hill_tunnel(parent, world, metal)
 	# Solid trunks for the countryside trees (behind the fence, but a car can break through).
 	# Some field-edge trees landed on the motorway: drop those, and give the rest solid trunks
 	# well away from the carriageway (junctions and bridges stay clear).
@@ -243,11 +253,14 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		"spawns": [C.car_xform(lane_a_right[spawn_i], lane_a_right[spawn_i + 1] - lane_a_right[spawn_i]),
 			C.car_xform(lane_a_right[spawn_i - 4], lane_a_right[spawn_i - 3] - lane_a_right[spawn_i - 4])],
 		"waypoints": lane_a_mid, "speeds": speeds_a, "props": props,
-		"map_paths": [C.closed_route(center), service_road, truck_access],
+		"map_paths": [C.closed_route(center), service_road, truck_access, hill["road"]],
+		"exits": [{"to": "hill_roads", "gate": hill["tunnel"]["gate"], "width": hill["tunnel"]["width"]}],
+		"entrances": {"hill_roads": hill["tunnel"]["entrance"]},
 		"map_places": [
 			{"name": "Raststätte Nordring", "position": Vector3((SERVICE_START + SERVICE_END) * 0.5, 0, -RADIUS + 44)},
 			{"name": "Lkw-Stellplatz", "position": truck_access[-1]},
 			{"name": "Windpark", "position": Vector3(-875, 0, -RADIUS - 270)},
+			{"name": "Tunnel Hügelland", "position": HILL_MOUTH},
 		],
 		"ai_routes": [
 			{"waypoints": lane_a_mid, "speeds": speeds_a, "spawn": C.car_xform(lane_a_mid[60], lane_a_mid[61] - lane_a_mid[60])},
@@ -921,3 +934,91 @@ static func _backdrop_hills(parent: Node3D) -> void:
 	C.terrain_tiles(parent, ox, oz, cell, nx, nz, heights, C.terrain_material("grass", 3.5, Color(0.73, 0.92, 0.66)), colors)
 	V.plant(parent, "conifer", conifers, 4042, 1.0, 1.4, false, true)
 	V.plant(parent, "broadleaf", trees, 4043, 1.0, 1.4, false, true)
+
+
+static func _on_hill(p: Vector3) -> bool:
+	var r := Vector2((p.x - HILL_CENTRE.x) / HILL_RADII.x, (p.z - HILL_CENTRE.y) / HILL_RADII.y).length()
+	return r < 1.05 or (absf(p.x - HILL_MOUTH.x) < 14.0 and p.z > -RADIUS + 80.0 and p.z < HILL_MOUTH.z + 2.0)
+
+
+## The wooded hill with the tunnel to the Hügelland: a heightfield rising from the plain (cosine
+## profile, a little uneven), a road from the lorry park cut into its foot, the tunnel (its earth
+## cover over the cut) and woods on the slopes. Returns {"road", "tunnel"}.
+static func _hill_tunnel(parent: Node3D, world: SBWorld, metal: Material) -> Dictionary:
+	const CELL := 4.0
+	var ox := HILL_CENTRE.x - HILL_RADII.x - 8.0
+	var oz := HILL_CENTRE.y - HILL_RADII.y - 8.0
+	var nx := int((HILL_RADII.x + 8.0) * 2.0 / CELL) + 1
+	var nz := int((HILL_RADII.y + 8.0) * 2.0 / CELL) + 1
+	var noise := FastNoiseLite.new()
+	noise.seed = 611
+	noise.frequency = 0.02
+	var h := PackedFloat32Array()
+	h.resize(nx * nz)
+	for ix in nx:
+		for iz in nz:
+			var x := ox + ix * CELL
+			var z := oz + iz * CELL
+			var r := Vector2((x - HILL_CENTRE.x) / HILL_RADII.x, (z - HILL_CENTRE.y) / HILL_RADII.y).length()
+			var rise := 0.5 * (1.0 + cos(PI * minf(r, 1.0)))
+			h[ix * nz + iz] = rise * (HILL_HEIGHT + noise.get_noise_2d(x, z) * 3.0)
+	# The road from the lorry park, level with the plain, cut into the hill's foot.
+	var dir := Vector3(0, 0, 1)
+	var road := PackedVector3Array()
+	var z0 := -RADIUS + 92.0
+	var zz := z0
+	while zz <= HILL_MOUTH.z + 0.01:
+		road.append(Vector3(HILL_MOUTH.x, 0.0, zz))
+		zz += 6.0
+	if road[road.size() - 1].z < HILL_MOUTH.z - 0.01:
+		road.append(HILL_MOUTH)
+	var before := h.duplicate()
+	var cut_road := road.duplicate()
+	cut_road.append(HILL_MOUTH + dir * 18.0)
+	C.carve_path(h, nx, nz, ox, oz, CELL, cut_road, 5.0, 12.0, 0.0, false)
+	var old := h.duplicate()
+	C.tunnel_cut(h, nx, nz, ox, oz, CELL, HILL_MOUTH, dir, 1.0, 75.0, 12.0, -0.5)
+	var physical := h.duplicate()
+	C.tunnel_cut_physical(physical, nx, nz, ox, oz, CELL, HILL_MOUTH, dir)
+	world.add_heightfield(ox, oz, CELL, nx, nz, physical, 0.9)
+	var grass := C.terrain_material("grass", 3.5, Color(0.73, 0.92, 0.66))
+	parent.add_child(C.terrain_mesh(ox, oz, CELL, nx, nz, h, grass))
+	var asphalt := C.road_material(2, 6.5, 12.0, "rural")
+	parent.add_child(C.road_mesh(road, 3.25, asphalt, false, 0.012, 12.0))
+	var ground := C.portal_ground(before, old, nx, nz, ox, oz, CELL, HILL_MOUTH, dir)
+	var tunnel := C.tunnel(parent, world, HILL_MOUTH, dir, "Hügelland  ›", 9.0, 5.4, 70.0, ground, grass, Color.WHITE, 17.0, 0.012)
+	# A sign at the lorry park.
+	C.box(parent, world, Vector3(HILL_MOUTH.x + 5.2, 1.1, z0 + 4.0), Vector3(0.06, 1.1, 0.06), Vector3.ZERO, metal, 0.7)
+	C.box(parent, null, Vector3(HILL_MOUTH.x + 5.2, 2.35, z0 + 4.0), Vector3(1.4, 0.35, 0.04), Vector3.ZERO, C.mat(Color(0.95, 0.80, 0.10), 0.6), 0.8, false)
+	C.label3d(parent, "Hügelland  ↑", Vector3(HILL_MOUTH.x + 5.2, 2.35, z0 + 3.95), PI, 0.6)
+	# Woods on the slopes, not on the road, the portal or right over it.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 612
+	var broadleaf: Array[Vector3] = []
+	var conifers: Array[Vector3] = []
+	var bushes: Array[Vector3] = []
+	var gx := ox + 6.0
+	while gx < ox + (nx - 1) * CELL - 6.0:
+		var gz := oz + 6.0
+		while gz < oz + (nz - 1) * CELL - 6.0:
+			var p := Vector2(gx + rng.randf_range(-3.0, 3.0), gz + rng.randf_range(-3.0, 3.0))
+			var r := Vector2((p.x - HILL_CENTRE.x) / HILL_RADII.x, (p.y - HILL_CENTRE.y) / HILL_RADII.y).length()
+			gz += 9.0
+			if r > 0.92 or rng.randf() < 0.25 or C.tunnel_zone(p, Vector2(HILL_MOUTH.x, HILL_MOUTH.z), Vector2(0, 1)):
+				continue
+			if absf(p.x - HILL_MOUTH.x) < 11.0 and p.y < HILL_MOUTH.z:
+				continue
+			var q := Vector3(p.x, float(ground.call(p.x, p.y)), p.y)
+			if r > 0.8 and rng.randf() < 0.5:
+				bushes.append(q)
+			elif rng.randf() < 0.6:
+				conifers.append(q)
+			else:
+				broadleaf.append(q)
+			if V.keep(q) and r <= 0.8:
+				world.add_box(q + Vector3.UP * 1.8, Vector3(0.22, 1.8, 0.22), Vector3.ZERO, 0.7)
+		gx += 9.0
+	V.plant(parent, "conifer", conifers, 613, 0.7, 1.1, false)
+	V.plant(parent, "broadleaf", broadleaf, 614, 0.8, 1.25, false)
+	V.plant(parent, "bush", bushes, 615, 0.8, 1.6, false)
+	return {"road": road, "tunnel": tunnel}

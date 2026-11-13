@@ -149,53 +149,23 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	# the shortcut) straight out to a tunnel at the foot of the ring of mountains (towards the city).
 	var exit_from := track[270]
 	var exit_dir := Vector3(exit_from.x, 0.0, exit_from.z).normalized()
-	var exit_road := PackedVector3Array()
-	var edge_t := 0.0
-	while maxf(absf(exit_from.x + exit_dir.x * edge_t), absf(exit_from.z + exit_dir.z * edge_t)) < 790.0:
-		edge_t += 2.0
-	var mouth_t := edge_t + 18.0
-	var mouth_y := C.sample(heights, nx, nz, ox, oz, cell, exit_from.x + exit_dir.x * edge_t, exit_from.z + exit_dir.z * edge_t)
-	var t := 0.0
-	while t <= mouth_t + 0.01:
-		var q := exit_from + exit_dir * t
-		var u := clampf(t / mouth_t, 0.0, 1.0)
-		q.y = lerpf(exit_from.y, mouth_y, u * u * (3.0 - 2.0 * u))
-		exit_road.append(q)
-		t += 6.0
-	for _pass in 4:
-		var sm := exit_road.duplicate()
-		for i in range(1, exit_road.size() - 1):
-			sm[i].y = (exit_road[i - 1].y + exit_road[i].y * 2.0 + exit_road[i + 1].y) * 0.25
-		exit_road = sm
-	C.carve_path(heights, nx, nz, ox, oz, cell, exit_road, 5.0, 12.0, 0.08, false)
+	_exit_before = heights.duplicate()
+	var exit_road := C.exit_road(heights, nx, nz, ox, oz, cell, exit_from, exit_dir,
+		func(p: Vector3) -> bool: return maxf(absf(p.x), absf(p.z)) >= 790.0)
 	_exit_road = exit_road
 	# Dig the tunnel's cut (drawn and physical); the tunnel's earth cover follows the old slope.
 	_exit_ground = heights.duplicate()
-	var tm := exit_road[exit_road.size() - 1]
-	for ix in nx:
-		for iz in nz:
-			var rel2 := Vector2(ox + ix * cell - tm.x, oz + iz * cell - tm.z)
-			var along2 := rel2.dot(Vector2(exit_dir.x, exit_dir.z))
-			var across2 := absf(rel2.dot(Vector2(-exit_dir.z, exit_dir.x)))
-			if along2 > 1.0 and along2 < 76.0 and across2 < 12.0:
-				heights[ix * nz + iz] = minf(heights[ix * nz + iz], tm.y - 0.5)
+	var mouth := exit_road[exit_road.size() - 1]
+	C.tunnel_cut(heights, nx, nz, ox, oz, cell, mouth, exit_dir, 1.0, 75.0, 12.0, mouth.y - 0.5)
 	# The pistes are drawn 4-5 cm above the sand; the physics ground is raised under them by the
 	# same amount so the wheels roll on the drawn surface instead of sinking into it.
 	var physical := C.raise_under_roads(heights, nx, nz, ox, oz, cell, [
 		{"points": track, "half_w": half_w, "lift": 0.052, "closed": true},
 		{"points": shortcut, "half_w": 3.6, "lift": 0.043},
 		{"points": exit_road, "half_w": 4.0, "lift": 0.043}])
-	# The tunnel runs into the mountain: the physics ground is cut away under it from 1 m inside
-	# the mouth, where the floor slab has taken over (no pit before the slab's edge). The earth
-	# cover over the roof is built by the tunnel itself.
-	var mouth := exit_road[exit_road.size() - 1]
-	for ix in nx:
-		for iz in nz:
-			var rel := Vector2(ox + ix * cell - mouth.x, oz + iz * cell - mouth.z)
-			var along := rel.dot(Vector2(exit_dir.x, exit_dir.z))
-			var across := absf(rel.dot(Vector2(-exit_dir.z, exit_dir.x)))
-			if along > 1.0 and along < 76.0 and across < 9.0:
-				physical[ix * nz + iz] = minf(physical[ix * nz + iz], mouth.y - 0.3)
+	# The tunnel runs into the mountain: the physics ground is cut away under it inside the
+	# mouth, where the floor slab has taken over (no pit before the slab's edge).
+	C.tunnel_cut_physical(physical, nx, nz, ox, oz, cell, mouth, exit_dir)
 	world.add_heightfield(ox, oz, cell, nx, nz, physical, 0.82)
 
 	# Vertex colours: sand on flats, red rock on steep slopes and mesa walls.
@@ -215,7 +185,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	wash_noise.cellular_return_type = FastNoiseLite.RETURN_DISTANCE2_SUB
 	# Coloured as the ground was before the tunnel's cut: the earth put back over the tunnel takes
 	# the same colours.
-	var hc := _exit_ground
+	var hc := _exit_before
 	for ix in nx:
 		for iz in nz:
 			var i := ix * nz + iz
@@ -249,7 +219,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	parent.add_child(C.road_mesh(_exit_road, 4.0, shortcut_mat, false, 0.043, 12.0, ground_height))
 	var exit_mouth := _exit_road[_exit_road.size() - 1]
 	var exit_dir2 := (_exit_road[_exit_road.size() - 1] - _exit_road[_exit_road.size() - 2])
-	var old_ground := func(x: float, z: float) -> float: return C.sample(_exit_ground, nx, nz, ox, oz, cell, x, z)
+	var old_ground := C.portal_ground(_exit_before, _exit_ground, nx, nz, ox, oz, cell, exit_mouth, exit_dir2.normalized())
 	var ground_colour := func(x: float, z: float) -> Color:
 		var fx := clampf((x - ox) / cell, 0.0, nx - 1.001)
 		var fz := clampf((z - oz) / cell, 0.0, nz - 1.001)
@@ -534,6 +504,7 @@ static var _post_zone := Vector2(INF, INF)
 static var _exit_road := PackedVector3Array()
 static var _exit_tunnel: Dictionary = {}
 static var _exit_ground := PackedFloat32Array()
+static var _exit_before := PackedFloat32Array()
 static func _near_track(p: Vector2, track: PackedVector3Array, dist: float, closed := true) -> bool:
 	if p.distance_to(_post_zone) < 50.0:
 		return true

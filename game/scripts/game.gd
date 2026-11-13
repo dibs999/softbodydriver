@@ -37,6 +37,7 @@ var vehicles: Array[SBVehicle] = []
 var pedestrians: Node3D   # people on the city's footways (pedestrians.gd)
 var _maproot: Node3D
 var _travelling := false
+var _locked_exit := ""        # the career-locked map whose tunnel the car is in (toast once)
 var _fade: ColorRect
 var props: Array[SBProp] = []          # loose cones and drums of the map
 var _tune_front: HSlider
@@ -57,6 +58,7 @@ var _loading_overlay: CanvasLayer
 var _reverse_hold := 0.0
 var recovery: RefCounted = preload("res://scripts/recovery_trail.gd").new()   # where the player stood on its wheels lately (Pos1)
 var _clutch_pedal := 0.0     # smoothed clutch pedal for the manual clutch (0 up, 1 down)
+var _clutch_sim := 0.0       # simulation time of the last pedal update
 var _was_running := true
 ## Cruise control: target speed in km/h (< 0 off) and the speed controller's integral term.
 var cruise_kmh := -1.0
@@ -127,15 +129,21 @@ func _check_exits() -> void:
 	if _travelling or not is_instance_valid(player) or world.paused:
 		return
 	var p := player.get_position_ws()
+	var locked := ""
 	for e: Dictionary in map_data.get("exits", []):
 		var local: Vector3 = (e["gate"] as Transform3D).affine_inverse() * p
-		if local.z < 0.0 and local.z > -12.0 and absf(local.x) < float(e["width"]) * 0.5 + 1.0 and absf(local.y) < 6.0:
+		# Anywhere in the tunnel's far half: at a low frame rate a fast car covers many metres
+		# between two checks and must not slip past a narrow gate into the end wall.
+		if local.z < 0.0 and local.z > -40.0 and absf(local.x) < float(e["width"]) * 0.5 + 1.0 and absf(local.y) < 6.0:
 			var to := String(e["to"])
 			if Game.settings.get("career", false) and not Career.map_unlocked(Game.progress, to):
-				hud.toast("%s ist in der Karriere noch gesperrt" % _map_name(to))
+				locked = to
+				if _locked_exit != to:
+					hud.toast("%s ist in der Karriere noch gesperrt · noch %d Aufträge" % [_map_name(to), Career.contracts_to_unlock(Game.progress, to)])
 				continue
 			travel(to)
 			return
+	_locked_exit = locked
 
 
 func _map_name(id: String) -> String:
@@ -780,8 +788,13 @@ func _drive_player(delta: float) -> void:
 	elif Game.settings["manual_clutch"]:
 		# Clutch pedal with travel: a key pushes it down quickly and lets it come up over ~0.45 s
 		# (an analogue trigger is followed as closely as the rate allows). Pedal up = engaged.
+		# Paced in simulation time: when the physics runs behind the clock (a slow machine), a
+		# pedal let up in wall-clock time came up in fewer simulated steps and stalled the engine.
 		var target := Input.get_action_strength("clutch")
-		_clutch_pedal = move_toward(_clutch_pedal, target, (9.0 if target > _clutch_pedal else 2.2) * delta)
+		var sim_now := float(world.get_stats()["sim_time"])
+		var sim_dt := clampf(sim_now - _clutch_sim, 0.0, 0.1)
+		_clutch_sim = sim_now
+		_clutch_pedal = move_toward(_clutch_pedal, target, (9.0 if target > _clutch_pedal else 2.2) * sim_dt)
 		player.set_clutch(1.0 - _clutch_pedal)
 	else:
 		player.set_clutch(1.0 - Input.get_action_strength("clutch") if Input.is_action_pressed("clutch") else -1.0)

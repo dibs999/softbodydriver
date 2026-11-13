@@ -582,6 +582,97 @@ static func verge_material(width: float, v_scale := 12.0) -> ShaderMaterial:
 	return m
 
 
+## A road out of the map to a tunnel in a hillside: from `from` (a point on a map road, with its
+## height) straight along `dir` until `at_foot.call(p)` says the hillside begins, then `into`
+## metres on into it. Its height follows the ground, smoothed and held to `max_grade`, and stays
+## at the foot's level for the last stretch into the hill. Points every 6 m; carved into `h`.
+static func exit_road(h: PackedFloat32Array, nx: int, nz: int, ox: float, oz: float, cell: float,
+		from: Vector3, dir: Vector3, at_foot: Callable, into := 18.0, max_grade := 0.07) -> PackedVector3Array:
+	dir = Vector3(dir.x, 0.0, dir.z).normalized()
+	var edge_t := 0.0
+	while edge_t < 3000.0 and not at_foot.call(from + dir * edge_t):
+		edge_t += 2.0
+	var foot := from + dir * edge_t
+	var foot_y := sample(h, nx, nz, ox, oz, cell, foot.x, foot.z)
+	var pts := PackedVector3Array()
+	var t := 0.0
+	while t <= edge_t + into + 0.01:
+		var q := from + dir * t
+		q.y = sample(h, nx, nz, ox, oz, cell, q.x, q.z) if t < edge_t else foot_y
+		pts.append(q)
+		t += 6.0
+	pts[0].y = from.y
+	for _pass in 12:
+		var sm := pts.duplicate()
+		for i in range(1, pts.size() - 1):
+			sm[i].y = (pts[i - 1].y + pts[i].y * 2.0 + pts[i + 1].y) * 0.25
+		pts = sm
+	var rise := 6.0 * max_grade
+	for i in range(1, pts.size()):
+		pts[i].y = clampf(pts[i].y, pts[i - 1].y - rise, pts[i - 1].y + rise)
+	carve_path(h, nx, nz, ox, oz, cell, pts, 5.0, 12.0, 0.08, false)
+	return pts
+
+
+## The ground kept clear round a tunnel portal (`mouth` and direction `dir`, both in x/z): its
+## forecourt and the earth right over the portal, where the cover is built up over the old ground.
+static func tunnel_zone(p: Vector2, mouth: Vector2, dir: Vector2) -> bool:
+	var rel := p - mouth
+	var along := rel.dot(dir)
+	var across := absf(rel.dot(Vector2(-dir.y, dir.x)))
+	return (along > -14.0 and along < 8.0 and across < 21.0) or (along >= 8.0 and along < 40.0 and across < 10.0)
+
+
+## The ground a tunnel's earth cover follows: in front of the portal (along `dir` from `mouth`)
+## the ground as it is now, behind it, over 14 m, back to the hillside as it was before the approach
+## road was cut into it. (The road's cut runs on 18 m into the hill and showed as a notch up the
+## slope above the portal; a hard change at the head wall left a step beside it.)
+static func portal_ground(before: PackedFloat32Array, after: PackedFloat32Array, nx: int, nz: int, ox: float, oz: float,
+		cell: float, mouth: Vector3, dir: Vector3) -> Callable:
+	return func(x: float, z: float) -> float:
+		var along := (x - mouth.x) * dir.x + (z - mouth.z) * dir.z
+		var now := sample(after, nx, nz, ox, oz, cell, x, z)
+		if along <= 0.0:
+			return now
+		return lerpf(now, sample(before, nx, nz, ox, oz, cell, x, z), smoothstep(0.0, 14.0, along))
+
+
+## The physics ground's cut for a tunnel, in two steps. From just inside the mouth the ground is
+## brought down to the floor slab's top (the approach road's cut ends at the mouth and climbs back
+## to the hillside beyond it: left alone, that made a hump inside the tunnel); a grid point cut
+## that close drags the interpolated ground at most to the slab's level before the mouth, so the
+## slab's leading edge never stands proud of it like a kerb. From a cell and a half in, the ground
+## goes down to 0.3 m under the floor.
+static func tunnel_cut_physical(h: PackedFloat32Array, nx: int, nz: int, ox: float, oz: float, cell: float,
+		mouth: Vector3, dir: Vector3, half := 9.0) -> void:
+	tunnel_cut(h, nx, nz, ox, oz, cell, mouth, dir, 0.3, 75.7, half, mouth.y - 0.05)
+	var start := 1.0 + 1.5 * cell
+	tunnel_cut(h, nx, nz, ox, oz, cell, mouth, dir, start, 76.0 - start, half, mouth.y - 0.3)
+
+
+## Cuts the ground away along a tunnel: from `start` to `start + length` metres in from `mouth`
+## along `dir`, out to `half` metres either side, down to `level`. On the drawn ground the hollow
+## is hidden under the tunnel's earth cover; on the physics ground the floor slab takes over.
+static func tunnel_cut(h: PackedFloat32Array, nx: int, nz: int, ox: float, oz: float, cell: float,
+		mouth: Vector3, dir: Vector3, start: float, length: float, half: float, level: float) -> void:
+	var d := Vector2(dir.x, dir.z).normalized()
+	var n := Vector2(-d.y, d.x)
+	var m := Vector2(mouth.x, mouth.z)
+	var lo := Vector2(INF, INF)
+	var hi := -lo
+	for a: float in [start, start + length]:
+		for c: float in [-half, half]:
+			var p := m + d * a + n * c
+			lo = lo.min(p)
+			hi = hi.max(p)
+	for ix in range(maxi(0, floori((lo.x - ox) / cell)), mini(nx, ceili((hi.x - ox) / cell) + 1)):
+		for iz in range(maxi(0, floori((lo.y - oz) / cell)), mini(nz, ceili((hi.y - oz) / cell) + 1)):
+			var rel := Vector2(ox + ix * cell, oz + iz * cell) - m
+			var along := rel.dot(d)
+			if along > start and along < start + length and absf(rel.dot(n)) < half:
+				h[ix * nz + iz] = minf(h[ix * nz + iz], level)
+
+
 ## A road tunnel into a hillside or bank, the way out to another map: the mouth at `mouth` (road
 ## level) and running along `dir` (horizontal, into the hill) for `length`, with a floor, walls,
 ## a roof, a row of lights, a concrete portal and a direction sign over it. Collision walls keep a

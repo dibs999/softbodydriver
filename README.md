@@ -280,15 +280,27 @@ Details und verbleibende Release-Abnahmen: [Linux-Paketierung](docs/RELEASE_LINU
 - **Wüste**: 1 km² Dünen und Tafelberge, Schotterpiste mit Sprüngen, Felsbrocken und Kakteen
 - **Hügelland**: prozedurales Terrain mit kurviger Landstraße über Kuppen und durch Senken, dazu Wald und der Lindensee in einer Senke innerhalb der Runde
 
-Stadt und Wüste hängen zusammen: Die Ausfallstraße im Osten der Stadt führt durch einen Tunnel
-im Erdwall, und auf der anderen Seite kommt man aus einem Tunnel am Fuß der Bergkette in der
-Wüste heraus. Von dort führt eine Piste zur Rallyeschleife, und durch denselben Tunnel geht es
-zurück in die Stadt. Die Kartenwahl im Hauptmenü bestimmt nur, wo man startet. Bei der Durchfahrt
-wird die andere Karte um das fahrende Auto herum geladen: Tempo, Tank und Schäden bleiben.
-Verkehr und Passanten der alten Karte verschwinden, ein Anhänger bleibt zurück, und eine laufende
-Aktivität wird abgebrochen. In der Karriere führt der Tunnel zu
-einer noch gesperrten Karte nicht hinüber, sondern meldet, wie viele Aufträge fehlen. Beide
-Portale sind mit Erde überdeckt, mit Flügelwänden aus Beton, und der Hügel darüber ist befahrbar.
+Alle sechs Karten hängen über Tunnel zusammen (Wüste – Stadt – Testgelände, Wald & Weide –
+Hügelland – Autobahn); die Kartenwahl im Hauptmenü bestimmt nur, wo man startet:
+
+- **Stadt ↔ Wüste**: Die Ausfallstraße im Osten der Stadt führt durch einen Tunnel im Erdwall.
+  In der Wüste kommt man am Fuß der Bergkette heraus, eine Piste führt zur Rallyeschleife.
+- **Hügelland ↔ Wald & Weide**: Vom Ring im Norden führt eine Straße durch den Wald hinauf zu
+  einem Tunnel im Kamm. Auf der Offroad-Karte kommt man im bewaldeten Randhang heraus und fährt
+  auf einem Feldweg zur Feldwegrunde.
+- **Stadt ↔ Testgelände**: Die Ausfallstraße im Westen der Stadt führt durch einen zweiten
+  Tunnel im Erdwall. Am Testgelände kommt man im Westwall heraus und fährt durch das
+  Wirtschaftstor im Zaun auf die Asphaltfläche.
+- **Hügelland ↔ Autobahn**: Vom Ring im Westen führt eine Straße in einem Einschnitt zum
+  Tunnel. An der Autobahn endet er in einem bewaldeten Hügel hinter dem Lkw-Parkplatz der
+  Raststätte Nordring, von wo man wieder auf den Ring kommt.
+
+Bei der Durchfahrt wird die andere Karte um das fahrende Auto herum geladen: Tempo, Tank und
+Schäden bleiben. Verkehr und Passanten der alten Karte verschwinden, ein Anhänger bleibt zurück,
+und eine laufende Aktivität wird abgebrochen. In der Karriere führt ein Tunnel zu einer noch
+gesperrten Karte nicht hinüber, sondern meldet, wie viele Aufträge fehlen. Die Portale sind mit
+Erde überdeckt und haben Flügelwände aus Beton; der Hügel darüber ist befahrbar, und Bäume
+wachsen darauf weiter.
 
 Der Asphalt altert sichtbar: polierte, leicht wandernde Rollspuren, Netzrisse vor allem in den
 Rollspuren und am Rand, vergossene Risse, Flicken, Längsnähte zwischen den Fertigerbahnen,
@@ -524,7 +536,8 @@ godot --headless --path game -s res://tests/career_test.gd        # Karriere: Lo
 godot --headless --path game -s res://tests/career_garage_test.gd # Karriere: Autopreise, Kauf, Kaufknopf im Menü
 godot --headless --path game -s res://tests/career_contract_test.gd # Karriere: Aufträge je Karte, Prämie, nächster Auftrag
 godot --headless --path game -s res://tests/career_maps_test.gd   # Karriere: Kartenfreischaltung über Aufträge
-godot --headless --path game -s res://tests/map_travel_test.gd    # Von der Stadt durch den Tunnel in die Wüste und zurück, über den Tunnel hinweg
+godot --headless --path game -s res://tests/map_travel_test.gd    # Stadt ↔ Wüste und Stadt ↔ Testgelände, über den Tunnel hinweg
+godot --headless --path game -s res://tests/country_travel_test.gd # Vom Hügelland nach Wald & Weide und zur Autobahn und jeweils zurück
 godot --headless --path game -s res://tests/paint_test.gd         # Lackwahl im Menü, Vorschau und Spielerauto
 godot --headless --path game -s res://tests/cruise_test.gd        # Tempomat: halten, überholen, Bremse schaltet ab
 godot --headless --path game -s res://tests/weather_door_test.gd # Offene Tür, Regenabschirmung und Akustik

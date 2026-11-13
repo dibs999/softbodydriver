@@ -91,9 +91,9 @@ static func _runs(flags: Array[bool], pad: int, closed: bool) -> Array:
 # ------------------------------------------------------------------------------------ guardrails
 
 ## W-beam guardrails on the outside of sharp bends and where the ground falls away beside the
-## road. Returns the number of rail runs built.
+## road; none where `clear(p)` is true (a road joining). Returns the number of rail runs built.
 static func guardrails(parent: Node3D, world: SBWorld, road: PackedVector3Array, half_w: float,
-		height: Callable, closed := true, bend := 0.22, drop := 1.4) -> int:
+		height: Callable, closed := true, bend := 0.22, drop := 1.4, clear := Callable()) -> int:
 	var n := road.size()
 	var offset := half_w + 1.15
 	var flags_l: Array[bool] = []
@@ -108,7 +108,7 @@ static func guardrails(parent: Node3D, world: SBWorld, road: PackedVector3Array,
 			var fall := road[i].y - float(height.call(edge.x, edge.z))
 			# Outside of the bend: a left turn (positive angle here) has its outside on the right.
 			var outside := (turn > bend and s > 0.0) or (turn < -bend and s < 0.0)
-			if outside or fall > drop:
+			if (outside or fall > drop) and not (clear.is_valid() and clear.call(road[i] + side * s * offset)):
 				if s < 0.0: flags_l[i] = true
 				else: flags_r[i] = true
 	var built := 0

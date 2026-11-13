@@ -11,7 +11,10 @@ const PITCH := BLOCK + STREET
 const KERB := 0.14
 
 
-static var _bank_east: Dictionary = {}
+## The banks the tunnels run into, by side (1 east, -1 west), as they were before the cut.
+static var _banks: Dictionary = {}
+## Roads out of town along z = 0 into tunnels in the bank: side, the map beyond, portal sign.
+const TUNNELS := [[1.0, "desert", "Wüste  ›"], [-1.0, "proving_grounds", "Testgelände  ›"]]
 const FACADE_SHADER := preload("res://materials/facade.gdshader")
 
 
@@ -491,16 +494,24 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	props.append_array(bins)
 	_street_life(parent, world, origin, metal)
 	surface_regions.append_array(_outskirts(parent, world, size * 0.5, pavement, facades))
-	# The road out of town: east along z = 0 from the ring street into a tunnel at the foot of the
-	# bank, to the desert.
+	# The roads out of town: east and west along z = 0 from the ring street into tunnels at the
+	# foot of the bank, to the desert and to the proving ground.
 	var half_size := size * 0.5
-	C.quad(parent, Vector3(half_size + 11.0, 0.012, 0.0), Vector2(22.0, 16.0), asphalt)
-	var bank_ground := func(x: float, z: float) -> float:
-		if x > _bank_east["x"] + (_bank_east["nx"] - 1) * _bank_east["cell"]:
-			return -0.03   # the meadow beyond the bank
-		return C.sample(_bank_east["heights"], _bank_east["nx"], _bank_east["nz"], _bank_east["x"], _bank_east["z"], _bank_east["cell"], x, z)
-	var exit_tunnel := C.tunnel(parent, world, Vector3(half_size + 22.0, 0.0, 0.0), Vector3(1, 0, 0), "Wüste  ›", 12.0, 5.6, 70.0,
-		bank_ground, C.terrain_material("grass", 2.8), Color.WHITE, 22.0, 0.014)
+	var exits: Array = []
+	var entrances := {}
+	for spec: Array in TUNNELS:
+		var side: float = spec[0]
+		var bank: Dictionary = _banks[side]
+		C.quad(parent, Vector3(side * (half_size + 11.0), 0.012, 0.0), Vector2(22.0, 16.0), asphalt)
+		var bank_ground := func(x: float, z: float) -> float:
+			var x0: float = bank["x"]
+			if x < x0 or x > x0 + (int(bank["nx"]) - 1) * float(bank["cell"]):
+				return -0.03   # the meadow beyond the bank
+			return C.sample(bank["heights"], bank["nx"], bank["nz"], x0, bank["z"], bank["cell"], x, z)
+		var t := C.tunnel(parent, world, Vector3(side * (half_size + 22.0), 0.0, 0.0), Vector3(side, 0, 0), spec[2], 12.0, 5.6, 70.0,
+			bank_ground, C.terrain_material("grass", 2.8), Color.WHITE, 22.0, 0.014)
+		exits.append({"to": spec[1], "gate": t["gate"], "width": t["width"]})
+		entrances[spec[1]] = t["entrance"]
 	var speeds := C.speeds_from_curvature(route, 13.5, 6.0, 25.0)
 	var spawn_p := Vector3(origin + STREET * 0.5 + 5 * PITCH - 4.0, 0, origin + STREET * 0.5 + 5 * PITCH + 20.0)
 	var map_paths: Array[PackedVector3Array] = []
@@ -516,8 +527,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		"surface_regions": surface_regions,
 		"traffic_signals": signals,
 		"pedestrian_loops": pedestrian_loops,
-		"exits": [{"to": "desert", "gate": exit_tunnel["gate"], "width": exit_tunnel["width"]}],
-		"entrances": {"desert": exit_tunnel["entrance"]},
+		"exits": exits, "entrances": entrances,
 		"ai_routes": [
 			{"waypoints": route, "speeds": speeds, "spawn": C.car_xform(route[3], route[4] - route[3])},
 			{"waypoints": route, "speeds": speeds, "spawn": C.car_xform(route[route.size() / 2], route[route.size() / 2 + 1] - route[route.size() / 2])},
@@ -539,11 +549,11 @@ static func _outskirts(parent: Node3D, world: SBWorld, half: float, pavement: Ma
 		var sgn := -1.0 if side % 2 == 0 else 1.0
 		var c := Vector3(0, KERB * 0.5, sgn * (half + 3.0)) if horizontal else Vector3(sgn * (half + 3.0), KERB * 0.5, 0)
 		var ext := Vector3(half * 2.0 + 12.0, KERB, 6.0) if horizontal else Vector3(6.0, KERB, half * 2.0 + 12.0)
-		if side == 3:
-			# East: a gap for the road out of town (z = 0) to the tunnel in the bank.
+		if not horizontal:
+			# East and west: a gap for the road out of town (z = 0) to the tunnel in the bank.
 			var piece := (half * 2.0 + 12.0 - 16.0) * 0.5
 			for s2: float in [-1.0, 1.0]:
-				C.box(parent, world, Vector3(half + 3.0, KERB * 0.5, s2 * (8.0 + piece * 0.5)), Vector3(3.0, KERB * 0.5, piece * 0.5), Vector3.ZERO, pavement, 0.9)
+				C.box(parent, world, Vector3(sgn * (half + 3.0), KERB * 0.5, s2 * (8.0 + piece * 0.5)), Vector3(3.0, KERB * 0.5, piece * 0.5), Vector3.ZERO, pavement, 0.9)
 			continue
 		C.box(parent, world, c, ext * 0.5, Vector3.ZERO, pavement, 0.9)
 	# Meadow beyond, out to the horizon.
@@ -569,13 +579,14 @@ static func _outskirts(parent: Node3D, world: SBWorld, half: float, pavement: Ma
 				var along := px if along_x else pz
 				var hgt := 9.0 + 3.0 * sin(along * 0.021) + 2.0 * cos(along * 0.047)
 				heights[x * nz + z] = maxf(0.0, hgt * smoothstep(0.0, 0.45, out) * (1.0 - 0.35 * smoothstep(0.6, 1.0, out)) - 0.02)
-		# East: the tunnel to the desert runs into the bank along z = 0; its physics ground is cut
-		# away (the drawn bank stays whole over the tunnel).
-		if rect.position.x >= inner - 0.1:
-			_bank_east = {"heights": heights.duplicate(), "x": rect.position.x, "z": rect.position.y, "cell": cell, "nx": nx, "nz": nz}
+		# East and west: the tunnels run into the bank along z = 0; the ground is cut away there
+		# (the tunnel's earth cover closes it again, drawn and physical).
+		var tunnel_side := 1.0 if rect.position.x >= inner - 0.1 else (-1.0 if rect.end.x <= -inner + 0.1 and not along_x else 0.0)
+		if tunnel_side != 0.0:
+			_banks[tunnel_side] = {"heights": heights.duplicate(), "x": rect.position.x, "z": rect.position.y, "cell": cell, "nx": nx, "nz": nz}
 			for x in nx:
 				for z in nz:
-					if absf(rect.position.y + z * cell) < 14.0 and rect.position.x + x * cell > inner + 2.0:
+					if absf(rect.position.y + z * cell) < 14.0 and (rect.position.x + x * cell) * tunnel_side > inner + 2.0:
 						heights[x * nz + z] = 0.0
 		var physical := heights
 		world.add_heightfield(rect.position.x, rect.position.y, cell, nx, nz, physical, 0.75)
@@ -584,8 +595,8 @@ static func _outskirts(parent: Node3D, world: SBWorld, half: float, pavement: Ma
 		var count := int((rect.size.x if along_x else rect.size.y) / 14.0)
 		for i in count:
 			var t := (i + 0.5) / count
-			if rect.position.x >= inner - 0.1 and absf(rect.position.y + rect.size.y * t) < 16.0:
-				continue   # the tunnel to the desert
+			if tunnel_side != 0.0 and absf(rect.position.y + rect.size.y * t) < 16.0:
+				continue   # the tunnels
 			var jitter := sin(i * 2.31) * 0.5 + 0.5
 			var p := Vector3(rect.position.x + rect.size.x * t, 0, rect.position.y + rect.size.y * (0.25 + 0.6 * jitter)) if along_x \
 				else Vector3(rect.position.x + rect.size.x * (0.25 + 0.6 * jitter), 0, rect.position.y + rect.size.y * t)
