@@ -72,5 +72,11 @@ func run() -> void:
 	tick(100)
 	print("  coasting: %.1f -> %.1f km/h" % [before, kmh()])
 	check(kmh() < before - 3.0, "and the car then coasts")
+	if failed or OS.has_environment("CRUISE_DIAG"):
+		# A rare suite-only failure (car at ~0 km/h after engaging at 90): say where and in what state.
+		var t: Dictionary = scene.player.get_telemetry()
+		print("  diagnostics: map %s car %s at %s, running %s, gear %s, rpm %.0f, status %s, broken beams %s" % [game.selected_map,
+			scene.player.get_info().get("id", "?"), scene.player.get_position_ws(), t.get("running"), t.get("gear"),
+			float(t.get("rpm", 0.0)), t.get("status", ""), t.get("broken_beams")])
 	print("TEST OK" if not failed else "TEST FAILED")
 	quit(1 if failed else 0)

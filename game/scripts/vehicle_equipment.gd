@@ -139,6 +139,7 @@ func state_for(v: SBVehicle) -> Dictionary:
 	var lamp_materials: Array = []
 	var tail_materials: Array = []
 	var lamp_entries: Array = []
+	var reverse_lamps: Array = []
 	for child in v.get_children():
 		var lamp_name := String(child.name).to_lower()
 		if child is MeshInstance3D and "turnsignalsrear" in lamp_name:
@@ -148,6 +149,15 @@ func state_for(v: SBVehicle) -> Dictionary:
 		var is_head := "headlight" in lamp_name
 		var is_tail := lamp_name.ends_with("taillight") or lamp_name.ends_with("taillights") \
 			or lamp_name.ends_with("taillight_left") or lamp_name.ends_with("taillight_right")
+		var is_reverse := "reverselight" in lamp_name
+		if child is MeshInstance3D and is_reverse:
+			var lens: Material = child.get_active_material(0)
+			if lens is StandardMaterial3D:
+				var own_lens: StandardMaterial3D = lens.duplicate()
+				own_lens.emission_energy_multiplier = 2.5
+				child.material_override = own_lens
+				var reverse_side := -1 if lamp_name.ends_with("_left") else (1 if lamp_name.ends_with("_right") else 0)
+				reverse_lamps.append({"material": own_lens, "side": reverse_side})
 		if child is MeshInstance3D and (is_head or is_tail):
 			var original: Material = child.get_active_material(0)
 			if original is StandardMaterial3D:
@@ -198,8 +208,19 @@ func state_for(v: SBVehicle) -> Dictionary:
 			rig.add_child(lamp)
 			if side < 0: left.append(lamp)
 			else: right.append(lamp)
+	# Reversing light: a weak, wide lamp pointing back, lit with the reversing lamp lenses.
+	var reverse_light := SpotLight3D.new()
+	reverse_light.position = Vector3(rear_x - 0.05, maxf(0.3, rear_y - 0.05), 0.0)
+	reverse_light.rotation_degrees = Vector3(-12.0, 90.0, 0.0)
+	reverse_light.spot_range = 14.0
+	reverse_light.spot_angle = 55.0
+	reverse_light.light_energy = 2.5
+	reverse_light.light_color = Color(1.0, 0.97, 0.92)
+	reverse_light.shadow_enabled = false
+	reverse_light.visible = false
+	rig.add_child(reverse_light)
 	var paint_rgb: Array = body.get("paint", [0.5, 0.1, 0.1])
-	var s := {"paint": Color(float(paint_rgb[0]), float(paint_rgb[1]), float(paint_rgb[2])), "rig": rig, "lamp_materials": lamp_materials, "tail_materials": tail_materials, "lamp_entries": lamp_entries, "broken": {}, "lamp_check": 0.0, "authored_signals": authored_signals, "headlights": headlights, "glare_head": glare_head, "glare_tail": glare_tail, "left": left, "right": right, "lights": false, "light_mode": 0, "signal": 0, "hazards": false}
+	var s := {"paint": Color(float(paint_rgb[0]), float(paint_rgb[1]), float(paint_rgb[2])), "rig": rig, "lamp_materials": lamp_materials, "tail_materials": tail_materials, "lamp_entries": lamp_entries, "reverse_lamps": reverse_lamps, "reverse_light": reverse_light, "broken": {}, "lamp_check": 0.0, "authored_signals": authored_signals, "headlights": headlights, "glare_head": glare_head, "glare_tail": glare_tail, "left": left, "right": right, "lights": false, "light_mode": 0, "signal": 0, "hazards": false}
 	states[v] = s
 	return s
 
@@ -457,7 +478,8 @@ func _process(delta: float) -> void:
 		_update_lamp_damage(v, s, delta)
 		_auto_lights(s)
 		var broken: Dictionary = s["broken"]
-		var braking := float(v.get_telemetry().get("brake", 0.0)) > 0.05
+		var tel: Dictionary = v.get_telemetry()
+		var braking := float(tel.get("brake", 0.0)) > 0.05
 		for entry in s["lamp_entries"]:
 			var mat: StandardMaterial3D = entry["material"]
 			var dead := _lamp_dead(broken, bool(entry["front"]), int(entry["side"]))
@@ -465,6 +487,12 @@ func _process(delta: float) -> void:
 			if not entry["front"]: mat.emission_energy_multiplier = 3.5 if braking else 0.8
 			# A smashed lens shows the dark reflector behind it.
 			mat.albedo_color = (entry["albedo"] as Color).darkened(0.75) if dead else entry["albedo"]
+		# Reversing lamps: in reverse gear with the engine running; they sit in the tail light housing
+		# and break with it.
+		var reversing: bool = int(tel.get("gear", 0)) < 0 and bool(tel.get("running", true))
+		for entry in s["reverse_lamps"]:
+			(entry["material"] as StandardMaterial3D).emission_enabled = reversing and not _lamp_dead(broken, false, int(entry["side"]))
+		s["reverse_light"].visible = reversing and not s["reverse_lamps"].is_empty() and not _lamp_dead(broken, false, 0)
 		for i in s["headlights"].size():
 			var light: SpotLight3D = s["headlights"][i]
 			light.visible = s["lights"] and not broken.get("head_left" if i == 0 else "head_right", false)

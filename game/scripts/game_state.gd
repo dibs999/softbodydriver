@@ -1217,6 +1217,15 @@ func make_material_library() -> Dictionary:
 	tail.emission = Color(0.9, 0.05, 0.03)
 	tail.emission_energy_multiplier = 0.9
 	lib["taillight"] = tail
+
+	# Reversing lamp lens in the tail light: clear, lit only in reverse (vehicle_equipment.gd).
+	var reverse := StandardMaterial3D.new()
+	reverse.albedo_color = Color(0.86, 0.87, 0.88)
+	reverse.metallic = 0.4
+	reverse.roughness = 0.1
+	reverse.emission_enabled = false
+	reverse.emission = Color(1.0, 0.98, 0.94)
+	lib["reverselight"] = reverse
 	return lib
 
 

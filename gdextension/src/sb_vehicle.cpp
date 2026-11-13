@@ -31,6 +31,7 @@ Color fallbackColor(const std::string& n) {
     if (n == "tire") return Color(0.05, 0.05, 0.05);
     if (n == "headlight") return Color(0.95, 0.95, 0.9);
     if (n == "taillight") return Color(0.7, 0.02, 0.02);
+    if (n == "reverselight") return Color(0.9, 0.9, 0.88);
     if (n == "plate") return Color(0.92, 0.92, 0.9);
     if (n == "interior") return Color(0.08, 0.08, 0.09);
     if (n == "headliner") return Color(0.56, 0.55, 0.52);
@@ -221,7 +222,7 @@ Ref<Material> SBVehicle::materialFor(const std::string& name, const Dictionary& 
     sm->set_albedo(c);
     if (c.a < 1.0f) sm->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA);
     if (base == "glass") sm->set_cull_mode(BaseMaterial3D::CULL_DISABLED);
-    if (base == "headlight" || base == "taillight") {
+    if (base == "headlight" || base == "taillight" || base == "reverselight") {
         sm->set_feature(BaseMaterial3D::FEATURE_EMISSION, true);
         sm->set_emission(c);
         sm->set_emission_energy_multiplier(base == "headlight" ? 1.5f : 0.8f);
