@@ -23,7 +23,7 @@
   "engine": {
     "name": "150 kW E-Motor", "type": "electric", "layout": "RWD", "cylinders": 0,
     "torqueCurve": [[0, 310], [4600, 310], [6000, 240], [8000, 180], [10000, 143], [12000, 119], [14000, 100], [14800, 0]],
-    "idleRpm": 0, "redlineRpm": 14000, "inertia": 0.05, "friction": 2, "engineBraking": 0.002, "mass": 95,
+    "idleRpm": 0, "redlineRpm": 14000, "inertia": 0.05, "friction": 0.4, "engineBraking": 0.0003, "mass": 95,
     "gears": [1.0], "reverse": -1.0, "finalDrive": 11.5,
     "automatic": true, "shiftUpRpm": 13000, "shiftDownRpm": 1000,
     "maxBrakeTorque": 2400, "frontBrakeBias": 0.66, "handbrakeTorque": 1600, "lsd": 2, "regen": 0.25,

@@ -39,7 +39,9 @@ Der **Kestrel e:Hatch** fährt elektrisch: 150-kW-Heckmotor mit 310 Nm ab Stills
 Untersetzung (0–100 km/h in rund 7 s), 58-kWh-Akku im Unterboden, 1.790 kg. Er hat keinen Leerlauf,
 keine Kupplung und kann nicht abgewürgt werden; beim Gaswegnehmen rekuperiert er spürbar (mit dem
 Bremspedal stärker) und lädt dabei den Akku. Der Akku leert sich mit der abgerufenen Leistung
-(Motor und Umrichter ~90 %, 0,4 kW Bordnetz). Das Kombiinstrument zeigt Ladestand und Leistung
+(Motor und Umrichter ~90 %, 0,4 kW Bordnetz): bei konstant 50 km/h rund 10, bei 100 km/h
+17 und bei 130 km/h 24 kWh/100 km. Die Rekuperation blendet über die ersten 10 % Pedalweg aus,
+so dass leichtes Gas das Tempo ruhig hält. Das Kombiinstrument zeigt Ladestand und Leistung
 (grün beim Rekuperieren), am Serviceplatz wird geladen statt getankt (in der Karriere 0,49 €/kWh).
 Statt Motoraufnahmen hört man das Surren von Motor und Getriebe, lauter unter Last und beim
 Rekuperieren; Auspuff und Abgas gibt es nicht, Öl, Wasserschlag und Überdrehschäden auch nicht.

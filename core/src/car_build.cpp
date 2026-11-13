@@ -1215,6 +1215,7 @@ CarBuild buildCar(const CarDefinition& def) {
     if (pt.electric) {
         pt.clutchMaxTorque = peak * 3.0;   // a shaft, not a friction clutch
         pt.regenTorqueNm = ed.regen * peak;
+        pt.drivetrainEfficiency = 0.97;   // one reduction stage, no gearbox
     }
     pt.clutchStiffness = 18.0 * std::max<real>(1.0, peak / 250.0);
     pt.forwardGears = ed.gears;

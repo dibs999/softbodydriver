@@ -1299,3 +1299,28 @@ TEST_CASE("an electric car pulls from standstill, never stalls, recuperates and 
     CHECK(car.systems().state().oilPressureBar > 1.0);
     CHECK(w.stats().finite);
 }
+
+TEST_CASE("an electric compact uses a realistic amount of energy at steady speeds") {
+    // Kestrel e:Hatch held at a steady speed with a light, smooth pedal: road load through a
+    // single reduction gear, motor and inverter. Real compact EVs: ~11-13 kWh/100 km at 50 km/h,
+    // ~15-18 at 100, ~21-25 at 130.
+    for (const real target : {50.0, 100.0}) {
+        CarBuild cb = buildCar(loadCarDefinition(carPath("kestrel_ev")));
+        World w = flatWorld();
+        w.addBody(std::move(cb.body));
+        SoftBody& car = w.body(0);
+        w.simulate(1.0);
+        VehicleControls c;
+        real e0 = 0.0, x0 = 0.0;
+        for (int i = 0; i < 1600; ++i) {
+            c.throttle = std::clamp((target - car.telemetry().speedKmh) * 0.15 + 0.2, 0.0, 1.0);
+            car.setControls(c);
+            w.simulate(0.05);
+            if (i == 800) { e0 = car.systems().state().fuelL; x0 = car.centerOfMass().x; }
+        }
+        const real per100 = (e0 - car.systems().state().fuelL) / ((car.centerOfMass().x - x0) / 1000.0) * 100.0;
+        MESSAGE(target << " km/h: " << per100 << " kWh/100 km");
+        if (target < 75.0) { CHECK(per100 > 8.0); CHECK(per100 < 14.0); }
+        else { CHECK(per100 > 14.0); CHECK(per100 < 20.0); }
+    }
+}
