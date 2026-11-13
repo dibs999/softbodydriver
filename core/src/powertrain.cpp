@@ -176,17 +176,24 @@ void Powertrain::step(const PowertrainInputs& in,
                             spec_.engineBraking * std::max<real>(0.0, engineOmega_);
     real netEngineTorque = grossTorque - (1.0 - 0.7 * effThrottle) * lossTorque;
     // Recuperation: off the pedal the motor works as a generator, harder with the brake pedal
-    // pressed, fading out below ~10 km/h where it can no longer feed the battery.
+    // pressed, fading out below ~10 km/h where it can no longer feed the battery. It blends out
+    // over the first 10 % of pedal travel, so holding a speed with a light foot does not flip
+    // between driving and recuperating (a hard switch at 5 % made the car surge back and forth
+    // at 50 km/h and wasted a third of its energy in the round trip).
     lastRegenPower_ = 0.0;
-    if (spec_.electric && running_ && throttle < 0.05 && engineOmega_ > 0.0 && curRatio != 0.0) {
-        const real regen = spec_.regenTorqueNm * (1.0 + 1.5 * brake) * std::clamp(rpm / 900.0, 0.0, 1.0);
+    const real regenShare = std::clamp((0.10 - throttle) / 0.10, 0.0, 1.0);
+    if (spec_.electric && running_ && regenShare > 0.0 && engineOmega_ > 0.0 && curRatio != 0.0) {
+        const real regen = regenShare * spec_.regenTorqueNm * (1.0 + 1.5 * brake) * std::clamp(rpm / 900.0, 0.0, 1.0);
         netEngineTorque -= regen;
-        lastRegenPower_ = regen * engineOmega_;
+        // The battery sees the motor's net torque: driving and braking at once cancel out.
+        lastRegenPower_ = std::max<real>(0.0, (regen - grossTorque) * engineOmega_);
     }
     // Friction never drives the crank backwards.
     if (engineOmega_ <= 0.0 && netEngineTorque < 0.0) netEngineTorque = 0.0;
     lastEngineTorque_ = netEngineTorque;
     lastEnginePower_ = std::max<real>(0.0, grossTorque * engineOmega_);
+    // Electric: the battery supplies the net electromagnetic torque (drive minus recuperation).
+    if (spec_.electric) lastEnginePower_ = std::max<real>(0.0, (netEngineTorque + (1.0 - 0.7 * effThrottle) * lossTorque) * engineOmega_);
 
     // Clutch engagement: manual if >= 0, otherwise automatic launch curve.
     if (shiftTimer_ > 0.0 || clutchWear_ >= 1.0) {
