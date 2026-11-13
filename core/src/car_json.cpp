@@ -61,6 +61,7 @@ void parseBody(CarBodyDef& b, const json& j) {
         SB_REAL("paintMetallic", b.paintMetallic)
         SB_REAL("dragCoefficient", b.dragCoefficient) SB_REAL("frontalArea", b.frontalArea)
         SB_REAL("rearWing", b.rearWing)
+        SB_BOOL("bullbar", b.bullbar)
         SB_BOOL("detachableBumpers", b.detachableBumpers)
         SB_BOOL("detachableDoors", b.detachableDoors)
         SB_BOOL("detachableTailgate", b.detachableTailgate)
@@ -174,9 +175,15 @@ CarDefinition parseCarDefinition(const std::string& text, const std::string& sou
                         return true;
                     }
                     if (kk == "automatic") { e.automatic = v2.get<bool>(); return true; }
+                    if (kk == "type") {
+                        e.type = v2.get<std::string>();
+                        if (e.type != "combustion" && e.type != "electric")
+                            throw std::runtime_error("engine.type must be combustion or electric");
+                        return true;
+                    }
                     if (kk == "cylinders") { e.cylinders = v2.get<int>(); return true; }
                     static const std::pair<const char*, real EngineDef::*> reals[] = {
-                        {"idleRpm", &EngineDef::idleRpm}, {"redlineRpm", &EngineDef::redlineRpm},
+                        {"idleRpm", &EngineDef::idleRpm}, {"regen", &EngineDef::regen}, {"redlineRpm", &EngineDef::redlineRpm},
                         {"inertia", &EngineDef::inertia}, {"friction", &EngineDef::friction},
                         {"engineBraking", &EngineDef::engineBraking}, {"mass", &EngineDef::mass},
                         {"reverse", &EngineDef::reverse}, {"finalDrive", &EngineDef::finalDrive},

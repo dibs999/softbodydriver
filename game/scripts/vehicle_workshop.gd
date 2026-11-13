@@ -3,7 +3,7 @@ extends RefCounted
 ## configuration is a small dictionary of choices laid over the car file when the car is built:
 ## an engine from another car (with its own gearbox or the car's), engine tune and rev limit, final
 ## drive, drive layout and limited-slip differential, springs, dampers and anti-roll bars per axle,
-## tyre compound, brake size and ballast. Applying it rebuilds the car where it stands.
+## tyre compound, wheels, a bull bar, brake size and ballast. Applying it rebuilds the car where it stands.
 
 ## Neutral values: a configuration equal to these builds the car exactly as its file describes it.
 const DEFAULTS := {
@@ -28,6 +28,7 @@ const DEFAULTS := {
 	"ride_height": 0.0,    # ground clearance change, m (lowered / raised springs)
 	"tire_width": 1.0,     # tyre width factor (narrower / wider tyres on the same rims)
 	"wheels": 0,           # index into WHEELS
+	"bullbar": false,      # steel bull bar ahead of the front bumper (generated bodies only)
 }
 
 ## Tyre compounds: name and grip factor over the car's own tyres.
@@ -86,7 +87,8 @@ static func engine_catalogue(cars: Array) -> Array:
 	var out: Array = []
 	for c: Dictionary in cars:
 		var e: Dictionary = read_definition(c["path"]).get("engine", {})
-		if e.is_empty():
+		# An electric motor needs its battery and inverter: not a part to swap.
+		if e.is_empty() or str(e.get("type", "combustion")) == "electric":
 			continue
 		var peak_t := 0.0
 		var peak_p := 0.0
@@ -103,6 +105,8 @@ static func engine_catalogue(cars: Array) -> Array:
 ## The car file `definition` with configuration `cfg` applied (a new dictionary).
 static func apply(definition: Dictionary, cfg: Dictionary, catalogue: Array) -> Dictionary:
 	var c := normalized(cfg)
+	if str(definition.get("engine", {}).get("type", "combustion")) == "electric":
+		c["engine"] = ""   # an electric car keeps its motor (and its battery)
 	var d: Dictionary = definition.duplicate(true)
 	var e: Dictionary = d.get("engine", {})
 	var chassis: Dictionary = d.get("chassis", {})
@@ -197,6 +201,8 @@ static func apply(definition: Dictionary, cfg: Dictionary, catalogue: Array) -> 
 	# Wings bolt onto the generated bodies; an imported model would hide the wing it carries.
 	if c["wing"] > 0 and not d.has("visualModel"):
 		body["rearWing"] = float(WINGS[c["wing"]][1])
+	if c["bullbar"] and not d.has("visualModel"):
+		body["bullbar"] = true
 	if c["ride_height"] != 0.0:
 		body["groundClearance"] = maxf(0.07, float(body.get("groundClearance", 0.14)) + float(c["ride_height"]))
 	chassis["curbMass"] = float(chassis.get("curbMass", 1200.0)) + float(c["ballast"])
@@ -242,5 +248,6 @@ static func summary(cfg: Dictionary, catalogue: Array) -> String:
 	if c["ballast"] != 0.0: parts.append("%+d kg" % int(c["ballast"]))
 	if c["wing"] > 0: parts.append(WINGS[c["wing"]][0])
 	if c["wheels"] > 0: parts.append(WHEELS[c["wheels"]][0])
+	if c["bullbar"]: parts.append("Rammschutz")
 	if c["ride_height"] != 0.0: parts.append("Höhe %+d mm" % int(round(c["ride_height"] * 1000.0)))
 	return "Serienstand" if parts.is_empty() else ", ".join(parts)

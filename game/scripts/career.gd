@@ -5,6 +5,7 @@ extends RefCounted
 
 const START_MONEY := 2000.0
 const FUEL_PRICE := 1.85          # EUR per litre
+const CHARGE_PRICE := 0.49        # EUR per kWh at the service bay's charger
 const RECOVERY_FEE := 150.0       # towing for an instant repair away from the service
 const STARTER_CAR := "kestrel_hatch"   # owned from the start of a career
 

@@ -32,6 +32,7 @@ Color fallbackColor(const std::string& n) {
     if (n == "headlight") return Color(0.95, 0.95, 0.9);
     if (n == "taillight") return Color(0.7, 0.02, 0.02);
     if (n == "reverselight") return Color(0.9, 0.9, 0.88);
+    if (n == "bullbar") return Color(0.03, 0.03, 0.032);
     if (n == "plate") return Color(0.92, 0.92, 0.9);
     if (n == "interior") return Color(0.08, 0.08, 0.09);
     if (n == "headliner") return Color(0.56, 0.55, 0.52);
@@ -2178,8 +2179,10 @@ Dictionary SBVehicle::get_info() const {
     d["redline_rpm"] = def_.engine.redlineRpm;
     d["gears"] = static_cast<int64_t>(def_.engine.gears.size());
     d["fuel_capacity"] = def_.engine.fuelCapacity;
+    d["electric"] = def_.engine.type == "electric";
     d["tire_radius"] = def_.tires.radius;
     d["tread"] = String(def_.tires.tread.c_str());
+    d["bullbar"] = def_.body.bullbar;
     d["mass"] = def_.chassis.curbMass;
     d["length"] = def_.body.length;
     d["wheelbase"] = def_.body.wheelbase;

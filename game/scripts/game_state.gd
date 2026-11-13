@@ -1226,6 +1226,8 @@ func make_material_library() -> Dictionary:
 	reverse.emission_enabled = false
 	reverse.emission = Color(1.0, 0.98, 0.94)
 	lib["reverselight"] = reverse
+	# Bull bar: black powder-coated steel tube.
+	lib["bullbar"] = _metal(Color(0.03, 0.03, 0.032), 0.35, 0.45)
 	return lib
 
 

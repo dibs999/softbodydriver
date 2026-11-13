@@ -58,6 +58,9 @@ struct CarSystemsSpec {
     real seizeC = 145.0;              ///< Engine seizes.
     real blockDeformLimit = 0.015;    ///< Mean relative block beam deformation -> fully damaged.
     // ---- fuel
+    /// Electric: fuelCapacityL / fuelL hold the battery's energy in kWh and fuelRateLPerH the net
+    /// battery power in kW (negative while recuperating); no oil system, no intake to hydrolock.
+    bool electric = false;
     real fuelCapacityL = 50.0;
     real fuelL = 40.0;
     real bsfcGPerKWh = 255.0;

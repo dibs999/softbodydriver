@@ -121,13 +121,17 @@ func _process(_d: float) -> bool:
 				"One inch larger rims keep the outer diameter")
 			var trail := W.apply(W.read_definition("res://cars/trailhead_4x4.car.json"), {"wheels": 4}, cat)
 			check(trail["tires"]["tread"] == "road", "Road tyres on the 4x4")
+			check(W.apply(def, {"bullbar": true}, cat)["body"]["bullbar"] == true and not W.apply(W.read_definition("res://cars/meridian_sedan.car.json"), {"bullbar": true}, cat)["body"].has("bullbar"),
+				"Bull bar on a generated body, not on an imported model")
 			var RS := preload("res://scripts/road_surface.gd")
 			var rs: RefCounted = RS.new()
 			check(rs.effective_grip("gravel", "offroad") > rs.effective_grip("gravel") + 0.08 and rs.effective_grip("sand", "offroad") > rs.effective_grip("sand") + 0.12
 				and is_equal_approx(rs.effective_grip("asphalt", "offroad"), rs.effective_grip("asphalt")), "A block tread grips better on loose ground, the same on tarmac")
-			print("  ", scene.rebuild_player({"wheels": 3}))
+			print("  ", scene.rebuild_player({"wheels": 3, "bullbar": true}))
 			check(str(scene.player.get_info()["tread"]) == "offroad" and float(scene.player.get_info()["tire_radius"]) > def["tires"]["radius"] * 1.05,
 				"The rebuilt car runs on the all-terrain tyres")
+			check(bool(scene.player.get_info()["bullbar"]) and bool(root.get_node("Game").progress.get_config("kestrel_hatch").get("bullbar", false)),
+				"with the bull bar fitted, and the profile keeps it (a yes/no part)")
 			var msg: String = scene.rebuild_player({"power": 1.2})
 			check(msg == "Werkstatt: Leistung +20 %", "A plain engine tune rebuilds as well (%s)" % msg)
 			Input.action_press("throttle", 1.0)

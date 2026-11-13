@@ -48,7 +48,7 @@ static func _valid(data: Variant) -> bool:
 		for cfg in data["configs"].values():
 			if not cfg is Dictionary: return false
 			for v in cfg.values():
-				if not (v is String or _number(v)): return false
+				if not (v is String or v is bool or _number(v)): return false
 	var selection: Dictionary = data["selection"]
 	if not selection.get("last_car") is String or not selection.get("last_map") is String: return false
 	for car in data["braking"].values():

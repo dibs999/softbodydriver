@@ -1,0 +1,32 @@
+{
+  "_comment": "Electric compact hatchback on the Kestrel body: 58 kWh battery in the floor, 150 kW rear motor, single-speed reduction gear.",
+  "id": "kestrel_ev",
+  "name": "Kestrel e:Hatch 58 kWh",
+  "brand": "Kestrel",
+  "description": "Elektro-Kompakter (C-Segment), Heckmotor mit 150 kW und 310 Nm ab Stillstand, 58-kWh-Akku im Unterboden, Rekuperation beim Gaswegnehmen.",
+  "body": {
+    "style": "hatchback", "doors": 4, "detachableBumpers": true, "detachableDoors": true, "detachableTailgate": true,
+    "length": 4.26, "width": 1.81, "height": 1.56,
+    "wheelbase": 2.77, "frontOverhang": 0.80,
+    "trackFront": 1.54, "trackRear": 1.55, "groundClearance": 0.14,
+    "noseHeight": 0.70, "hoodHeight": 0.98, "beltHeight": 1.02, "tailHeight": 1.04,
+    "hoodLength": 1.02, "windshieldRun": 0.86, "roofLength": 1.80, "rearWindowRun": 0.42,
+    "roofWidthRatio": 0.80, "cornerRadiusFront": 0.22, "cornerRadiusRear": 0.24,
+    "paint": [0.86, 0.87, 0.88], "paintMetallic": 0.55
+  },
+  "chassis": { "curbMass": 1790, "frontWeight": 0.47, "bodyStiffness": 1.1, "bodyStrength": 1.0 },
+  "suspension": {
+    "front": { "wheelRate": 30000, "bumpDamping": 2200, "reboundDamping": 4300, "antiRollRate": 9500,  "bumpTravel": 0.085, "droopTravel": 0.10 },
+    "rear":  { "wheelRate": 34000, "bumpDamping": 2300, "reboundDamping": 4500, "antiRollRate": 6500,  "bumpTravel": 0.090, "droopTravel": 0.11 }
+  },
+  "tires": { "radius": 0.336, "width": 0.215, "rimRadius": 0.229, "pressurePsi": 38, "friction": 1.1, "tireMass": 10.0, "rimMass": 9.5, "rays": 20, "rimDesign": "multispoke" },
+  "engine": {
+    "name": "150 kW E-Motor", "type": "electric", "layout": "RWD", "cylinders": 0,
+    "torqueCurve": [[0, 310], [4600, 310], [6000, 240], [8000, 180], [10000, 143], [12000, 119], [14000, 100], [14800, 0]],
+    "idleRpm": 0, "redlineRpm": 14000, "inertia": 0.05, "friction": 2, "engineBraking": 0.002, "mass": 95,
+    "gears": [1.0], "reverse": -1.0, "finalDrive": 11.5,
+    "automatic": true, "shiftUpRpm": 13000, "shiftDownRpm": 1000,
+    "maxBrakeTorque": 2400, "frontBrakeBias": 0.66, "handbrakeTorque": 1600, "lsd": 2, "regen": 0.25,
+    "fuelCapacity": 58, "bsfc": 0, "radiatorUA": 800
+  }
+}

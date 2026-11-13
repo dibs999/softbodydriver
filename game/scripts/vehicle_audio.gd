@@ -101,7 +101,7 @@ func configure(next_vehicle: SBVehicle, cylinders: int) -> void:
 	_gear = telemetry["gear"]
 	_rpm = telemetry["rpm"]
 	_shift_player.stop()
-	var profile := "v8" if cylinders == 8 else ("v6" if cylinders == 6 else "i4")
+	var profile := "electric" if cylinders <= 0 else ("v8" if cylinders == 8 else ("v6" if cylinders == 6 else "i4"))
 	if profile == _engine_profile:
 		return
 	_engine_profile = profile
@@ -110,6 +110,12 @@ func configure(next_vehicle: SBVehicle, cylinders: int) -> void:
 		player.queue_free()
 	_engine_players.clear()
 	_source_gains.clear()
+	electric = profile == "electric"
+	if electric:
+		_engine_rpms = []
+		_coast_rpms = []
+		_loop_rpms = []
+		return
 	_engine_rpms = ENGINE_BANDS[profile]
 	_coast_rpms = COAST_BANDS[profile]
 	_loop_rpms = _engine_rpms + _coast_rpms
@@ -134,6 +140,13 @@ func configure(next_vehicle: SBVehicle, cylinders: int) -> void:
 
 
 var _rod_broken := false
+## Electric drive: no engine recordings, the motor's whine and the reduction gear's mesh tone.
+var electric := false
+var _whine := 0.0
+var _whine_p1 := 0.0
+var _whine_p2 := 0.0
+var _whine_p3 := 0.0
+var _motor_hz := 0.0
 
 
 func impact(strength: float) -> void:
@@ -200,6 +213,13 @@ func _process(delta: float) -> void:
 		_shift_player.play()
 	_gear = gear
 	_update_engine(t, volume * float(Game.settings.get("engine_volume", 0.8)), delta)
+	if electric:
+		# Louder under load and while recuperating, nothing at a standstill.
+		var motor_rpm := maxf(0.0, float(t["rpm"]))
+		var load := absf(float(t.get("fuel_rate", 0.0))) / 120.0
+		var target := (0.25 + 0.75 * clampf(load, 0.0, 1.0)) * smoothstep(150.0, 1500.0, motor_rpm) * float(t["running"])
+		_whine = lerpf(_whine, target * volume * float(Game.settings.get("engine_volume", 0.8)) * (0.7 if cockpit else 1.0), 1.0 - exp(-delta * 10.0))
+		_motor_hz = motor_rpm / 60.0
 	_fill()
 
 
@@ -278,6 +298,13 @@ func _fill() -> void:
 		if _knock > 0.0:
 			_knock_phase = fmod(_knock_phase + TAU * _crank_hz / MIX_RATE, TAU)
 			knock = pow(maxf(0.0, sin(_knock_phase)), 40.0) * (_low_noise * 1.6 + noise * 0.25) * _knock * (0.35 + 0.65 * _load)
+		var whine := 0.0
+		if _whine > 0.0005:
+			# Motor (8 pole pairs) and the gear mesh (23 teeth) plus a faint inverter tone.
+			_whine_p1 = fmod(_whine_p1 + TAU * _motor_hz * 8.0 / MIX_RATE, TAU)
+			_whine_p2 = fmod(_whine_p2 + TAU * _motor_hz * 23.0 / MIX_RATE, TAU)
+			_whine_p3 = fmod(_whine_p3 + TAU * (1800.0 + _motor_hz * 4.0) / MIX_RATE, TAU)
+			whine = (sin(_whine_p1) * 0.05 + sin(_whine_p2) * 0.028 + sin(_whine_p3) * 0.012) * _whine
 		_impact *= 0.9989
 		_impact_tail *= 0.9998
 		_horn_level = move_toward(_horn_level, 1.0 if horn else 0.0, 1.0 / (0.012 * MIX_RATE) if horn else 1.0 / (0.07 * MIX_RATE))
@@ -299,7 +326,7 @@ func _fill() -> void:
 			_grind_p2 = fmod(_grind_p2 + TAU * (3100.0 + 420.0 * _low_noise) / MIX_RATE, TAU)
 			var metal := (sin(_grind_p1) * 0.16 + sin(_grind_p2) * 0.10) * (0.45 + absf(_low_noise) * 2.2)
 			scrape = (metal * (1.0 - 0.75 * _loose_road) + (noise * 0.7 + _air_noise * 0.3) * 0.22) * _body_scrape
-		var common := (air + tire + flap + grind + scrape) * road_volume + hit + honk + knock + burn
+		var common := (air + tire + flap + grind + scrape) * road_volume + hit + honk + knock + burn + whine
 		var spread := (_air_noise - _low_noise) * _wind * 0.065 * road_volume
 		_cabin_l = lerpf(_cabin_l, common + spread, filter)
 		_cabin_r = lerpf(_cabin_r, common - spread, filter)

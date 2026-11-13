@@ -76,6 +76,8 @@ struct CarBodyDef {
     /// Bolt-on rear wing: angle of attack in degrees (0 = none). A flat plate on two struts over
     /// the rear deck; its downforce and drag come from the triangle aerodynamics like the body's.
     real rearWing = 0.0;
+    /// Bolt-on steel bull bar ahead of the front bumper (~30 kg of tube on the chassis rails).
+    bool bullbar = false;
     real frontalArea = 0.0;
 };
 
@@ -130,6 +132,12 @@ struct TireDef {
 
 struct EngineDef {
     std::string name = "1.4 I4 Turbo";
+    /// "combustion" or "electric". An electric motor has no idle, no clutch and cannot stall;
+    /// it pulls from standstill, recuperates on lift-off and runs off a battery: fuelCapacity is
+    /// then the battery's usable energy in kWh.
+    std::string type = "combustion";
+    /// Electric: lift-off recuperation torque as a fraction of peak torque (more with the brake).
+    real regen = 0.2;
     std::string layout = "FWD";   ///< FWD | RWD | AWD
     std::string position = "front"; ///< front | mid; independent of driven axle layout.
     std::vector<std::pair<real, real>> torqueCurve;  ///< (rpm, Nm)
@@ -232,6 +240,8 @@ struct CarLayout {
     /// Rear wing (CarBodyDef::rearWing): plate corners front-left, front-right, rear-left,
     /// rear-right, and the body nodes its struts stand on.
     std::vector<std::uint32_t> wingNodes, wingMounts;
+    /// Bull bar (CarBodyDef::bullbar): 8 corner nodes, inner (bumper side) x first, as the bumpers.
+    std::vector<std::uint32_t> bullbarNodes;
     std::array<DoorLayout, 2> frontDoors; // left, right
     std::array<DoorLayout, 2> rearDoors;  // left, right (four-door bodies with detachable doors)
 

@@ -24,6 +24,9 @@ struct PowertrainSpec {
         {6400.0, 185.0},
         {6800.0, 0.0},
     };
+    /// Electric motor: no idle governor, no clutch (direct drive), never stalls, recuperates.
+    bool electric = false;
+    real regenTorqueNm = 0.0;        ///< Electric: motor braking torque on lift-off (Nm)
     real idleRpm = 850.0;
     real redlineRpm = 6500.0;
     real engineInertia = 0.18;       ///< kg*m^2 (flywheel + crank)
@@ -96,6 +99,8 @@ public:
     void setRunning(bool r);
     /// Brake power of the engine in the last step (W, >= 0).
     real lastEnginePower() const { return lastEnginePower_; }
+    /// Electric: power fed back by recuperation in the last step (W, >= 0).
+    real lastRegenPower() const { return lastRegenPower_; }
     void setAutomatic(bool a) { spec_.automatic = a; }
     /// Sum of the rotational inertias (kg*m^2) of the driven wheels; used to keep the explicit
     /// clutch coupling numerically stable in low gears.
@@ -127,6 +132,7 @@ private:
     real shiftThrottle_ = 0.0;   ///< Smoothed pedal for the automatic's shift points
     real lastEngineTorque_ = 0.0;
     real lastEnginePower_ = 0.0;
+    real lastRegenPower_ = 0.0;
     real clutchTempC_ = 45.0, clutchWear_ = 0.0, gearboxDamage_ = 0.0;
     real clutchSlipRpm_ = 0.0, grind_ = 0.0;
     bool running_ = true;
