@@ -22,6 +22,8 @@ const DEFAULTS := {
 	"ballast": 0.0,        # kg added (negative: weight stripped out)
 	"boost": 0.0,          # extra charge pressure: torque gain from mid revs up (0.25 = +25 %)
 	"gear_spread": 1.0,    # gearbox spread (<1 close-ratio sport box, >1 long touring box)
+	# Individual ratio of each gear (factor on the ratio after the spread), gears 1-8.
+	"g1": 1.0, "g2": 1.0, "g3": 1.0, "g4": 1.0, "g5": 1.0, "g6": 1.0, "g7": 1.0, "g8": 1.0,
 	"wing": 0,             # index into WINGS (procedural bodies only)
 	"ride_height": 0.0,    # ground clearance change, m (lowered / raised springs)
 	"tire_width": 1.0,     # tyre width factor (narrower / wider tyres on the same rims)
@@ -136,6 +138,10 @@ static func apply(definition: Dictionary, cfg: Dictionary, catalogue: Array) -> 
 			for g in gears:
 				spread.append(top * pow(float(g) / top, float(c["gear_spread"])))
 			e["gears"] = spread
+	var gl: Array = e.get("gears", [])
+	for i in mini(gl.size(), 8):
+		gl[i] = float(gl[i]) * float(c["g%d" % (i + 1)])
+	e["gears"] = gl
 	if c["limiter"] != 0.0:
 		e["redlineRpm"] = float(e.get("redlineRpm", 6000.0)) + float(c["limiter"])
 		e["shiftUpRpm"] = minf(float(e.get("shiftUpRpm", 5500.0)) + float(c["limiter"]), float(e["redlineRpm"]) - 300.0)
@@ -198,6 +204,10 @@ static func summary(cfg: Dictionary, catalogue: Array) -> String:
 				parts.append("Motor %s" % entry["name"])
 	if c["power"] != 1.0: parts.append("Leistung %+d %%" % int(round((c["power"] - 1.0) * 100.0)))
 	if c["boost"] != 0.0: parts.append("Ladedruck %+d %%" % int(round(c["boost"] * 100.0)))
+	for i in 8:
+		if c["g%d" % (i + 1)] != 1.0:
+			parts.append("Gangstufen angepasst")
+			break
 	if c["gear_spread"] != 1.0: parts.append("Getriebe %s" % ("eng" if c["gear_spread"] < 1.0 else "lang"))
 	if c["layout"] != "": parts.append(c["layout"])
 	if c["compound"] != 1: parts.append(COMPOUNDS[c["compound"]][0])

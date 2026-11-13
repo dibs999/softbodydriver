@@ -71,6 +71,7 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 	world.add_ground_plane(1.0)
 	var grass := C.surface_material("grass", 3.1, Color(0.50, 0.66, 0.50))
 	var asphalt := C.surface_material("asphalt", 2.0, Color.WHITE, 0.30)
+	asphalt.set_shader_parameter("paver_strip", 4.5)   # the pad was laid in 4.5 m paver strips
 	var concrete := C.surface_material("pavement", 2.1, Color(0.86, 0.86, 0.85), 0.25)
 	var line := _mat(Color(0.92, 0.92, 0.88), 0.6)
 	var red := _mat(Color(0.75, 0.1, 0.08), 0.6)

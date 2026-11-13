@@ -40,6 +40,9 @@ uniform vec4 street_grid = vec4(0.0);
 // kerb_grid (like street_grid) the outer 15 cm of each block and its vertical face are granite
 // kerbstones in 1 m lengths.
 uniform vec2 paving = vec2(0.0);
+// Large asphalt pads (test track): laid in paver strips of this width along x (0 = off), each a
+// touch different in tone, with longitudinal joints and transverse day joints every 60-110 m.
+uniform float paver_strip = 0.0;
 uniform vec4 kerb_grid = vec4(0.0);
 uniform float kerb_top = 0.16;
 // Street lamps lighting the ground (street_lighting.gd): the nearest lamps as xyz = light source,
@@ -273,6 +276,26 @@ void fragment() {
 			slab_col = mix(slab_col, slab_col * 0.5, gum * (1.0 - smoothstep(0.008, 0.025, px)));
 			col = slab_col;
 		}
+	}
+	if (paver_strip > 0.0 && n.y > 0.7) {
+		vec2 q = world_pos.xz;
+		float strip = floor(q.y / paver_strip);
+		float across_s = fract(q.y / paver_strip) * paver_strip;
+		// Day joints: each strip starts a new day at its own places.
+		float day_len = 60.0 + 50.0 * hash(vec2(strip, 3.0));
+		float day = floor((q.x + hash(vec2(strip, 7.0)) * 80.0) / day_len);
+		float along_s = fract((q.x + hash(vec2(strip, 7.0)) * 80.0) / day_len) * day_len;
+		col *= mix(0.93, 1.07, hash(vec2(strip, day)));
+		float px_s = max(length(fwidth(q)), 0.0005);
+		float seam_fade = 1.0 - smoothstep(0.03, 0.12, px_s);
+		float joint_l = 1.0 - smoothstep(0.012, 0.012 + px_s, min(across_s, paver_strip - across_s));
+		float joint_t = 1.0 - smoothstep(0.012, 0.012 + px_s, min(along_s, day_len - along_s));
+		// Sealed joint: a darker band a few centimetres wide, wavy where the bitumen was poured.
+		float seal_w = 0.05 + 0.03 * vnoise(vec2(q.x * 0.4, strip));
+		float seal_s = 1.0 - smoothstep(seal_w, seal_w + 0.02, min(across_s, paver_strip - across_s));
+		col = mix(col, col * 0.55, max(joint_l, joint_t) * 0.8 * seam_fade);
+		col = mix(col, col * 0.72, seal_s * 0.5 * seam_fade);
+		col *= mix(1.0, 0.985, 1.0 - seam_fade);
 	}
 	// Large patches in world space: lighter/darker batches, dry or lush areas.
 	vec2 mp = world_pos.xz / macro_scale;
