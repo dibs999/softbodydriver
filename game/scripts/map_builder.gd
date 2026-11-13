@@ -501,6 +501,74 @@ static func _handling_course(world: SBWorld, parent: Node3D, paint: Material, si
 
 
 # =========================================================================== hill roads
+## A lake in a hollow inside the road loop, ~95 m in from the road where nothing else stands: a
+## level shore round a bowl ~3.5 m deep. Returns {} when no spot is free.
+static func _hill_lake(heights: PackedFloat32Array, nx: int, nz: int, ox: float, oz: float, cell: float,
+		road: PackedVector3Array, chord: PackedVector3Array) -> Dictionary:
+	var radius := 38.0
+	var n := road.size()
+	for frac: float in [0.55, 0.62, 0.48, 0.70, 0.40, 0.78, 0.30, 0.85]:
+		var i := int(n * frac)
+		var r := road[i]
+		var c := r - Vector3(r.x, 0, r.z).normalized() * 98.0
+		var ok := Vector2(c.x - road[VILLAGE_AT].x, c.z - road[VILLAGE_AT].z).length() > 170.0
+		for f: Vector3 in [road[12], road[194], road[410]]:
+			ok = ok and Vector2(c.x - f.x, c.z - f.z).length() > 100.0
+		for j in range(0, chord.size(), 2):
+			ok = ok and Vector2(c.x - chord[j].x, c.z - chord[j].z).length() > radius + 45.0
+		for j in range(0, n, 3):
+			ok = ok and Vector2(c.x - road[j].x, c.z - road[j].z).length() > radius + 40.0
+		if not ok:
+			continue
+		var hl := C.sample(heights, nx, nz, ox, oz, cell, c.x, c.z)
+		var surface := hl - 0.3
+		for ix in nx:
+			var x := ox + ix * cell
+			if absf(x - c.x) > radius + 40.0: continue
+			for iz in nz:
+				var z := oz + iz * cell
+				if absf(z - c.z) > radius + 40.0: continue
+				var d := Vector2(x - c.x, z - c.z).length()
+				var k := ix * nz + iz
+				# Level shore blending into the hills; the bowl inside.
+				heights[k] = lerpf(heights[k], hl, 1.0 - smoothstep(radius, radius + 36.0, d))
+				if d < radius:
+					heights[k] = minf(heights[k], surface - 3.5 * (1.0 - pow(d / radius, 2.0)) - 0.08)
+				elif d < radius + 6.0:
+					heights[k] = maxf(heights[k], surface + 0.06)
+		return {"centre": Vector3(c.x, surface, c.z), "xz": Vector2(c.x, c.z), "radius": radius, "surface": surface, "bottom": surface - 5.0}
+	return {}
+
+
+## Water of the lake (physics and surface) with reeds along the shore.
+static func _lake_surface(parent: Node3D, world: SBWorld, lake: Dictionary, ground: Callable) -> void:
+	var c: Vector3 = lake["centre"]
+	var r: float = lake["radius"] + 2.0
+	var rect := Rect2(c.x - r, c.z - r, r * 2.0, r * 2.0)
+	world.add_water(rect, float(lake["surface"]), float(lake["bottom"]))
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://materials/water.gdshader")
+	var plane := PlaneMesh.new()
+	plane.size = rect.size
+	var mi := MeshInstance3D.new()
+	mi.mesh = plane
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.position = Vector3(c.x, float(lake["surface"]), c.z)
+	mi.name = "Lake"
+	parent.add_child(mi)
+	var reeds: Array[Vector3] = []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5150
+	for i in 420:
+		var a := rng.randf() * TAU
+		var p := c + Vector3(cos(a), 0, sin(a)) * rng.randf_range(lake["radius"] - 4.0, lake["radius"] + 3.0)
+		var y: float = ground.call(p.x, p.z)
+		if y > float(lake["surface"]) - 0.2 and y < float(lake["surface"]) + 0.3:
+			reeds.append(Vector3(p.x, y, p.z))
+	V.grass(parent, reeds, 5151, true, 1.3, 2.1)
+
+
 static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	props.clear()
 	var nx := 385
@@ -550,6 +618,7 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	var half_w := 4.5
 	C.carve_path(heights, nx, nz, ox, oz, cell, road, half_w + 0.75, 13.0, 0.05)
 	C.carve_path(heights, nx, nz, ox, oz, cell, chord, CHORD_HALF_W + 0.75, 11.0, 0.05, false)
+	var lake := _hill_lake(heights, nx, nz, ox, oz, cell, road, chord)
 	# The roads are drawn 4-5 cm above the terrain; the physics ground is raised under them by the
 	# same amount so the wheels roll on the drawn asphalt instead of sinking into it.
 	var physical := C.raise_under_roads(heights, nx, nz, ox, oz, cell, [
@@ -628,6 +697,8 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	R.bend_signs(parent, road, half_w, ground_height, true, 0.145)
 	var farm_points := [road[12], road[194], road[410]]
 	var keep_clear := func(p: Vector3) -> bool:
+		if not lake.is_empty() and Vector2(p.x, p.z).distance_to(lake["xz"]) < float(lake["radius"]) + 7.0:
+			return false
 		for f: Vector3 in farm_points:
 			if Vector2(p.x - f.x, p.z - f.z).length() < 34.0:
 				return false
@@ -720,6 +791,8 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 			for dz in range(-1, 2):
 				road_cells[rc + Vector2i(dx, dz)] = true
 	var near_road := func(p: Vector2, d: float) -> bool:
+		if not lake.is_empty() and p.distance_to(lake["xz"]) < float(lake["radius"]) + 7.0:
+			return true   # no tree colliders in the lake or on its shore
 		if not road_cells.has(Vector2i(floori(p.x / 16.0), floori(p.y / 16.0))):
 			return false
 		for j in net.size():
@@ -759,6 +832,16 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 					break
 			if free: out.append(p)
 		return out
+	if not lake.is_empty():
+		var dry := func(list: Array[Vector3]) -> Array[Vector3]:
+			var out: Array[Vector3] = []
+			for q in list:
+				if Vector2(q.x, q.z).distance_to(lake["xz"]) >= float(lake["radius"]) + 7.0: out.append(q)
+			return out
+		broadleaf = dry.call(broadleaf)
+		conifers = dry.call(conifers)
+		under = dry.call(under)
+		_lake_surface(parent, world, lake, ground_height)
 	broadleaf = off_chord.call(broadleaf, 9.5)   # as far as the tree colliders keep off roads
 	conifers = off_chord.call(conifers, 9.5)
 	under = off_chord.call(under, CHORD_HALF_W + 3.0)
@@ -842,7 +925,7 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	return {"props": props.duplicate(), "spawns": [car_xform(s0, s1 - s0), car_xform(road[n_road - 6], road[n_road - 5] - road[n_road - 6])],
 		"waypoints": road, "speeds": speeds, "ai_routes": ai_routes,
 		"map_paths": [C.closed_route(road), chord, lookout],
-		"map_places": [{"name": "Waldhof", "position": road[12]}, {"name": "Lindenau", "position": road[VILLAGE_AT]}, {"name": "Aussichtspunkt", "position": lookout[4]},
+		"map_places": [{"name": "Waldhof", "position": road[12]}, {"name": "Lindenau", "position": road[VILLAGE_AT]}, {"name": "Aussichtspunkt", "position": lookout[4]}, {"name": "Lindensee", "position": lake.get("centre", road[0])},
 			{"name": "Bergweide", "position": road[194]}, {"name": "Talblick", "position": road[410]}],
 		"ai_spawns": [car_xform(road[144], road[145] - road[144]), car_xform(road[320], road[321] - road[320])],
 		"environment": {"sky_top": Color(0.26, 0.48, 0.75), "horizon": Color(0.68, 0.76, 0.80),
