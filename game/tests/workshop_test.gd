@@ -113,6 +113,21 @@ func _process(_d: float) -> bool:
 			var g2 := W.apply(def, {"g2": 0.9}, cat)
 			check(is_equal_approx(g2["engine"]["gears"][1], def["engine"]["gears"][1] * 0.9) and is_equal_approx(g2["engine"]["gears"][0], def["engine"]["gears"][0]), "Single gear ratio: only 2nd gear changes")
 			check(not W.apply(W.read_definition("res://cars/meridian_sedan.car.json"), {"wing": 2}, cat)["body"].has("rearWing"), "but not on an imported model")
+			var at := W.apply(def, {"wheels": 3}, cat)
+			check(is_equal_approx(at["tires"]["radius"], def["tires"]["radius"] * 1.06) and at["tires"]["tread"] == "offroad" and at["tires"]["tireMass"] > def["tires"]["tireMass"],
+				"All-terrain tyres: larger, heavier, block tread")
+			var plus1 := W.apply(def, {"wheels": 1}, cat)
+			check(is_equal_approx(plus1["tires"]["radius"], def["tires"]["radius"]) and is_equal_approx(plus1["tires"]["rimRadius"], def["tires"]["rimRadius"] + 0.0127),
+				"One inch larger rims keep the outer diameter")
+			var trail := W.apply(W.read_definition("res://cars/trailhead_4x4.car.json"), {"wheels": 4}, cat)
+			check(trail["tires"]["tread"] == "road", "Road tyres on the 4x4")
+			var RS := preload("res://scripts/road_surface.gd")
+			var rs: RefCounted = RS.new()
+			check(rs.effective_grip("gravel", "offroad") > rs.effective_grip("gravel") + 0.08 and rs.effective_grip("sand", "offroad") > rs.effective_grip("sand") + 0.12
+				and is_equal_approx(rs.effective_grip("asphalt", "offroad"), rs.effective_grip("asphalt")), "A block tread grips better on loose ground, the same on tarmac")
+			print("  ", scene.rebuild_player({"wheels": 3}))
+			check(str(scene.player.get_info()["tread"]) == "offroad" and float(scene.player.get_info()["tire_radius"]) > def["tires"]["radius"] * 1.05,
+				"The rebuilt car runs on the all-terrain tyres")
 			var msg: String = scene.rebuild_player({"power": 1.2})
 			check(msg == "Werkstatt: Leistung +20 %", "A plain engine tune rebuilds as well (%s)" % msg)
 			Input.action_press("throttle", 1.0)

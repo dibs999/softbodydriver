@@ -206,3 +206,10 @@ TEST_CASE("doors of the imported four-door bodies close and latch again, brakes 
         }
     }
 }
+
+TEST_CASE("tyre tread pattern is read from the car file and checked") {
+    CHECK(parseCarDefinition(R"({"id": "x"})").tires.tread == "road");
+    CHECK(parseCarDefinition(R"({"id": "x", "tires": {"tread": "offroad"}})").tires.tread == "offroad");
+    CHECK_THROWS(parseCarDefinition(R"({"id": "x", "tires": {"tread": "slick"}})"));
+    CHECK(loadCarDefinition(std::string(SB_CARS_DIR) + "/trailhead_4x4.car.json").tires.tread == "offroad");
+}

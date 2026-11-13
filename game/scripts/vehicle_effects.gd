@@ -7,6 +7,7 @@ var world: SBWorld
 var dirt := false
 var surfaces: RefCounted
 var marks: MultiMeshInstance3D
+var _tread := ""   # the car's tyre tread pattern (get_info)
 var wheel_surfaces := ["asphalt", "asphalt", "asphalt", "asphalt"]
 var _surface_timer := 0.0
 ## 0 clean .. 1 caked; grows on loose ground, washes off in the rain.
@@ -244,10 +245,12 @@ func _process(delta: float) -> void:
 		if surfaces and _surface_timer <= 0:
 			_surface_timer = 0.08
 			var wheels: PackedVector3Array = vehicle.get_effect_anchors()["wheels"]
+			if _tread == "":
+				_tread = str(vehicle.get_info().get("tread", "road"))
 			var grip := PackedFloat32Array([1, 1, 1, 1])
 			for i in mini(4, wheels.size()):
 				wheel_surfaces[i] = surfaces.at(wheels[i])
-				grip[i] = surfaces.effective_grip(wheel_surfaces[i])
+				grip[i] = surfaces.effective_grip(wheel_surfaces[i], _tread)
 			vehicle.set_surface_grip(grip)
 			_update_grime(0.08)
 	for p in get_children():

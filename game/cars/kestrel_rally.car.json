@@ -18,7 +18,7 @@
     "front": { "wheelRate": 33000, "bumpDamping": 2500, "reboundDamping": 4700, "antiRollRate": 9000, "bumpTravel": 0.12, "droopTravel": 0.13 },
     "rear": { "wheelRate": 31000, "bumpDamping": 2400, "reboundDamping": 4500, "antiRollRate": 6500, "bumpTravel": 0.12, "droopTravel": 0.14 }
   },
-  "tires": { "radius": 0.329, "width": 0.220, "rimRadius": 0.195, "pressurePsi": 30, "friction": 1.23, "tireMass": 10.5, "rimMass": 8.5, "rays": 20 },
+  "tires": { "radius": 0.329, "width": 0.220, "rimRadius": 0.195, "pressurePsi": 30, "friction": 1.23, "tireMass": 10.5, "rimMass": 8.5, "rays": 20, "tread": "offroad" },
   "engine": {
     "name": "2.0 I4 Rally Turbo", "layout": "AWD", "cylinders": 4,
     "torqueCurve": [[750, 128], [1800, 260], [2600, 365], [4400, 392], [5800, 358], [6800, 305], [7350, 0]],

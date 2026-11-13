@@ -120,6 +120,12 @@ struct TireDef {
     real tireMass = 9.5;
     real rimMass = 9.0;
     int rays = 20;
+    /// Tread pattern: "road" or "offroad" (block tread). The physics takes it as given; the game
+    /// gives a block tread more grip on loose ground (gravel, sand, grass), the friction value
+    /// above already carries what it loses on tarmac.
+    std::string tread = "road";
+    /// Rim look: "" = by body style, "multispoke", "forged" (deep concave) or "steel" (visual only).
+    std::string rimDesign;
 };
 
 struct EngineDef {

@@ -38,6 +38,16 @@ konkrete Teilergebnisse und erklärt das Gesamtprodukt noch nicht für fertig.
   baut das Auto im Stand neu auf, 90 kg schwerer (Motormassen-Differenz), auf demselben Platz in
   der Fahrzeugliste; nach 4 s Vollgas 104 statt rund 63 km/h. Werkszustand stellt Motor und
   Profil zurück, ein reines Kennfeld-Tuning baut ebenfalls neu auf, in Fahrt wird abgelehnt.
+  Räder: Geländereifen (6 % größer, schwerer, Blockprofil `tires.tread = "offroad"`) bauen den
+  Kestrel neu auf; Sportfelgen 1 Zoll größer behalten den Außendurchmesser; Straßenreifen machen
+  den Trailhead zum Straßenauto. Ein Blockprofil hält auf Schotter, Sand und Gras mehr als die
+  Hälfte der Haftung, die ein Straßenreifen dort verliert (Kestrel Sand: 0,76 → 0,91), auf Asphalt
+  gleich bis auf die etwas geringere Grundhaftung des Reifens. Reifenflanke zeigt die echte Größe
+  aus den Maßen (225/45 R17 Serie, 225/55 R17 Gelände „VELTRA TERRA“, 225/40 R18), Geländereifen
+  mit grobem Blockprofil; eigene Felgen je Radsatz an den generierten Autos (Doppelspeichen,
+  konkav geschmiedet, Stahl; `tires.rimDesign`, Core-Test: alle Designs bleiben im Reifen und
+  unterscheiden sich); `workshop_extremes_test` fährt alle Autos mit Geländereifen und größeren
+  Felgen.
 * Alle sieben `cartest … --quick`-Prüfstände: `RESULT: OK`.
 * Erweiterter Headless-Belastungstest: **30 Minuten 1,75 Sekunden simuliert**
   in **5 Minuten 5,753 Sekunden Laufzeit**. **51 vollständige Zyklen** mit echter

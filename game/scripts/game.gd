@@ -1181,11 +1181,12 @@ func _build_workshop(ws_page: VBoxContainer) -> void:
 	_ws["ride_height"] = _pause_slider(ws_page, "Fahrzeughöhe", -40.0, 60.0, 5.0, "%+.0f mm", note)
 	ws_page.add_child(UITheme.section("Räder, Bremsen, Gewicht"))
 	_ws["compound"] = _pause_choices(ws_page, "Reifen", Workshop.COMPOUNDS.map(func(c): return c[0]))
+	_ws["wheels"] = _pause_choices(ws_page, "Räder", Workshop.WHEELS.map(func(w): return w[0]))
 	_ws["tire_width"] = _pause_slider(ws_page, "Reifenbreite", 85.0, 125.0, 5.0, "%.0f %%", note)
 	_ws["wing"] = _pause_choices(ws_page, "Heckflügel", Workshop.WINGS.map(func(w): return w[0]))
 	_ws["brakes"] = _pause_slider(ws_page, "Bremsanlage", 70.0, 150.0, 5.0, "%.0f %%", note)
 	_ws["ballast"] = _pause_slider(ws_page, "Gewicht", -150.0, 300.0, 10.0, "%+.0f kg", note)
-	for key in ["engine", "gearbox", "layout", "lsd", "compound", "wing"]:
+	for key in ["engine", "gearbox", "layout", "lsd", "compound", "wing", "wheels"]:
 		(_ws[key] as OptionButton).item_selected.connect(func(_i: int): _workshop_preview())
 	_ws_info = UITheme.label("", 14, UITheme.MUTED)
 	_ws_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1217,6 +1218,7 @@ func _workshop_load() -> void:
 	(_ws["lsd"] as OptionButton).select(maxi(0, LSD_CHOICES.map(func(l): return l[1]).find(float(cfg["lsd"]))))
 	(_ws["compound"] as OptionButton).select(int(cfg["compound"]))
 	(_ws["wing"] as OptionButton).select(int(cfg["wing"]))
+	(_ws["wheels"] as OptionButton).select(int(cfg["wheels"]))
 	# Only as many gear sliders as the car's gearbox (or the donor's, if chosen) has gears.
 	var gear_count := int(player.get_info().get("gears", 6))
 	for g in 8:
@@ -1247,6 +1249,7 @@ func _workshop_read() -> Dictionary:
 	cfg["lsd"] = LSD_CHOICES[(_ws["lsd"] as OptionButton).selected][1]
 	cfg["compound"] = (_ws["compound"] as OptionButton).selected
 	cfg["wing"] = (_ws["wing"] as OptionButton).selected
+	cfg["wheels"] = (_ws["wheels"] as OptionButton).selected
 	for key in ["power", "final_drive", "spring_f", "spring_r", "damp_f", "damp_r", "arb_f", "arb_r", "brakes", "tire_width", "boost", "gear_spread", "g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"]:
 		cfg[key] = (_ws[key] as HSlider).value / 100.0
 	cfg["ride_height"] = (_ws["ride_height"] as HSlider).value / 1000.0
@@ -1268,9 +1271,16 @@ func _workshop_preview() -> void:
 		peak_t = maxf(peak_t, float(pt[1]))
 		peak_p = maxf(peak_p, float(pt[1]) * float(pt[0]) * TAU / 60.0 / 1000.0)
 	var mass := float(d.get("chassis", {}).get("curbMass", 0.0))
-	_ws_info.text = "Ergebnis: %s, %d kW (%d PS), %d Nm, Drehzahlgrenze %d U/min, %s, %d kg, %.1f kg/kW" % [
+	# Tyre size as written on the sidewall: width / profile R rim diameter.
+	var t: Dictionary = d.get("tires", {})
+	var tw := float(t.get("width", 0.205))
+	var tr := float(t.get("radius", 0.316))
+	var rr := float(t.get("rimRadius", 0.203))
+	_ws_info.text = "Ergebnis: %s, %d kW (%d PS), %d Nm, Drehzahlgrenze %d U/min, %s, %d kg, %.1f kg/kW, Reifen %d/%d R%d %s" % [
 		e.get("name", "?"), int(round(peak_p)), int(round(peak_p * 1.36)), int(round(peak_t)), int(e.get("redlineRpm", 0)),
-		e.get("layout", "?"), int(round(mass)), mass / maxf(peak_p, 1.0)]
+		e.get("layout", "?"), int(round(mass)), mass / maxf(peak_p, 1.0),
+		int(round(tw * 1000.0 / 5.0) * 5.0), int(round((tr - rr) / tw * 20.0) * 5.0), int(round(rr * 2.0 / 0.0254)),
+		"Geländeprofil" if t.get("tread", "road") == "offroad" else "Straßenprofil"]
 
 
 ## Rebuilds the player's car with configuration `cfg` where it stands (upright, at rest): stores the

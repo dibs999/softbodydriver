@@ -42,6 +42,11 @@ func at(point: Vector3) -> String:
 static func grip(kind: String) -> float:
 	return {"asphalt": 1.0, "pavement": 0.94, "gravel": 0.78, "sand": 0.66, "grass": 0.70}.get(kind, 1.0)
 
-func effective_grip(kind: String) -> float:
+## Grip of a surface for a tyre. A block tread ("offroad") digs into loose ground and keeps more
+## than half of what a road tyre loses there (its lower grip on tarmac is in the car's friction).
+func effective_grip(kind: String, tread := "road") -> float:
 	var wet_factor: float = {"asphalt": 0.72, "pavement": 0.68, "gravel": 0.87, "sand": 0.95, "grass": 0.62}.get(kind, 0.8)
-	return grip(kind) * lerpf(1.0, wet_factor, clampf(wetness, 0, 1))
+	var g := grip(kind)
+	if tread == "offroad" and kind in ["gravel", "sand", "grass"]:
+		g += (1.0 - g) * 0.55
+	return g * lerpf(1.0, wet_factor, clampf(wetness, 0, 1))

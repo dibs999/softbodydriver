@@ -596,7 +596,28 @@ std::vector<MeshSurface> buildWheelMeshes(const TireDef& tire, BodyStyle style) 
         lm.revolve({{0.0, hwid * 0.74}, {0.072, hwid * 0.74}, {0.08, hwid * 0.55}}, 20, true);
         const int spokes = style == BodyStyle::SUV ? 6 : (style == BodyStyle::Sedan ? 8 : 5);
         const real spokeHalf = style == BodyStyle::SUV ? 0.031 : (style == BodyStyle::Sedan ? 0.016 : 0.023);
-        for (int s = 0; s < spokes; ++s) {
+        const real rimEnd = Rr - 0.035;
+        if (tire.rimDesign == "multispoke") {
+            // Ten slim spokes in pairs: the usual larger sports rim.
+            for (int s = 0; s < 5; ++s)
+                for (real off : {-0.105, 0.105}) {
+                    const real a = 2.0 * kPi * s / 5 + off;
+                    lm.spoke(a, 0.062, rimEnd, hwid * 0.71, hwid * 0.58, 0.016, 0.0115, 0.014);
+                }
+        } else if (tire.rimDesign == "forged") {
+            // Six broad, thin spokes in a deep concave: the hub stands far out, the spokes fall
+            // steeply into the rim bed.
+            for (int s = 0; s < 6; ++s)
+                lm.spoke(2.0 * kPi * s / 6, 0.062, rimEnd, hwid * 0.76, hwid * 0.40, 0.027, 0.013, 0.010);
+        } else if (tire.rimDesign == "steel") {
+            // Pressed steel wheel: a closed dish with a stiffening ring and eight round vents
+            // suggested by short bosses between them.
+            lm.revolve({{0.07, hwid * 0.70}, {0.15, hwid * 0.68}, {0.16, hwid * 0.74}, {0.175, hwid * 0.68},
+                        {rimEnd - 0.01, hwid * 0.60}, {rimEnd + 0.012, hwid * 0.52}}, 40, true);
+            for (int s = 0; s < 8; ++s)
+                lm.spoke(2.0 * kPi * (s + 0.5) / 8, 0.19, rimEnd - 0.012, hwid * 0.63, hwid * 0.60, 0.016, 0.016, 0.006);
+        }
+        for (int s = 0; s < spokes && tire.rimDesign.empty(); ++s) {
             const real a = 2.0 * kPi * s / spokes;
             // Wider at the hub, slimmer where it meets the rim bed; the face falls from the hub
             // towards the lip.

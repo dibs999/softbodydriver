@@ -380,6 +380,8 @@ void SBVehicle::buildMeshes(const Dictionary& materials) {
                 // The tyre shader draws its tread and sidewall pattern from these radii.
                 wg.surfs.back().instance->set_instance_shader_parameter("tire_radius", def_.tires.radius);
                 wg.surfs.back().instance->set_instance_shader_parameter("rim_radius", def_.tires.rimRadius);
+                wg.surfs.back().instance->set_instance_shader_parameter("tire_width", wg.width);
+                wg.surfs.back().instance->set_instance_shader_parameter("block_tread", def_.tires.tread == "offroad" ? 1.0 : 0.0);
             }
         }
         wheels_.push_back(wg);
@@ -2176,6 +2178,8 @@ Dictionary SBVehicle::get_info() const {
     d["redline_rpm"] = def_.engine.redlineRpm;
     d["gears"] = static_cast<int64_t>(def_.engine.gears.size());
     d["fuel_capacity"] = def_.engine.fuelCapacity;
+    d["tire_radius"] = def_.tires.radius;
+    d["tread"] = String(def_.tires.tread.c_str());
     d["mass"] = def_.chassis.curbMass;
     d["length"] = def_.body.length;
     d["wheelbase"] = def_.body.wheelbase;
