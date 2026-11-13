@@ -26,6 +26,8 @@ SBWorld::~SBWorld() {
 
 void SBWorld::_bind_methods() {
     ClassDB::bind_method(D_METHOD("add_ground_plane", "friction"), &SBWorld::add_ground_plane);
+    ClassDB::bind_method(D_METHOD("add_water", "rect", "surface", "bottom"), &SBWorld::add_water);
+    ClassDB::bind_method(D_METHOD("water_depth_at", "point"), &SBWorld::water_depth_at);
     ClassDB::bind_method(D_METHOD("add_box", "center", "half_extents", "euler", "friction"), &SBWorld::add_box);
     ClassDB::bind_method(D_METHOD("add_heightfield", "origin_x", "origin_z", "cell_size", "nx", "nz", "heights", "friction"),
                          &SBWorld::add_heightfield);
@@ -196,6 +198,23 @@ void SBWorld::threadMain() {
 void SBWorld::add_ground_plane(double friction) {
     std::lock_guard<WorldMutex> lock(mtx_);
     world_.addCollider(sb::StaticCollider::plane({0, 0, 0}, {0, 1, 0}, friction, "ground"));
+}
+
+void SBWorld::add_water(const Rect2& rect, double surface, double bottom) {
+    std::lock_guard<WorldMutex> lock(mtx_);
+    sb::WaterVolume w;
+    w.minX = rect.position.x;
+    w.maxX = rect.position.x + rect.size.x;
+    w.minZ = rect.position.y;
+    w.maxZ = rect.position.y + rect.size.y;
+    w.surfaceY = surface;
+    w.bottomY = bottom;
+    world_.addWater(w);
+}
+
+double SBWorld::water_depth_at(const Vector3& p) const {
+    std::lock_guard<WorldMutex> lock(mtx_);
+    return world_.waterDepthAt({p.x, p.y, p.z});
 }
 
 void SBWorld::add_box(const Vector3& c, const Vector3& h, const Vector3& e, double friction) {

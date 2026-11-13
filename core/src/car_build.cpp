@@ -557,6 +557,7 @@ CarBuild buildCar(const CarDefinition& def) {
                 }
         BeamParams block = makeBeam(1.4e6, 220.0, 1.1e5, kInf);
         connectAll(car, rig.engine, block, &sys.engineBlockBeams);
+        sys.intakeNode = rig.engine[3];   // top corner of the block: where the air filter sits
         // Mounts on the four bottom corners (breakable).
         BeamParams mount = makeBeam(3.5e5, 160.0, 2.4e4, 6.0e4);
         for (int ix = 0; ix < 2; ++ix)
@@ -1512,6 +1513,9 @@ CarBuild buildCar(const CarDefinition& def) {
     setRigidParts(build.visual, {build.layout.bonnetNodes, build.layout.frontDoors[0].nodes, build.layout.frontDoors[1].nodes,
                                  build.layout.rearDoors[0].nodes, build.layout.rearDoors[1].nodes,
                                  build.layout.frontBumperNodes, build.layout.rearBumperNodes, build.layout.tailgateNodes});
+    // In water a car floats on the air in its cabin and boot (mean density ~450 kg/m^3), floods
+    // through door seals and vents in about a minute and then sinks (steel, glass, engine).
+    car.setDisplacement(car.totalMass() / 450.0, car.totalMass() / 2600.0, 60.0);
     build.restPositions = car.positions();
     return build;
 }

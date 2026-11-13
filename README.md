@@ -259,7 +259,7 @@ Details und verbleibende Release-Abnahmen: [Linux-Paketierung](docs/RELEASE_LINU
 
 ### Karten
 
-- **Wald & Weide · Offroad**: etwa 1,5 × 1,5 km Gelände ohne Asphalt. 3,2-km-Feldwegrunde, schmaler Waldpfad, Höhenroute und optionaler Geröllpfad mit kleinen Felsstufen. Bauernhof, Holzlager, Aussichtspunkt und Weiden mit Heuballen. Minikarte und Zeitfahren sind integriert; auf dieser Karte gibt es keinen Straßenverkehr. Empfohlen: Basalt-SUV oder Kestrel Rallye. Die Grasnarbe und Fahrspuren sind festes Terrain, kein dynamisch verformbarer Schlamm.
+- **Wald & Weide · Offroad**: etwa 1,5 × 1,5 km Gelände ohne Asphalt. Am Waldweg liegt ein Weiher mit Schilfufer, dessen Abfluss den Weg als Furt (gut 30 cm tief) quert. 3,2-km-Feldwegrunde, schmaler Waldpfad, Höhenroute und optionaler Geröllpfad mit kleinen Felsstufen. Bauernhof, Holzlager, Aussichtspunkt und Weiden mit Heuballen. Minikarte und Zeitfahren sind integriert; auf dieser Karte gibt es keinen Straßenverkehr. Empfohlen: Basalt-SUV oder Kestrel Rallye. Die Grasnarbe und Fahrspuren sind festes Terrain, kein dynamisch verformbarer Schlamm.
 - **Testgelände**: Asphaltfläche mit Oval (KI-Verkehr), Sprungrampen, Bodenwellen, Schlaglochpiste, Leitplanken, Crash-Wand, Mast für Seitenaufprall, Slalom und Hügel
 - **Autobahn**: 8,5 km Ring mit 2×3 Spuren, Beton-Mittelleitplanke, Schutzplanken, Brücken, Schilderbrücken, Beleuchtung und Gegenverkehr
 - **Stadt**: Straßenraster mit Bordsteinkanten, Hochhäusern, Wohnviertel, Markt, Werkstatthöfen, Altstadtgasse, Hochstraße, Parkdeck und Frachtterminal; ringsum ein bewachsener Erdwall mit Bäumen und dahinter die Vorstadt als Silhouette
@@ -385,6 +385,12 @@ bis Gas gegeben wird, statt es in der Fahrstufe davonkriechen zu lassen (`auto_h
 Bremsen halten wie echte Bremssättel auch statisch: Ein voll gebremstes Auto steht an 30 %
 Steigung, die Handbremse allein hält an 20 %, ohne zu rutschen oder zu schaukeln.
 Das Pausenmenü bietet Aktivitäten, Wetter und Tageszeit auch ohne Funktionstasten.
+**Wasser**: Knoten unter der Wasseroberfläche erfahren Auftrieb und Wasserwiderstand. Durch eine
+Furt fährt man langsam mit Gischt an den Rädern; wer in tiefes Wasser fährt, wird auf wenigen Metern
+abgebremst, schwimmt zunächst auf der Luft in der Kabine, läuft in etwa einer Minute voll und sinkt.
+Gerät Wasser in den Ansaugtrakt eines laufenden Motors, gibt es Wasserschlag: Der Motor ist zerstört,
+bis repariert wird (`water_test`, Kerntest).
+
 **Werkstatt** (Pausenmenü): Teile und Tuning wie in BeamNGs Fahrzeugkonfiguration. Jeder Motor
 aus allen Fahrzeugen lässt sich einbauen (mit dem eigenen Getriebe, dessen Schaltpunkte an den neuen
 Drehzahlbereich angepasst werden, oder mit dem des Spenderautos); das Leergewicht ändert sich um die
@@ -500,6 +506,7 @@ godot --headless --path game -s res://tests/cockpit_instruments_test.gd # Echte 
 godot --headless --path game -s res://tests/session_controls_test.gd # Pausenmenü, Wetter, Aktivitäten und Bergung
 godot --headless --path game -s res://tests/trailer_test.gd         # Anhänger an-/abkuppeln, ziehen, bremsen
 godot --headless --path game -s res://tests/workshop_test.gd        # Werkstatt: Motortausch, Allrad, Reifen, Werkszustand
+godot --headless --path game -s res://tests/water_test.gd           # Furt und Weiher: durchfahren, schwimmen
 godot --headless --path game -s res://tests/time_trial_flow_test.gd # Echte vollständige Runde, Ergebnis und Profil-Neuladen
 godot --headless --path game -s res://tests/time_trial_flow_test.gd -- --record-save-failure # Echte Runde bei nicht schreibbarer Rekorddatei
 godot --headless --path game -s res://tests/proving_ground_test.gd # Anfahrt, Service, Gelände und Kollisionen

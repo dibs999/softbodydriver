@@ -60,6 +60,66 @@ void World::applyLinks() {
     }
 }
 
+real World::waterDepthAt(const Vec3& p) const {
+    real depth = 0.0;
+    for (const WaterVolume& w : waters_)
+        if (p.x >= w.minX && p.x <= w.maxX && p.z >= w.minZ && p.z <= w.maxZ && p.y < w.surfaceY && p.y > w.bottomY)
+            depth = std::max(depth, w.surfaceY - p.y);
+    return depth;
+}
+
+// Water: each node carries a share of the body's displacement (by mass) and feels buoyancy as it
+// goes under (over its first 15 cm, a node's "size"), plus drag that grows with the square of its
+// speed through the water (the body's drag area shared out by volume) and a little linear damping. While a body sits in the water it floods:
+// its displacement falls from the dry value to the flooded one over floodSeconds, and it sinks.
+void World::accumulateWaterForces(SoftBody& b) {
+    const auto& pos = b.positions();
+    const auto& vel = b.velocities();
+    const auto& mass = b.masses();
+    auto& force = b.forces();
+    auto& depth = b.waterDepths();
+    depth.assign(pos.size(), 0.0);
+    const real total = b.totalMass();
+    if (total <= 0.0) return;
+    const real dry = b.displacement() > 0.0 ? b.displacement() : total / 700.0;
+    const real wet = b.floodedDisplacement() >= 0.0 ? b.floodedDisplacement() : dry;
+    const real disp = dry + (wet - dry) * b.flooding();
+    const real g = -settings_.gravity.y;
+    real under = 0.0;
+    for (std::size_t i = 0; i < pos.size(); ++i) {
+        if (mass[i] <= 0.0) continue;
+        real d = 0.0, rho = 1000.0;
+        for (const WaterVolume& w : waters_)
+            if (pos[i].x >= w.minX && pos[i].x <= w.maxX && pos[i].z >= w.minZ && pos[i].z <= w.maxZ &&
+                pos[i].y < w.surfaceY && pos[i].y > w.bottomY && w.surfaceY - pos[i].y > d) {
+                d = w.surfaceY - pos[i].y;
+                rho = w.density;
+            }
+        if (d <= 0.0) continue;
+        depth[i] = d;
+        const real s = std::min<real>(1.0, d / 0.15);
+        const real vol = disp * mass[i] / total;
+        under += mass[i] * s;
+        force[i].y += rho * g * vol * s;
+        // Drag: 0.5 rho Cd A |v| v with A ~ vol^(2/3); limited so one step never reverses the node.
+        const Vec3 v = vel[i];
+        const real speed = length(v);
+        // The body's drag area (~1.5 disp^(2/3), a blunt body) shared out by volume: summed over
+        // the nodes it is the whole car's, not the far larger sum of each node's own cross-section.
+        const real area = 1.5 * std::cbrt(disp * disp) * vol / disp;
+        real k = 0.5 * rho * 1.0 * area * speed + 0.4 * mass[i];   // N per (m/s)
+        k = std::min(k * s, 0.5 * mass[i] / settings_.dt);
+        force[i] -= v * k;
+    }
+    const real frac = under / total;
+    b.setSubmerged(frac);
+    // Flooding: water gets in while a good part of the body is under, drains slowly when out.
+    real f = b.flooding();
+    if (frac > 0.25) f = std::min<real>(1.0, f + settings_.dt * frac / std::max<real>(b.floodSeconds(), 1.0));
+    else if (frac < 0.02) f = std::max<real>(0.0, f - settings_.dt / 120.0);
+    b.setFlooding(f);
+}
+
 void World::accumulateAerodynamicForces(SoftBody& b) {
     if (settings_.airDensity <= 0.0 || b.triangleCount() == 0) return;
     const auto& pos = b.positions();
@@ -479,6 +539,7 @@ void World::step() {
         for (std::size_t i = 0; i < force.size(); ++i) force[i] = invMass[i] > 0 ? g * mass[i] : Vec3{};
         b.accumulateBeamForces(settings_.dt);
         accumulateAerodynamicForces(b);
+        if (!waters_.empty()) accumulateWaterForces(b);
         const bool selfContact = std::any_of(b.selfCollisionPanels().begin(), b.selfCollisionPanels().end(),
                                             [&](const SelfCollisionPanel& p) { return b.selfCollisionActive(p); });
         if (selfContact) sc.selfContactPrevious = b.positions();

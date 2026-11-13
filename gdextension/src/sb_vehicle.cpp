@@ -1042,6 +1042,8 @@ void SBVehicle::sync_from_world() {
     visualResetPending_ = false;
     tel_ = body.telemetry();
     if (body.hasSystems()) sys_ = body.systems().state();
+    submerged_ = body.submerged();
+    flooding_ = body.flooding();
     // Wheel slip / contact.
     const std::size_t nw = body.wheels().size();
     slip_.assign(nw, 0.0f);
@@ -2035,6 +2037,9 @@ Dictionary SBVehicle::get_telemetry() const {
     d["fan_on"] = sys_.fanOn;
     d["running"] = sys_.running;
     d["seized"] = sys_.seized;
+    d["hydrolocked"] = sys_.hydrolocked;
+    d["submerged"] = submerged_;   // share of the car under water
+    d["flooding"] = flooding_;     // 0 dry .. 1 full of water
     d["head_gasket"] = sys_.headGasketBlown;
     d["driveshaft_broken"] = sys_.driveshaftBroken;
     d["mounts_broken"] = sys_.mountsBroken;

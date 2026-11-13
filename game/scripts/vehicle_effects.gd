@@ -252,6 +252,13 @@ func update_effects(t: Dictionary, anchors: Dictionary, slip: PackedFloat32Array
 		var intensity := smoothstep(2.5, 12.0, sliding) * contact
 		if loose:
 			intensity = maxf(intensity, smoothstep(12, 65, speed) * contact * 0.65)
+		# A wheel in water throws spray instead of dust (a ford, the pond's edge).
+		var splash := 0.0
+		if world and world.has_method("water_depth_at"):
+			var wet_depth: float = world.water_depth_at(contacts[i] + Vector3.UP * 0.05)
+			if wet_depth > 0.0:
+				splash = smoothstep(3.0, 25.0, speed) * clampf(wet_depth / 0.15, 0.3, 1.0)
+				intensity = maxf(intensity, splash)
 		if marks and refresh_surface:
 			marks.trace("%s:%d" % [vehicle.get_instance_id(), i], contacts[i], normals[i], intensity if not loose and contact > 0.15 else 0.0)
 		_levels[i] = lerpf(_levels[i], intensity, 1.0 - exp(-delta * 6.0))
@@ -259,10 +266,16 @@ func update_effects(t: Dictionary, anchors: Dictionary, slip: PackedFloat32Array
 		p.global_position = contacts[i] + normals[i] * 0.04 if contact > 0.05 else wheels[i] - Vector3.UP * radius
 		p.emitting = _levels[i] > 0.10
 		p.color = Color(0.67, 0.53, 0.35, _levels[i] * 0.85) if loose else Color(0.83, 0.86, 0.88, _levels[i])
+		if splash > 0.0:
+			p.color = Color(0.86, 0.9, 0.92, minf(1.0, _levels[i] * 1.2))
 		# Airflow stretches the emitted wake; existing particles stay in world space.
 		p.direction = (normals[i] * 0.65 - vehicle.get_velocity() * 0.035).normalized()
 		p.gravity = breeze + Vector3.UP * (-0.12 if loose else 0.25)
 		p.initial_velocity_max = 0.6 + _levels[i] * 1.2
+		if splash > 0.0:   # heavy droplets: thrown up and out, falling back fast
+			p.direction = (normals[i] * 1.0 + vehicle.get_velocity().normalized() * 0.4).normalized()
+			p.gravity = Vector3.UP * -6.0
+			p.initial_velocity_max = 2.0 + splash * 4.0
 		p.scale_amount_max = 0.8 + _levels[i] * 1.1
 		var spark := sparks[i]
 		spark.global_position = p.global_position

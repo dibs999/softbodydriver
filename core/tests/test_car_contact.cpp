@@ -618,3 +618,46 @@ TEST_CASE("a bolt-on rear wing presses the rear axle down at speed and adds drag
     CHECK(winged < plain + 1500.0);  // but not a racing car's
     CHECK(d1 > d0);                  // and it costs speed
 }
+
+TEST_CASE("water: a car fords shallow water, floats in deep water, floods, sinks and hydrolocks") {
+    auto run = [](real depthW, real seconds, real& speedIn, real& floorY, bool& hydro, real& flood) {
+        auto car = buildCar(loadCarDefinition(std::string(SB_CARS_DIR) + "/kestrel_hatch.car.json"));
+        World w;
+        w.addCollider(StaticCollider::plane({0, -depthW, 0}, {0, 1, 0}));
+        w.addCollider(StaticCollider::box({-50, -depthW * 0.5, 0}, {50.0, depthW * 0.5, 50.0}, {0, 0, 0}));
+        WaterVolume wv;
+        wv.minX = 0.0; wv.maxX = 200.0; wv.minZ = -50.0; wv.maxZ = 50.0; wv.surfaceY = 0.0; wv.bottomY = -depthW - 1.0;
+        w.addWater(wv);
+        const auto ic = w.addBody(std::move(car.body));
+        auto& b = w.body(ic);
+        b.translate({-15.0, 0.0, 0.0});
+        w.simulate(1.0);
+        VehicleControls c; c.throttle = 0.5; b.setControls(c);
+        for (auto& v : b.velocities()) v.x += 30.0 / 3.6;
+        w.simulate(7.0);
+        speedIn = b.telemetry().speedKmh;
+        w.simulate(seconds - 7.0);
+        floorY = 1e9;
+        for (const auto& p : b.positions()) floorY = std::min(floorY, p.y);
+        hydro = b.systems().state().hydrolocked;
+        flood = b.flooding();
+        REQUIRE(w.stats().finite);
+    };
+    real v = 0, floorY = 0, flood = 0;
+    bool hydro = false;
+    // 30 cm ford: through at a walking pace or more, engine fine.
+    run(0.3, 12.0, v, floorY, hydro, flood);
+    CHECK(v > 10.0);
+    CHECK(v < 28.0);
+    CHECK_FALSE(hydro);
+    CHECK(flood < 0.05);
+    // 1.6 m pond: stopped by the water within metres, afloat at first, then flooded and sunk with the
+    // engine hydrolocked.
+    run(1.6, 8.0, v, floorY, hydro, flood);
+    CHECK(v < 4.0);
+    CHECK(floorY > -1.2);     // floating, not on the bottom
+    run(1.6, 75.0, v, floorY, hydro, flood);
+    CHECK(flood > 0.5);
+    CHECK(hydro);
+    CHECK(floorY < -1.3);     // sinking towards the bottom
+}
