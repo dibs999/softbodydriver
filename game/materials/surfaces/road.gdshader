@@ -35,6 +35,7 @@ uniform float retro_gain = 25.0;
 global uniform float road_wetness;  // set by the weather (darker, glossier)
 
 varying vec3 world_pos;
+varying vec3 geo_normal;   // view space, without the normal map
 
 float hash(vec2 p) {
 	p = mod(p, 512.0);   // world coordinates of a few km would leave the fract below without precision
@@ -79,6 +80,7 @@ float cell_edge(vec2 x) {
 
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	geo_normal = (MODELVIEW_MATRIX * vec4(NORMAL, 0.0)).xyz;
 }
 
 void fragment() {
@@ -295,12 +297,22 @@ void fragment() {
 
 // Lambert with the retro lobe above, plus GGX specular (wet roads mirror lamps and headlights).
 void light() {
-	float ndl = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
+	// A light skimming the surface (headlights reach the road at well under a degree) would pick out
+	// the tiled normal map's gentle slopes as bands across the lane, one per texture repeat. At that
+	// angle the grains shade each other and only the overall surface counts: the detail normal
+	// fades out for grazing lights.
+	vec3 gn = normalize(geo_normal);
+	vec3 n = normalize(mix(gn, NORMAL, smoothstep(0.03, 0.3, dot(gn, LIGHT))));
+	float ndl = clamp(dot(n, LIGHT), 0.0, 1.0);
+	// Headlight beams reach the road at a fraction of a degree: plain Lambert then turns every
+	// few-centimetre undulation of the surface into a bright or black band across the lane. Rough
+	// aggregate catches grazing light from all sides, so the diffuse term gets a small wrap.
+	float ndl_d = clamp((dot(n, LIGHT) + 0.06) / 1.06, 0.0, 1.0);
 	float retro = pow(clamp(dot(LIGHT, VIEW), 0.0, 1.0), 12.0) * retro_gain;
-	DIFFUSE_LIGHT += ndl * (1.0 + retro) * ATTENUATION * LIGHT_COLOR / PI;
+	DIFFUSE_LIGHT += ndl_d * (1.0 + retro) * ATTENUATION * LIGHT_COLOR / PI;
 	vec3 h = normalize(LIGHT + VIEW);
-	float ndh = clamp(dot(NORMAL, h), 0.0, 1.0);
-	float ndv = clamp(dot(NORMAL, VIEW), 0.001, 1.0);
+	float ndh = clamp(dot(n, h), 0.0, 1.0);
+	float ndv = clamp(dot(n, VIEW), 0.001, 1.0);
 	float a = max(ROUGHNESS * ROUGHNESS, 0.002);
 	float a2 = a * a;
 	float dd = ndh * ndh * (a2 - 1.0) + 1.0;
