@@ -487,6 +487,9 @@ func _process(delta: float) -> void:
 			if not entry["front"]: mat.emission_energy_multiplier = 3.5 if braking else 0.8
 			# A smashed lens shows the dark reflector behind it.
 			mat.albedo_color = (entry["albedo"] as Color).darkened(0.75) if dead else entry["albedo"]
+		var plates: Node = v.get_node_or_null("Plates")
+		if plates and plates.has_method("set_lamp"):
+			plates.set_lamp(s["lights"] and not _lamp_dead(broken, false, 0))
 		# Reversing lamps: in reverse gear with the engine running; they sit in the tail light housing
 		# and break with it.
 		var reversing: bool = int(tel.get("gear", 0)) < 0 and bool(tel.get("running", true))

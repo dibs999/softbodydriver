@@ -283,7 +283,8 @@ Fahrbahnen streuen Licht wie echter Asphalt zur Lichtquelle zurück: Im Abblendl
 Straße bis weit voraus zu sehen, nicht nur ein Fleck vor dem Stoßfänger. Straßen und Bankette haben
 echte Flächennormalen, auch an Steigungen. Die Lampen anderer Autos blenden nachts mit hellem Kern und
 Lichthof (Fernlicht stärker, Rückleuchten rot, beim Bremsen heller), am stärksten genau in Lampenachse.
-Im Rückwärtsgang leuchten die Rückfahrlichter und werfen etwas Licht hinter das Auto.
+Im Rückwärtsgang leuchten die Rückfahrlichter und werfen etwas Licht hinter das Auto; die
+Kennzeichenleuchte macht das hintere Kennzeichen nachts lesbar.
 
 Statische Hindernisse laufen über eine Broadphase. Deshalb bremsen auch Karten mit über 600 Kollisionsobjekten (Leitplanken, Gebäude) die 2000-Hz-Physik nicht aus.
 
