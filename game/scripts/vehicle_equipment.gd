@@ -8,6 +8,7 @@ signal fuel_delivered(litres: float, session_litres: float)
 
 const REPAIR_SECONDS := 4.0
 var _headlight_shadows := true
+var _compat := false
 const FUEL_RATE_LPS := 0.8
 var service_progress := 0.0
 var refuel_delivered_litres := 0.0
@@ -452,7 +453,8 @@ func _process(delta: float) -> void:
 	# (a whole traffic queue at night), and the Compatibility renderer's coarse spot shadows laid
 	# broad diagonal acne bands across facades 30 m ahead, whatever the bias. Not on the lowest
 	# shadow setting either.
-	_headlight_shadows = int(Game.graphics.get("shadows", 1)) > 0 and RenderingServer.get_current_rendering_method() != "gl_compatibility"
+	_compat = RenderingServer.get_current_rendering_method() == "gl_compatibility"
+	_headlight_shadows = int(Game.graphics.get("shadows", 1)) > 0 and not _compat
 	for old_vehicle in states.keys():
 		if not is_instance_valid(old_vehicle) or old_vehicle not in game.vehicles:
 			states[old_vehicle]["rig"].queue_free()
@@ -476,7 +478,14 @@ func _process(delta: float) -> void:
 				m.set_shader_parameter("cabin_up", up)
 				m.set_shader_parameter("cabin_mid", v.get_position_ws())
 		_update_lamp_damage(v, s, delta)
-		_auto_lights(s)
+		if v != game.player and (game.get("_parked") as Array).has(v):
+			# Parked: lights off (the light sensor is for cars that are being driven).
+			s["lights"] = false
+			s["light_mode"] = 0
+		else:
+			_auto_lights(s)
+			if v != game.player:
+				_traffic_beam(v, s, delta)
 		var broken: Dictionary = s["broken"]
 		var tel: Dictionary = v.get_telemetry()
 		var braking := float(tel.get("brake", 0.0)) > 0.05
@@ -513,8 +522,12 @@ func _process(delta: float) -> void:
 				light.rotation_degrees.x = 0.0
 			else:
 				light.spot_range = 140.0 if high else 70.0
-				light.spot_angle = 32.0 if high else 44.0
-				light.light_energy = 30.0 if high else 16.0
+				# 30 degrees: a wider cone ends in a hard line across the road right beside the
+				# bumper, where the lamp is so close that even its dim rim still reads as an edge
+				# (the cone's angular falloff setting did not soften it in either renderer).
+				light.spot_angle = 32.0 if high else 30.0
+				# The Compatibility renderer lights the road about half as bright again: tone it down.
+				light.light_energy = (30.0 if high else 16.0) * (0.6 if _compat else 1.0)
 				light.rotation_degrees.x = -0.5 if high else -2.0
 		# Glare: headlights by mode (high beam dazzles), tail lamps brighter on the brake.
 		for i in 2:
@@ -545,6 +558,36 @@ func _process(delta: float) -> void:
 var _cabin_light: OmniLight3D
 ## Light sensor: until the driver switches the lights by hand, dipped beams follow the daylight
 ## (dusk, night, heavy cloud and rain), with a little hysteresis so they do not flicker.
+## Other drivers at night: high beam on an empty road, dipped as soon as a car is ahead within
+## ~350 m, coming towards them or driving in front (with a little hysteresis so they do not
+## flicker). Never in fog or in the lit city.
+const HIGH_BEAM_CLEAR := 350.0
+
+func _traffic_beam(v: SBVehicle, s: Dictionary, delta: float) -> void:
+	if not s["lights"] or s.get("manual_lights", false):
+		return
+	s["beam_check"] = float(s.get("beam_check", randf() * 0.5)) - delta
+	if float(s["beam_check"]) > 0.0:
+		return
+	s["beam_check"] = 0.5
+	var allowed: bool = Game.selected_map != "city" and game.get("weather") != null \
+		and int(game.weather.weather_index) != game.weather.FOG
+	var me := v.get_position_ws()
+	var fwd := v.get_forward()
+	var clear := allowed
+	if clear:
+		for other in game.vehicles:
+			if other == v or not is_instance_valid(other): continue
+			var d: Vector3 = other.get_position_ws() - me
+			var dist := d.length()
+			# Ahead within the reach of the high beam (and a car right behind a bend still counts
+			# once it is within 150 m).
+			var limit := HIGH_BEAM_CLEAR * (1.1 if s["light_mode"] == 1 else 1.0)
+			if dist < limit and (d.dot(fwd) > dist * 0.82 or dist < 150.0 and d.dot(fwd) > 0.0):
+				clear = false
+				break
+	s["light_mode"] = 2 if clear else 1
+
 func _auto_lights(s: Dictionary) -> void:
 	if s.get("manual_lights", false) or not game.get("weather"):
 		return
