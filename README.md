@@ -298,7 +298,8 @@ Straße bis weit voraus zu sehen, nicht nur ein Fleck vor dem Stoßfänger. Stra
 echte Flächennormalen, auch an Steigungen. Die Lampen anderer Autos blenden nachts mit hellem Kern und
 Lichthof (Fernlicht stärker, Rückleuchten rot, beim Bremsen heller), am stärksten genau in Lampenachse.
 Im Rückwärtsgang leuchten die Rückfahrlichter und werfen etwas Licht hinter das Auto; die
-Kennzeichenleuchte macht das hintere Kennzeichen nachts lesbar.
+Kennzeichenleuchte macht das hintere Kennzeichen nachts lesbar. Andere Fahrer fahren nachts
+auf freier Strecke mit Fernlicht und blenden ab, sobald jemand vor ihnen fährt oder entgegenkommt.
 
 Statische Hindernisse laufen über eine Broadphase. Deshalb bremsen auch Karten mit über 600 Kollisionsobjekten (Leitplanken, Gebäude) die 2000-Hz-Physik nicht aus.
 
