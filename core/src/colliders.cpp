@@ -54,6 +54,20 @@ StaticCollider StaticCollider::heightfield(real originX, real originZ,
     return c;
 }
 
+StaticCollider StaticCollider::heightPatch(real pivotX, real pivotZ, real yaw, real originX, real originZ, real cellSize,
+                                           int nx, int nz, std::vector<real> heights, real thickness, real friction,
+                                           const std::string& name) {
+    StaticCollider c = heightfield(originX, originZ, cellSize, cellSize, nx, nz, std::move(heights), friction, name);
+    c.pivotX = pivotX;
+    c.pivotZ = pivotZ;
+    c.yaw = yaw;
+    c.cosYaw = std::cos(yaw);
+    c.sinYaw = std::sin(yaw);
+    c.thickness = thickness > 0 ? thickness : kInf;
+    c.computeBounds();
+    return c;
+}
+
 void StaticCollider::computeBounds() {
     if (kind == Kind::Plane) {
         unbounded = true;
@@ -63,11 +77,29 @@ void StaticCollider::computeBounds() {
     if (kind == Kind::Heightfield) {
         real lo = kInf, hi = -kInf;
         for (real h : heights) {
+            if (std::isnan(h)) continue;
             lo = std::min(lo, h);
             hi = std::max(hi, h);
         }
-        boundsLo = {originX, lo - 1.0, originZ};
-        boundsHi = {originX + (nx - 1) * cellSizeX, hi + 0.05, originZ + (nz - 1) * cellSizeZ};
+        if (lo > hi) lo = hi = 0;   // all holes
+        const real x0 = originX, x1 = originX + (nx - 1) * cellSizeX;
+        const real z0 = originZ, z1 = originZ + (nz - 1) * cellSizeZ;
+        if (yaw == 0 && pivotX == 0 && pivotZ == 0) {
+            boundsLo = {x0, lo - 1.0, z0};
+            boundsHi = {x1, hi + 0.05, z1};
+            return;
+        }
+        boundsLo = {kInf, lo - std::min<real>(1.0, thickness), kInf};
+        boundsHi = {-kInf, hi + 0.05, -kInf};
+        for (real lx : {x0, x1})
+            for (real lz : {z0, z1}) {
+                const real wx = pivotX + lx * cosYaw + lz * sinYaw;
+                const real wz = pivotZ - lx * sinYaw + lz * cosYaw;
+                boundsLo.x = std::min(boundsLo.x, wx);
+                boundsLo.z = std::min(boundsLo.z, wz);
+                boundsHi.x = std::max(boundsHi.x, wx);
+                boundsHi.z = std::max(boundsHi.z, wz);
+            }
         return;
     }
     Vec3 ext{0, 0, 0};
@@ -94,6 +126,7 @@ real StaticCollider::sampleHeight(real x, real z, Vec3* outNormal) const {
     const real h0 = h00 + tx * (h10 - h00);
     const real h1 = h01 + tx * (h11 - h01);
     const real h = h0 + tz * (h1 - h0);
+    if (std::isnan(h)) return h;   // a hole
 
     if (outNormal) {
         const real dhdx = ((1.0 - tz) * (h10 - h00) + tz * (h11 - h01)) / cellSizeX;
@@ -113,12 +146,20 @@ bool StaticCollider::contact(const Vec3& p, Vec3& outNormal, real& outDepth) con
     }
 
     if (kind == Kind::Heightfield) {
+        // Into the grid's frame (a turned patch: rotate by -yaw about its pivot).
+        real x = p.x, z = p.z;
+        if (yaw != 0 || pivotX != 0 || pivotZ != 0) {
+            const real dx = p.x - pivotX, dz = p.z - pivotZ;
+            x = dx * cosYaw - dz * sinYaw;
+            z = dx * sinYaw + dz * cosYaw;
+        }
         const real maxX = originX + (nx - 1) * cellSizeX;
         const real maxZ = originZ + (nz - 1) * cellSizeZ;
-        if (p.x < originX || p.x > maxX || p.z < originZ || p.z > maxZ) return false;
+        if (x < originX || x > maxX || z < originZ || z > maxZ) return false;
         Vec3 n;
-        const real h = sampleHeight(p.x, p.z, &n);
-        if (p.y >= h) return false;
+        const real h = sampleHeight(x, z, &n);
+        if (std::isnan(h) || p.y >= h || h - p.y > thickness) return false;
+        if (yaw != 0) n = {n.x * cosYaw + n.z * sinYaw, n.y, -n.x * sinYaw + n.z * cosYaw};
         outNormal = n;
         outDepth = (h - p.y) * n.y;
         return outDepth > 0;

@@ -31,6 +31,9 @@ void SBWorld::_bind_methods() {
     ClassDB::bind_method(D_METHOD("add_box", "center", "half_extents", "euler", "friction"), &SBWorld::add_box);
     ClassDB::bind_method(D_METHOD("add_heightfield", "origin_x", "origin_z", "cell_size", "nx", "nz", "heights", "friction"),
                          &SBWorld::add_heightfield);
+    ClassDB::bind_method(D_METHOD("add_height_patch", "pivot", "yaw", "origin_x", "origin_z", "cell_size", "nx", "nz", "heights",
+                                  "thickness", "friction"),
+                         &SBWorld::add_height_patch);
     ClassDB::bind_method(D_METHOD("clear_colliders"), &SBWorld::clear_colliders);
     ClassDB::bind_method(D_METHOD("spawn_car", "path", "xform"), &SBWorld::spawn_car);
     ClassDB::bind_method(D_METHOD("remove_vehicle", "vehicle"), &SBWorld::remove_vehicle);
@@ -234,9 +237,23 @@ void SBWorld::add_heightfield(double ox, double oz, double cell, int nx, int nz,
     world_.addCollider(sb::StaticCollider::heightfield(ox, oz, cell, cell, nx, nz, std::move(h), friction, "terrain"));
 }
 
+void SBWorld::add_height_patch(const Vector3& pivot, double yaw, double origin_x, double origin_z, double cell, int nx,
+                               int nz, const PackedFloat32Array& heights, double thickness, double friction) {
+    if (nx < 2 || nz < 2 || heights.size() < static_cast<int64_t>(nx) * nz) {
+        UtilityFunctions::push_error("SBWorld.add_height_patch: heights must contain nx * nz values");
+        return;
+    }
+    std::vector<sb::real> h(static_cast<std::size_t>(nx) * static_cast<std::size_t>(nz));
+    for (std::size_t i = 0; i < h.size(); ++i) h[i] = heights[static_cast<int64_t>(i)];
+    std::lock_guard<WorldMutex> lock(mtx_);
+    world_.addCollider(sb::StaticCollider::heightPatch(pivot.x, pivot.z, yaw, origin_x, origin_z, cell, nx, nz, std::move(h),
+                                                       thickness, friction, "patch"));
+}
+
 void SBWorld::clear_colliders() {
     std::lock_guard<WorldMutex> lock(mtx_);
     world_.clearColliders();
+    world_.clearWater();   // all of a map's static world: a map change builds the next one
 }
 
 SBVehicle* SBWorld::spawn_car(const String& path, const Transform3D& xform) {

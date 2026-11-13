@@ -580,3 +580,189 @@ static func verge_material(width: float, v_scale := 12.0) -> ShaderMaterial:
 	m.set_shader_parameter("width_m", width)
 	m.set_shader_parameter("v_metres", v_scale)
 	return m
+
+
+## A road tunnel into a hillside or bank, the way out to another map: the mouth at `mouth` (road
+## level) and running along `dir` (horizontal, into the hill) for `length`, with a floor, walls,
+## a roof, a row of lights, a concrete portal and a direction sign over it. Collision walls keep a
+## car in. Returns {"gate", "entrance", "width"}: a car past the gate (halfway in) travels on; a
+## car arriving from the other map starts at the entrance, facing out.
+## `ground(x, z)` gives the hillside's height before the tunnel was dug (the map cuts it away
+## along the tunnel, drawn and physical, out to `cut_half` metres from the axis): the tunnel gets
+## an earth cover up to it in `cover` material, with vertex colour `cover_color` (a Color, or a
+## Callable(x, z) -> Color giving the map's ground colours), and a head wall over the portal up to
+## the slope. `floor_lift` is the map's road level over `mouth.y` for the drawn carriageway.
+static func tunnel(parent: Node3D, world: SBWorld, mouth: Vector3, dir: Vector3, sign_text: String,
+		width := 9.0, height := 5.4, length := 70.0, ground := Callable(), cover: Material = null,
+		cover_color: Variant = Color.WHITE, cut_half := 14.0, floor_lift := 0.0) -> Dictionary:
+	dir = Vector3(dir.x, 0.0, dir.z).normalized()
+	var right := dir.cross(Vector3.UP).normalized()
+	var yaw := atan2(dir.x, dir.z)
+	var concrete := noise_mat(Color(0.56, 0.55, 0.52), 0.07, 2.0, 0.9)
+	var inner_wall := noise_mat(Color(0.30, 0.30, 0.31), 0.06, 2.0, 0.85)
+	var floor_mat := surface_material("asphalt", 2.0, Color(0.55, 0.55, 0.55))
+	var mid := mouth + dir * (length * 0.5)
+	var euler := Vector3(0.0, yaw, 0.0)
+	# Floor 5 cm under road level (a box edge standing proud of the road stops a tyre like a wall;
+	# a small step down is driven over), walls, roof and the far end.
+	box(parent, world, mid + Vector3.DOWN * 0.30, Vector3(width * 0.5 + 0.6, 0.25, length * 0.5), euler, floor_mat, 0.95).visible = false
+	# The drawn carriageway at the map's road level (`floor_lift`), with edge lines and centre dashes.
+	quad(parent, mid + Vector3.UP * floor_lift, Vector2(width, length), floor_mat, yaw)
+	var paint := mat(Color(0.86, 0.86, 0.82), 0.6)
+	for side: float in [-1.0, 1.0]:
+		quad(parent, mid + right * side * (width * 0.5 - 0.45) + Vector3.UP * (floor_lift + 0.004), Vector2(0.15, length), paint, yaw)
+	var dash := 1.5
+	while dash < length:
+		quad(parent, mouth + dir * (dash + 1.5) + Vector3.UP * (floor_lift + 0.004), Vector2(0.15, 3.0), paint, yaw)
+		dash += 9.0
+	for side: float in [-1.0, 1.0]:
+		box(parent, world, mid + right * side * (width * 0.5 + 0.35) + Vector3.UP * height * 0.5, Vector3(0.35, height * 0.5, length * 0.5), euler, inner_wall, 0.6)
+		# A raised walkway / kerb along each wall.
+		box(parent, world, mid + right * side * (width * 0.5 - 0.35) + Vector3.UP * 0.12, Vector3(0.35, 0.12, length * 0.5), euler, concrete, 0.8)
+	box(parent, world, mid + Vector3.UP * (height + 0.4), Vector3(width * 0.5 + 0.7, 0.4, length * 0.5), euler, inner_wall, 0.8)
+	box(parent, world, mouth + dir * length + Vector3.UP * height * 0.5, Vector3(width * 0.5 + 0.7, height * 0.5 + 0.4, 0.4), euler, inner_wall, 0.8)
+	# Lights down the middle of the roof (an emissive strip every 8 m) and the darkness inside.
+	var lamp := mat(Color(1.0, 0.92, 0.75), 0.4)
+	lamp.emission_enabled = true
+	lamp.emission = Color(1.0, 0.88, 0.62)
+	lamp.emission_energy_multiplier = 3.0
+	var k := 6.0
+	while k < length - 4.0:
+		box(parent, null, mouth + dir * k + Vector3.UP * (height - 0.05), Vector3(0.18, 0.05, 1.4), euler, lamp, 0.8, false, false)
+		k += 8.0
+	# Earth over the tunnel: the old slope where it is higher than the roof, otherwise a mound over
+	# the roof that falls away at about 1:1.4 to the sides, behind and, beside the head wall, in
+	# front of the portal (wing walls of concrete hold it back from the opening). Drawn as one
+	# mesh and carried by a height patch, so a car driving over the top cannot drop into the cut.
+	var roof_top := mouth.y + height + 0.8
+	var head_half := width * 0.5 + 3.6
+	var head := roof_top + 0.8
+	if ground.is_valid():
+		head = maxf(head, _tunnel_cover(parent, world, mouth, dir, right, width, length, roof_top, head_half, cut_half,
+			ground, cover if cover else concrete, cover_color, concrete))
+	# Portal: pillars and a head wall round the opening, up to the slope.
+	for side: float in [-1.0, 1.0]:
+		box(parent, world, mouth + right * side * (width * 0.5 + 2.0) + Vector3.UP * (height * 0.5 + 0.5), Vector3(1.6, height * 0.5 + 1.5, 0.8), euler, concrete, 0.8)
+	var lintel_lo := mouth.y + height + 0.4
+	box(parent, world, Vector3(mouth.x, (lintel_lo + head) * 0.5, mouth.z), Vector3(head_half, (head - lintel_lo) * 0.5, 0.8), euler, concrete, 0.8)
+	# A coping along the top of the head wall.
+	box(parent, null, Vector3(mouth.x, head + 0.1, mouth.z) - dir * 0.1, Vector3(head_half + 0.15, 0.1, 0.95), euler, concrete, 0.8, false)
+	# Direction sign above the portal (blue motorway / yellow rural is too fussy: a plain board).
+	var board_mat := mat(Color(0.10, 0.28, 0.62), 0.5)
+	box(parent, null, mouth - dir * 0.85 + Vector3.UP * (height + 1.6), Vector3(3.2, 0.7, 0.05), euler, board_mat, 0.8, false)
+	var label := Label3D.new()
+	label.text = sign_text
+	label.font_size = 64
+	label.pixel_size = 0.009
+	label.modulate = Color(0.97, 0.97, 0.95)
+	label.outline_size = 0
+	label.position = mouth - dir * 0.92 + Vector3.UP * (height + 1.6)
+	label.rotation = Vector3(0.0, yaw + PI, 0.0)
+	parent.add_child(label)
+	var gate := Transform3D(Basis.looking_at(dir, Vector3.UP), mouth + dir * (length * 0.5))
+	return {"gate": gate, "entrance": car_xform(mouth + dir * (length * 0.32), -dir), "width": width}
+
+
+## The earth over a tunnel (see tunnel()): a 2 m grid from 12 m before the portal to 16 m past the
+## far end, ±(width/2 + 16) m wide. Each point is the higher of the old ground and a mound over
+## the roof falling off at 0.7 per metre; the grid leaves out the opening in front of the head
+## wall, and concrete wing walls run down from the mound's edge there. Only cells that stand
+## above the old ground or lie over the cut (`cut_half`, the half-width the map dug away) are
+## drawn; physically it is a turned height patch over the whole grid. Returns the height the
+## head wall must reach.
+static func _tunnel_cover(parent: Node3D, world: SBWorld, mouth: Vector3, dir: Vector3, right: Vector3, width: float, length: float,
+		roof_top: float, head_half: float, cut_half: float, ground: Callable, cover: Material, cover_color: Variant, wing: Material) -> float:
+	const STEP := 2.0
+	var a0 := -12.0
+	var c_half := ceilf((width * 0.5 + 16.0) / STEP) * STEP   # whole cells either side of the axis
+	var na := int((length + 16.0 - a0) / STEP) + 1
+	var nc := int(c_half * 2.0 / STEP) + 1
+	var pts := PackedVector3Array()
+	var olds := PackedFloat32Array()
+	pts.resize(na * nc)
+	olds.resize(na * nc)
+	for i in na:
+		var a := a0 + i * STEP
+		for j in nc:
+			var c := -c_half + j * STEP
+			var p := mouth + dir * a + right * c
+			var old := float(ground.call(p.x, p.z))
+			var crest := roof_top + 0.5 - 0.7 * (maxf(0.0, absf(c) - width * 0.5 - 1.5) + maxf(0.0, a - length - 1.0) + maxf(0.0, -a))
+			p.y = maxf(old, crest) + 0.04
+			pts[i * nc + j] = p
+			olds[i * nc + j] = old
+	# Which cells are drawn: not the opening, and only where the mound shows or the cut is.
+	var cells := PackedByteArray()
+	cells.resize((na - 1) * (nc - 1))
+	var opening := func(i: int, j: int) -> bool:
+		return a0 + (i + 0.5) * STEP < 0.0 and absf(-c_half + (j + 0.5) * STEP) < head_half
+	for i in na - 1:
+		for j in nc - 1:
+			if opening.call(i, j):
+				continue
+			var ac := a0 + (i + 0.5) * STEP
+			var cc := -c_half + (j + 0.5) * STEP
+			var raised := false
+			for k in 4:
+				var v := (i + k / 2) * nc + j + k % 2
+				raised = raised or pts[v].y > olds[v] + 0.1
+			if raised or (absf(cc) < cut_half and ac > -1.0 and ac < length + 8.0):
+				cells[i * (nc - 1) + j] = 1
+	var top := SurfaceTool.new()
+	top.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var walls := SurfaceTool.new()
+	walls.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var head := roof_top
+	for i in na - 1:
+		for j in nc - 1:
+			if cells[i * (nc - 1) + j] == 0:
+				continue
+			var q := [pts[i * nc + j], pts[(i + 1) * nc + j], pts[(i + 1) * nc + j + 1], pts[i * nc + j + 1]]
+			for v: Vector3 in [q[0], q[1], q[3], q[1], q[2], q[3]]:
+				top.set_color(cover_color.call(v.x, v.z) if cover_color is Callable else cover_color)
+				top.set_uv(Vector2(v.x, v.z) * 0.1)
+				top.add_vertex(v)
+			if i == int(-a0 / STEP) and absf(-c_half + (j + 0.5) * STEP) < head_half + STEP:
+				head = maxf(head, maxf(q[0].y, q[3].y) + 0.25)
+			# Wing walls where the cell borders the opening at the side (not across it).
+			for e: int in [0, 2]:
+				# Edge e runs from corner e to e+1 and borders the cell on that side.
+				var ni: int = i + [0, 1, 0, -1][e]
+				var nj: int = j + [-1, 0, 1, 0][e]
+				if ni < 0 or nj < 0 or ni >= na - 1 or nj >= nc - 1 or not opening.call(ni, nj):
+					continue
+				var p0: Vector3 = q[e]
+				var p1: Vector3 = q[(e + 1) % 4]
+				var b0 := Vector3(p0.x, float(ground.call(p0.x, p0.z)) - 0.6, p0.z)
+				var b1 := Vector3(p1.x, float(ground.call(p1.x, p1.z)) - 0.6, p1.z)
+				var cap := Vector3.UP * 0.12   # the wall stands a little proud of the earth
+				for v: Vector3 in [p0 + cap, b0, p1 + cap, p1 + cap, b0, b1, p0 + cap, p1 + cap, b0, p1 + cap, b1, b0]:
+					walls.set_uv(Vector2(v.x + v.z, v.y) * 0.5)
+					walls.add_vertex(v)
+	top.index()
+	top.generate_normals()
+	var mi := MeshInstance3D.new()
+	mi.mesh = top.commit()
+	mi.material_override = cover
+	parent.add_child(mi)
+	walls.generate_normals()
+	var wm := MeshInstance3D.new()
+	wm.mesh = walls.commit()
+	wm.material_override = wing
+	wm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_DOUBLE_SIDED
+	parent.add_child(wm)
+	if world:
+		# Physically, the same grid as a turned height patch 1.5 m thick (the tunnel runs beneath
+		# it), level with the old ground, with a hole over the opening. Where it meets the map's own
+		# terrain both are the old ground, so there is no edge anywhere for a tyre to catch.
+		# Patch frame: local +Z along `dir`, local +X = -right (see SBWorld.add_height_patch).
+		var heights := PackedFloat32Array()
+		heights.resize(na * nc)
+		for ix in nc:
+			var j := nc - 1 - ix   # local x = -c
+			for iz in na:
+				var a := a0 + iz * STEP
+				var c := -c_half + j * STEP
+				heights[ix * na + iz] = NAN if a < -0.5 and absf(c) < head_half - STEP * 0.5 else pts[iz * nc + j].y - 0.04
+		world.add_height_patch(Vector3(mouth.x, 0.0, mouth.z), atan2(dir.x, dir.z), -c_half, a0, STEP, nc, na, heights, 1.5, 0.8)
+	return head

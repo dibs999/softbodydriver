@@ -1,5 +1,6 @@
 // Physics core unit tests (doctest).
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include <limits>
 #include <doctest/doctest.h>
 
 #include <cmath>
@@ -535,6 +536,32 @@ TEST_CASE("heightfield collider interpolates height and slope normal") {
     REQUIRE(hf.contact({1.0, 0.4, 1.0}, n, depth));
     CHECK(depth > 0.05);
     CHECK_FALSE(hf.contact({1.0, 0.6, 1.0}, n, depth));
+}
+
+TEST_CASE("turned height patch: yaw, thickness and holes") {
+    // A 3x3 patch with 2 m cells, turned 90 degrees about (10, 0): local +Z runs along world +X
+    // and local +X along world -Z. It rises 1 m per cell along local Z (world +X), 3 m thick,
+    // and the vertex at local (0, 0) is a hole.
+    const real nan = std::numeric_limits<real>::quiet_NaN();
+    std::vector<real> h = {nan, 6.0, 7.0,  5.0, 6.0, 7.0,  5.0, 6.0, 7.0};   // [ix * 3 + iz]
+    const real yaw = 1.5707963267948966;
+    StaticCollider p = StaticCollider::heightPatch(10.0, 0.0, yaw, 0.0, 0.0, 2.0, 3, 3, h, 3.0, 0.9);
+    Vec3 n;
+    real depth = 0;
+    // World (10 + 3, y, -3): local x = 3 (dz -> -local x... ), local z = 3.
+    // local = R(-yaw) (dx, dz): x = dx cos - dz sin = 3, z = dx sin + dz cos = 3 for (dx, dz) = (3, -3).
+    REQUIRE(p.contact({13.0, 6.0, -3.0}, n, depth));   // surface 6.5 there
+    CHECK(depth == doctest::Approx(0.5 / std::sqrt(1.25)).epsilon(0.02));
+    CHECK(n.x < -0.3);                  // the slope rises towards world +X
+    CHECK(std::abs(n.z) < 1e-9);
+    CHECK_FALSE(p.contact({13.0, 6.6, -3.0}, n, depth));   // above it
+    CHECK_FALSE(p.contact({13.0, 3.0, -3.0}, n, depth));   // 3.5 m under it: under the patch, free
+    CHECK_FALSE(p.contact({10.5, 5.0, -0.5}, n, depth));   // in the hole round local (0, 0)
+    CHECK_FALSE(p.contact({20.0, 5.0, 0.0}, n, depth));    // outside the grid
+    CHECK(p.boundsLo.x == doctest::Approx(10.0));
+    CHECK(p.boundsHi.x == doctest::Approx(14.0));
+    CHECK(p.boundsLo.z == doctest::Approx(-4.0));
+    CHECK(p.boundsHi.z == doctest::Approx(0.0).epsilon(1e-9));
 }
 
 TEST_CASE("ColTri breaks automatically when an underlying edge beam breaks") {

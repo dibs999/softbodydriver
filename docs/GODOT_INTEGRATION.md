@@ -20,6 +20,7 @@
 | `add_ground_plane(friction)` | Bodenebene y = 0 |
 | `add_box(center, half_extents, euler_xyz, friction)` | Gedrehter Quader (Rampe, Wand, Leitplanke). Euler-Reihenfolge wie `Basis.from_euler(e, EULER_ORDER_XYZ)` |
 | `add_heightfield(origin_x, origin_z, cell, nx, nz, heights, friction)` | Terrain, `heights[ix * nz + iz]` |
+| `add_height_patch(pivot, yaw, origin_x, origin_z, cell, nx, nz, heights, thickness, friction)` | Höhenfeld, um `yaw` um `pivot` gedreht (lokal +Z = (sin yaw, 0, cos yaw)); NaN-Höhen sind Löcher; Punkte tiefer als `thickness` unter der Fläche berühren es nicht (Erde über einem Tunnel) |
 | `spawn_car(path, xform) -> SBVehicle` | Lädt `res://cars/*.car.json`. Ursprung ist der Bodenpunkt zwischen den Achsen, die lokale +X-Achse zeigt nach vorne |
 | `remove_vehicle(v)`, `get_vehicles()` | |
 | `time_scale`, `paused`, `air_density`, `material_library` | `material_library`: Name → Material (`paint`, `glass`, `chrome`, `trim`, `tire`, `rim`, `headlight`, `taillight`, …). Fehlt ein Eintrag, wird ein Standardmaterial verwendet |

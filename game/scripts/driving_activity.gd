@@ -103,6 +103,8 @@ func configure(id: String, data: Dictionary) -> void:
 		for v in speeds: total += v
 		_ref_speed = clampf(total / speeds.size(), 6.0, 45.0)
 	_records.load(records_path)
+	if is_instance_valid(_marker):
+		_marker.queue_free()
 	_marker = Node3D.new()
 	add_child(_marker)
 	var material := C.mat(Color("71e0cb"))

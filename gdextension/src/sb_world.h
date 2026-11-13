@@ -56,6 +56,11 @@ public:
     void add_box(const Vector3& center, const Vector3& half_extents, const Vector3& euler, double friction);
     void add_heightfield(double origin_x, double origin_z, double cell_size, int nx, int nz,
                          const PackedFloat32Array& heights, double friction);
+    /// A heightfield turned by `yaw` round `pivot` (grid from the pivot along local +X and +Z, local
+    /// +Z = (sin yaw, 0, cos yaw)); NaN heights are holes; points deeper than `thickness` under it
+    /// pass beneath (a cover over a tunnel).
+    void add_height_patch(const Vector3& pivot, double yaw, double origin_x, double origin_z, double cell, int nx, int nz,
+                          const PackedFloat32Array& heights, double thickness, double friction);
     void clear_colliders();
 
     // Vehicles.

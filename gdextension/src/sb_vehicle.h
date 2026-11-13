@@ -65,7 +65,10 @@ public:
     void set_steer_rate(double r) { ctl_.steerRate = r; }
 
     void reset_to(const Transform3D& xform);  ///< Repair and place.
-    bool relocate_to(const Transform3D& xform); ///< Rigid recovery preserving damage and fuel; ground-origin convention.
+    /// Rigid move preserving damage and fuel; ground-origin convention. A recovery (keep_motion
+    /// false) stops the car; a map change (true) carries its velocity and wheel spin over, turned
+    /// with the car, so it drives on at the new place.
+    bool relocate_to(const Transform3D& xform, bool keep_motion = false);
     bool service_repair(); ///< Repair in place without adding fuel; leave ignition off.
     double refuel(double litres); ///< Adds fuel while stopped with engine off; returns accepted litres.
     bool set_door_open(int index, bool open); ///< 0 driver/left, 1 passenger/right; stationary operation.

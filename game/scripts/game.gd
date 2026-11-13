@@ -35,6 +35,9 @@ var world: SBWorld
 var map_data: Dictionary
 var vehicles: Array[SBVehicle] = []
 var pedestrians: Node3D   # people on the city's footways (pedestrians.gd)
+var _maproot: Node3D
+var _travelling := false
+var _fade: ColorRect
 var props: Array[SBProp] = []          # loose cones and drums of the map
 var _tune_front: HSlider
 var _tune_rear: HSlider
@@ -85,9 +88,129 @@ func _ready() -> void:
 	world.paused = true
 	world.material_library = Game.make_material_library()
 	add_child(world)
+	_build_map()
+	road_marks = RoadMarks.new()
+	road_marks.world = world
+	add_child(road_marks)
+	_finish_ready()
+
+
+## Traffic on the map's routes, one car of each other model.
+func _spawn_traffic() -> void:
+	if not Game.settings["traffic"]:
+		return
+	var others := Game.cars.filter(func(c): return c["path"] != Game.selected_car)
+	var routes: Array = map_data.get("ai_routes", [])
+	if routes.is_empty():
+		for sp in map_data.get("ai_spawns", []):
+			routes.append({"waypoints": map_data["waypoints"], "speeds": map_data["speeds"], "spawn": sp})
+	for i in mini(routes.size(), others.size()):
+		# A route may name its car (a 4x4 on the trails); otherwise traffic takes the next one.
+		var v := Game.spawn_vehicle(world, routes[i].get("car", others[i]["path"]), routes[i]["spawn"])
+		if v:
+			vehicles.append(v)
+			ai[v] = AIDriver.new(v, routes[i]["waypoints"], routes[i]["speeds"], 0.9)
+			ai[v].others = vehicles
+			ai[v].signals = map_data.get("traffic_signals")
+			ai[v].reacts_to_crashes = true
+			if equipment:   # a map change: the rest of the game is there already
+				ai[v].lamps = equipment.state_for(v)
+				ai[v].player = player
+				_configure_effects(v)
+
+
+## Through a tunnel at the edge of the map onto the next one: the screen goes dark, the old map
+## (geometry, props, traffic, people) goes, the next one is built round the player's car, which
+## comes out of the matching tunnel there at the speed it went in, with its damage, fuel and
+## everything else as it was. map_data "exits": [{"to", "gate", "width"}], "entrances": {from: xform}.
+func _check_exits() -> void:
+	if _travelling or not is_instance_valid(player) or world.paused:
+		return
+	var p := player.get_position_ws()
+	for e: Dictionary in map_data.get("exits", []):
+		var local: Vector3 = (e["gate"] as Transform3D).affine_inverse() * p
+		if local.z < 0.0 and local.z > -12.0 and absf(local.x) < float(e["width"]) * 0.5 + 1.0 and absf(local.y) < 6.0:
+			var to := String(e["to"])
+			if Game.settings.get("career", false) and not Career.map_unlocked(Game.progress, to):
+				hud.toast("%s ist in der Karriere noch gesperrt" % _map_name(to))
+				continue
+			travel(to)
+			return
+
+
+func _map_name(id: String) -> String:
+	for entry in Game.MAPS:
+		if entry["id"] == id:
+			return String(entry["name"])
+	return id
+
+
+func travel(to: String) -> void:
+	if _travelling:
+		return
+	_travelling = true
+	var from := Game.selected_map
+	if activity and activity.active:
+		activity.cancel("Karte verlassen")
+	uncouple_trailer()
+	if _fade == null:
+		_fade = ColorRect.new()
+		_fade.color = Color.BLACK
+		_fade.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hud.get_parent().add_child(_fade)
+	_fade.modulate.a = 1.0
+	_fade.show()
+	await get_tree().process_frame
+	var was_paused := world.paused
+	world.paused = true
+	# Everything of the old map but the player's car.
+	for v in vehicles.duplicate():
+		if v != player:
+			vehicles.erase(v)
+			ai.erase(v)
+			world.remove_vehicle(v)
+	_parked.clear()
+	for prop in props:
+		if is_instance_valid(prop):
+			world.remove_prop(prop)
+	props.clear()
+	world.clear_colliders()
+	if is_instance_valid(_maproot):
+		_maproot.free()
+	if is_instance_valid(pedestrians):
+		pedestrians.free()
+	pedestrians = null
+	Game.selected_map = to
+	_build_map()
+	var entrances: Dictionary = map_data.get("entrances", {})
+	var arrive: Transform3D = entrances.get(from, map_data["spawns"][0])
+	player.relocate_to(arrive, entrances.has(from))
+	weather.set_shelters(map_data.get("rain_shelters", []))
+	equipment.configure(self, map_data["spawns"][0])
+	var places: Array = map_data.get("map_places", []).duplicate()
+	places.append({"name": "Service / Tankstelle", "position": equipment.bay})
+	map_data["map_places"] = places
+	minimap.configure(map_data, vehicles, _map_name(to))
+	audio.dirt = to == "desert"
+	activity.configure(to, map_data)
+	_spawn_traffic()
+	world.sync_visuals()
+	cam.snap()
+	world.paused = was_paused
+	hud.toast(_map_name(to))
+	var tw := create_tween()
+	tw.tween_property(_fade, "modulate:a", 0.0, 0.6)
+	tw.tween_callback(_fade.hide)
+	_travelling = false
+
+
+## The selected map: its geometry, props, surfaces, light and its people.
+func _build_map() -> void:
 	var maproot := Node3D.new()
 	maproot.name = "Map"
 	add_child(maproot)
+	_maproot = maproot
 	match Game.selected_map:
 		"offroad":
 			map_data = preload("res://scripts/maps/offroad.gd").build(world, maproot)
@@ -113,9 +236,9 @@ func _ready() -> void:
 		if prop:
 			props.append(prop)
 	surfaces.configure(Game.selected_map, map_data)
-	road_marks = RoadMarks.new()
-	road_marks.world = world
-	add_child(road_marks)
+
+
+func _finish_ready() -> void:
 
 	if Game.settings.get("career", false):
 		var info: Dictionary = Game.car_info(Game.selected_car)
@@ -130,21 +253,7 @@ func _ready() -> void:
 	vehicles.append(player)
 	_apply_settings(player)
 	_neutral_for_own_clutch()
-	if Game.settings["traffic"]:
-		var others := Game.cars.filter(func(c): return c["path"] != Game.selected_car)
-		var routes: Array = map_data.get("ai_routes", [])
-		if routes.is_empty():
-			for sp in map_data.get("ai_spawns", []):
-				routes.append({"waypoints": map_data["waypoints"], "speeds": map_data["speeds"], "spawn": sp})
-		for i in mini(routes.size(), others.size()):
-			# A route may name its car (a 4x4 on the trails); otherwise traffic takes the next one.
-			var v := Game.spawn_vehicle(world, routes[i].get("car", others[i]["path"]), routes[i]["spawn"])
-			if v:
-				vehicles.append(v)
-				ai[v] = AIDriver.new(v, routes[i]["waypoints"], routes[i]["speeds"], 0.9)
-				ai[v].others = vehicles
-				ai[v].signals = map_data.get("traffic_signals")
-				ai[v].reacts_to_crashes = true
+	_spawn_traffic()
 
 	cam = CameraRig.new()
 	cam.current = true
@@ -584,6 +693,7 @@ func _process(delta: float) -> void:
 	if _replay_frames == 0:
 		recovery.record(player, float(world.get_stats()["sim_time"]))
 	_update_trailer()
+	_check_exits()
 	_watch_physics_load(delta)
 	if wipers:
 		wipers.update(0.0 if world.paused else delta * world.time_scale, weather.weather_index == weather.RAIN, weather.wetness)

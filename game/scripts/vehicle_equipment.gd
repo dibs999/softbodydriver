@@ -25,11 +25,16 @@ var refueling := false
 var _fuel_unpaid := 0.0   # litres delivered but not yet billed (career)
 var clock := 0.0
 
+var _bay_nodes: Array[Node] = []
+
 func configure(scene: Node3D, spawn: Transform3D) -> void:
 	game = scene
 	# Build the beam images while the map loads, not on the first switch of the lights.
 	beam_texture(false)
 	beam_texture(true)
+	for n in _bay_nodes:
+		if is_instance_valid(n): n.queue_free()
+	_bay_nodes.clear()
 	bay = spawn.origin + spawn.basis.z.normalized() * 8.0
 	_bay_transform = Transform3D(spawn.basis, bay)
 	_last_sim_time = float(game.world.get_stats()["sim_time"])
@@ -42,6 +47,7 @@ func configure(scene: Node3D, spawn: Transform3D) -> void:
 	marker.scale.y = 0.04
 	marker.material_override = material(Color(0.16, 0.76, 0.62), true)
 	add_child(marker)
+	_bay_nodes.append(marker)
 	var pump := _build_pump()
 	pump.position = bay + spawn.basis.z.normalized() * 4.0 + Vector3(0, 0.75, 0)
 	# The displays face the bay.
@@ -49,18 +55,20 @@ func configure(scene: Node3D, spawn: Transform3D) -> void:
 	to_bay.y = 0.0
 	if to_bay.length() > 0.01: pump.rotation.y = atan2(to_bay.x, to_bay.z)
 	add_child(pump)
+	_bay_nodes.append(pump)
 	game.world.add_box(pump.position, Vector3(0.35, 0.75, 0.25), Vector3(0, pump.rotation.y, 0), 0.8)
 	var sign := Label3D.new()
 	_service_sign = sign
 	_refresh_service_sign()
 	var prompts := get_node_or_null("/root/Game/DriverPrompts")
-	if prompts: prompts.device_changed.connect(_refresh_service_sign)
+	if prompts and not prompts.device_changed.is_connected(_refresh_service_sign): prompts.device_changed.connect(_refresh_service_sign)
 	sign.position = pump.position + Vector3(0, 1.4, 0)
 	sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	sign.font_size = 28
 	sign.pixel_size = 0.008
 	sign.visibility_range_end = 55.0
 	add_child(sign)
+	_bay_nodes.append(sign)
 
 func _refresh_service_sign() -> void:
 	if not is_instance_valid(_service_sign): return
