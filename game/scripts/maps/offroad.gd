@@ -61,6 +61,9 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	# sharp crest near the ridge junction bottomed out even the 4x4 and cracked its sump).
 	# Re-carving the loop last keeps its smoothed profile; the side trails blend into it.
 	C.carve_path(heights, COUNT, COUNT, ORIGIN, ORIGIN, CELL, loop, 3.8, 9.0, 0.0)
+	# Pond and ford on the forest trail: a level clearing beside the trail, a bowl ~1.9 m deep and a
+	# channel from it across the trail (the ford, ~35 cm of water on the track).
+	var pond_info := _dig_pond(heights, forest, rock_path)
 	var paths: Array[PackedVector3Array] = [C.closed_route(loop), forest, ridge_path, access, rock_path]
 	var ground := func(x: float, z: float) -> float:
 		return C.sample(heights, COUNT, COUNT, ORIGIN, ORIGIN, CELL, x, z)
@@ -105,6 +108,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	for i in paths.size():
 		V.roadside_grass(parent, paths[i], false, widths[i] + 0.3, widths[i] + 12.0, 4.5, 77 + i, ground,
 			func(p: Vector3) -> bool: return _near_paths(Vector2(p.x, p.z), paths, 3.2) or p.distance_to(yard[0]) < 30.0)
+	_pond(parent, world, pond_info, ground)
 	_vegetation(parent, world, paths, ground, farm)
 	_farm(parent, world, farm, ground)
 	var timber := forest[forest.size()/3] + Vector3(-14,0,9)
@@ -135,6 +139,9 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	var stones := _rock_garden(parent, world, rock_path, ground)
 	var props := _loose_logs(paths, surface, timber)
 	props.append_array(_fallen_branches(paths, surface, timber))
+	# Nothing lying in the water.
+	var pond_c: Vector3 = pond_info["centre"]
+	props = props.filter(func(pr: Dictionary) -> bool: return Vector2((pr["position"] as Vector3).x - pond_c.x, (pr["position"] as Vector3).z - pond_c.z).length() > 36.0)
 	var length_m := 0.0
 	for i in loop.size(): length_m += loop[i].distance_to(loop[(i+1)%loop.size()])
 	var loop_speeds := C.speeds_from_curvature(loop, 12.0, 6.0, 35)
@@ -146,8 +153,9 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		"ai_routes": [{"waypoints": loop, "speeds": loop_speeds, "spawn": C.car_xform(loop[half], loop[half + 1] - loop[half]),
 			"car": "res://cars/trailhead_4x4.car.json"}],
 		"map_path_color": Color("b6a27b"),
+		"water": [pond_info],
 		"surface_regions": [{"rect": Rect2(farm.x-17,farm.z-17,34,34),"surface":"gravel"}],
-		"map_places": [{"name":"Hof & Start", "position":farm}, {"name":"Holzlager", "position":timber},
+		"map_places": [{"name":"Hof & Start", "position":farm}, {"name":"Holzlager", "position":timber}, {"name":"Weiher & Furt", "position":pond_info["centre"]},
 			{"name":"Höhenblick", "position":summit}, {"name":"Geröllpfad", "position":stones},
 			{"name":"Weideland", "position":loop[315]}],
 		"offroad_length_m": length_m,
@@ -278,7 +286,95 @@ static func _curve(controls: PackedVector3Array) -> PackedVector3Array:
 	result.append(controls[-1])
 	return result
 
+static var _pond_xz := Vector2(INF, INF)
+
+## Digs the pond and the ford into the terrain heights (before the trails are drawn on them) and
+## returns {centre, surface, ford, rect}: the water surface sits 22 cm under the clearing.
+static func _dig_pond(heights: PackedFloat32Array, forest: PackedVector3Array, rock_path: PackedVector3Array) -> Dictionary:
+	var k := int(forest.size() * 0.62)
+	var fp := forest[k]
+	var dir := (forest[k + 1] - forest[k - 1])
+	dir.y = 0.0
+	dir = dir.normalized()
+	var side := Vector3(-dir.z, 0, dir.x)
+	# On the side away from the rock trail.
+	var rock_mid := rock_path[rock_path.size() / 2]
+	if (fp + side * 20.0).distance_to(rock_mid) < (fp - side * 20.0).distance_to(rock_mid):
+		side = -side
+	var pc := fp + side * 21.0
+	var hp := C.sample(heights, COUNT, COUNT, ORIGIN, ORIGIN, CELL, fp.x, fp.z)
+	var surface := hp - 0.22
+	var ford_end := fp - side * 9.0   # the channel runs on past the trail
+	for ix in COUNT:
+		var x := ORIGIN + ix * CELL
+		if absf(x - pc.x) > 60.0: continue
+		for iz in COUNT:
+			var z := ORIGIN + iz * CELL
+			if absf(z - pc.z) > 60.0: continue
+			var q := Vector2(x, z)
+			var d := q.distance_to(Vector2(pc.x, pc.z))
+			var i := ix * COUNT + iz
+			# Level clearing round the pond, blending into the hillside.
+			heights[i] = lerpf(heights[i], hp, 1.0 - smoothstep(26.0, 46.0, d))
+			# Bowl: 1.9 m deep in the middle, shelving banks.
+			if d < 15.0:
+				heights[i] = minf(heights[i], hp - 1.9 * (1.0 - pow(d / 15.0, 2.0)) - 0.05)
+			# Channel from the pond across the trail (the ford).
+			var a := Vector2(pc.x, pc.z)
+			var b := Vector2(ford_end.x, ford_end.z)
+			var t := clampf((q - a).dot(b - a) / (b - a).length_squared(), 0.0, 1.0)
+			var sd := q.distance_to(a + (b - a) * t)
+			var channel := 0.58 * (1.0 - smoothstep(1.8, 4.5, sd)) * (1.0 - smoothstep(0.85, 1.0, t))
+			heights[i] = minf(heights[i], hp - channel)
+			# Inside the water's box but away from the pond and the channel the ground stays above the
+			# water line (else the hillside's hollows would fill up to the box's straight edges).
+			var in_box := absf(x - (pc.x + ford_end.x) * 0.5) < absf(pc.x - ford_end.x) * 0.5 + 18.0 \
+				and absf(z - (pc.z + ford_end.z) * 0.5) < absf(pc.z - ford_end.z) * 0.5 + 18.0
+			if in_box and d > 16.5 and (sd > 4.6 or t >= 1.0):
+				heights[i] = maxf(heights[i], surface + 0.08)
+	_pond_xz = Vector2(pc.x, pc.z)
+	var lo := Vector2(minf(pc.x, ford_end.x), minf(pc.z, ford_end.z)) - Vector2(17, 17)
+	var hi := Vector2(maxf(pc.x, ford_end.x), maxf(pc.z, ford_end.z)) + Vector2(17, 17)
+	return {"centre": pc, "surface": surface, "ford": fp, "ford_dir": dir, "rect": Rect2(lo, hi - lo), "bottom": hp - 2.5}
+
+
+## The water: physics (SBWorld water volume) and its surface; reeds round the edge.
+static func _pond(parent: Node3D, world: SBWorld, info: Dictionary, ground: Callable) -> void:
+	var rect: Rect2 = info["rect"]
+	var surface: float = info["surface"]
+	world.add_water(rect, surface, float(info["bottom"]))
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://materials/water.gdshader")
+	var plane := PlaneMesh.new()
+	plane.size = rect.size
+	plane.subdivide_width = 8
+	plane.subdivide_depth = 8
+	var mi := MeshInstance3D.new()
+	mi.mesh = plane
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.position = Vector3(rect.get_center().x, surface, rect.get_center().y)
+	mi.name = "Pond"
+	parent.add_child(mi)
+	# Reeds on the banks: tufts where the ground is within a few centimetres of the water line.
+	var reeds: Array[Vector3] = []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 6620
+	var pc: Vector3 = info["centre"]
+	for i in 260:
+		var a := rng.randf() * TAU
+		var r := rng.randf_range(12.0, 18.5)
+		var p := pc + Vector3(cos(a), 0, sin(a)) * r
+		var y: float = ground.call(p.x, p.z)
+		if y > surface - 0.15 and y < surface + 0.25 and not _near_paths(Vector2(p.x, p.z), [], 0.0):
+			reeds.append(Vector3(p.x, y, p.z))
+	V.grass(parent, reeds, 6621, true, 1.3, 2.0)
+
+
 static func _near_paths(p: Vector2, paths: Array[PackedVector3Array], distance: float) -> bool:
+	# The pond and its banks count as taken: no trees, rocks or bushes in the water.
+	if paths.size() > 0 and p.distance_to(_pond_xz) < 25.0 + distance:
+		return true
 	for path in paths:
 		for i in path.size()-1:
 			var a := Vector2(path[i].x,path[i].z)

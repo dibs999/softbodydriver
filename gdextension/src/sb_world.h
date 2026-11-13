@@ -50,6 +50,9 @@ public:
 
     // Static world geometry.
     void add_ground_plane(double friction);
+    /// A body of water over the rect (x/z min..max), surface at `surface`, floor down to `bottom`.
+    void add_water(const Rect2& rect, double surface, double bottom);
+    double water_depth_at(const Vector3& p) const;
     void add_box(const Vector3& center, const Vector3& half_extents, const Vector3& euler, double friction);
     void add_heightfield(double origin_x, double origin_z, double cell_size, int nx, int nz,
                          const PackedFloat32Array& heights, double friction);

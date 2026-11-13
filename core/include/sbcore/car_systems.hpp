@@ -32,6 +32,7 @@ struct CarSystemsSpec {
     // ---- structure references (beam indices into the SoftBody)
     std::vector<std::uint32_t> radiatorBeams;
     std::vector<std::uint32_t> engineBlockBeams;
+    std::int64_t intakeNode = -1;   ///< Air intake (top of the engine): water here hydrolocks a running engine.
     std::vector<std::uint32_t> oilPanBeams;
     std::vector<std::uint32_t> fuelTankBeams;
     std::vector<std::uint32_t> engineMountBeams;
@@ -111,6 +112,9 @@ struct CarSystemsState {
     real fireRoll = 0.0;         ///< Deterministic ignition draw
     real crashWindow = 0.0;      ///< s left in which a freshly crushed running engine may ignite
     real lastBlockDamage = 0.0;
+    /// Water drawn into the intake of a running engine: the pistons hit incompressible water and
+    /// bend the rods; the engine stops dead and will not turn again until repaired.
+    bool hydrolocked = false;
     bool seized = false;
     bool running = true;
     bool driveshaftBroken = false;

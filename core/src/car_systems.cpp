@@ -278,7 +278,12 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
         }
     }
     s.wear = clamp01(s.wear);
-    if (s.coolantTempC > spec_.seizeC || s.wear >= 1.0 || s.blockDamage >= 1.0) s.seized = true;
+    if (spec_.intakeNode >= 0 && !s.hydrolocked && pt && pt->running() &&
+        body.nodeWaterDepth(static_cast<std::size_t>(spec_.intakeNode)) > 0.03) {
+        s.hydrolocked = true;
+        s.status = "HYDROLOCK";
+    }
+    if (s.coolantTempC > spec_.seizeC || s.wear >= 1.0 || s.blockDamage >= 1.0 || s.hydrolocked) s.seized = true;
 
     real scale = 1.0;
     if (s.coolantTempC > spec_.overheatPowerLossC)
@@ -302,6 +307,7 @@ void CarSystems::step(SoftBody& body, Powertrain* pt, std::vector<real>& driveTo
     // ------------------------------------------------------------------ status text (priority order)
     if (structuralCounter_ == 0) {
         if (s.fire > 0.0) s.status = s.fireSource == 1 ? "FUEL FIRE" : "ENGINE FIRE";
+        else if (s.hydrolocked) s.status = "HYDROLOCK";
         else if (s.rodBroken) s.status = "ENGINE BLOWN";
         else if (s.seized) s.status = "ENGINE SEIZED";
         else if (s.fuelL <= 0.0) s.status = "OUT OF FUEL";

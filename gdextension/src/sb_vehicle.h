@@ -191,6 +191,7 @@ private:
     std::vector<sb::Vec3> vel_;
     sb::VehicleTelemetry tel_;
     sb::CarSystemsState sys_;
+    double submerged_ = 0.0, flooding_ = 0.0;   // water (SoftBody::submerged / flooding)
     std::vector<float> slip_, contact_;
     PackedVector3Array contactPoints_, contactNormals_;
     std::vector<float> beamStrain_;

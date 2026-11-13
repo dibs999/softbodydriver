@@ -51,6 +51,15 @@ struct BodyLink {
 /// The next multi-body step starts them again. Must not run concurrently with World::step().
 void shutdownPhysicsThreads();
 
+/// A body of water: an axis-aligned box whose top is the surface (a pond, a river, a ford).
+/// Nodes below the surface feel buoyancy and water drag; see SoftBody::setDisplacement.
+struct WaterVolume {
+    real minX = 0.0, maxX = 0.0, minZ = 0.0, maxZ = 0.0;
+    real surfaceY = 0.0;
+    real bottomY = -10.0;
+    real density = 1000.0;   ///< kg/m^3
+};
+
 class World {
 public:
     explicit World(WorldSettings s = {}) : settings_(s) {}
@@ -61,6 +70,10 @@ public:
     void addCollider(const StaticCollider& c) { colliders_.push_back(c); }
     /// Couples two bodies (see BodyLink). Returns its index; links of a removed body go with it.
     std::size_t addLink(const BodyLink& link) { links_.push_back(link); return links_.size() - 1; }
+    std::size_t addWater(const WaterVolume& w) { waters_.push_back(w); return waters_.size() - 1; }
+    const std::vector<WaterVolume>& waters() const { return waters_; }
+    /// Depth of point p below the water surface (0 when not in any water).
+    real waterDepthAt(const Vec3& p) const;
     void removeLink(std::size_t i) { if (i < links_.size()) links_.erase(links_.begin() + static_cast<std::ptrdiff_t>(i)); }
     std::vector<BodyLink>& links() { return links_; }
     const std::vector<BodyLink>& links() const { return links_; }
@@ -100,6 +113,8 @@ private:
     std::vector<SoftBody> bodies_;
     std::vector<StaticCollider> colliders_;
     std::vector<BodyLink> links_;
+    std::vector<WaterVolume> waters_;
+    void accumulateWaterForces(SoftBody& b);
     std::uint64_t steps_ = 0;
     std::size_t lastContacts_ = 0;
     std::size_t lastBodyContacts_ = 0;

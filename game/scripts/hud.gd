@@ -48,6 +48,7 @@ const BG := Color(0.0, 0.0, 0.0, 0.52)
 const MESSAGE_SECONDS := 4.5
 const STATUS := {
 	"ENGINE SEIZED": "Motor festgelaufen", "OUT OF FUEL": "Tank leer",
+	"HYDROLOCK": "Wasserschlag · Wasser im Ansaugtrakt, Motor zerstört",
 	"DRIVESHAFT BROKEN": "Antriebswelle gebrochen", "HEAD GASKET BLOWN": "Zylinderkopfdichtung defekt",
 	"OVERHEATING": "Motor überhitzt", "LOW OIL PRESSURE": "Öldruck zu niedrig",
 	"LOW COOLANT": "Zu wenig Kühlmittel", "COOLANT LEAK": "Kühlmittelverlust",

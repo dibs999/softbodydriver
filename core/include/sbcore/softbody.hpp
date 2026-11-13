@@ -284,6 +284,24 @@ public:
     bool downFacesPassive() const { return downFacesPassive_; }
     void setSleepEnabled(bool on) { sleepEnabled_ = on; if (!on) wake(); }
     bool sleepEnabled() const { return sleepEnabled_; }
+    // ---- water (World::accumulateWaterForces)
+    /// Volume of water the body displaces fully submerged and dry inside (m^3); 0 = from the
+    /// mass at 700 kg/m^3. Cars float on the air in the cabin until they have flooded.
+    void setDisplacement(real m3, real floodedM3 = -1.0, real floodSeconds = 60.0) {
+        displacement_ = m3; floodedDisplacement_ = floodedM3; floodSeconds_ = floodSeconds;
+    }
+    real displacement() const { return displacement_; }
+    real floodedDisplacement() const { return floodedDisplacement_; }
+    real floodSeconds() const { return floodSeconds_; }
+    /// 0 dry .. 1 full of water.
+    real flooding() const { return flooding_; }
+    void setFlooding(real f) { flooding_ = f; }
+    /// Depth of node i below the water surface in the last step (0 out of the water).
+    real nodeWaterDepth(std::size_t i) const { return i < waterDepth_.size() ? waterDepth_[i] : 0.0; }
+    std::vector<real>& waterDepths() { return waterDepth_; }
+    /// Share of the body (by mass) under water in the last step.
+    real submerged() const { return submerged_; }
+    void setSubmerged(real s) { submerged_ = s; }
     bool asleep() const { return asleep_; }
     void wake() { asleep_ = false; restTime_ = 0.0; prevPos_.clear(); }
     /// Called by the world after each step: tracks the fastest node and lets a sleep-enabled
@@ -401,6 +419,8 @@ private:
     std::vector<Vec3> pos_, vel_, force_;
     std::vector<real> mass_, invMass_, friction_, contactStiffness_;
     std::vector<Vec3> contactImpulse_; // Static-surface normal impulse from the previous solver step.
+    real displacement_ = 0.0, floodedDisplacement_ = -1.0, floodSeconds_ = 60.0, flooding_ = 0.0, submerged_ = 0.0;
+    std::vector<real> waterDepth_;
     std::vector<std::uint8_t> collision_;
     std::vector<std::string> nodeIds_;
     std::vector<NodeParams> nodeParams_;
