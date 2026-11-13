@@ -418,8 +418,12 @@ void fragment() {
 // grazing angle), GGX specular for wet surfaces.
 void light() {
 	float ndl = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
+	// Headlight beams reach the road at a fraction of a degree: plain Lambert then turns every
+	// few-centimetre undulation of the surface into a bright or black band across the lane. Rough
+	// aggregate catches grazing light from all sides, so the diffuse term gets a small wrap.
+	float ndl_d = clamp((dot(NORMAL, LIGHT) + 0.06) / 1.06, 0.0, 1.0);
 	float retro = pow(clamp(dot(LIGHT, VIEW), 0.0, 1.0), 12.0) * retro_gain;
-	DIFFUSE_LIGHT += ndl * (1.0 + retro) * ATTENUATION * LIGHT_COLOR / PI;
+	DIFFUSE_LIGHT += ndl_d * (1.0 + retro) * ATTENUATION * LIGHT_COLOR / PI;
 	vec3 h = normalize(LIGHT + VIEW);
 	float ndh = clamp(dot(NORMAL, h), 0.0, 1.0);
 	float ndv = clamp(dot(NORMAL, VIEW), 0.001, 1.0);

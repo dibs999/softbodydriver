@@ -281,7 +281,8 @@ rechnet die 48 nächsten Laternen selbst, weil der Mobile-Renderer echte Lichter
 begrenzt (eine ganze Straße ist ein Objekt). Echte Spotlichter beleuchten weiter Autos und Gegenstände.
 Fahrbahnen streuen Licht wie echter Asphalt zur Lichtquelle zurück: Im Abblendlicht ist die
 Straße bis weit voraus zu sehen, nicht nur ein Fleck vor dem Stoßfänger. Straßen und Bankette haben
-echte Flächennormalen, auch an Steigungen.
+echte Flächennormalen, auch an Steigungen. Die Lampen anderer Autos blenden nachts mit hellem Kern und
+Lichthof (Fernlicht stärker, Rückleuchten rot, beim Bremsen heller), am stärksten genau in Lampenachse.
 
 Statische Hindernisse laufen über eine Broadphase. Deshalb bremsen auch Karten mit über 600 Kollisionsobjekten (Leitplanken, Gebäude) die 2000-Hz-Physik nicht aus.
 

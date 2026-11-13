@@ -161,6 +161,8 @@ func state_for(v: SBVehicle) -> Dictionary:
 				var lamp_side := -1 if lamp_name.ends_with("_left") else (1 if lamp_name.ends_with("_right") else 0)
 				lamp_entries.append({"material": own, "front": is_head, "side": lamp_side, "albedo": own.albedo_color})
 	var headlights: Array = []
+	var glare_head: Array = []
+	var glare_tail: Array = []
 	var left: Array = []
 	var right: Array = []
 	for side in [-1, 1]:
@@ -177,6 +179,8 @@ func state_for(v: SBVehicle) -> Dictionary:
 		light.light_volumetric_fog_energy = 0.06
 		rig.add_child(light)
 		headlights.append(light)
+		glare_head.append(_glare(rig, Vector3(lamp_x + 0.03, maxf(0.25, lamp_y), side * width * 0.34), true))
+		glare_tail.append(_glare(rig, Vector3(rear_x - 0.03, maxf(0.24, rear_y + 0.04), side * width * 0.38), false))
 		for end in [-1, 1]:
 			# The Concept already has skinned rear signal lenses. Reuse those rather
 			# than stacking generated boxes over its authored lamp geometry.
@@ -195,7 +199,7 @@ func state_for(v: SBVehicle) -> Dictionary:
 			if side < 0: left.append(lamp)
 			else: right.append(lamp)
 	var paint_rgb: Array = body.get("paint", [0.5, 0.1, 0.1])
-	var s := {"paint": Color(float(paint_rgb[0]), float(paint_rgb[1]), float(paint_rgb[2])), "rig": rig, "lamp_materials": lamp_materials, "tail_materials": tail_materials, "lamp_entries": lamp_entries, "broken": {}, "lamp_check": 0.0, "authored_signals": authored_signals, "headlights": headlights, "left": left, "right": right, "lights": false, "light_mode": 0, "signal": 0, "hazards": false}
+	var s := {"paint": Color(float(paint_rgb[0]), float(paint_rgb[1]), float(paint_rgb[2])), "rig": rig, "lamp_materials": lamp_materials, "tail_materials": tail_materials, "lamp_entries": lamp_entries, "broken": {}, "lamp_check": 0.0, "authored_signals": authored_signals, "headlights": headlights, "glare_head": glare_head, "glare_tail": glare_tail, "left": left, "right": right, "lights": false, "light_mode": 0, "signal": 0, "hazards": false}
 	states[v] = s
 	return s
 
@@ -364,6 +368,27 @@ func hud_state() -> Dictionary:
 static var _beams := {}
 const BEAM_ENERGY_LOW := 400.0
 const BEAM_ENERGY_HIGH := 600.0
+const GLARE_SHADER := preload("res://materials/lamp_glare.gdshader")
+
+## A camera-facing glare quad at a lamp (see lamp_glare.gdshader), with its own material.
+func _glare(rig: Node3D, at: Vector3, head: bool) -> MeshInstance3D:
+	var quad := MeshInstance3D.new()
+	var mesh := QuadMesh.new()
+	mesh.size = Vector2(1, 1)
+	quad.mesh = mesh
+	var m := ShaderMaterial.new()
+	m.shader = GLARE_SHADER
+	m.set_shader_parameter("facing_sign", 1.0 if head else -1.0)
+	m.set_shader_parameter("tint", Color(1.0, 0.93, 0.82) if head else Color(1.0, 0.06, 0.03))
+	m.set_shader_parameter("size", 0.38 if head else 0.22)
+	m.set_shader_parameter("narrow", 0.55 if head else 0.35)
+	quad.material_override = m
+	quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	quad.extra_cull_margin = 16.0   # the quad is placed in the vertex shader, larger than its mesh
+	quad.position = at
+	rig.add_child(quad)
+	return quad
+
 static func beam_texture(high: bool) -> ImageTexture:
 	if _beams.has(high):
 		return _beams[high]
@@ -390,7 +415,9 @@ static func beam_texture(high: bool) -> ImageTexture:
 				var cut := -0.6 + 1.6 * kerb   # 15 degree step up on the kerb side (right-hand traffic)
 				var below := cut - elev
 				var lit := smoothstep(-0.12, 0.35, below)
-				var spread := 0.15 + 0.85 * exp(-pow(az / (12.0 + 10.0 * kerb), 2.0))
+				# The broad foreground spill fades out well inside the 40 degree projector frame: at the
+				# frame edge it would end in a straight, razor-sharp line out from the lamp.
+				var spread := 0.15 * (1.0 - smoothstep(18.0, 36.0, absf(az))) + 0.85 * exp(-pow(az / (12.0 + 10.0 * kerb), 2.0))
 				var depth := 1.0 / (1.0 + pow(maxf(below - 0.8, 0.0) / 1.2, 2.2))
 				i = 0.004 + lit * spread * depth
 			img.set_pixel(x, y, Color(i, i, i).linear_to_srgb())   # projector images are read as sRGB
@@ -458,6 +485,16 @@ func _process(delta: float) -> void:
 				light.spot_angle = 32.0 if high else 44.0
 				light.light_energy = 30.0 if high else 16.0
 				light.rotation_degrees.x = -0.5 if high else -2.0
+		# Glare: headlights by mode (high beam dazzles), tail lamps brighter on the brake.
+		for i in 2:
+			var head_on: bool = s["lights"] and not broken.get("head_left" if i == 0 else "head_right", false)
+			var head_glare: MeshInstance3D = s["glare_head"][i]
+			head_glare.visible = head_on
+			(head_glare.material_override as ShaderMaterial).set_shader_parameter("strength", 4.0 if s["light_mode"] == 2 else 1.8)
+			var tail_dead: bool = broken.get("tail_left" if i == 0 else "tail_right", false)
+			var tail_glare: MeshInstance3D = s["glare_tail"][i]
+			tail_glare.visible = not tail_dead and (s["lights"] or braking)
+			(tail_glare.material_override as ShaderMaterial).set_shader_parameter("strength", 1.8 if braking else 0.7)
 		for lamp in s["left"]: lamp.visible = blink and (s["hazards"] or s["signal"] == -1) and not broken.get(lamp.get_meta("corner"), false)
 		for lamp in s["right"]: lamp.visible = blink and (s["hazards"] or s["signal"] == 1) and not broken.get(lamp.get_meta("corner"), false)
 		for signal_material in s["authored_signals"]:
