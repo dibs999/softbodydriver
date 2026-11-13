@@ -84,7 +84,7 @@ void SBVehicle::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_abs"), &SBVehicle::get_abs);
     ClassDB::bind_method(D_METHOD("set_steer_rate", "rate"), &SBVehicle::set_steer_rate);
     ClassDB::bind_method(D_METHOD("reset_to", "xform"), &SBVehicle::reset_to);
-    ClassDB::bind_method(D_METHOD("relocate_to", "xform"), &SBVehicle::relocate_to);
+    ClassDB::bind_method(D_METHOD("relocate_to", "xform", "keep_motion"), &SBVehicle::relocate_to, DEFVAL(false));
     ClassDB::bind_method(D_METHOD("service_repair"), &SBVehicle::service_repair);
     ClassDB::bind_method(D_METHOD("set_door_open", "index", "open"), &SBVehicle::set_door_open);
     ClassDB::bind_method(D_METHOD("toggle_door", "index"), &SBVehicle::toggle_door);
@@ -1514,7 +1514,7 @@ void SBVehicle::reset_to(const Transform3D& xform) {
     impactAccum_ = 0.0;
 }
 
-bool SBVehicle::relocate_to(const Transform3D& xform) {
+bool SBVehicle::relocate_to(const Transform3D& xform, bool keep_motion) {
     invalidateStates();
     if (!world_ || bodyIndex_ < 0 || !xform.is_finite()) return false;
     // Recovery is a rigid motion: reject scales/reflections rather than changing
@@ -1539,21 +1539,29 @@ bool SBVehicle::relocate_to(const Transform3D& xform) {
                                restPositions_[layout_.refRL].y + restPositions_[layout_.refRR].y) * 0.25 + 0.03;
         const Vector3 target = xform.origin + destination.xform(Vector3(0, static_cast<real_t>(floorY), 0));
         for (auto& node : p) node = toS(target + rotation.xform(toG(node - center)));
-        body.setVelocity({});
+        if (keep_motion) {
+            for (auto& v : body.velocities()) v = toS(rotation.xform(toG(v)));
+        } else {
+            body.setVelocity({});
+        }
         body.clearContacts();
         for (auto& wheel : body.wheels()) {
-            wheel.angularVelocity = 0.0;
-            wheel.load = wheel.slipSpeed = 0.0;
+            if (!keep_motion) {
+                wheel.angularVelocity = 0.0;
+                wheel.load = wheel.slipSpeed = 0.0;
+            }
             wheel.contactAge = 1.0;
             wheel.contactPoint = wheel.center(body);
             wheel.contactNormal = toS(destination.get_column(1));
         }
         // A queued sandbox reset must never silently repair the recovered car.
         ctl_.reset = phys_.reset = false;
-        ctl_.starter = phys_.starter = false;
-        starterTimer_ = 0.0;
-        ctl_.throttle = phys_.throttle = 0.0;
-        body.controls().throttle = 0.0;
+        if (!keep_motion) {
+            ctl_.starter = phys_.starter = false;
+            starterTimer_ = 0.0;
+            ctl_.throttle = phys_.throttle = 0.0;
+            body.controls().throttle = 0.0;
+        }
         visualResetPending_ = true;
         impactAccum_ = 0.0;
         sync_from_world();

@@ -276,9 +276,19 @@ Details und verbleibende Release-Abnahmen: [Linux-Paketierung](docs/RELEASE_LINU
 - **Wald & Weide · Offroad**: etwa 1,5 × 1,5 km Gelände ohne Asphalt. Am Waldweg liegt ein Weiher mit Schilfufer, dessen Abfluss den Weg als Furt (gut 30 cm tief) quert. 3,2-km-Feldwegrunde, schmaler Waldpfad, Höhenroute und optionaler Geröllpfad mit kleinen Felsstufen. Bauernhof, Holzlager, Aussichtspunkt und Weiden mit Heuballen. Minikarte und Zeitfahren sind integriert; auf dieser Karte gibt es keinen Straßenverkehr. Empfohlen: Basalt-SUV oder Kestrel Rallye. Die Grasnarbe und Fahrspuren sind festes Terrain, kein dynamisch verformbarer Schlamm.
 - **Testgelände**: Asphaltfläche mit Oval (KI-Verkehr), Sprungrampen, Bodenwellen, Schlaglochpiste, Leitplanken, Crash-Wand, Mast für Seitenaufprall, Slalom und Hügel
 - **Autobahn**: 8,5 km Ring mit 2×3 Spuren, Beton-Mittelleitplanke, Schutzplanken, Brücken, Schilderbrücken, Beleuchtung und Gegenverkehr
-- **Stadt**: Straßenraster mit Bordsteinkanten, Hochhäusern, Wohnviertel, Markt, Werkstatthöfen, Altstadtgasse, Hochstraße, Parkdeck und Frachtterminal; ringsum ein bewachsener Erdwall mit Bäumen und dahinter die Vorstadt als Silhouette Auf den Gehwegen sind Menschen unterwegs: bis zu 22 je Block in der Innenstadt, weniger am Stadtrand und spät nachts. Sie bleiben an Schaufenstern stehen, kehren um, weichen einem Auto aus, das auf den Gehweg kommt, und wer trotzdem erwischt wird, fällt hin und steht nach ein paar Sekunden wieder auf. Wohnhäuser haben Balkone, Hochhäuser in der Mitte teils einen zurückgesetzten Turm über einem breiten Sockelbau mit Dachterrasse.
+- **Stadt**: Straßenraster mit Bordsteinkanten, Hochhäusern, Wohnviertel, Markt, Werkstatthöfen, Altstadtgasse, Hochstraße, Parkdeck und Frachtterminal; ringsum ein bewachsener Erdwall mit Bäumen und dahinter die Vorstadt als Silhouette. Auf den Gehwegen sind Menschen unterwegs: bis zu 22 je Block in der Innenstadt, weniger am Stadtrand und spät nachts. Sie bleiben an Schaufenstern stehen, kehren um, weichen einem Auto aus, das auf den Gehweg kommt, und wer trotzdem erwischt wird, fällt hin und steht nach ein paar Sekunden wieder auf. Wohnhäuser haben Balkone, Hochhäuser in der Mitte teils einen zurückgesetzten Turm über einem breiten Sockelbau mit Dachterrasse.
 - **Wüste**: 1 km² Dünen und Tafelberge, Schotterpiste mit Sprüngen, Felsbrocken und Kakteen
 - **Hügelland**: prozedurales Terrain mit kurviger Landstraße über Kuppen und durch Senken, dazu Wald und der Lindensee in einer Senke innerhalb der Runde
+
+Stadt und Wüste hängen zusammen: Die Ausfallstraße im Osten der Stadt führt durch einen Tunnel
+im Erdwall, und auf der anderen Seite kommt man aus einem Tunnel am Fuß der Bergkette in der
+Wüste heraus. Von dort führt eine Piste zur Rallyeschleife, und durch denselben Tunnel geht es
+zurück in die Stadt. Die Kartenwahl im Hauptmenü bestimmt nur, wo man startet. Bei der Durchfahrt
+wird die andere Karte um das fahrende Auto herum geladen: Tempo, Tank und Schäden bleiben.
+Verkehr und Passanten der alten Karte verschwinden, ein Anhänger bleibt zurück, und eine laufende
+Aktivität wird abgebrochen. In der Karriere führt der Tunnel zu
+einer noch gesperrten Karte nicht hinüber, sondern meldet, wie viele Aufträge fehlen. Beide
+Portale sind mit Erde überdeckt, mit Flügelwänden aus Beton, und der Hügel darüber ist befahrbar.
 
 Der Asphalt altert sichtbar: polierte, leicht wandernde Rollspuren, Netzrisse vor allem in den
 Rollspuren und am Rand, vergossene Risse, Flicken, Längsnähte zwischen den Fertigerbahnen,
@@ -514,6 +524,7 @@ godot --headless --path game -s res://tests/career_test.gd        # Karriere: Lo
 godot --headless --path game -s res://tests/career_garage_test.gd # Karriere: Autopreise, Kauf, Kaufknopf im Menü
 godot --headless --path game -s res://tests/career_contract_test.gd # Karriere: Aufträge je Karte, Prämie, nächster Auftrag
 godot --headless --path game -s res://tests/career_maps_test.gd   # Karriere: Kartenfreischaltung über Aufträge
+godot --headless --path game -s res://tests/map_travel_test.gd    # Von der Stadt durch den Tunnel in die Wüste und zurück, über den Tunnel hinweg
 godot --headless --path game -s res://tests/paint_test.gd         # Lackwahl im Menü, Vorschau und Spielerauto
 godot --headless --path game -s res://tests/cruise_test.gd        # Tempomat: halten, überholen, Bremse schaltet ab
 godot --headless --path game -s res://tests/weather_door_test.gd # Offene Tür, Regenabschirmung und Akustik

@@ -40,8 +40,16 @@ Recorder::Recorder(const World& world, std::string sceneName, std::string descri
             o["nx"] = c.nx;
             o["nz"] = c.nz;
             json h = json::array();
-            for (real hv : c.heights) h.push_back(std::round(hv * 1000.0) / 1000.0);
+            for (real hv : c.heights) {
+                if (std::isnan(hv)) h.push_back(nullptr);   // a hole
+                else h.push_back(std::round(hv * 1000.0) / 1000.0);
+            }
             o["heights"] = std::move(h);
+            if (c.yaw != 0 || c.pivotX != 0 || c.pivotZ != 0 || std::isfinite(c.thickness)) {
+                o["pivot"] = json::array({c.pivotX, 0.0, c.pivotZ});
+                o["yaw"] = c.yaw;
+                if (std::isfinite(c.thickness)) o["thickness"] = c.thickness;
+            }
         }
         colliders.push_back(o);
     }

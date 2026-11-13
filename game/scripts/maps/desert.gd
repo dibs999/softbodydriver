@@ -145,11 +145,57 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			smooth[i].y = (shortcut[i - 1].y + shortcut[i].y * 2.0 + shortcut[i + 1].y) * 0.25
 		shortcut = smooth
 	C.carve_path(heights, nx, nz, ox, oz, cell, shortcut, 5.0, 11.0, 0.08, false)
+	# The road out: from the north-west of the loop (point 270, clear of the start, the jumps and
+	# the shortcut) straight out to a tunnel at the foot of the ring of mountains (towards the city).
+	var exit_from := track[270]
+	var exit_dir := Vector3(exit_from.x, 0.0, exit_from.z).normalized()
+	var exit_road := PackedVector3Array()
+	var edge_t := 0.0
+	while maxf(absf(exit_from.x + exit_dir.x * edge_t), absf(exit_from.z + exit_dir.z * edge_t)) < 790.0:
+		edge_t += 2.0
+	var mouth_t := edge_t + 18.0
+	var mouth_y := C.sample(heights, nx, nz, ox, oz, cell, exit_from.x + exit_dir.x * edge_t, exit_from.z + exit_dir.z * edge_t)
+	var t := 0.0
+	while t <= mouth_t + 0.01:
+		var q := exit_from + exit_dir * t
+		var u := clampf(t / mouth_t, 0.0, 1.0)
+		q.y = lerpf(exit_from.y, mouth_y, u * u * (3.0 - 2.0 * u))
+		exit_road.append(q)
+		t += 6.0
+	for _pass in 4:
+		var sm := exit_road.duplicate()
+		for i in range(1, exit_road.size() - 1):
+			sm[i].y = (exit_road[i - 1].y + exit_road[i].y * 2.0 + exit_road[i + 1].y) * 0.25
+		exit_road = sm
+	C.carve_path(heights, nx, nz, ox, oz, cell, exit_road, 5.0, 12.0, 0.08, false)
+	_exit_road = exit_road
+	# Dig the tunnel's cut (drawn and physical); the tunnel's earth cover follows the old slope.
+	_exit_ground = heights.duplicate()
+	var tm := exit_road[exit_road.size() - 1]
+	for ix in nx:
+		for iz in nz:
+			var rel2 := Vector2(ox + ix * cell - tm.x, oz + iz * cell - tm.z)
+			var along2 := rel2.dot(Vector2(exit_dir.x, exit_dir.z))
+			var across2 := absf(rel2.dot(Vector2(-exit_dir.z, exit_dir.x)))
+			if along2 > 1.0 and along2 < 76.0 and across2 < 12.0:
+				heights[ix * nz + iz] = minf(heights[ix * nz + iz], tm.y - 0.5)
 	# The pistes are drawn 4-5 cm above the sand; the physics ground is raised under them by the
 	# same amount so the wheels roll on the drawn surface instead of sinking into it.
 	var physical := C.raise_under_roads(heights, nx, nz, ox, oz, cell, [
 		{"points": track, "half_w": half_w, "lift": 0.052, "closed": true},
-		{"points": shortcut, "half_w": 3.6, "lift": 0.043}])
+		{"points": shortcut, "half_w": 3.6, "lift": 0.043},
+		{"points": exit_road, "half_w": 4.0, "lift": 0.043}])
+	# The tunnel runs into the mountain: the physics ground is cut away under it from 1 m inside
+	# the mouth, where the floor slab has taken over (no pit before the slab's edge). The earth
+	# cover over the roof is built by the tunnel itself.
+	var mouth := exit_road[exit_road.size() - 1]
+	for ix in nx:
+		for iz in nz:
+			var rel := Vector2(ox + ix * cell - mouth.x, oz + iz * cell - mouth.z)
+			var along := rel.dot(Vector2(exit_dir.x, exit_dir.z))
+			var across := absf(rel.dot(Vector2(-exit_dir.z, exit_dir.x)))
+			if along > 1.0 and along < 76.0 and across < 9.0:
+				physical[ix * nz + iz] = minf(physical[ix * nz + iz], mouth.y - 0.3)
 	world.add_heightfield(ox, oz, cell, nx, nz, physical, 0.82)
 
 	# Vertex colours: sand on flats, red rock on steep slopes and mesa walls.
@@ -167,13 +213,16 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 	wash_noise.frequency = 0.006
 	wash_noise.noise_type = FastNoiseLite.TYPE_CELLULAR
 	wash_noise.cellular_return_type = FastNoiseLite.RETURN_DISTANCE2_SUB
+	# Coloured as the ground was before the tunnel's cut: the earth put back over the tunnel takes
+	# the same colours.
+	var hc := _exit_ground
 	for ix in nx:
 		for iz in nz:
 			var i := ix * nz + iz
-			var hx := heights[mini(ix + 1, nx - 1) * nz + iz] - heights[maxi(ix - 1, 0) * nz + iz]
-			var hz := heights[ix * nz + mini(iz + 1, nz - 1)] - heights[ix * nz + maxi(iz - 1, 0)]
+			var hx := hc[mini(ix + 1, nx - 1) * nz + iz] - hc[maxi(ix - 1, 0) * nz + iz]
+			var hz := hc[ix * nz + mini(iz + 1, nz - 1)] - hc[ix * nz + maxi(iz - 1, 0)]
 			var slope := Vector2(hx, hz).length() / (2.0 * cell)
-			var band := 0.5 + 0.5 * sin(heights[i] * 0.95 + 0.35 * sin(ix * 0.04))
+			var band := 0.5 + 0.5 * sin(hc[i] * 0.95 + 0.35 * sin(ix * 0.04))
 			var cliff := rock.lerp(Color(0.86, 0.58, 0.41), band * 0.52)
 			var dust := sand.lerp(Color(0.88, 0.72, 0.53), 0.28 + 0.22 * sin(ix * 0.022 + iz * 0.036))
 			var wx := ox + ix * cell
@@ -182,7 +231,7 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			dust = dust.lerp(Color(0.70, 0.56, 0.43), smoothstep(0.18, 0.45, pn) * 0.75)      # desert pavement
 			dust = dust.lerp(Color(1.0, 0.70, 0.52), smoothstep(0.20, 0.5, -pn) * 0.55)       # red soil
 			dust = dust.lerp(Color(1.08, 1.0, 0.86), (1.0 - smoothstep(0.0, 0.06, wash_noise.get_noise_2d(wx, wz) + 0.5)) * 0.6)  # washes
-			colors[i] = dust.lerp(cliff, smoothstep(0.17, 0.73, slope)).darkened(clampf(heights[i] / 330.0, 0.0, 0.22))
+			colors[i] = dust.lerp(cliff, smoothstep(0.17, 0.73, slope)).darkened(clampf(hc[i] / 330.0, 0.0, 0.22))
 	var terrain_mat := C.terrain_material("gravel", 5.0, Color(0.80, 0.72, 0.62))
 	terrain_mat.set_shader_parameter("has_strata", true)
 	terrain_mat.set_shader_parameter("slope_tint", Color(1.0, 1.0, 1.0))
@@ -197,6 +246,20 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		m.set_shader_parameter("ground_color", Color(0.615, 0.50, 0.355))
 	parent.add_child(C.road_mesh(track, half_w, road_mat, true, 0.052, 12.0, ground_height))
 	parent.add_child(C.road_mesh(shortcut, 3.6, shortcut_mat, false, 0.043, 12.0, ground_height))
+	parent.add_child(C.road_mesh(_exit_road, 4.0, shortcut_mat, false, 0.043, 12.0, ground_height))
+	var exit_mouth := _exit_road[_exit_road.size() - 1]
+	var exit_dir2 := (_exit_road[_exit_road.size() - 1] - _exit_road[_exit_road.size() - 2])
+	var old_ground := func(x: float, z: float) -> float: return C.sample(_exit_ground, nx, nz, ox, oz, cell, x, z)
+	var ground_colour := func(x: float, z: float) -> Color:
+		var fx := clampf((x - ox) / cell, 0.0, nx - 1.001)
+		var fz := clampf((z - oz) / cell, 0.0, nz - 1.001)
+		var ix := int(fx)
+		var iz := int(fz)
+		var c0 := colors[ix * nz + iz].lerp(colors[(ix + 1) * nz + iz], fx - ix)
+		var c1 := colors[ix * nz + iz + 1].lerp(colors[(ix + 1) * nz + iz + 1], fx - ix)
+		return c0.lerp(c1, fz - iz)
+	_exit_tunnel = C.tunnel(parent, world, exit_mouth, exit_dir2, "Stadt  ›", 9.0, 5.4, 70.0, old_ground, terrain_mat,
+		ground_colour, 17.0, -0.045)
 	var mine := _mine(parent, world, shortcut, ground_height)
 
 	# Boulders (colliding) and cacti / shrubs (visual).
@@ -351,6 +414,8 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 		for k in range(-12, 3):
 			speeds[(j + k) % n_track] = minf(speeds[(j + k) % n_track], 17.0)
 	return {"props": _props.duplicate(), "spawns": [C.car_xform(track[0], track[1] - track[0]), C.car_xform(track[n_track - 8], track[n_track - 7] - track[n_track - 8])],
+		"exits": [{"to": "city", "gate": _exit_tunnel["gate"], "width": _exit_tunnel["width"]}],
+		"entrances": {"city": _exit_tunnel["entrance"]},
 		"waypoints": track, "speeds": speeds,
 		"map_paths": [C.closed_route(track), shortcut],
 		"map_places": [{"name": "Rallyelager Red Mesa", "position": track[6]}, {"name": "Raststätte Coyote Flats", "position": post}, {"name": "Alte Mine", "position": mine},
@@ -466,9 +531,17 @@ static func _saguaro_arm_mesh(rise: float) -> Mesh:
 
 
 static var _post_zone := Vector2(INF, INF)
+static var _exit_road := PackedVector3Array()
+static var _exit_tunnel: Dictionary = {}
+static var _exit_ground := PackedFloat32Array()
 static func _near_track(p: Vector2, track: PackedVector3Array, dist: float, closed := true) -> bool:
 	if p.distance_to(_post_zone) < 50.0:
 		return true
+	# Nothing on the road out to the tunnel either.
+	for j in range(0, _exit_road.size() - 1):
+		var c := Geometry2D.get_closest_point_to_segment(p, Vector2(_exit_road[j].x, _exit_road[j].z), Vector2(_exit_road[j + 1].x, _exit_road[j + 1].z))
+		if p.distance_squared_to(c) < 100.0:
+			return true
 	for j in (track.size() if closed else track.size() - 1):
 		var a := Vector2(track[j].x, track[j].z)
 		var next := track[(j + 1) % track.size()]

@@ -78,6 +78,8 @@ public:
     std::vector<BodyLink>& links() { return links_; }
     const std::vector<BodyLink>& links() const { return links_; }
     void clearColliders() { colliders_.clear(); }
+    /// Removes every water volume (a map change rebuilds them).
+    void clearWater() { waters_.clear(); }
 
     /// Advances one fixed physics step.
     void step();
