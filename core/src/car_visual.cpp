@@ -1147,7 +1147,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                 const std::string mat = lidMaterial(doorMaterial(bumperMaterial(quadMaterial(xm, ym, zm, seg), xm, ym), xm, seg, side), xm, seg);
                 for (int pass = 0; pass < 2; ++pass) {
                     if (pass == 1 && (mat == "glass" || mat == "door_left_glass" || mat == "door_right_glass" || mat == "rdoor_left_glass" ||
-                                      mat == "rdoor_right_glass" || mat == "tailgate_glass" || mat == "headlight" || mat == "taillight" || seg == 0)) continue;
+                                      mat == "rdoor_right_glass" || mat == "tailgate_glass" || mat == "headlight" || mat == "taillight" || mat == "reverselight" || seg == 0)) continue;
                     const std::string mm = pass == 0 ? mat : (mat == "bonnet" ? "bonnet_inner" : mat.rfind("tailgate_", 0) == 0 ? "tailgate_interior"
                                                                  : doorMaterial(bumperMaterial("interior", xm, ym), xm, seg, side));
                     MeshSurface& m = vb.surf(mm);
@@ -1458,7 +1458,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                 vb.box("grille", base - n * 0.016, {0.022, th, len}, tailNodes, n, up, t);
                 if (k == 0) {
                     vb.box("taillight", base + n * 0.007 + up * (th * 0.35), {0.005, th * 0.55, len * 0.99}, tailNodes, n, up, t);
-                    vb.box("headlight", base + n * 0.007 + up * (-th * 0.55), {0.005, th * 0.30, len * 0.99}, tailNodes, n, up, t);
+                    vb.box("reverselight", base + n * 0.007 + up * (-th * 0.55), {0.005, th * 0.30, len * 0.99}, tailNodes, n, up, t);
                 } else {
                     vb.box("taillight", base + n * 0.007, {0.005, th - 0.010, len * 0.99}, tailNodes, n, up, t);
                 }
@@ -2301,8 +2301,11 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         std::vector<MeshSurface> split;
         for (MeshSurface& m : vis.skinned) {
             const std::string& mat = m.material;
-            const bool lamp = mat.size() >= 9 && (mat.compare(mat.size() - 9, 9, "headlight") == 0 ||
-                                                  mat.compare(mat.size() - 9, 9, "taillight") == 0);
+            const auto endsWith = [&](const char* tail) {
+                const std::size_t n = std::char_traits<char>::length(tail);
+                return mat.size() >= n && mat.compare(mat.size() - n, n, tail) == 0;
+            };
+            const bool lamp = endsWith("headlight") || endsWith("taillight") || endsWith("reverselight");
             if (!lamp || m.side != 0) continue;
             MeshSurface halves[2];
             std::vector<std::uint32_t> remap[2];

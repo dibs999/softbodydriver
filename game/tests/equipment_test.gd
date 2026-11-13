@@ -47,6 +47,23 @@ func run() -> void:
 	equipment.clock = 0.5
 	equipment._process(0)
 	check(not state["left"][0].visible and not state["right"][0].visible, "Hazard lamps cycle off")
+	var reverse_lamps: Array = state["reverse_lamps"]
+	check(reverse_lamps.size() == 2, "Generated tail lights carry a reversing lamp per side")
+	check(not reverse_lamps.any(func(e): return e["material"].emission_enabled) and not state["reverse_light"].visible,
+		"Reversing lamps stay dark with the headlights on, out of reverse")
+	v.set_ignition(true)
+	v.start_engine()
+	v.set_gear(-1)
+	scene.world.step_blocking(1.0)
+	scene.world.sync_visuals()
+	equipment._process(0)
+	check(reverse_lamps.all(func(e): return e["material"].emission_enabled) and state["reverse_light"].visible,
+		"In reverse the reversing lamps light up")
+	v.set_gear(1)
+	scene.world.step_blocking(1.0)
+	scene.world.sync_visuals()
+	equipment._process(0)
+	check(not reverse_lamps.any(func(e): return e["material"].emission_enabled), "and go out again in a forward gear")
 	v.reset_to(Transform3D(Basis.IDENTITY, Vector3(80, 0, 0)))
 	scene.world.step_blocking(0.01)
 	scene.world.sync_visuals()
