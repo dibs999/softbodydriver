@@ -264,7 +264,7 @@ Details und verbleibende Release-Abnahmen: [Linux-Paketierung](docs/RELEASE_LINU
 - **Autobahn**: 8,5 km Ring mit 2×3 Spuren, Beton-Mittelleitplanke, Schutzplanken, Brücken, Schilderbrücken, Beleuchtung und Gegenverkehr
 - **Stadt**: Straßenraster mit Bordsteinkanten, Hochhäusern, Wohnviertel, Markt, Werkstatthöfen, Altstadtgasse, Hochstraße, Parkdeck und Frachtterminal; ringsum ein bewachsener Erdwall mit Bäumen und dahinter die Vorstadt als Silhouette
 - **Wüste**: 1 km² Dünen und Tafelberge, Schotterpiste mit Sprüngen, Felsbrocken und Kakteen
-- **Hügelland**: prozedurales Terrain mit kurviger Landstraße über Kuppen und durch Senken, dazu Wald
+- **Hügelland**: prozedurales Terrain mit kurviger Landstraße über Kuppen und durch Senken, dazu Wald und der Lindensee in einer Senke innerhalb der Runde
 
 Der Asphalt altert sichtbar: polierte, leicht wandernde Rollspuren, Netzrisse vor allem in den
 Rollspuren und am Rand, vergossene Risse, Flicken, Längsnähte zwischen den Fertigerbahnen,
