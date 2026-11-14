@@ -1117,7 +1117,9 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
     const real cPillar = bd.style == BodyStyle::Coupe ? 0.34 : (bd.style == BodyStyle::Sedan ? 0.24 : (bd.style == BodyStyle::SUV ? 0.18 : 0.28));
     const real handleF = prof.xB - 0.06;
     const real handleR = prof.xRD1 + 0.20;
-    auto quadMaterial = [&](real xm, real ym, real /*zm*/, int seg) -> std::string {
+    int kPillarRow = 0;   // first sample row of segment 8 (outer edge of roof, windscreen, rear window)
+    for (int s = 0; s < 8; ++s) kPillarRow += subdiv[s];
+    auto quadMaterial = [&](real xm, real ym, real /*zm*/, int seg, int k) -> std::string {
         const real yB = prof.yBottom(xm);
         const real yBe = prof.yBelt(xm);
         const bool gh = prof.greenhouse(xm) > 0.04;
@@ -1150,8 +1152,11 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         // Independent bonnet surfaces follow the breakable panel, including its underside.
         if (build.layout.bonnetNodes.size() == 8 && xm > prof.xCowl + 0.025 && xm < L - 0.12) return "bonnet";
         // seg 8, 9: roof / windshield / rear window / hood / deck
-        if (xm > prof.xWsTop + 0.035 && xm < prof.xCowl - 0.01) return "glass";
-        if (xm > prof.xRwBase + 0.02 && xm < prof.xRwTop - 0.035) return "glass";
+        // The outermost row of the windscreen and rear window stays body colour: an A and D pillar
+        // about 10 cm wide. Glass right up to the roof rail left only the edge between two panes,
+        // which read as a thin tube frame.
+        if (xm > prof.xWsTop + 0.035 && xm < prof.xCowl - 0.01) return k == kPillarRow ? "paint" : "glass";
+        if (xm > prof.xRwBase + 0.02 && xm < prof.xRwTop - 0.035) return k == kPillarRow ? "paint" : "glass";
         return "paint";
     };
 
@@ -1197,7 +1202,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                 const real ym = 0.5 * (a.second + b.second);
                 const real zm = 0.5 * (a.first + b.first) * (side ? 1.0 : -1.0);
                 const int seg = segOf[static_cast<std::size_t>(k)];
-                const std::string mat = lidMaterial(doorMaterial(bumperMaterial(quadMaterial(xm, ym, zm, seg), xm, ym), xm, seg, side), xm, seg);
+                const std::string mat = lidMaterial(doorMaterial(bumperMaterial(quadMaterial(xm, ym, zm, seg, k), xm, ym), xm, seg, side), xm, seg);
                 for (int pass = 0; pass < 2; ++pass) {
                     if (pass == 1 && (mat == "glass" || mat == "door_left_glass" || mat == "door_right_glass" || mat == "rdoor_left_glass" ||
                                       mat == "rdoor_right_glass" || mat == "tailgate_glass" || mat == "headlight" || mat == "taillight" || mat == "reverselight" || seg == 0)) continue;

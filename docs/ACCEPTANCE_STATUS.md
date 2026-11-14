@@ -181,9 +181,12 @@ Vulkan-Aufnahme in der Stadt zeigt korrekte Unschärfe hinter dem Auto.
 Bei der Suite fiel ein Verkehrsauto im Hügelland auf, das beim Rechtsabbiegen das
 Vorfahrtsschild streifte (Spiegel ab, 6 gebrochene Beams). Das Schild stand innerhalb des
 Eckausrundungsradius und steht jetzt 10,5 m vor der Einmündung am Bankett. Die
-schnelle Drift-Medaille liegt nahe am Grenzbereich (4.886 bis 5.704 Punkte je nach Lauf,
-weil der Mehrkern-Löser nicht bitgenau gleich rechnet); der Test gibt wie einem Fahrer
-einen zweiten Versuch.
+schnelle Drift-Medaille schwankte zwischen 4.886 und 5.704 Punkten (Gold ab 5.000). Die
+Ursache: Der 88-m-Kreis des Testfahrers reichte bis z = −218, also an den Rand der Betonfläche
+(−221). Jede Runde rutschte das Heck an derselben Stelle über die Kante, und der Drift brach
+ab. Der schnelle Drift fährt jetzt auf der offenen Westfläche, der Testfahrer leitet früher
+in die Winkelregelung über und hält den Winkel auch mit dem Gas. Ergebnis: 6.264 bis 6.366
+Punkte bei 59 bis 60 s Kette in drei Läufen, ohne zweiten Versuch.
 
 ## Scheinwerfer der prozeduralen Autos, Fahrbahnränder im Hügelland
 
@@ -200,3 +203,13 @@ ist aber in Dreiecke zerlegt. An Böschungen stach das Gras sägezahnartig durch
 und über die Fahrbahnkante. `C.sample_mesh` liefert die Höhe genau so, wie das Mesh sie
 zeichnet, und Fahrbahn und Bankett liegen nie darunter. Die Fahrphysik ist davon nicht
 betroffen: Sie nutzt weiter die angehobene Fahrbahnhöhe.
+
+## Kestrel-Form
+
+Der Kestrel hatte ein 1,72 m langes, flaches Dach und eine steile, kurze Heckscheibe. Aus
+der Seite wirkte er wie ein Minivan, nicht wie ein 4,28-m-Kompakter. Neu: Windschutzscheibe
+0,88 m, Dach 1,38 m, Heckscheibe 0,66 m flacher, Heckkante 0,93 m statt 1,02 m (die Klappe
+fällt unter der Scheibe ab, statt ein flaches Brett zu bilden). Kestrel EV und Kestrel Rallye
+wurden ebenso angepasst. Die Frontscheibe und die Heckscheibe lassen jetzt außen ein etwa
+10 cm breites Blechband stehen: A- und D-Säule wirkten zuvor wie dünne Rohre zwischen zwei
+Scheiben. Die Haubenvorderkante der sichtbaren Karosserie ist schärfer gerundet (4 statt 11 cm).

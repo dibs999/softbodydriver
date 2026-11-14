@@ -112,7 +112,9 @@ struct Profile {
             const real tt = clamp01(x / std::max<real>(0.05, xRwBase));
             y = b.tailHeight + (beltRear() - b.tailHeight) * std::pow(std::sin(tt * kPi * 0.5), 0.5);
         }
-        y -= edgeRound(L - x, 0.11);
+        // The crisp skin's bonnet already turns down into its short front face; a further 11 cm
+        // round on top of that made the leading edge a thick cushion.
+        y -= edgeRound(L - x, crispHood ? 0.04 : 0.11);
         y -= edgeRound(x, 0.08);
         return y;
     }
