@@ -1539,6 +1539,18 @@ bool SBVehicle::relocate_to(const Transform3D& xform, bool keep_motion) {
                                restPositions_[layout_.refRL].y + restPositions_[layout_.refRR].y) * 0.25 + 0.03;
         const Vector3 target = xform.origin + destination.xform(Vector3(0, static_cast<real_t>(floorY), 0));
         for (auto& node : p) node = toS(target + rotation.xform(toG(node - center)));
+        // Nothing may start under the destination's ground: a front bumper hanging off its broken
+        // mounts sat below the wheels, the ground pushed it out on the first step and shoved the
+        // recovered car ~5 m out of the service bay. Lift the whole car so its lowest node clears.
+        {
+            const Vector3 upAxis = destination.get_column(1).normalized();
+            double lowest = 1e9;
+            for (const auto& node : p) lowest = std::min<double>(lowest, (toG(node) - xform.origin).dot(upAxis));
+            if (lowest < 0.01) {
+                const sb::Vec3 lift = toS(upAxis * static_cast<real_t>(0.01 - lowest));
+                for (auto& node : p) node += lift;
+            }
+        }
         if (keep_motion) {
             for (auto& v : body.velocities()) v = toS(rotation.xform(toG(v)));
         } else {

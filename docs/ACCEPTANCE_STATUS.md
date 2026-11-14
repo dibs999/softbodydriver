@@ -237,3 +237,12 @@ zwischen Vorderrad und Kotflügel eingeklemmt und riss das untere Türscharnier 
 gelöste Tür schaukelte sich danach auf, bis Haubenschloss, Stoßfänger und Heckklappenschloss
 brachen. Das betrifft eine von 72 Positionen; die Energiezufuhr durch eine halb gelöste Tür
 muss gesondert untersucht werden.
+
+## Bergung zum Service
+
+Im Dauertest (`session_soak_test`) verließ ein geborgenes Auto im 20. Zyklus die
+Servicebucht: Beim Absetzen bekam das verbeulte Auto einen kleinen Schubs (etwa 1 m/s),
+und weil die Fahrereingabe des nächsten Bilds die Bremse wieder löste, rollte es rund 5 m
+weit. Die Bergung aktiviert jetzt Auto Hold. Außerdem hebt `relocate_to` das Auto an,
+falls ein Knoten (etwa ein herabhängender Stoßfänger) unter dem Zielboden läge. Ergebnis:
+53 Zyklen ohne Fehler.

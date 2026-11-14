@@ -859,6 +859,10 @@ func recover_to_service() -> bool:
 	if not game.player.relocate_to(_bay_transform): return false
 	game.player.set_input(0, 1, 0, 1)
 	game.player.set_ignition(false)
+	# A recovered car stands secured: the next frame's driver input (no pedals) replaced the brake
+	# above, and the small settle of a crashed car onto its wheels let it roll ~5 m out of the bay.
+	if "_auto_hold" in game:
+		game._auto_hold = true
 	_last_sim_time = float(game.world.get_stats()["sim_time"])
 	service_completed.emit("recovery")
 	return true
