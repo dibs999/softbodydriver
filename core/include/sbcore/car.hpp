@@ -78,6 +78,9 @@ struct CarBodyDef {
     real rearWing = 0.0;
     /// Bolt-on steel bull bar ahead of the front bumper (~30 kg of tube on the chassis rails).
     bool bullbar = false;
+    /// Panel van: closed sides behind the B pillar (no rear side glass), and the tail lights, plate
+    /// and rear bumper sit at the belt line instead of under the (roof-high) top of the rear doors.
+    bool panelVan = false;
     real frontalArea = 0.0;
 };
 

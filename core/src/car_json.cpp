@@ -62,6 +62,7 @@ void parseBody(CarBodyDef& b, const json& j) {
         SB_REAL("dragCoefficient", b.dragCoefficient) SB_REAL("frontalArea", b.frontalArea)
         SB_REAL("rearWing", b.rearWing)
         SB_BOOL("bullbar", b.bullbar)
+        SB_BOOL("panelVan", b.panelVan)
         SB_BOOL("detachableBumpers", b.detachableBumpers)
         SB_BOOL("detachableDoors", b.detachableDoors)
         SB_BOOL("detachableTailgate", b.detachableTailgate)

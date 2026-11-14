@@ -84,6 +84,10 @@ struct Profile {
 
     real beltRear() const { return b.beltHeight + 0.035; }
 
+    /// Height the rear fascia (bumper, lamps, plate) is laid out from: the top of the rear, except
+    /// on a panel van, whose rear doors reach the roof; there it is the belt line.
+    real tailFascia() const { return b.panelVan ? std::min(b.tailHeight, b.beltHeight + 0.05) : b.tailHeight; }
+
     /// Height of the "shoulder" / deck line at the outer edge (hood, belt line, trunk).
     real yBelt(real x) const {
         real y;

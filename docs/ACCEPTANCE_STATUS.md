@@ -208,8 +208,32 @@ betroffen: Sie nutzt weiter die angehobene Fahrbahnhöhe.
 
 Der Kestrel hatte ein 1,72 m langes, flaches Dach und eine steile, kurze Heckscheibe. Aus
 der Seite wirkte er wie ein Minivan, nicht wie ein 4,28-m-Kompakter. Neu: Windschutzscheibe
-0,88 m, Dach 1,38 m, Heckscheibe 0,66 m flacher, Heckkante 0,93 m statt 1,02 m (die Klappe
+0,80 m, Dach 1,38 m, Heckscheibe 0,56 statt 0,45 m und damit flacher, Heckkante 0,93 m statt 1,02 m (die Klappe
 fällt unter der Scheibe ab, statt ein flaches Brett zu bilden). Kestrel EV und Kestrel Rallye
 wurden ebenso angepasst. Die Frontscheibe und die Heckscheibe lassen jetzt außen ein etwa
 10 cm breites Blechband stehen: A- und D-Säule wirkten zuvor wie dünne Rohre zwischen zwei
 Scheiben. Die Haubenvorderkante der sichtbaren Karosserie ist schärfer gerundet (4 statt 11 cm).
+Eine kürzere Motorhaube (1,10 m) wurde verworfen: Die Vorderkante der Fahrertür rückte in den
+Kotflügel, die Tür schwang ohne Anschlag auf 144° auf und rastete nicht mehr ein
+(`door_controls_test`). Die Haube bleibt bei 1,18 m, dafür ist die Frontscheibe kürzer.
+
+Eine noch flachere Heckscheibe (ab 0,62 m) machte die Heckklappe so lang, dass sie nur bis
+etwa 5° schloss und nicht mehr einrastete. 0,56 m hält alle Klappentests.
+
+## Leichte Requisiten blockieren kein Rad mehr
+
+Der Kestrel-Umbau ließ den statistischen Pylonen- und Leitbakentest kippen, obwohl die Heckform
+mit Treffern an der Front nichts zu tun hat: Das Ergebnis reagierte chaotisch auf kleinste
+Änderungen am Knotengitter. Die Diagnose eines Treffers mit 15 km/h Verlust: Das Vorderrad
+kippte den 28-kg-Gummifuß der Leitbake hoch, der Fuß verkeilte sich zwischen Hinterreifen und
+Radhaus und blockierte das Hinterrad (Raddrehzahl 0, das Auto drehte sich ein). Reibung
+zwischen einem Auto und einem nachgebenden leichten Requisit ist jetzt auf 0,3 begrenzt. Danach
+liegt der schlimmste Leitbakentreffer bei 1,6 statt 15 km/h und der schlimmste Pylonentreffer
+in der gewählten Variante bei 3,3 statt 13 bis 27 km/h. Der Test verlangt für Leitbaken jetzt
+keinen Treffer über 6 km/h.
+
+**Offen:** In einer anderen Kestrel-Variante wurde ein Pylon an der äußersten rechten Ecke
+zwischen Vorderrad und Kotflügel eingeklemmt und riss das untere Türscharnier ab. Die halb
+gelöste Tür schaukelte sich danach auf, bis Haubenschloss, Stoßfänger und Heckklappenschloss
+brachen. Das betrifft eine von 72 Positionen; die Energiezufuhr durch eine halb gelöste Tür
+muss gesondert untersucht werden.

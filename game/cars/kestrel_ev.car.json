@@ -10,7 +10,7 @@
     "wheelbase": 2.77, "frontOverhang": 0.80,
     "trackFront": 1.54, "trackRear": 1.55, "groundClearance": 0.14,
     "noseHeight": 0.70, "hoodHeight": 0.98, "beltHeight": 1.02, "tailHeight": 0.93,
-    "hoodLength": 1.02, "windshieldRun": 0.88, "roofLength": 1.42, "rearWindowRun": 0.66,
+    "hoodLength": 1.02, "windshieldRun": 0.88, "roofLength": 1.42, "rearWindowRun": 0.56,
     "roofWidthRatio": 0.80, "cornerRadiusFront": 0.22, "cornerRadiusRear": 0.24,
     "paint": [0.86, 0.87, 0.88], "paintMetallic": 0.55
   },

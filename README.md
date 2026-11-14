@@ -33,6 +33,15 @@ Der Prüfstand unterscheidet hochfrequente Schwingungen, langsames Ausbrechen
 und ungültige Geschwindigkeitsfenster. Eine kleine RMS-Zahl allein bestätigt
 keine stabile Hochgeschwindigkeitsfahrt.
 
+### Transporter
+
+Der **Kastell Cargo 2.2 Diesel** ist ein mittelgroßer Kastenwagen: 4,97 m lang, 1,98 m hoch,
+rund 2 t schwer, Frontantrieb, Vierzylinder-Diesel mit 385 Nm, 6-Gang-Getriebe. Die
+Seitenwände sind hinter der B-Säule geschlossen (Karosserie-Option `panelVan`), Rückleuchten,
+Kennzeichen und Stoßfänger sitzen auf Brüstungshöhe statt unter der dachhohen Heckkante.
+`van_test` misst 0–100 km/h in etwa 12 s, 47 m Bremsweg aus 100 km/h und einen Spurwechsel
+bei 70 km/h mit rund 0,4 g und knapp 2° Wankwinkel. Der Van fährt auch im KI-Verkehr mit.
+
 ### Elektroauto
 
 Der **Kestrel e:Hatch** fährt elektrisch: 150-kW-Heckmotor mit 310 Nm ab Stillstand und einer

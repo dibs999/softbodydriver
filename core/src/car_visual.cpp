@@ -996,7 +996,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
     const auto& rearNodes = bd.detachableBumpers ? build.layout.rearBumperNodes : bodyNodes;
     auto bumperMaterial = [&](const std::string& material, real x, real y) {
         if (bd.detachableBumpers && x > L - 0.30 && y < bd.noseHeight - 0.16) return "bumper_front_" + material;
-        if (bd.detachableBumpers && x < 0.30 && y < bd.tailHeight - 0.28) return "bumper_rear_" + material;
+        if (bd.detachableBumpers && x < 0.30 && y < prof.tailFascia() - 0.28) return "bumper_rear_" + material;
         return material;
     };
     auto surfaceNodes = [&](const std::string& material) -> const std::vector<std::uint32_t>& {
@@ -1144,7 +1144,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         if (seg == 7) {
             if (!gh) return "paint";
             const bool frontWin = xm > prof.xB + 0.045 && xm < prof.xCowl - 0.09;
-            const bool rearWin = xm > prof.xRwBase + cPillar && xm < prof.xB - 0.045;
+            const bool rearWin = !bd.panelVan && xm > prof.xRwBase + cPillar && xm < prof.xB - 0.045;
             if (frontWin || rearWin) return "glass";
             if (std::abs(xm - prof.xB) <= 0.045) return "trim";
             return "paint";
@@ -1516,7 +1516,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         // Tail lights: housing, red lens with a brighter brake band, following the tail round the
         // corner like the headlights; a white reversing lamp on the inner segment.
         const real hwR = prof.halfW(0.04);
-        const real yT = bd.tailHeight - 0.11;
+        const real yT = prof.tailFascia() - 0.11;
         const real rcR = prof.b.cornerRadiusRear;
         const real th = sport ? 0.045 : 0.068;
         for (int side = 0; side < 2; ++side) {
@@ -1690,7 +1690,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         }
         {
             // Red reflectors in the lower rear bumper.
-            const real y = bd.tailHeight - 0.36;
+            const real y = prof.tailFascia() - 0.36;
             const real hz = prof.halfW(0.04) - 0.13;
             for (real side : {-1.0, 1.0})
                 vb.bevelBox("reflector", {-0.004, y, side * hz}, {0.010, 0.014, 0.055}, 0.006, rearNodes);
@@ -1718,7 +1718,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             const auto& panelNodes = front ? frontNodes : rearNodes;
             const real sign = front ? 1.0 : -1.0;
             const real x = front ? L - 0.25 : 0.25;
-            const real top = front ? bd.noseHeight - 0.16 : bd.tailHeight - 0.28;
+            const real top = front ? bd.noseHeight - 0.16 : prof.tailFascia() - 0.28;
             const real bottom = prof.yBottom(x) + 0.035;
             const real mid = (top + bottom) * 0.5;
             const real half = prof.halfW(x) * 0.86;

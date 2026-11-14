@@ -167,6 +167,13 @@ TEST_CASE("props stand still on the ground and a car knocks them over without te
         // prop no longer shoving the car's panels, at most the chaotic tail exceeds 2 km/h.
         CHECK(bad <= (kind == PropKind::Cone ? 3 : 5));
         if (kind == PropKind::Cone) CHECK(severe <= 1);
+        // A beacon foot flipped up by the front wheel used to wedge in the rear wheel arch and stop
+        // that wheel (15 km/h, the car slewed round); with sliding friction against yielding props
+        // capped, nothing locks a wheel any more.
+        if (kind == PropKind::Beacon) {
+            CHECK(severe == 0);
+            CHECK(worst < 6.0);
+        }
     }
 }
 

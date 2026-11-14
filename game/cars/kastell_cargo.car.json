@@ -1,0 +1,32 @@
+{
+  "_comment": "Mid-size panel van, front-wheel drive, four-cylinder diesel.",
+  "id": "kastell_cargo",
+  "name": "Kastell Cargo 2.2 Diesel",
+  "brand": "Kastell",
+  "description": "Mittelgroßer Kastenwagen mit Frontantrieb, 2,2-l-Diesel mit 110 kW und 385 Nm, 6-Gang-Schaltgetriebe. Hoher Aufbau, viel Masse, früh am Limit.",
+  "body": {
+    "style": "suv", "doors": 4, "panelVan": true,
+    "length": 4.97, "width": 1.99, "height": 1.98,
+    "wheelbase": 2.93, "frontOverhang": 0.93,
+    "trackFront": 1.70, "trackRear": 1.70, "groundClearance": 0.17,
+    "noseHeight": 0.86, "hoodHeight": 1.12, "beltHeight": 1.14, "tailHeight": 1.84,
+    "hoodLength": 0.92, "windshieldRun": 0.86, "roofLength": 3.06, "rearWindowRun": 0.08,
+    "roofWidthRatio": 0.94, "cornerRadiusFront": 0.20, "cornerRadiusRear": 0.10,
+    "paint": [0.86, 0.87, 0.88], "paintMetallic": 0.1
+  },
+  "chassis": { "curbMass": 2050, "frontWeight": 0.58, "bodyStiffness": 1.15, "bodyStrength": 1.15 },
+  "suspension": {
+    "front": { "wheelRate": 36000, "bumpDamping": 2800, "reboundDamping": 5600, "antiRollRate": 15000, "bumpTravel": 0.10, "droopTravel": 0.12 },
+    "rear":  { "wheelRate": 48000, "bumpDamping": 3000, "reboundDamping": 6000, "antiRollRate": 9000, "bumpTravel": 0.11, "droopTravel": 0.12 }
+  },
+  "tires": { "radius": 0.343, "width": 0.215, "rimRadius": 0.203, "pressurePsi": 52, "friction": 1.05, "tireMass": 11.0, "rimMass": 10.0, "rays": 20 },
+  "engine": {
+    "name": "2.2 Diesel", "layout": "FWD", "cylinders": 4,
+    "torqueCurve": [[750, 160], [1250, 300], [1750, 385], [2500, 385], [3200, 330], [3800, 270], [4300, 200], [4600, 0]],
+    "idleRpm": 780, "redlineRpm": 4200, "inertia": 0.26, "friction": 26, "engineBraking": 0.06, "mass": 215,
+    "gears": [4.17, 2.33, 1.42, 1.03, 0.79, 0.64], "reverse": -3.80, "finalDrive": 4.10,
+    "automatic": false, "shiftUpRpm": 3800, "shiftDownRpm": 1300,
+    "maxBrakeTorque": 3000, "frontBrakeBias": 0.66, "handbrakeTorque": 2200, "lsd": 0,
+    "fuelCapacity": 70, "bsfc": 215, "radiatorUA": 2200
+  }
+}

@@ -49,7 +49,7 @@ Umfang oder Feinschliff identisch sind.
 | Reifen | Node-Reifen mit Druck, Schlupfkurve, Lastabhängigkeit | 20 Laufflächen-Nodes, Druck, Lastabhängigkeit, Gleitreibung, Verschleiß/Temperatur, Platzer | gleichwertig im Prinzip |
 | Antrieb und Systeme | Motor, Getriebe, Kupplung, Thermik, Kraftstoff, Schäden | dasselbe, dazu Elektroantrieb, Wasserschlag, Lagerschäden | gleichwertig |
 | Schaden | jede Delle aus der Physik, abfallende Teile | dasselbe, Glasbruch, Lampenbruch, Achsbruch | gleichwertig im Prinzip; Optik der Risskanten einfacher |
-| Fahrzeugauswahl | > 50 Grundmodelle mit Teilekonfigurator (Slots) | 13 Autos, Motortausch, Tuning, Lack, Bullbar, Anhänger | deutlich kleiner; kein Lkw/Bus |
+| Fahrzeugauswahl | > 50 Grundmodelle mit Teilekonfigurator (Slots) | 14 Fahrzeuge inkl. Kastenwagen, Motortausch, Tuning, Lack, Bullbar, Anhänger | deutlich kleiner; kein Lkw/Bus |
 | Karten | mehrere große Karten (bis ~20 km²) | sechs verbundene Karten (je ~1–2 km²), Tunnelübergänge | kleiner; durchgehende Welt vorhanden |
 | Verkehr und KI | KI-Verkehr, Polizei, Rennen | KI-Verkehr mit Unfällen/Pannen, Polizei-Verfolgung, Rennen | gleichwertig im Prinzip |
 | Spielmodi | Freies Fahren, Szenarien, Zeitfahren, Karriere | Freies Fahren, Zeitfahren, Lieferfahrten, Rennen, Crashtest, Drift, Verfolgung, Karriere, Fahrstunde | gleichwertig im Prinzip |
@@ -58,7 +58,7 @@ Umfang oder Feinschliff identisch sind.
 | Werkzeuge | World Editor, Teile-Editor, Mod-System, Fotomodus | Wiederholung, freie Kamera, Node-Greifer, eigenes Fahrzeugformat, glTF-Import | Lücke: Editor, Fotomodus |
 | Mehrspieler | nur über Drittanbieter-Mod | keiner | kein Unterschied im Grundspiel |
 
-Daraus folgen die nächsten größeren Baustellen: mehr Fahrzeugklassen (Lkw/Transporter),
+Daraus folgen die nächsten größeren Baustellen: weitere Fahrzeugklassen (Lkw; ein Transporter ist seit November 2026 dabei),
 Lenkrad-Force-Feedback, ein Fotomodus und größere Kartenflächen. Bildqualität und
 Fahrgefühl lassen sich nur mit eigener Hardware und Spielern beurteilen; Headless-Tests
 belegen sie nicht.
