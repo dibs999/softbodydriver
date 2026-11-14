@@ -271,7 +271,7 @@ PropBuild buildBranch() {
     b.setName("branch");
     NodeParams np;
     np.mass = 13.0 / 18.0;   // green-ish wood, ~900 kg/m^3
-    np.friction = 0.45;
+    np.friction = 0.40;
     np.group = "prop";
     const real xs[6] = {-1.2, -0.6, -0.05, 0.05, 0.6, 1.2};
     std::vector<std::vector<std::uint32_t>> st(6);

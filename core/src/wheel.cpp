@@ -57,6 +57,8 @@ void PressureWheel::resetCondition(SoftBody& body) {
     leakPsiPerS = 0.0;
     grip = 1.0;
     appliedGrip = -1.0;
+    appliedGroundGrip = -1.0;
+    slideFactor = 1.0;
     appliedSpokeFactor = -1.0;
     conditionCounter = 0;
     load = slipSpeed = 0.0;
@@ -70,6 +72,26 @@ void PressureWheel::resetCondition(SoftBody& body) {
 void PressureWheel::puncture(real psiPerSecond) {
     leakPsiPerS = std::max(leakPsiPerS, psiPerSecond);
     if (psiPerSecond > 500.0) burst = true;
+}
+
+real PressureWheel::slideAndLoadFactor(const SoftBody& body) {
+    real f = 1.0;
+    // Combined slip: how fast the contact patch slides compared with how fast the wheel travels.
+    // (A fixed sliding speed would not do: under ABS at 100 km/h the patch slides ~4 m/s at the
+    // ~14 % slip where a real tyre has its peak grip.)
+    const auto& vel = body.velocities();
+    const Vec3 vh = (vel[spec.hubLeft] + vel[spec.hubRight]) * 0.5;
+    const real vRoad = length(vh - contactNormal * dot(vh, contactNormal));
+    const real slip = slipSpeed / std::max<real>(vRoad, 3.0);
+    const real s = std::clamp<real>((slip - 0.15) / 0.45, 0.0, 1.0);
+    // The rubber takes its relaxation length (~0.3-0.5 m, a few tens of ms) to build up or lose
+    // grip: follow the curve with a lag instead of jumping with every flicker of the measured slip.
+    const real target = 1.0 - (1.0 - kSlideGrip) * s * s * (3.0 - 2.0 * s);
+    slideFactor += (target - slideFactor) * (1.0 - std::exp(-kConditionPeriod / 0.06));
+    f *= slideFactor;
+    if (spec.ratedLoad > 0.0 && load > 50.0)
+        f *= std::clamp<real>(1.0 - kLoadSensitivity * (load / spec.ratedLoad - 1.0), 0.8, 1.12);
+    return f;
 }
 
 void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, real dt) {
@@ -184,6 +206,12 @@ void PressureWheel::step(SoftBody& body, real driveTorque, real brakeTorque, rea
         if (std::abs(grip - appliedGrip) > 0.005) {
             for (std::uint32_t n : treadNodes) body.setNodeFriction(n, spec.friction * grip);
             appliedGrip = grip;
+        }
+        // Against the road only: the friction curve (slip, load) and the node tyre's calibration.
+        groundGrip = kGroundScale * slideAndLoadFactor(body);
+        if (std::abs(groundGrip - appliedGroundGrip) > 0.005) {
+            for (std::uint32_t n : treadNodes) body.setNodeGroundGrip(n, groundGrip);
+            appliedGroundGrip = groundGrip;
         }
     }
 

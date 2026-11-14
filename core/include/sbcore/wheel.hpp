@@ -94,6 +94,8 @@ struct PressureWheel {
     int conditionCounter = 0;
     real appliedSpokeFactor = 1.0;
     real appliedGrip = 1.0;
+    real groundGrip = 1.0;                  ///< Road-only factor: slip/load curve x kGroundScale
+    real appliedGroundGrip = 1.0;
 
     /// Restores a new, correctly inflated tyre (used by SoftBody::repair).
     void resetCondition(SoftBody& body);
@@ -108,6 +110,19 @@ struct PressureWheel {
     real measureAngularVelocity(const SoftBody& body, real* outInertia = nullptr) const;
     /// Applies inflation pressure, drive torque (Nm, + = forward) and brake torque (Nm, >= 0) for step dt.
     void step(SoftBody& body, real driveTorque, real brakeTorque, real dt);
+    /// The tyre's friction curve on top of the rubber's own coefficient: full grip up to ~15 %
+    /// combined slip (contact patch sliding speed over road speed), falling to kSlideGrip when the
+    /// patch slides outright (a locked or spinning wheel, a drift), and load sensitivity (a tyre
+    /// pressed harder grips less per newton: twice its rated load gives ~1.76x the force).
+    real slideAndLoadFactor(const SoftBody& body);   // called at the condition rate (100 Hz)
+    real slideFactor = 1.0;
+    static constexpr real kConditionPeriod = 0.01;
+    static constexpr real kSlideGrip = 0.82;          ///< sliding / peak friction (dry rubber on asphalt)
+    static constexpr real kLoadSensitivity = 0.12;    ///< per unit of load over the rated load
+    /// The node tyre brakes ~15 % harder than its rubber coefficient (the tread ring's stiffness in
+    /// the patch); this brings a compact on road tyres (1.15) to ~35 m from 100 km/h with ABS and
+    /// ~0.88 g on a skidpad, like the real thing.
+    static constexpr real kGroundScale = 0.92;
 };
 
 /// Generates the tread nodes and spoke/belt beams of a PressureWheel inside `body`.

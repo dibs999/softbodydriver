@@ -3,7 +3,9 @@ extends SceneTree
 ## holding the speed) circles on the proving ground's concrete pad for 60 s, scored with the drift
 ## challenge's own formula and combo. A steady, unbroken drift at 55 km/h and ~30 deg earns silver;
 ## a fast, steep one at ~70 km/h and ~38 deg earns gold. This also checks that a rear-drive car can
-## hold a long drift at all.
+## hold a long drift at all. The circles are ones sliding tyres can hold (~0.9 g: 26 m at 55 km/h,
+## 44 m at 70 km/h; the 28 m once asked of the fast drift needed 1.4 g), and the drifter kicks the
+## tail out at moderate speed and lifts when the angle runs away, as a driver does.
 ## godot --headless -s res://tests/drift_medal_test.gd
 const Activity := preload("res://scripts/driving_activity.gd")
 const STEP := 0.02
@@ -42,11 +44,11 @@ func _run(scene: Node) -> void:
 	world.time_scale = 0.0
 	scene.set_process(false)
 	scene.activity.set_process(false)
-	var steady: Array = _drift(scene, 55.0, 34.0, 22.0)
+	var steady: Array = _drift(scene, 55.0, 34.0, 26.0)
 	print("  steady drift 55 km/h: %.0f points, longest chain %.0f s" % steady)
 	check(steady[1] > 40.0, "A rear-drive car holds a drift for most of the minute")
 	check(steady[0] >= Activity.DRIFT_MEDAL_POINTS[1] and steady[0] < Activity.DRIFT_MEDAL_POINTS[2], "A steady medium-speed drift earns silver")
-	var fast: Array = _drift(scene, 70.0, 40.0, 28.0)
+	var fast: Array = _drift(scene, 70.0, 40.0, 44.0)
 	print("  fast drift 70 km/h: %.0f points, longest chain %.0f s" % fast)
 	check(fast[0] >= Activity.DRIFT_MEDAL_POINTS[2], "A fast, steep drift held for the minute earns gold")
 
@@ -88,7 +90,9 @@ func _drift(scene: Node, speed_t: float, beta_deg: float, radius_t: float) -> Ar
 		if phase == 0:
 			throttle = 1.0
 			steer = 0.0
-			if speed > speed_t * 0.85:
+			# Kick the tail out at a moderate speed and build the speed up in the drift (initiated at
+			# ~60 km/h the sliding rear swung past the angle into a spin).
+			if speed > minf(speed_t * 0.85, 48.0):
 				phase = 1
 				centre = p + f.cross(Vector3.UP) * -radius_t   # circle centre to the left
 		elif phase == 1:
@@ -109,6 +113,8 @@ func _drift(scene: Node, speed_t: float, beta_deg: float, radius_t: float) -> Ar
 			# Throttle holds the speed (and with it the rear slip that keeps the car sideways).
 			integ = clampf(integ + (speed_t - speed) * STEP * 0.02, -0.4, 0.4)
 			throttle = clampf(0.45 + 0.04 * (speed_t - speed) + integ, 0.0, 1.0)
+			# Lift when the angle runs away: full throttle on a sliding rear spins the car.
+			throttle = minf(throttle, clampf(1.0 - 2.0 * (beta - beta_t) / beta_t, 0.15, 1.0))
 		prev_heading = heading
 		car.set_input(throttle, 0.0, steer, hb)
 		world.step_blocking(STEP)
@@ -124,6 +130,8 @@ func _drift(scene: Node, speed_t: float, beta_deg: float, radius_t: float) -> Ar
 				contact += loads[i] * 0.25
 				slip += slips[i] * 0.25
 			var rate := Activity.drift_rate(speed, rad_to_deg(absf(beta)), slip, contact)
+			if OS.has_environment("DRIFT_DEBUG") and int(round(drift_time / STEP)) % 25 == 0:
+				print("    t=%.1f v=%.0f beta=%.0f slip=%.2f rate=%.0f thr=%.2f steer=%.2f" % [drift_time, speed, rad_to_deg(beta), slip, rate, throttle, steer])
 			if rate > 0:
 				chain += STEP
 				hold = 1.2

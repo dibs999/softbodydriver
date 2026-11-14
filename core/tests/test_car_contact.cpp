@@ -138,26 +138,35 @@ TEST_CASE("props stand still on the ground and a car knocks them over without te
     // jammed under a front tyre and was dragged (-24 km/h). Single positions are chaotic (a tiny
     // change decides whether a squashed cone slides out at once or is carried for a while), so the
     // spread is judged: the mean loss and how many strikes cost more than 2 km/h.
+    // Cones over 72 positions (12 across x 6 distances): with 18 a single unlucky position decided
+    // the mean (one strike of 15 km/h among seventeen of under 1 km/h).
     for (const PropKind kind : {PropKind::Cone, PropKind::Beacon}) {
         const std::string name = kind == PropKind::Cone ? "cone" : "beacon";
         CAPTURE(name);
+        const std::vector<real> offsets = kind == PropKind::Cone
+            ? std::vector<real>{-0.9, -0.75, -0.6, -0.45, -0.3, -0.15, 0.1, 0.35, 0.55, 0.75, 0.9, 1.0}
+            : std::vector<real>{-0.9, -0.6, -0.45, -0.15, 0.1, 0.35, 0.55, 0.75, 1.0};
+        const std::vector<real> aheads = kind == PropKind::Cone ? std::vector<real>{6.0, 6.2, 6.4, 6.6, 6.8, 7.0}
+                                                               : std::vector<real>{6.0, 6.5};
         real sum = 0.0, worst = 0.0;
-        int bad = 0, strikes = 0;
-        for (const real offset : {-0.9, -0.6, -0.45, -0.15, 0.1, 0.35, 0.55, 0.75, 1.0})
-            for (const real ahead : {6.0, 6.5}) {
+        int bad = 0, severe = 0, strikes = 0;
+        for (const real offset : offsets)
+            for (const real ahead : aheads) {
                 real knocked = 0;
                 const real loss = alone - coast(true, kind, &knocked, offset, ahead);
                 sum += loss;
                 worst = std::max(worst, loss);
                 bad += loss > 2.0 ? 1 : 0;
+                severe += loss > 6.0 ? 1 : 0;
                 ++strikes;
             }
-        MESSAGE(name << ": mean loss " << sum / strikes << " km/h, worst " << worst << ", " << bad << " of " << strikes << " over 2 km/h");
+        MESSAGE(name << ": mean loss " << sum / strikes << " km/h, worst " << worst << ", " << bad << " of " << strikes << " over 2 km/h, " << severe << " over 6");
         CHECK(sum / strikes < (kind == PropKind::Cone ? 0.8 : 2.0));
         // A cone the rear tyre dragged up into the arch used to self-lock between tread and body
-        // (up to 10-13 km/h, 2 of 18 strikes); with the geometric-mean contact friction at most one
-        // strike of the chaotic tail may exceed 2 km/h.
-        CHECK(bad <= (kind == PropKind::Cone ? 1 : 5));
+        // (up to 10-13 km/h, 2 of 18 strikes); with the geometric-mean contact friction, and a light
+        // prop no longer shoving the car's panels, at most the chaotic tail exceeds 2 km/h.
+        CHECK(bad <= (kind == PropKind::Cone ? 3 : 5));
+        if (kind == PropKind::Cone) CHECK(severe <= 1);
     }
 }
 
@@ -454,6 +463,9 @@ TEST_CASE("a box trailer stands on its drawbar alone and follows the car on the 
     CHECK(kmh > 40.0);
     CHECK(worstGap < 2.0);
     CHECK_FALSE(w.links()[0].broken);
+    // The frame's pitch on the hitch while towing: the reference for "still level" after the stop
+    // (an absolute bound tripped over a couple of centimetres of static pitch).
+    const real towingTilt = w.body(it).positions()[trailer.frameOrigin].y - w.body(it).positions()[trailer.frameX].y;
     // Braking (the trailer's overrun brake follows the car's): both stop, coupled, upright.
     c.throttle = 0.0;
     c.brake = 1.0;
@@ -466,7 +478,11 @@ TEST_CASE("a box trailer stands on its drawbar alone and follows the car on the 
     CHECK(length(w.body(it).centerOfMassVelocity()) < 0.5);
     CHECK_FALSE(w.links()[0].broken);
     const auto& tp = w.body(it).positions();
-    CHECK(std::abs(tp[trailer.frameOrigin].y - tp[trailer.frameX].y) < 0.15);   // level, not jack-knifed onto its side
+    const real stopTilt = tp[trailer.frameOrigin].y - tp[trailer.frameX].y;
+    const Vec3 heading = normalize(tp[trailer.frameX] - tp[trailer.frameOrigin]);
+    MESSAGE("trailer pitch towing " << towingTilt << ", stopped " << stopTilt << "; heading " << heading.x << ", " << heading.z);
+    CHECK(std::abs(stopTilt - towingTilt) < 0.1);   // level as it was towed, not tipped onto its side
+    CHECK(std::abs(heading.x) > 0.95);               // still in line behind the car, not jack-knifed
     // Removing the trailer takes its link with it.
     w.removeBody(it);
     CHECK(w.links().empty());

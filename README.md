@@ -596,11 +596,11 @@ Beispielausgabe des Prüfstands:
 - [x] Datengetriebener Generator für realistische Autos mit Doppelquerlenker-Fahrwerk, Stabilisatoren und Stoßdämpfern mit Zug- und Druckstufe
 - [x] Fahrzeugsysteme: Kühlung, Öl, Motorschaden, Kraftstoff, Bremsen, Traktionskontrolle und ABS
 - [x] Native Desktop-App (Godot 4.5 + GDExtension) für Windows, macOS und Linux, inklusive CI-Export
-- [ ] Abnehmbare Teile (Türen, Motorhaube, Stoßstangen als eigene Bruchgruppen) und splitterndes Glas
+- [x] Abnehmbare Teile (Türen, Motorhaube, Heckklappe, Stoßfänger als eigene Bruchgruppen) und splitterndes Glas
 - [x] Bewegliche Requisiten (Pylonen, Fässer, Wasserbarrieren, Baumstämme)
-- [ ] Kollision mit Bäumen auf allen Karten
-- [ ] Reifenmodell mit Lastabhängigkeit und Schräglaufkurve, Oberflächen (Schotter, Gras, Nässe)
+- [x] Kollision mit Bäumen auf allen Karten
+- [x] Reifenmodell mit Lastabhängigkeit und Schlupfkurve, Oberflächen (Schotter, Gras, Nässe)
 - [x] Import detaillierter glTF-Automodelle als Flexbody
 - [x] Reifenverschleiß, -temperatur, Luftdruck, Plattfuß und Platzen
 - [x] Karten Autobahn, Stadt und Wüste, Kombiinstrument im HUD
-- [ ] Multithreading über mehrere Fahrzeuge
+- [x] Multithreading über mehrere Fahrzeuge

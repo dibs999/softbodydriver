@@ -373,6 +373,9 @@ public:
     const std::vector<real>& masses() const { return mass_; }
     const std::vector<real>& invMasses() const { return invMass_; }
     const std::vector<real>& frictions() const { return friction_; }
+    /// Extra friction factor against static ground only (a tyre's slip and load curve: it shapes
+    /// the grip on the road, not how the tread rubs on props or other cars). 1 by default.
+    const std::vector<real>& groundGrips() const { return groundGrip_; }
     const std::vector<Vec3>& contactImpulses() const { return contactImpulse_; }
     void clearContacts() { std::fill(contactImpulse_.begin(), contactImpulse_.end(), Vec3{}); }
     void addContact(std::size_t i, const Vec3& impulse) { contactImpulse_[i] += impulse; }
@@ -403,6 +406,7 @@ public:
     const std::vector<PressureWheel>& wheels() const { return wheels_; }
 
     void setNodeFriction(std::uint32_t i, real f) { if (i < friction_.size()) friction_[i] = f; }
+    void setNodeGroundGrip(std::uint32_t i, real g) { if (i < groundGrip_.size()) groundGrip_[i] = g; }
     /// Changes a node's mass at runtime (e.g. cargo / load tests).
     void setNodeMass(std::uint32_t i, real mass);
     bool isFixed(std::uint32_t i) const { return invMass_[i] == 0; }
@@ -417,7 +421,7 @@ private:
     std::string name_;
     // Node data, structure-of-arrays for cache / SIMD friendliness.
     std::vector<Vec3> pos_, vel_, force_;
-    std::vector<real> mass_, invMass_, friction_, contactStiffness_;
+    std::vector<real> mass_, invMass_, friction_, groundGrip_, contactStiffness_;
     std::vector<Vec3> contactImpulse_; // Static-surface normal impulse from the previous solver step.
     real displacement_ = 0.0, floodedDisplacement_ = -1.0, floodSeconds_ = 60.0, flooding_ = 0.0, submerged_ = 0.0;
     std::vector<real> waterDepth_;
