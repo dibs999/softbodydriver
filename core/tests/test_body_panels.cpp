@@ -310,3 +310,36 @@ TEST_CASE("bonnet and tailgate open on their struts, close again and relatch wit
         CHECK(body.telemetry().brokenBeams == 0);
     }
 }
+
+TEST_CASE("part frames stay finite and follow the car through a half turn") {
+    // A car spawned facing exactly opposite its build orientation: the passenger cell's rotation
+    // has trace -1, where the trace-only quaternion formula gave zero and the part frames NaN.
+    auto car = referenceCar();
+    const auto& original = car.body.positions();
+    for (const real angle : {3.14159265358979, 3.14159265358979 * 0.5, -3.0}) {
+        CAPTURE(angle);
+        std::vector<Vec3> positions(original.size());
+        for (std::size_t i = 0; i < original.size(); ++i) {
+            const Vec3& p = original[i];
+            positions[i] = Vec3{std::cos(angle) * p.x + std::sin(angle) * p.z, p.y, -std::sin(angle) * p.x + std::cos(angle) * p.z};
+        }
+        std::vector<float> frames;
+        for (int call = 0; call < 2; ++call) {   // the second call starts from the first one's fit
+            computeNodeFrames(positions, car.visual, frames);
+            for (float f : frames) REQUIRE(std::isfinite(f));
+            REQUIRE(!car.visual.parts.empty());
+            // Every rigid part's vertices land where the turned car puts them.
+            std::size_t checked = 0;
+            for (const auto& mesh : car.visual.skinned)
+                for (std::size_t i = 0; i < mesh.skin.size(); ++i) {
+                    const auto& skin = mesh.skin[i];
+                    if (skin.weight[0] < 0 || skin.part < 0) continue;
+                    const Vec3 rest{static_cast<real>(mesh.positions[i * 3]), static_cast<real>(mesh.positions[i * 3 + 1]), static_cast<real>(mesh.positions[i * 3 + 2])};
+                    const Vec3 turned{std::cos(angle) * rest.x + std::sin(angle) * rest.z, rest.y, -std::sin(angle) * rest.x + std::cos(angle) * rest.z};
+                    CHECK(length(evalSkin(positions, frames, skin) - turned) < 1e-3);
+                    ++checked;
+                }
+            CHECK(checked > 100);
+        }
+    }
+}

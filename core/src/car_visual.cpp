@@ -665,8 +665,40 @@ void cellBasis(const Vec3& fl, const Vec3& fr, const Vec3& rl, const Vec3& rr, V
 }
 }  // namespace
 
+namespace {
+// Rotation matrix -> unit quaternion (w, x, y, z), Shepperd's method: well conditioned for any
+// rotation. (The trace-only formula gave the zero quaternion for a half turn: a car spawned
+// facing exactly opposite its build orientation got NaN part frames - its rear number plate's
+// transform was not finite until it steered.)
+void quatFromMatrix(const real R[3][3], real q[4]) {
+    const real tr = R[0][0] + R[1][1] + R[2][2];
+    if (tr > 0.0) {
+        const real s = std::sqrt(tr + 1.0) * 2.0;
+        q[0] = 0.25 * s; q[1] = (R[2][1] - R[1][2]) / s; q[2] = (R[0][2] - R[2][0]) / s; q[3] = (R[1][0] - R[0][1]) / s;
+    } else if (R[0][0] > R[1][1] && R[0][0] > R[2][2]) {
+        const real s = std::sqrt(std::max<real>(1e-12, 1.0 + R[0][0] - R[1][1] - R[2][2])) * 2.0;
+        q[0] = (R[2][1] - R[1][2]) / s; q[1] = 0.25 * s; q[2] = (R[0][1] + R[1][0]) / s; q[3] = (R[0][2] + R[2][0]) / s;
+    } else if (R[1][1] > R[2][2]) {
+        const real s = std::sqrt(std::max<real>(1e-12, 1.0 + R[1][1] - R[0][0] - R[2][2])) * 2.0;
+        q[0] = (R[0][2] - R[2][0]) / s; q[1] = (R[0][1] + R[1][0]) / s; q[2] = 0.25 * s; q[3] = (R[1][2] + R[2][1]) / s;
+    } else {
+        const real s = std::sqrt(std::max<real>(1e-12, 1.0 + R[2][2] - R[0][0] - R[1][1])) * 2.0;
+        q[0] = (R[1][0] - R[0][1]) / s; q[1] = (R[0][2] + R[2][0]) / s; q[2] = (R[1][2] + R[2][1]) / s; q[3] = 0.25 * s;
+    }
+    const real l = std::sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
+    if (l > 1e-12) for (int i = 0; i < 4; ++i) q[i] /= l;
+    else { q[0] = 1.0; q[1] = q[2] = q[3] = 0.0; }
+}
+}  // namespace
+
 void computeNodeFrames(const std::vector<Vec3>& pos, const CarVisual& vis, std::vector<float>& frames) {
     const std::size_t n = pos.size();
+    // The part frames of the last call warm-start this one (kept before the resize below cut them).
+    const std::size_t nrest = vis.restNodes.size();
+    const std::size_t partsExpected = (nrest != 0 && nrest <= n) ? vis.parts.size() : 0;
+    std::vector<float> previous;
+    if (partsExpected > 0 && frames.size() == 12 + n * 3 + 16 * partsExpected)
+        previous.assign(frames.begin() + static_cast<std::ptrdiff_t>(12 + n * 3), frames.end());
     frames.resize(12 + n * 3);
     // Rigid motion of the passenger cell: R = B_now * B_rest^T, t = c_now - R * c_rest.
     real R[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
@@ -697,8 +729,7 @@ void computeNodeFrames(const std::vector<Vec3>& pos, const CarVisual& vis, std::
     // panel swinging on its hinges or lying loose on the road keeps its shape.
     const std::size_t partBase = 12 + n * 3;
     const std::size_t nParts = haveRest ? vis.parts.size() : 0;
-    std::vector<float> previous;
-    if (frames.size() == partBase + 16 * nParts) previous.assign(frames.begin() + static_cast<std::ptrdiff_t>(partBase), frames.end());
+    if (previous.size() != 16 * nParts) previous.clear();
     frames.resize(partBase + 16 * nParts);
     for (std::size_t p = 0; p < nParts; ++p) {
         const auto& nodes = vis.parts[p];
@@ -716,14 +747,14 @@ void computeNodeFrames(const std::vector<Vec3>& pos, const CarVisual& vis, std::
                 for (int j = 0; j < 3; ++j) A[i][j] += av[i] * bv[j];
         }
         real q[4] = {1, 0, 0, 0};  // w, x, y, z
-        if (!previous.empty()) for (int i = 0; i < 4; ++i) q[i] = previous[16 * p + 12 + static_cast<std::size_t>(i)];
-        else {
-            // Start from the passenger cell so the first fit converges to the right branch.
-            const real tr = R[0][0] + R[1][1] + R[2][2];
-            q[0] = std::sqrt(std::max<real>(0.0, 1.0 + tr)) * 0.5;
-            const real s4 = q[0] > 1e-6 ? 0.25 / q[0] : 0.0;
-            q[1] = (R[2][1] - R[1][2]) * s4; q[2] = (R[0][2] - R[2][0]) * s4; q[3] = (R[1][0] - R[0][1]) * s4;
+        bool warm = !previous.empty();
+        if (warm) {
+            for (int i = 0; i < 4; ++i) q[i] = previous[16 * p + 12 + static_cast<std::size_t>(i)];
+            const real l = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3];
+            warm = std::isfinite(l) && l > 0.5;
         }
+        // Otherwise start from the passenger cell so the first fit converges to the right branch.
+        if (!warm) quatFromMatrix(R, q);
         real Rp[3][3];
         for (int it = 0; it < 12; ++it) {
             const real w = q[0], x = q[1], y = q[2], z = q[3];
@@ -747,6 +778,7 @@ void computeNodeFrames(const std::vector<Vec3>& pos, const CarVisual& vis, std::
                                 dq[0] * q[2] - dq[1] * q[3] + dq[2] * q[0] + dq[3] * q[1],
                                 dq[0] * q[3] + dq[1] * q[2] - dq[2] * q[1] + dq[3] * q[0]};
             const real nl = std::sqrt(nq[0] * nq[0] + nq[1] * nq[1] + nq[2] * nq[2] + nq[3] * nq[3]);
+            if (!(nl > 1e-12)) break;
             for (int i = 0; i < 4; ++i) q[i] = nq[i] / nl;
         }
         {
@@ -1408,9 +1440,11 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                 part(centre, n, t, 0.5 * length(p1 - p0), k);
             }
         };
-        // Headlight units: dark bezel, chrome reflector across the whole unit, a daytime-running
-        // strip along the lower edge and two projector lenses on the face. 17 cm tall (12 on
-        // coupes), from 40 % of the half width round most of the corner.
+        // Headlight units: black housing with a gunmetal interior, a chrome accent along
+        // the top, a daytime-running light along the top edge that turns down at the inner end
+        // (an L), a projector (dark lens in a chrome ring) and a reflector main beam (lens disc in
+        // a chrome bowl). 17 cm tall (12 on coupes), from 40 % of the half width round most of
+        // the corner. A chrome face across the whole unit read as a flat mirror slab.
         const real housingH = sport ? 0.06 : 0.085;
         // The top stays just under the nose line: above it the face already curves back into the
         // bonnet and the paint would cover the unit's upper corners.
@@ -1433,13 +1467,24 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                 const Vec3 base = c + Vec3{0, yH, 0} - n * (rake * std::max<real>(0.0, yH - bd.noseHeight + housingH * 0.3));
                 const real len = hl * 1.12;   // overlap: no gaps at the joints
                 vb.box("grille", base - n * 0.020, {0.026, housingH, len}, bodyNodes, n, up, t);
-                vb.box("chrome", base + n * 0.004, {0.006, housingH - 0.012, len * 0.99}, bodyNodes, n, up, t);
-                vb.box("headlight", base + n * 0.011 + up * (-housingH + 0.018), {0.004, 0.008, len * 0.99}, bodyNodes, n, up, t);
-                if (k == 1 || k == 3) {
-                    const Vec3 lc = base + up * 0.012;
-                    vb.tube("grille", lc + n * 0.004, lc + n * 0.012, housingH * 0.52, bodyNodes, 20);
-                    vb.tube("chrome", lc + n * 0.012, lc + n * 0.017, housingH * 0.44, bodyNodes, 20);
-                    vb.tube("headlight", lc + n * 0.017, lc + n * 0.022, housingH * 0.30, bodyNodes, 20);
+                vb.box("engine", base + n * 0.004, {0.006, housingH - 0.010, len * 0.99}, bodyNodes, n, up, t);
+                vb.box("chrome", base + n * 0.010 + up * (housingH - 0.007), {0.003, 0.0025, len * 0.99}, bodyNodes, n, up, t);
+                vb.box("headlight", base + n * 0.011 + up * (housingH - 0.019), {0.004, 0.0055, len * 0.99}, bodyNodes, n, up, t);
+                if (k == 0)   // the DRL turns down at the inner end
+                    vb.box("headlight", base + n * 0.011 - t * (hl * 0.80) + up * 0.004, {0.004, housingH - 0.030, 0.0055}, bodyNodes, n, up, t);
+                const Vec3 lc = base - up * 0.010;
+                // Lamps sit flush on the raked face: square to n they sank into it at the top and
+                // showed as half moons.
+                Vec3 nf = normalize(cross(t, up));
+                if (dot(nf, n) < 0.0) nf = nf * -1.0;
+                // No bright dot in the middle: two round lamps with a white centre each read as a pair
+                // of cartoon eyes from a few metres away.
+                if (k == 1) {   // projector: dark condenser lens in a thin chrome ring
+                    vb.tube("chrome", lc + nf * 0.006, lc + nf * 0.014, housingH * 0.60, bodyNodes, 28);
+                    vb.tube("grille", lc + nf * 0.014, lc + nf * 0.019, housingH * 0.53, bodyNodes, 28);
+                } else if (k == 3) {   // reflector main beam: lens disc in a chrome bowl
+                    vb.tube("chrome", lc + nf * 0.006, lc + nf * 0.010, housingH * 0.74, bodyNodes, 28);
+                    vb.tube("headlight", lc + nf * 0.010, lc + nf * 0.013, housingH * 0.60, bodyNodes, 28);
                 }
             });
         }

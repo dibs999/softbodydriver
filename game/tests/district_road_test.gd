@@ -8,6 +8,7 @@ const AIDriver := preload("res://scripts/ai_driver.gd")
 const STEP := 0.05
 var frame := 0
 var failed := false
+var _bb := 0
 
 func check(value: bool, caption: String) -> void:
 	print(caption, ": ", value)
@@ -112,9 +113,14 @@ func _run(scene: Node) -> void:
 		if step_idx < net.size() / 2: progress += step_idx   # forward along the route only
 		prev_idx = taxi.idx
 		min_up = minf(min_up, player.get_up().y)
+		var bb := int(player.get_telemetry().get("broken_beams", 0))
+		if bb != _bb:
+			print("    t=%.2f broken %d at %s v=%.0f km/h idx=%d" % [t, bb, player.get_position_ws(), player.get_velocity().length() * 3.6, taxi.idx])
+			_bb = bb
 		if player.get_position_ws().distance_to(far_end) < 10.0: passed_far_mouth = true
 	print("  network lap (%.0f m): %d of %d route points in %.0f s, lowest up %.2f" % [lap, progress, net.size(), t, min_up])
 	check(passed_far_mouth and progress >= net.size() - 4, "A traffic car turns off, crosses the valley, turns back onto the loop and completes the lap")
+	print("  broken beams after the lap: %d" % int(player.get_telemetry().get("broken_beams", 0)))
 	check(min_up > 0.85 and int(player.get_telemetry().get("broken_beams", 0)) == 0, "It turns at both junctions without leaving the road")
 
 func MapBuilder_xform(p: Vector3, heading: Vector3) -> Transform3D:

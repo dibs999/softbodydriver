@@ -515,6 +515,7 @@ func _help(canvas: Vector2) -> void:
 		[["F", "G"], "Tanken / Service halten (Motor aus)"],
 		[["U", "⇧U"], "Fahrer- / Beifahrertür im Stand"],
 		[["F7", "F8"], "Wetter  ·  Tageszeit (Umschalt+F8 Zeitlauf)"],
+		[["F9", "F10"], "Freie Kamera  ·  Fotomodus (F12 speichert)"],
 	]
 	for i in lines.size():
 		var y := p.y + 80 + i * 27

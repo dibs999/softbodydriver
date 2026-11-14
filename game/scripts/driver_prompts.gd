@@ -7,7 +7,7 @@ const KEYS := {
 	"ignition": "I", "headlights": "L", "wipers": "X", "toggle_gearbox": "M",
 	"shift_down": "Q", "shift_up": "E", "clutch": "Shift",
 	"handbrake": "Leertaste", "refuel": "F", "service_repair": "G",
-	"cruise_control": "V",
+	"cruise_control": "V", "indicators": ", / .", "hazards": "H", "look_back": "^",
 	"menu": "Esc", "reset_vehicle": "R", "recover_vehicle": "Pos1", "driver_door": "U", "passenger_door": "Shift+U", "cockpit_look": "rechte Maustaste + Maus",
 }
 const PAD := {
@@ -15,7 +15,7 @@ const PAD := {
 	"ignition": "Back", "headlights": "D-Pad ↑", "wipers": "Start → Wischer", "toggle_gearbox": "D-Pad ↓",
 	"shift_down": "LB", "shift_up": "RB", "clutch": "X",
 	"handbrake": "A", "refuel": "D-Pad ←", "service_repair": "D-Pad →",
-	"cruise_control": "R3",
+	"cruise_control": "R3", "indicators": "Back + D-Pad ←/→", "hazards": "Back + D-Pad ↑", "look_back": "Back + D-Pad ↓",
 	"menu": "Start", "reset_vehicle": "B", "recover_vehicle": "Start → Zurückstellen", "driver_door": "Start → Fahrertür", "passenger_door": "Start → Beifahrertür", "cockpit_look": "rechter Stick",
 }
 
@@ -41,4 +41,5 @@ static func control_summary() -> String:
 		hint("toggle_gearbox"), hint("shift_down"), hint("shift_up"), hint("clutch"), hint("headlights"),
 		hint("wipers"), hint("refuel"), hint("service_repair"), hint("menu"), hint("reset_vehicle"), hint("cruise_control")]
 
+	summary += "\n%s Blinker · %s Warnblinker · %s Rückblick" % [hint("indicators"), hint("hazards"), hint("look_back")]
 	return summary + "\n" + ("Türen im Start-Menü · rechter Stick umsehen" if using_gamepad else "U Fahrertür · Shift+U Beifahrertür · rechte Maustaste umsehen")

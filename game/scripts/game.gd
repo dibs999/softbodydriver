@@ -51,6 +51,8 @@ var minimap: Minimap
 var _paused_before_map := false
 var _paused_before_menu := false
 var audio: Node
+var rumble: Node      # gamepad vibration
+var photo: CanvasLayer   # photo mode (F10)
 var traffic_audio: Node3D   # 3D engine and tyre sound of the other cars
 var _pause_first_button: Button
 var pause_menu: Control
@@ -297,6 +299,10 @@ func _finish_ready() -> void:
 	grabber.name = "NodeGrabber"
 	grabber.game = self
 	add_child(grabber)
+	rumble = preload("res://scripts/pad_rumble.gd").new()
+	rumble.name = "PadRumble"
+	rumble.world = world
+	add_child(rumble)
 	cam.equipment = equipment
 
 	var ui := CanvasLayer.new()
@@ -355,6 +361,10 @@ func _finish_ready() -> void:
 		lesson.start()
 		Game.start_lesson = false
 	_build_pause_menu(ui)
+	photo = preload("res://scripts/photo_mode.gd").new()
+	photo.name = "PhotoMode"
+	photo.game = self
+	add_child(photo)
 	cam.snap()
 	if _loading_overlay:
 		await _warm_up_rendering()
@@ -538,6 +548,8 @@ func _set_player(v: SBVehicle) -> void:
 			break
 	hud.vehicle = v
 	minimap.player = v
+	rumble.vehicle = v
+	rumble.effects = v.get_node_or_null("VehicleEffects")
 	hud.info = v.get_info()
 	hud.in_dash_instruments = v.get_dashboard_transform() is Transform3D
 	audio.configure(v, int(hud.info.get("cylinders", 4)))
@@ -721,6 +733,7 @@ func _process(delta: float) -> void:
 			ai[v].on_impact(imp)
 		if imp > 2.0 and v == player:
 			audio.impact(clampf(imp / 120.0, 0.05, 1.5))
+			rumble.impact(imp)
 			activity.on_impact(imp)
 			cam.shake = maxf(cam.shake, clampf(imp / 150.0, 0.0, 1.0))
 	if map_data.has("waypoints") and player.get_position_ws().y < -30.0:
@@ -873,6 +886,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			minimap.toggle_overview()
 			hud.show()
 			world.paused = _paused_before_map
+		return
+	if event.is_action_pressed("photo_mode") and not pause_menu.visible:
+		photo.toggle()
 		return
 	if event.is_action_pressed("menu"):
 		_toggle_pause()
@@ -1272,6 +1288,7 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 	steering_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	settings_page.add_child(steering_hint)
 	settings_page.add_child(Game.make_driving_help_option())
+	settings_page.add_child(Game.make_driving_option("rumble", "Gamepad-Vibration (Aufprall, ABS, Schotter, Begrenzer)"))
 	settings_page.add_child(UITheme.section("Grafik"))
 	settings_page.add_child(Game.make_graphics_options())
 	settings_page.add_child(UITheme.section("Audio"))

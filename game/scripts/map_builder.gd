@@ -715,12 +715,14 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	# Things stand on the ground as it was before the tunnel's cut (over the tunnel: its earth cover).
 	var ground_height := func(x: float, z: float) -> float:
 		return C.sample(exit_ground, nx, nz, ox, oz, cell, x, z)
-	parent.add_child(C.road_mesh(road, half_w, C.road_material(2, half_w * 2.0, 12.0, "rural"), true, 0.05, 12.0, ground_height))
-	parent.add_child(C.verge_mesh(road, half_w, 1.3, C.verge_material(1.3), true, 0.05, 12.0, ground_height))
+	var drawn_ground := func(x: float, z: float) -> float:
+		return C.sample_mesh(heights, nx, nz, ox, oz, cell, x, z)
+	parent.add_child(C.road_mesh(road, half_w, C.road_material(2, half_w * 2.0, 12.0, "rural"), true, 0.05, 12.0, ground_height, drawn_ground))
+	parent.add_child(C.verge_mesh(road, half_w, 1.3, C.verge_material(1.3), true, 0.05, 12.0, ground_height, [-1.0, 1.0], drawn_ground))
 	# The district road sits a few millimetres below the main road, so the main road's surface and
 	# edge line run on across the junction mouth as they do on a priority road.
-	parent.add_child(C.road_mesh(chord, CHORD_HALF_W, C.road_material(2, CHORD_HALF_W * 2.0, 12.0, "rural"), false, 0.044, 12.0, ground_height))
-	parent.add_child(C.verge_mesh(chord, CHORD_HALF_W, 1.1, C.verge_material(1.1), false, 0.044, 12.0, ground_height))
+	parent.add_child(C.road_mesh(chord, CHORD_HALF_W, C.road_material(2, CHORD_HALF_W * 2.0, 12.0, "rural"), false, 0.044, 12.0, ground_height, drawn_ground))
+	parent.add_child(C.verge_mesh(chord, CHORD_HALF_W, 1.1, C.verge_material(1.1), false, 0.044, 12.0, ground_height, [-1.0, 1.0], drawn_ground))
 	var ground_colour := func(x: float, z: float) -> Color:
 		var fx := clampf((x - ox) / cell, 0.0, nx - 1.001)
 		var fz := clampf((z - oz) / cell, 0.0, nz - 1.001)
@@ -733,8 +735,8 @@ static func build_hill_roads(world: SBWorld, parent: Node3D) -> Dictionary:
 	var entrances := {}
 	for o: Dictionary in outs:
 		var way: PackedVector3Array = o["road"]
-		parent.add_child(C.road_mesh(way, CHORD_HALF_W, C.road_material(2, CHORD_HALF_W * 2.0, 12.0, "rural"), false, 0.044, 12.0, ground_height))
-		parent.add_child(C.verge_mesh(way, CHORD_HALF_W, 1.1, C.verge_material(1.1), false, 0.044, 12.0, ground_height))
+		parent.add_child(C.road_mesh(way, CHORD_HALF_W, C.road_material(2, CHORD_HALF_W * 2.0, 12.0, "rural"), false, 0.044, 12.0, ground_height, drawn_ground))
+		parent.add_child(C.verge_mesh(way, CHORD_HALF_W, 1.1, C.verge_material(1.1), false, 0.044, 12.0, ground_height, [-1.0, 1.0], drawn_ground))
 		var t := C.tunnel(parent, world, o["mouth"], o["dir"], o["sign"], 9.0, 5.4, 70.0,
 			C.portal_ground(exit_before, exit_ground, nx, nz, ox, oz, cell, o["mouth"], o["dir"]),
 			grass, ground_colour, 17.0, -0.045)
@@ -1116,8 +1118,10 @@ static func _junction_dressing(parent: Node3D, world: SBWorld, road: PackedVecto
 		for m in 5:
 			var c := mouth + right * (0.35 + m * 0.6)
 			C.box(parent, null, Vector3(c.x, float(height.call(c.x, c.z)) + 0.05, c.z), Vector3(0.25, 0.004, 0.12), Vector3(0, atan2(out.x, out.z), 0), white, 0.6, false, false)
-		# Inverted triangle sign on a post at the right verge.
-		var sp := mouth + right * (CHORD_HALF_W + 1.4)
+		# Inverted triangle sign on a post at the right verge, set back behind the corner fillet
+		# (R 9 m): at the line it stood inside the curve a turning car sweeps, and traffic turning
+		# right clipped it with a mirror.
+		var sp := mouth - out * 10.5 + right * (CHORD_HALF_W + 1.2)
 		var ground := float(height.call(sp.x, sp.z))
 		C.box(parent, world, Vector3(sp.x, ground + 1.1, sp.z), Vector3(0.04, 1.1, 0.04), Vector3.ZERO, post, 0.6, true, false)
 		var tri := MeshInstance3D.new()
