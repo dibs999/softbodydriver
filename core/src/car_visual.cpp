@@ -996,7 +996,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
     const auto& rearNodes = bd.detachableBumpers ? build.layout.rearBumperNodes : bodyNodes;
     auto bumperMaterial = [&](const std::string& material, real x, real y) {
         if (bd.detachableBumpers && x > L - 0.30 && y < bd.noseHeight - 0.16) return "bumper_front_" + material;
-        if (bd.detachableBumpers && x < 0.30 && y < bd.tailHeight - 0.28) return "bumper_rear_" + material;
+        if (bd.detachableBumpers && x < 0.30 && y < prof.tailFascia() - 0.28) return "bumper_rear_" + material;
         return material;
     };
     auto surfaceNodes = [&](const std::string& material) -> const std::vector<std::uint32_t>& {
@@ -1117,7 +1117,9 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
     const real cPillar = bd.style == BodyStyle::Coupe ? 0.34 : (bd.style == BodyStyle::Sedan ? 0.24 : (bd.style == BodyStyle::SUV ? 0.18 : 0.28));
     const real handleF = prof.xB - 0.06;
     const real handleR = prof.xRD1 + 0.20;
-    auto quadMaterial = [&](real xm, real ym, real /*zm*/, int seg) -> std::string {
+    int kPillarRow = 0;   // first sample row of segment 8 (outer edge of roof, windscreen, rear window)
+    for (int s = 0; s < 8; ++s) kPillarRow += subdiv[s];
+    auto quadMaterial = [&](real xm, real ym, real /*zm*/, int seg, int k) -> std::string {
         const real yB = prof.yBottom(xm);
         const real yBe = prof.yBelt(xm);
         const bool gh = prof.greenhouse(xm) > 0.04;
@@ -1142,7 +1144,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         if (seg == 7) {
             if (!gh) return "paint";
             const bool frontWin = xm > prof.xB + 0.045 && xm < prof.xCowl - 0.09;
-            const bool rearWin = xm > prof.xRwBase + cPillar && xm < prof.xB - 0.045;
+            const bool rearWin = !bd.panelVan && xm > prof.xRwBase + cPillar && xm < prof.xB - 0.045;
             if (frontWin || rearWin) return "glass";
             if (std::abs(xm - prof.xB) <= 0.045) return "trim";
             return "paint";
@@ -1150,8 +1152,11 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         // Independent bonnet surfaces follow the breakable panel, including its underside.
         if (build.layout.bonnetNodes.size() == 8 && xm > prof.xCowl + 0.025 && xm < L - 0.12) return "bonnet";
         // seg 8, 9: roof / windshield / rear window / hood / deck
-        if (xm > prof.xWsTop + 0.035 && xm < prof.xCowl - 0.01) return "glass";
-        if (xm > prof.xRwBase + 0.02 && xm < prof.xRwTop - 0.035) return "glass";
+        // The outermost row of the windscreen and rear window stays body colour: an A and D pillar
+        // about 10 cm wide. Glass right up to the roof rail left only the edge between two panes,
+        // which read as a thin tube frame.
+        if (xm > prof.xWsTop + 0.035 && xm < prof.xCowl - 0.01) return k == kPillarRow ? "paint" : "glass";
+        if (xm > prof.xRwBase + 0.02 && xm < prof.xRwTop - 0.035) return k == kPillarRow ? "paint" : "glass";
         return "paint";
     };
 
@@ -1197,7 +1202,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
                 const real ym = 0.5 * (a.second + b.second);
                 const real zm = 0.5 * (a.first + b.first) * (side ? 1.0 : -1.0);
                 const int seg = segOf[static_cast<std::size_t>(k)];
-                const std::string mat = lidMaterial(doorMaterial(bumperMaterial(quadMaterial(xm, ym, zm, seg), xm, ym), xm, seg, side), xm, seg);
+                const std::string mat = lidMaterial(doorMaterial(bumperMaterial(quadMaterial(xm, ym, zm, seg, k), xm, ym), xm, seg, side), xm, seg);
                 for (int pass = 0; pass < 2; ++pass) {
                     if (pass == 1 && (mat == "glass" || mat == "door_left_glass" || mat == "door_right_glass" || mat == "rdoor_left_glass" ||
                                       mat == "rdoor_right_glass" || mat == "tailgate_glass" || mat == "headlight" || mat == "taillight" || mat == "reverselight" || seg == 0)) continue;
@@ -1511,7 +1516,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         // Tail lights: housing, red lens with a brighter brake band, following the tail round the
         // corner like the headlights; a white reversing lamp on the inner segment.
         const real hwR = prof.halfW(0.04);
-        const real yT = bd.tailHeight - 0.11;
+        const real yT = prof.tailFascia() - 0.11;
         const real rcR = prof.b.cornerRadiusRear;
         const real th = sport ? 0.045 : 0.068;
         for (int side = 0; side < 2; ++side) {
@@ -1685,7 +1690,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
         }
         {
             // Red reflectors in the lower rear bumper.
-            const real y = bd.tailHeight - 0.36;
+            const real y = prof.tailFascia() - 0.36;
             const real hz = prof.halfW(0.04) - 0.13;
             for (real side : {-1.0, 1.0})
                 vb.bevelBox("reflector", {-0.004, y, side * hz}, {0.010, 0.014, 0.055}, 0.006, rearNodes);
@@ -1713,7 +1718,7 @@ void buildCarVisual(CarBuild& build, const Profile& prof, const CarRig& rig) {
             const auto& panelNodes = front ? frontNodes : rearNodes;
             const real sign = front ? 1.0 : -1.0;
             const real x = front ? L - 0.25 : 0.25;
-            const real top = front ? bd.noseHeight - 0.16 : bd.tailHeight - 0.28;
+            const real top = front ? bd.noseHeight - 0.16 : prof.tailFascia() - 0.28;
             const real bottom = prof.yBottom(x) + 0.035;
             const real mid = (top + bottom) * 0.5;
             const real half = prof.halfW(x) * 0.86;

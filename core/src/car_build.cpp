@@ -894,7 +894,7 @@ CarBuild buildCar(const CarDefinition& def) {
             const real innerX = front ? L - 0.28 : 0.28;
             const real outerX = front ? L + 0.025 : -0.025;
             const real y0 = prof.yBottom(innerX) + 0.035;
-            const real y1 = front ? bd.noseHeight - 0.16 : bd.tailHeight - 0.28;
+            const real y1 = front ? bd.noseHeight - 0.16 : prof.tailFascia() - 0.28;
             const real halfWidth = prof.halfW(innerX) * 0.97;
             for (int ix = 0; ix < 2; ++ix)
                 for (int iy = 0; iy < 2; ++iy)
@@ -1280,7 +1280,7 @@ CarBuild buildCar(const CarDefinition& def) {
                 if (std::min({pa.x, pb.x, pc.x}) > L - 0.12 &&
                     std::max({pa.y, pb.y, pc.y}) < bd.noseHeight - 0.16) return;
                 if (std::max({pa.x, pb.x, pc.x}) < 0.12 &&
-                    std::max({pa.y, pb.y, pc.y}) < bd.tailHeight - 0.28) return;
+                    std::max({pa.y, pb.y, pc.y}) < prof.tailFascia() - 0.28) return;
             }
             const real apertureRear = bd.doors >= 4 && bd.detachableRearDoors ? prof.xDoorRR - 0.029 : prof.xDoorFR - 0.029;
             if (bd.detachableDoors && ctr.x > apertureRear && ctr.x < prof.xDoorFF + 0.03 &&

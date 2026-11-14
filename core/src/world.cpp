@@ -484,7 +484,12 @@ std::size_t World::collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody,
             // unchanged). The arithmetic mean gave rubber on a PVC cone 0.6: a cone the rear tyre
             // dragged up into the wheel arch self-locked between tread and body and braked the car
             // by up to 10 km/h (2 of 30 strike positions); now at most ~2 km/h, mean 0.9 -> 0.1.
-            const real mu = std::sqrt(std::max<real>(0.0, nFric[i] * c.friction));
+            real mu = std::sqrt(std::max<real>(0.0, nFric[i] * c.friction));
+            // A tall light prop that only yields (see above) can end up pinched between a tyre and
+            // its wheel arch: a beacon's rubber foot, flipped up on its edge by the front wheel,
+            // wedged there and its grip on the tread (0.9) stopped the rear wheel; the car slewed
+            // round and lost 15 km/h. Rubber against a squashed, sliding prop is capped at 0.3.
+            if (lightTris || lightNodes) mu = std::min<real>(mu, 0.3);
             const real jt = vtLen > 1e-9 ? std::min(mu * jn, vtLen / wTotal) : 0.0;
             const Vec3 vtDir = vtLen > 1e-9 ? (vt / vtLen) : Vec3{};
             const Vec3 impulse = n * jn - vtDir * jt;

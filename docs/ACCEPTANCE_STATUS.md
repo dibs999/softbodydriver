@@ -181,9 +181,12 @@ Vulkan-Aufnahme in der Stadt zeigt korrekte Unschärfe hinter dem Auto.
 Bei der Suite fiel ein Verkehrsauto im Hügelland auf, das beim Rechtsabbiegen das
 Vorfahrtsschild streifte (Spiegel ab, 6 gebrochene Beams). Das Schild stand innerhalb des
 Eckausrundungsradius und steht jetzt 10,5 m vor der Einmündung am Bankett. Die
-schnelle Drift-Medaille liegt nahe am Grenzbereich (4.886 bis 5.704 Punkte je nach Lauf,
-weil der Mehrkern-Löser nicht bitgenau gleich rechnet); der Test gibt wie einem Fahrer
-einen zweiten Versuch.
+schnelle Drift-Medaille schwankte zwischen 4.886 und 5.704 Punkten (Gold ab 5.000). Die
+Ursache: Der 88-m-Kreis des Testfahrers reichte bis z = −218, also an den Rand der Betonfläche
+(−221). Jede Runde rutschte das Heck an derselben Stelle über die Kante, und der Drift brach
+ab. Der schnelle Drift fährt jetzt auf der offenen Westfläche, der Testfahrer leitet früher
+in die Winkelregelung über und hält den Winkel auch mit dem Gas. Ergebnis: 6.264 bis 6.366
+Punkte bei 59 bis 60 s Kette in drei Läufen, ohne zweiten Versuch.
 
 ## Scheinwerfer der prozeduralen Autos, Fahrbahnränder im Hügelland
 
@@ -200,3 +203,46 @@ ist aber in Dreiecke zerlegt. An Böschungen stach das Gras sägezahnartig durch
 und über die Fahrbahnkante. `C.sample_mesh` liefert die Höhe genau so, wie das Mesh sie
 zeichnet, und Fahrbahn und Bankett liegen nie darunter. Die Fahrphysik ist davon nicht
 betroffen: Sie nutzt weiter die angehobene Fahrbahnhöhe.
+
+## Kestrel-Form
+
+Der Kestrel hatte ein 1,72 m langes, flaches Dach und eine steile, kurze Heckscheibe. Aus
+der Seite wirkte er wie ein Minivan, nicht wie ein 4,28-m-Kompakter. Neu: Windschutzscheibe
+0,80 m, Dach 1,38 m, Heckscheibe 0,56 statt 0,45 m und damit flacher, Heckkante 0,93 m statt 1,02 m (die Klappe
+fällt unter der Scheibe ab, statt ein flaches Brett zu bilden). Kestrel EV und Kestrel Rallye
+wurden ebenso angepasst. Die Frontscheibe und die Heckscheibe lassen jetzt außen ein etwa
+10 cm breites Blechband stehen: A- und D-Säule wirkten zuvor wie dünne Rohre zwischen zwei
+Scheiben. Die Haubenvorderkante der sichtbaren Karosserie ist schärfer gerundet (4 statt 11 cm).
+Eine kürzere Motorhaube (1,10 m) wurde verworfen: Die Vorderkante der Fahrertür rückte in den
+Kotflügel, die Tür schwang ohne Anschlag auf 144° auf und rastete nicht mehr ein
+(`door_controls_test`). Die Haube bleibt bei 1,18 m, dafür ist die Frontscheibe kürzer.
+
+Eine noch flachere Heckscheibe (ab 0,62 m) machte die Heckklappe so lang, dass sie nur bis
+etwa 5° schloss und nicht mehr einrastete. 0,56 m hält alle Klappentests.
+
+## Leichte Requisiten blockieren kein Rad mehr
+
+Der Kestrel-Umbau ließ den statistischen Pylonen- und Leitbakentest kippen, obwohl die Heckform
+mit Treffern an der Front nichts zu tun hat: Das Ergebnis reagierte chaotisch auf kleinste
+Änderungen am Knotengitter. Die Diagnose eines Treffers mit 15 km/h Verlust: Das Vorderrad
+kippte den 28-kg-Gummifuß der Leitbake hoch, der Fuß verkeilte sich zwischen Hinterreifen und
+Radhaus und blockierte das Hinterrad (Raddrehzahl 0, das Auto drehte sich ein). Reibung
+zwischen einem Auto und einem nachgebenden leichten Requisit ist jetzt auf 0,3 begrenzt. Danach
+liegt der schlimmste Leitbakentreffer bei 1,6 statt 15 km/h und der schlimmste Pylonentreffer
+in der gewählten Variante bei 3,3 statt 13 bis 27 km/h. Der Test verlangt für Leitbaken jetzt
+keinen Treffer über 6 km/h.
+
+**Offen:** In einer anderen Kestrel-Variante wurde ein Pylon an der äußersten rechten Ecke
+zwischen Vorderrad und Kotflügel eingeklemmt und riss das untere Türscharnier ab. Die halb
+gelöste Tür schaukelte sich danach auf, bis Haubenschloss, Stoßfänger und Heckklappenschloss
+brachen. Das betrifft eine von 72 Positionen; die Energiezufuhr durch eine halb gelöste Tür
+muss gesondert untersucht werden.
+
+## Bergung zum Service
+
+Im Dauertest (`session_soak_test`) verließ ein geborgenes Auto im 20. Zyklus die
+Servicebucht: Beim Absetzen bekam das verbeulte Auto einen kleinen Schubs (etwa 1 m/s),
+und weil die Fahrereingabe des nächsten Bilds die Bremse wieder löste, rollte es rund 5 m
+weit. Die Bergung aktiviert jetzt Auto Hold. Außerdem hebt `relocate_to` das Auto an,
+falls ein Knoten (etwa ein herabhängender Stoßfänger) unter dem Zielboden läge. Ergebnis:
+53 Zyklen ohne Fehler.

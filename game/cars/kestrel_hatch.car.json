@@ -9,8 +9,8 @@
     "length": 4.28, "width": 1.79, "height": 1.46,
     "wheelbase": 2.63, "frontOverhang": 0.89,
     "trackFront": 1.54, "trackRear": 1.51, "groundClearance": 0.14,
-    "noseHeight": 0.72, "hoodHeight": 0.99, "beltHeight": 1.01, "tailHeight": 1.02,
-    "hoodLength": 1.18, "windshieldRun": 0.78, "roofLength": 1.72, "rearWindowRun": 0.45,
+    "noseHeight": 0.72, "hoodHeight": 0.99, "beltHeight": 1.01, "tailHeight": 0.93,
+    "hoodLength": 1.18, "windshieldRun": 0.80, "roofLength": 1.38, "rearWindowRun": 0.56,
     "roofWidthRatio": 0.78, "cornerRadiusFront": 0.2, "cornerRadiusRear": 0.24,
     "paint": [0.62, 0.05, 0.04], "paintMetallic": 0.5
   },
