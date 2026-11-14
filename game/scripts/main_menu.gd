@@ -404,7 +404,8 @@ func _build_settings(root: Control) -> void:
 	for key in [["tcs", "Traktionskontrolle"], ["abs", "ABS"], ["automatic", "Automatikgetriebe"],
 			["manual_clutch", "Kupplung selbst treten (Schaltgetriebe; ohne Kupplung würgt der Motor ab)"],
 			["steering_assist", "Lenkhilfe (glättet Tastatur und begrenzt Lenkeinschlag bei Tempo)"], ["traffic", "KI-Verkehr"],
-			["career", "Karriere: Aktivitäten bringen Geld, Tanken und Reparaturen kosten"]]:
+			["career", "Karriere: Aktivitäten bringen Geld, Tanken und Reparaturen kosten"],
+			["rumble", "Gamepad-Vibration (Aufprall, ABS, Schotter, Drehzahlbegrenzer)"]]:
 		driving.add_child(Game.make_driving_option(key[0], key[1]))
 	driving.add_child(Game.make_driving_help_option())
 	var audio: VBoxContainer = page.call("Audio")

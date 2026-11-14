@@ -8,7 +8,7 @@ signal graphics_preset_changed
 signal driving_help_changed(visible: bool)
 signal driving_setting_changed(key: String, enabled: bool)
 
-const DRIVING_SETTINGS := ["tcs", "abs", "automatic", "manual_clutch", "steering_assist", "traffic", "career"]
+const DRIVING_SETTINGS := ["tcs", "abs", "automatic", "manual_clutch", "steering_assist", "traffic", "career", "rumble"]
 # An explicit path also allows isolated profile tests without touching the player profile.
 var settings_config_path := GRAPHICS_CONFIG
 
@@ -68,6 +68,7 @@ var settings := {
 	"steering_assist": true,     # speed sensitive steering limit
 	"traffic": true,             # AI cars on the map
 	"career": false,             # activities pay, fuel and repairs cost money
+	"rumble": true,              # gamepad vibration from impacts, ABS, loose ground, limiter
 	"show_help": false,
 	"master_volume": 0.8,
 	"engine_volume": 0.8,
@@ -1062,6 +1063,10 @@ func _setup_input() -> void:
 		var prompts := preload("res://scripts/driver_prompts.gd").new()
 		prompts.name = "DriverPrompts"
 		add_child(prompts)
+	if not has_node("PadCombos"):
+		var combos := preload("res://scripts/pad_combos.gd").new()
+		combos.name = "PadCombos"
+		add_child(combos)
 	_action("throttle", 0.05); _key("throttle", [KEY_W, KEY_UP]); _joy_axis("throttle", JOY_AXIS_TRIGGER_RIGHT, 1.0)
 	_action("brake", 0.05); _key("brake", [KEY_S, KEY_DOWN]); _joy_axis("brake", JOY_AXIS_TRIGGER_LEFT, 1.0)
 	_action("steer_left", 0.08); _key("steer_left", [KEY_A, KEY_LEFT]); _joy_axis("steer_left", JOY_AXIS_LEFT_X, -1.0)
@@ -1071,7 +1076,9 @@ func _setup_input() -> void:
 	_action("shift_up"); _key("shift_up", [KEY_E]); _joy_button("shift_up", JOY_BUTTON_RIGHT_SHOULDER)
 	_action("shift_down"); _key("shift_down", [KEY_Q]); _joy_button("shift_down", JOY_BUTTON_LEFT_SHOULDER)
 	_action("toggle_gearbox"); _key("toggle_gearbox", [KEY_M]); _joy_button("toggle_gearbox", JOY_BUTTON_DPAD_DOWN)
-	_action("ignition"); _key("ignition", [KEY_I]); _joy_button("ignition", JOY_BUTTON_BACK)
+	# Back is the ignition too, sent by PadCombos when Back is let go without a combo (held, it
+	# turns the D-pad into indicators, hazards and looking back).
+	_action("ignition"); _key("ignition", [KEY_I])
 	_action("reset_vehicle"); _key("reset_vehicle", [KEY_R]); _joy_button("reset_vehicle", JOY_BUTTON_B)
 	_action("repair_vehicle"); _key("repair_vehicle", [KEY_BACKSPACE, KEY_INSERT])
 	_action("recover_vehicle"); _key("recover_vehicle", [KEY_HOME])
@@ -1120,6 +1127,7 @@ func _setup_input() -> void:
 	_action("look_back"); _key("look_back", [KEY_QUOTELEFT, KEY_KP_0])
 	_action("replay"); _key("replay", [KEY_F5])
 	_action("camera_free"); _key("camera_free", [KEY_F9])
+	_action("photo_mode"); _key("photo_mode", [KEY_F10])
 
 
 # --------------------------------------------------------------------------- materials

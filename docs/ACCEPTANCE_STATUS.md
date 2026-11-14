@@ -150,3 +150,53 @@ Die neue Zeitfahr-Bildserie liegt unter
 wurde auch nach separatem Entpacken mit einer vollständigen nativen Runde
 und anschließendem Profil-/Rekord-Neuladen geprüft; Paketnachweise stehen in
 [RELEASE_LINUX.md](RELEASE_LINUX.md).
+
+## Teilrahmen bei halber Drehung
+
+Wurde ein Auto genau 180° gegenüber seiner Bauorientierung gesetzt (z. B. beim
+Driftstart auf dem Testgelände oder beim Kartenwechsel), lieferte die
+Spurformel für das Quaternion der starren Anbauteile ein Null-Quaternion und
+damit NaN. Godot meldete dann rund 45 Bilder lang `!v.is_finite()` für das
+hintere Kennzeichen des Meridian-Kombis. `computeNodeFrames` nutzt jetzt die
+Shepperd-Methode als Kaltstart und behält die Rahmen des Vorbilds als Warmstart.
+Der neue Kerntest prüft π, π/2 und −3 rad; Proben auf allen sechs Karten und im
+Drifttest zeigen keine Fehler mehr.
+
+## Gamepad und Fotomodus
+
+Blinker, Warnblinker und Rückblick lagen bisher nur auf der Tastatur. Mit gehaltenem Back
+wird das D-Pad zur zweiten Ebene (←/→ Blinker, ↑ Warnblinker, ↓ Rückblick). Back allein
+schaltet weiter den Motor, beim Loslassen ohne Kombination. Die Grundbelegung des D-Pads
+(Licht, Getriebe, Tanken, Service) reagiert unter der Ebene nicht. Neu ist die
+Gamepad-Vibration: Aufprall stark auf dem schweren Motor, ABS, loser Untergrund,
+Karosserieschleifen, Radschlupf und Drehzahlbegrenzer leicht. Belegt durch
+`gamepad_controls_test` mit echten Joypad-Ereignissen. Die Vibration selbst ist ohne
+Hardware nicht fühlbar geprüft, nur ihre Pegel.
+
+Der Fotomodus (`F10`) pausiert, blendet HUD und Minikarte aus und nutzt die freie Kamera
+mit Brennweite, Schärfentiefe und Belichtung. `F12` schreibt ein PNG. `photo_mode_test`
+prüft Pausieren, Wiederherstellen, Regler und Speichern unter Xvfb. Eine
+Vulkan-Aufnahme in der Stadt zeigt korrekte Unschärfe hinter dem Auto.
+
+Bei der Suite fiel ein Verkehrsauto im Hügelland auf, das beim Rechtsabbiegen das
+Vorfahrtsschild streifte (Spiegel ab, 6 gebrochene Beams). Das Schild stand innerhalb des
+Eckausrundungsradius und steht jetzt 10,5 m vor der Einmündung am Bankett. Die
+schnelle Drift-Medaille liegt nahe am Grenzbereich (4.886 bis 5.704 Punkte je nach Lauf,
+weil der Mehrkern-Löser nicht bitgenau gleich rechnet); der Test gibt wie einem Fahrer
+einen zweiten Versuch.
+
+## Scheinwerfer der prozeduralen Autos, Fahrbahnränder im Hügelland
+
+Die Scheinwerfer bestanden aus einer durchgehenden Chromfläche mit zwei Punkten und wirkten
+wie Spiegelplatten. Jetzt haben sie ein schwarzes Gehäuse mit grauem Metallgrund, oben eine
+Chromleiste und darunter ein Tagfahrlicht, das innen nach unten abknickt (L-Form). Dazu
+kommen ein Projektor (dunkle Linse im Chromring) und ein Reflektor (Leuchtscheibe in der
+Chromschale). Die Lampen liegen bündig in der geneigten Front. Senkrecht gestellt
+versanken sie oben und erschienen als Halbmonde; mit hellem Mittelpunkt wirkten sie aus
+der Distanz wie Comic-Augen. Geprüft mit Vulkan-Aufnahmen von Kestrel und Vortex.
+
+Im Hügelland folgten Fahrbahn und Bankett einer bilinearen Bodenhöhe, das Gelände-Mesh
+ist aber in Dreiecke zerlegt. An Böschungen stach das Gras sägezahnartig durch das Bankett
+und über die Fahrbahnkante. `C.sample_mesh` liefert die Höhe genau so, wie das Mesh sie
+zeichnet, und Fahrbahn und Bankett liegen nie darunter. Die Fahrphysik ist davon nicht
+betroffen: Sie nutzt weiter die angehobene Fahrbahnhöhe.

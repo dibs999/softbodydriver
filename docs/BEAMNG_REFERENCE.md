@@ -35,3 +35,30 @@ Die Begutachtung vor dieser Überarbeitungsrunde zeigt bereits C++-Node-Beam-Phy
 ## Grenzen dieser Iteration
 
 Ein vollständig ausgearbeitetes kommerzielles Fahrzeugspiel entsteht über mehrere überprüfbare Iterationen. Neue Funktionen und bestandene Tests belegen nur ihren jeweiligen Umfang. Fotorealistische Modelle, alle Karten, physikalisch abtrennbare Karosserieteile und ein vollständiger Spielmodus dürfen erst nach eigener Umsetzung und Abnahme als fertig gelten. Für die nächste visuelle Referenzrunde ist Zugriff auf die offizielle BeamNG-Dokumentation oder bereitgestelltes Bildmaterial erforderlich.
+
+## Funktionsvergleich (Stand 14. November 2026)
+
+Ehrliche Gegenüberstellung mit BeamNG.drive nach allgemein bekanntem Funktionsumfang
+(die offizielle Dokumentation ist aus der Cloud-Umgebung weiterhin nicht erreichbar).
+„Gleichwertig“ heißt: dasselbe Prinzip ist umgesetzt und durch Tests belegt, nicht dass
+Umfang oder Feinschliff identisch sind.
+
+| Bereich | BeamNG.drive | SoftBodyDriver | Einschätzung |
+|---|---|---|---|
+| Physikkern | Node-Beam mit 2000 Hz, plastische Verformung, Bruch | Node-Beam mit 2000 Hz, Plastizität, Bruchgruppen, mehrere Kerne | gleichwertig im Prinzip |
+| Reifen | Node-Reifen mit Druck, Schlupfkurve, Lastabhängigkeit | 20 Laufflächen-Nodes, Druck, Lastabhängigkeit, Gleitreibung, Verschleiß/Temperatur, Platzer | gleichwertig im Prinzip |
+| Antrieb und Systeme | Motor, Getriebe, Kupplung, Thermik, Kraftstoff, Schäden | dasselbe, dazu Elektroantrieb, Wasserschlag, Lagerschäden | gleichwertig |
+| Schaden | jede Delle aus der Physik, abfallende Teile | dasselbe, Glasbruch, Lampenbruch, Achsbruch | gleichwertig im Prinzip; Optik der Risskanten einfacher |
+| Fahrzeugauswahl | > 50 Grundmodelle mit Teilekonfigurator (Slots) | 13 Autos, Motortausch, Tuning, Lack, Bullbar, Anhänger | deutlich kleiner; kein Lkw/Bus |
+| Karten | mehrere große Karten (bis ~20 km²) | sechs verbundene Karten (je ~1–2 km²), Tunnelübergänge | kleiner; durchgehende Welt vorhanden |
+| Verkehr und KI | KI-Verkehr, Polizei, Rennen | KI-Verkehr mit Unfällen/Pannen, Polizei-Verfolgung, Rennen | gleichwertig im Prinzip |
+| Spielmodi | Freies Fahren, Szenarien, Zeitfahren, Karriere | Freies Fahren, Zeitfahren, Lieferfahrten, Rennen, Crashtest, Drift, Verfolgung, Karriere, Fahrstunde | gleichwertig im Prinzip |
+| Wetter/Zeit | Tageszeit, Wolken, Regen | Tageszeit, Nebel, Regen mit Nassgrip und Wischern | gleichwertig im Prinzip |
+| Eingabe | Tastatur, Gamepad, Lenkrad mit Force Feedback | Tastatur, Gamepad mit Vibration; kein Lenkrad-FFB | Lücke: Lenkrad-FFB |
+| Werkzeuge | World Editor, Teile-Editor, Mod-System, Fotomodus | Wiederholung, freie Kamera, Node-Greifer, eigenes Fahrzeugformat, glTF-Import | Lücke: Editor, Fotomodus |
+| Mehrspieler | nur über Drittanbieter-Mod | keiner | kein Unterschied im Grundspiel |
+
+Daraus folgen die nächsten größeren Baustellen: mehr Fahrzeugklassen (Lkw/Transporter),
+Lenkrad-Force-Feedback, ein Fotomodus und größere Kartenflächen. Bildqualität und
+Fahrgefühl lassen sich nur mit eigener Hardware und Spielern beurteilen; Headless-Tests
+belegen sie nicht.

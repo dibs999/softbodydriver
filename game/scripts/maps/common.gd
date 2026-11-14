@@ -148,6 +148,25 @@ static func sample(h: PackedFloat32Array, nx: int, nz: int, ox: float, oz: float
 	return lerpf(lerpf(h[ix * nz + iz], h[(ix + 1) * nz + iz], tx), lerpf(h[ix * nz + iz + 1], h[(ix + 1) * nz + iz + 1], tx), tz)
 
 
+## Height of the drawn terrain mesh: each cell is split into the triangles (ix,iz)-(ix+1,iz)-
+## (ix+1,iz+1) and (ix,iz)-(ix+1,iz+1)-(ix,iz+1), as terrain_mesh builds them. `sample` blends
+## bilinearly, which on a curved slope lies up to several centimetres off these planes.
+static func sample_mesh(h: PackedFloat32Array, nx: int, nz: int, ox: float, oz: float, cell: float, x: float, z: float) -> float:
+	var fx := clampf((x - ox) / cell, 0.0, nx - 1.001)
+	var fz := clampf((z - oz) / cell, 0.0, nz - 1.001)
+	var ix := int(fx)
+	var iz := int(fz)
+	var tx := fx - ix
+	var tz := fz - iz
+	var ha := h[ix * nz + iz]
+	var hb := h[(ix + 1) * nz + iz]
+	var hc := h[ix * nz + iz + 1]
+	var hd := h[(ix + 1) * nz + iz + 1]
+	if tx >= tz:
+		return ha + (hb - ha) * tx + (hd - hb) * tz
+	return ha + (hc - ha) * tz + (hd - hc) * tx
+
+
 ## Flattens the terrain along a path (points with y): within half_w the height is the path height,
 ## blended back to the terrain over `blend` metres. Only cells near the path are visited.
 static func carve_path(h: PackedFloat32Array, nx: int, nz: int, ox: float, oz: float, cell: float,
@@ -326,9 +345,11 @@ static func road_material(lanes: int, width: float, texture_length: float, style
 	return m
 
 
-## Road ribbon along a polyline (points with y). Closed loop if `closed`.
+## Road ribbon along a polyline (points with y). Closed loop if `closed`. `cover_at` (optional) is
+## the drawn terrain's height (sample_mesh): the ribbon never dips under it, where a bank beside
+## the road otherwise pushed grass over the shoulder.
 static func road_mesh(points: PackedVector3Array, half_w: float, material: Material, closed := true, lift := 0.04,
-		v_scale := 12.0, height_at := Callable()) -> MeshInstance3D:
+		v_scale := 12.0, height_at := Callable(), cover_at := Callable()) -> MeshInstance3D:
 	if height_at.is_valid() and points.size() >= 2:
 		# Follow the terrain between waypoints as well, especially at the shoulders.
 		var samples := PackedVector3Array()
@@ -372,6 +393,8 @@ static func road_mesh(points: PackedVector3Array, half_w: float, material: Mater
 				if height_at.is_valid():
 					p.y = height_at.call(p.x, p.z)
 				p.y += lift
+				if cover_at.is_valid():
+					p.y = maxf(p.y, float(cover_at.call(p.x, p.z)) + 0.02)
 				st.set_uv(vertex[1])
 				st.add_vertex(p)
 		v = v2
@@ -515,8 +538,10 @@ static func label3d(parent: Node3D, text: String, pos: Vector3, yaw: float, size
 ## height function): strips from just under the asphalt edge out to `width` metres beyond it, UV.x 0
 ## at the asphalt and 1 outside. The inner edge sits slightly below the road surface so the asphalt
 ## edge stays crisp; the outer edge meets the terrain. `sides` picks the left (-1) and/or right (+1) strip.
+## `cover_at` (optional) is the drawn terrain's height (sample_mesh): the strip never dips under it,
+## where the grass otherwise showed through in a saw-tooth along the terrain's cell diagonals.
 static func verge_mesh(points: PackedVector3Array, half_w: float, width: float, material: Material, closed := true,
-		road_lift := 0.04, v_scale := 12.0, height_at := Callable(), sides: Array = [-1.0, 1.0]) -> MeshInstance3D:
+		road_lift := 0.04, v_scale := 12.0, height_at := Callable(), sides: Array = [-1.0, 1.0], cover_at := Callable()) -> MeshInstance3D:
 	if height_at.is_valid() and points.size() >= 2:
 		var samples := PackedVector3Array()
 		var segments := points.size() if closed else points.size() - 1
@@ -562,6 +587,8 @@ static func verge_mesh(points: PackedVector3Array, half_w: float, width: float, 
 				if height_at.is_valid():
 					p.y = height_at.call(p.x, p.z)
 				p.y += vertex[2]
+				if cover_at.is_valid():
+					p.y = maxf(p.y, float(cover_at.call(p.x, p.z)) + 0.02)
 				st.set_uv(vertex[1])
 				st.add_vertex(p)
 		v = v2

@@ -269,7 +269,9 @@ Details und verbleibende Release-Abnahmen: [Linux-Paketierung](docs/RELEASE_LINU
 | `F1`, `F2`, `Esc` | Hilfe, Fahrzeugdiagnose, Pausenmenü |
 | `F3`, `F4` | Aktivität wählen, am Start aufstellen / Lauf abbrechen |
 | `N`, `K` | Minikarte ein/aus, Übersichtskarte |
-| Gamepad | RT/LT Gas/Bremse, linker Stick lenken, A Handbremse, LB/RB schalten, Y Kamera, B Reset |
+| `F10` | **Fotomodus**: Simulation hält an, HUD weg, freie Kamera (Fahrtasten fliegen, rechte Maustaste umsehen); Mausrad Brennweite, `←`/`→` Fokusentfernung, `↑`/`↓` Unschärfe (Schärfentiefe; nicht im Renderer „Kompatibilität“), `+`/`−` Belichtung, `F12` speichert ein PNG nach `user://screenshots/`, `H` blendet die Hilfe aus, `F10`/`Esc` zurück |
+| Gamepad | RT/LT Gas/Bremse, linker Stick lenken, rechter Stick umsehen, A Handbremse, X Kupplung, LB/RB schalten, Y Kamera, B Reset, Back Motor, Start Pausenmenü, D-Pad ↑ Licht / ↓ Getriebe / ← tanken / → Service, L3 Hupe, R3 Tempomat. **Back halten** + D-Pad ←/→ Blinker, ↑ Warnblinker, ↓ (halten) Rückblick |
+| Vibration | Das Gamepad vibriert bei Aufprall (stark, je nach Wucht), ABS-Regelung (Rattern), auf Schotter, Sand und Gras, bei schleifender Karosserie, durchdrehenden Rädern und am Drehzahlbegrenzer; abschaltbar unter Einstellungen → „Gamepad-Vibration“ |
 
 ### Karten
 

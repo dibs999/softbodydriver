@@ -35,6 +35,8 @@ var _center_mesh: MeshInstance3D
 var _shake_phase := 0.0
 var shake := 0.0
 var look_back := false
+## Field of view of the free camera (photo mode changes it).
+var free_fov := 62.0
 var _cockpit_yaw := 0.0
 var _cockpit_pitch := 0.0
 var mirrors: Node
@@ -153,7 +155,7 @@ func cycle() -> String:
 
 
 func _fly(delta: float) -> void:
-	fov = 62.0
+	fov = free_fov
 	h_offset = 0.0
 	v_offset = 0.0
 	global_basis = Basis.from_euler(Vector3(_free_pitch, _free_yaw, 0.0))
