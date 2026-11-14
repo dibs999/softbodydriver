@@ -1324,3 +1324,67 @@ TEST_CASE("an electric compact uses a realistic amount of energy at steady speed
         else { CHECK(per100 > 14.0); CHECK(per100 < 20.0); }
     }
 }
+
+TEST_CASE("tyres grip like real ones: ABS beats locked wheels, realistic braking distance and skidpad") {
+    // Peak grip up to ~15 % slip, less when the patch slides outright, and load sensitivity: a
+    // compact on road tyres stops from 100 km/h in ~35 m with ABS and needs over 8 % more with
+    // locked wheels; it corners at ~0.85-0.9 g. (Plain Coulomb friction gave 29.5 m either way and
+    // ~1.0 g, more than any road tyre manages.)
+    auto stop = [](bool abs) {
+        CarBuild cb = buildCar(loadCarDefinition(carPath("kestrel_hatch")));
+        World w = flatWorld();
+        w.addBody(std::move(cb.body));
+        auto& car = w.body(0);
+        w.simulate(1.0);
+        car.setVelocity({100.0 / 3.6, 0, 0});
+        w.simulate(0.3);
+        VehicleControls c;
+        c.brake = 1.0;
+        c.abs = abs;
+        car.setControls(c);
+        const Vec3 start = car.centerOfMass();
+        for (int i = 0; i < 400 && car.telemetry().speedKmh > 1.0; ++i) w.simulate(0.02);
+        return length(car.centerOfMass() - start);
+    };
+    const real withAbs = stop(true);
+    const real locked = stop(false);
+    MESSAGE("100-0 km/h: ABS " << withAbs << " m, locked " << locked << " m");
+    CHECK(withAbs > 32.0);
+    CHECK(withAbs < 38.0);
+    CHECK(locked > withAbs * 1.08);
+
+    // Skidpad: steering wound on slowly at ~70 km/h, the lateral acceleration averaged over 0.5 s.
+    CarBuild cb = buildCar(loadCarDefinition(carPath("kestrel_hatch")));
+    World w = flatWorld();
+    w.addBody(std::move(cb.body));
+    auto& car = w.body(0);
+    w.simulate(1.0);
+    car.setVelocity({70.0 / 3.6, 0, 0});
+    VehicleControls c;
+    c.throttle = 0.25;
+    car.setControls(c);
+    w.simulate(2.0);
+    real maxLat = 0.0;
+    real window[25] = {};
+    Vec3 vPrev = car.centerOfMassVelocity();
+    for (int i = 0; i < 600; ++i) {
+        c.throttle = std::clamp<real>(0.3 + (70.0 - car.telemetry().speedKmh) * 0.08, 0.0, 1.0);
+        c.steer = std::min<real>(0.7, i * 0.0015);
+        car.setControls(c);
+        w.simulate(0.02);
+        const Vec3 v = car.centerOfMassVelocity();
+        const Vec3 acc{(v.x - vPrev.x) / 0.02, 0.0, (v.z - vPrev.z) / 0.02};
+        vPrev = v;
+        const Vec3 dir = normalize(Vec3{v.x, 0, v.z});
+        window[i % 25] = length(acc - dir * dot(acc, dir));
+        if (i > 30) {
+            real avg = 0.0;
+            for (real x : window) avg += x;
+            maxLat = std::max(maxLat, avg / 25.0);
+        }
+    }
+    MESSAGE("skidpad: " << maxLat / 9.81 << " g");
+    CHECK(maxLat / 9.81 > 0.80);
+    CHECK(maxLat / 9.81 < 0.97);
+    CHECK(w.stats().finite);
+}

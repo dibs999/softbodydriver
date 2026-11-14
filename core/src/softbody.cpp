@@ -41,6 +41,7 @@ std::uint32_t SoftBody::addNode(const std::string& id, const Vec3& pos, const No
     mass_.push_back(p.mass);
     invMass_.push_back(p.fixed ? 0.0 : 1.0 / p.mass);
     friction_.push_back(p.friction);
+    groundGrip_.push_back(1.0);
     contactStiffness_.push_back(std::max<real>(0.0, p.contactStiffness));
     collision_.push_back(p.collision ? 1 : 0);
     std::string name = id;

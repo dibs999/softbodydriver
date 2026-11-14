@@ -17,6 +17,7 @@ constexpr real kSoftContactMaxDepth = 0.02;   // beyond this the rubber is "bott
 constexpr real kSoftContactDampingRatio = 0.02; // rubber loss lives in the tyre beams
 constexpr real kHeavyBody = 600.0;   // kg: vehicles, as opposed to props (a felled log is 380 kg)
 constexpr real kDeepContact = 0.01;  // m behind a face of another vehicle: interlocked structure
+constexpr real kLightProp = 50.0;    // kg: a cone, drum, bin, beacon or branch, which yields to a car
 }  // namespace
 
 void World::removeBody(std::size_t i) {
@@ -181,6 +182,7 @@ std::size_t World::collideBody(SoftBody& b, std::vector<const StaticCollider*>& 
     auto& vel = b.velocities();
     const auto& invMass = b.invMasses();
     const auto& friction = b.frictions();
+    const auto& groundGrip = b.groundGrips();
     const auto& collision = b.collisionFlags();
     const auto& soft = b.contactStiffnesses();
     const auto& hold = b.positionHold();
@@ -214,7 +216,7 @@ std::size_t World::collideBody(SoftBody& b, std::vector<const StaticCollider*>& 
             real depth;
             if (!c.contact(pos[i], n, depth)) continue;
             ++contacts;
-            const real mu = friction[i] * c.friction;
+            const real mu = friction[i] * groundGrip[i] * c.friction;
             if (soft[i] > 0.0) {
                 // Compliant tread rubber: spring-damper normal force, rigid stop beyond kSoftContactMaxDepth.
                 const real m = 1.0 / invMass[i];
@@ -284,6 +286,20 @@ std::size_t World::collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody,
     auto& tVel = triBody.velocities();
     const auto& tInvM = triBody.invMasses();
 
+    // A light prop against a vehicle: only the prop is pushed out of the overlap. A cone pinched
+    // between a tyre and a door could not get out either way, and its push-outs piled up on the
+    // car until the door's hinges tore (37 km/h, one strike in ~20; the car then rolled over the
+    // door). A 4.5 kg cone cannot shove a car's panels; it gives. The impulse still exchanges the
+    // momentum both ways, so the car is slowed by the hit as before. A low prop (under 25 cm: a
+    // block, a branch) keeps the shared push-out for the car's nodes in its faces: that is how a
+    // tyre climbs onto it instead of bulldozing it. A tyre does not climb a cone; it squashes it.
+    const bool lightNodes = nodeBody.totalMass() < kLightProp && triBody.totalMass() > kHeavyBody;
+    bool lightTris = triBody.totalMass() < kLightProp && nodeBody.totalMass() > kHeavyBody;
+    if (lightTris) {
+        Vec3 plo, phi;
+        triBody.aabb(plo, phi);
+        lightTris = phi.y - plo.y > 0.25;
+    }
     const real skin = settings_.colTriSkin;
     const real maxDepth = triBody.contactThickness() > 0.0 ? std::min(settings_.colTriThickness, triBody.contactThickness())
                                                           : settings_.colTriThickness;
@@ -440,11 +456,20 @@ std::size_t World::collideNodeVsTriangles(SoftBody& nodeBody, SoftBody& triBody,
         // 320 km/h, scattering parts. 2 mm per step lets them settle. Props (a cone squashed under
         // a bumper) keep the fast push-out, without which they wedge under the car.
         const real penetration = std::min(skin - c.dist, c.dist < -kDeepContact && heavyPair ? 0.002 : 0.02);
-        const Vec3 corr = n * (penetration / wTotal);
-        nPos[i] += corr * wp;
-        tPos[ia] -= corr * (w0 * wa);
-        tPos[ib] -= corr * (w1 * wb);
-        tPos[ic] -= corr * (w2 * wc);
+        if (lightNodes && wp > 0.0) {
+            nPos[i] += n * penetration;
+        } else if (lightTris && wTri > 0.0) {
+            const Vec3 corr = n * (penetration / wTri);
+            tPos[ia] -= corr * (w0 * wa);
+            tPos[ib] -= corr * (w1 * wb);
+            tPos[ic] -= corr * (w2 * wc);
+        } else {
+            const Vec3 corr = n * (penetration / wTotal);
+            nPos[i] += corr * wp;
+            tPos[ia] -= corr * (w0 * wa);
+            tPos[ib] -= corr * (w1 * wb);
+            tPos[ic] -= corr * (w2 * wc);
+        }
         ++contacts;
 
         const Vec3 vTri = tVel[ia] * w0 + tVel[ib] * w1 + tVel[ic] * w2;
