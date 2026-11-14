@@ -3,6 +3,7 @@ extends RefCounted
 ## a park and an AI traffic loop around the blocks.
 
 const C := preload("res://scripts/maps/common.gd")
+const CUTOUT := preload("res://materials/cutout.gdshader")
 const V := preload("res://scripts/maps/vegetation.gd")
 const BLOCKS := 10
 const BLOCK := 72.0         # block size (kerb to kerb)
@@ -1162,12 +1163,7 @@ static func _signage(parent: Node3D, world: SBWorld, origin: float, metal: Mater
 	C.scatter_multimesh(parent, cap, C.mat(Color(0.12, 0.22, 0.16), 0.5, 0.4), caps, false)
 	var arrow := PlaneMesh.new()
 	arrow.size = Vector2(1.3, 5.0)
-	var paint := StandardMaterial3D.new()
-	paint.albedo_texture = _arrow_texture()
-	paint.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
-	paint.alpha_scissor_threshold = 0.5
-	paint.roughness = 0.7
-	C.scatter_multimesh(parent, arrow, paint, arrows, false)
+	C.scatter_multimesh(parent, arrow, _cutout_material(_arrow_texture(), 0.7, 0.0), arrows, false)
 
 
 static func _bus_stop(parent: Node3D, world: SBWorld, p: Vector3, metal: Material, white: Material) -> void:
@@ -1220,14 +1216,17 @@ static func _poster_texture() -> ImageTexture:
 	return _tex_cache["poster"]
 
 
-static func _iron_material(tex: Texture2D) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_texture = tex
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
-	m.alpha_scissor_threshold = 0.5
-	m.roughness = 0.55
-	m.metallic = 0.55
-	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+static func _iron_material(tex: Texture2D) -> ShaderMaterial:
+	return _cutout_material(tex, 0.55, 0.55)
+
+
+## A decal cut out by its texture's alpha (see materials/cutout.gdshader).
+static func _cutout_material(tex: Texture2D, roughness: float, metallic: float) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = CUTOUT
+	m.set_shader_parameter("albedo_tex", tex)
+	m.set_shader_parameter("roughness_value", roughness)
+	m.set_shader_parameter("metallic_value", metallic)
 	return m
 
 
