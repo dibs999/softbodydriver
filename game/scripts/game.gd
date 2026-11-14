@@ -146,6 +146,16 @@ func _check_exits() -> void:
 	_locked_exit = locked
 
 
+## The map's places plus the service bay and, for each tunnel, where it leads.
+func _mark_places() -> void:
+	var places: Array = map_data.get("map_places", []).duplicate()
+	places.append({"name": "Service / Tankstelle", "position": equipment.bay})
+	for e: Dictionary in map_data.get("exits", []):
+		var gate: Transform3D = e["gate"]
+		places.append({"name": "Tunnel → %s" % _map_name(String(e["to"])).split(" · ")[0], "position": gate.origin + gate.basis.z * 35.0})
+	map_data["map_places"] = places
+
+
 func _map_name(id: String) -> String:
 	for entry in Game.MAPS:
 		if entry["id"] == id:
@@ -196,9 +206,7 @@ func travel(to: String) -> void:
 	player.relocate_to(arrive, entrances.has(from))
 	weather.set_shelters(map_data.get("rain_shelters", []))
 	equipment.configure(self, map_data["spawns"][0])
-	var places: Array = map_data.get("map_places", []).duplicate()
-	places.append({"name": "Service / Tankstelle", "position": equipment.bay})
-	map_data["map_places"] = places
+	_mark_places()
 	minimap.configure(map_data, vehicles, _map_name(to))
 	audio.dirt = to == "desert"
 	activity.configure(to, map_data)
@@ -307,9 +315,7 @@ func _finish_ready() -> void:
 		if entry["id"] == Game.selected_map:
 			map_title = entry["name"]
 			break
-	var places: Array = map_data.get("map_places", []).duplicate()
-	places.append({"name": "Service / Tankstelle", "position": equipment.bay})
-	map_data["map_places"] = places
+	_mark_places()
 	minimap.configure(map_data, vehicles, map_title)
 	audio = VehicleAudio.new()
 	audio.world = world

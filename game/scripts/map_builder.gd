@@ -267,8 +267,7 @@ static func build_proving_grounds(world: SBWorld, parent: Node3D) -> Dictionary:
 		"map_places": [{"name": "Sprung- und Crashbahn", "position": Vector3(124, 0, -40)},
 			{"name": "Fahrdynamik-Oval", "position": Vector3(20, 0, -130)},
 			{"name": "Handling-Parcours", "position": handling[3]},
-			{"name": "Werkstatt und Boxen", "position": workshop},
-			{"name": "Tunnel zur Stadt", "position": Surroundings.TUNNEL_MOUTH}],
+			{"name": "Werkstatt und Boxen", "position": workshop}],
 		"exits": [{"to": "city", "gate": Surroundings.tunnel["gate"], "width": Surroundings.tunnel["width"]}],
 		"entrances": {"city": Surroundings.tunnel["entrance"]},
 		"ai_spawns": [car_xform(waypoints[0], waypoints[1] - waypoints[0]), car_xform(waypoints[64], waypoints[65] - waypoints[64])]}

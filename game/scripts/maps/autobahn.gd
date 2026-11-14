@@ -260,7 +260,6 @@ static func build(world: SBWorld, parent: Node3D) -> Dictionary:
 			{"name": "Raststätte Nordring", "position": Vector3((SERVICE_START + SERVICE_END) * 0.5, 0, -RADIUS + 44)},
 			{"name": "Lkw-Stellplatz", "position": truck_access[-1]},
 			{"name": "Windpark", "position": Vector3(-875, 0, -RADIUS - 270)},
-			{"name": "Tunnel Hügelland", "position": HILL_MOUTH},
 		],
 		"ai_routes": [
 			{"waypoints": lane_a_mid, "speeds": speeds_a, "spawn": C.car_xform(lane_a_mid[60], lane_a_mid[61] - lane_a_mid[60])},

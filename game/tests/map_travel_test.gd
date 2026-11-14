@@ -56,6 +56,10 @@ func _process(_d: float) -> bool:
 		0:
 			if _sim() - mark < 1.0: return false
 			check(not _exit_to("desert").is_empty(), "The city has a way out to the desert")
+			var marked := false
+			for place: Dictionary in scene.map_data.get("map_places", []):
+				marked = marked or String(place["name"]) == "Tunnel → Wüste"
+			check(marked, "and the map marks the tunnel with where it leads")
 			check(scene.vehicles.size() > 1 and scene.pedestrians != null, "with traffic and people in it")
 			fuel = float(scene.player.get_telemetry()["fuel_l"])
 			_drive_into(_exit_to("desert"), 70.0)

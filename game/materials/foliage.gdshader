@@ -43,8 +43,11 @@ void vertex() {
 
 void fragment() {
 	vec4 tex = texture(leaf_tex, UV);
-	ALPHA = tex.a;
-	ALPHA_SCISSOR_THRESHOLD = alpha_cut;
+	// Cut out by hand: with ALPHA + ALPHA_SCISSOR_THRESHOLD the mobile renderer drew every leaf
+	// and grass card black (unlit), while Forward+ and Compatibility were right.
+	if (tex.a < alpha_cut) {
+		discard;
+	}
 	vec3 tint = mix(tint_a.rgb, tint_b.rgb, COLOR.g);
 	tint = mix(tint, tint * autumn.rgb * 1.25, step(1.0 - autumn_amount, tree_rand));
 	tint *= mix(0.88, 1.12, fract(tree_rand * 7.31));
@@ -57,5 +60,8 @@ void fragment() {
 	NORMAL = normalize(view_normal);
 	ROUGHNESS = 0.78;
 	SPECULAR = 0.32;
+#if CURRENT_RENDERER != RENDERER_MOBILE
+	// Light through the leaves. (The mobile renderer darkened the foliage to half with it.)
 	BACKLIGHT = col * translucency;
+#endif
 }
