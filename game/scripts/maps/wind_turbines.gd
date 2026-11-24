@@ -1,23 +1,32 @@
 extends Node3D
-## Slowly rotating wind turbines. The masts are visual-only boxes (they stand far outside the
+## Slowly rotating wind turbines. The masts are visual-only shapes (they stand far outside the
 ## driving envelope); the rotor assemblies are children of this node and keep their own phase.
 
 var _rotors: Array[Dictionary] = []
-var _blade_mesh: BoxMesh
-var _tip_mesh: BoxMesh
+var _blade_mesh: Mesh
+var _tip_mesh: Mesh
 
 func _ready() -> void:
-	_blade_mesh = BoxMesh.new()
-	_blade_mesh.size = Vector3(1.16, 19.0, 0.34)
-	_tip_mesh = BoxMesh.new()
-	_tip_mesh.size = Vector3(0.9, 2.8, 0.3)
+	_blade_mesh = CylinderMesh.new()
+	_blade_mesh.bottom_radius = 0.48
+	_blade_mesh.top_radius = 0.16
+	_blade_mesh.height = 18.2
+	_blade_mesh.radial_segments = 8
+	_tip_mesh = CylinderMesh.new()
+	_tip_mesh.bottom_radius = 0.17
+	_tip_mesh.top_radius = 0.11
+	_tip_mesh.height = 2.8
+	_tip_mesh.radial_segments = 8
 
 func add_turbine(p: Vector3, white: Material, metal: Material, red: Material, phase: float) -> void:
 	if _blade_mesh == null:
 		_ready()
 	var mast := MeshInstance3D.new()
-	var mast_mesh := BoxMesh.new()
-	mast_mesh.size = Vector3(2.3, 50.0, 2.3)
+	var mast_mesh := CylinderMesh.new()
+	mast_mesh.bottom_radius = 1.15
+	mast_mesh.top_radius = 0.62
+	mast_mesh.height = 50.0
+	mast_mesh.radial_segments = 12
 	mast.mesh = mast_mesh
 	mast.material_override = white
 	mast.position = p + Vector3.UP * 25.0
@@ -39,14 +48,16 @@ func add_turbine(p: Vector3, white: Material, metal: Material, red: Material, ph
 		var mi := MeshInstance3D.new()
 		mi.mesh = _blade_mesh
 		mi.material_override = white
-		mi.position = direction * 9.5
+		mi.position = direction * 9.1
 		mi.rotation.z = angle
+		mi.scale = Vector3(1.0, 1.0, 0.32)
 		rotor.add_child(mi)
 		var tip := MeshInstance3D.new()
 		tip.mesh = _tip_mesh
 		tip.material_override = red
-		tip.position = direction * 20.4
+		tip.position = direction * 19.3
 		tip.rotation.z = angle
+		tip.scale = Vector3(1.0, 1.0, 0.32)
 		rotor.add_child(tip)
 	_rotors.append({"node": rotor, "speed": 0.38 + 0.04 * sin(phase * 3.7)})
 
