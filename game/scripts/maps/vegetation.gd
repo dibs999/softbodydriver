@@ -447,6 +447,28 @@ static func grass(parent: Node3D, ground: Array[Vector3], seed := 1, dry := fals
 			var ks := s * (0.95 if k == 0 else rng.randf_range(0.45, 0.8))
 			xforms.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(ks, ks * rng.randf_range(0.75, 1.3), ks)), p + off - Vector3.UP * 0.02))
 	var tuft := _tuft_mesh(dry)
+	_grass_chunks(parent, tuft, xforms, reach)
+
+	# Meadow flowers grow only in a small share of the grass clumps, but across every map that
+	# uses the shared ground cover. Three colour variants break up the otherwise uniform green.
+	if not dry:
+		var flower_rng := RandomNumberGenerator.new()
+		flower_rng.seed = seed + 991
+		var flower_buckets: Array = []
+		for i in 3:
+			var bucket: Array[Transform3D] = []
+			flower_buckets.append(bucket)
+		for p in ground:
+			if flower_rng.randf() > 0.16:
+				continue
+			var s := flower_rng.randf_range(0.75, 1.25)
+			var xf := Transform3D(Basis(Vector3.UP, flower_rng.randf() * TAU).scaled(Vector3(s, s, s)), p + Vector3(flower_rng.randfn() * 0.18, 0.0, flower_rng.randfn() * 0.18))
+			flower_buckets[flower_rng.randi() % 3].append(xf)
+		for variant in 3:
+			_grass_chunks(parent, _flower_mesh(variant), flower_buckets[variant], reach)
+
+
+static func _grass_chunks(parent: Node3D, mesh: Mesh, xforms: Array[Transform3D], reach: float) -> void:
 	var chunks: Dictionary = {}
 	for xf in xforms:
 		var key := Vector2i(floori(xf.origin.x / 48.0), floori(xf.origin.z / 48.0))
@@ -457,7 +479,7 @@ static func grass(parent: Node3D, ground: Array[Vector3], seed := 1, dry := fals
 	for list: Array[Transform3D] in chunks.values():
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = tuft
+		mm.mesh = mesh
 		mm.instance_count = list.size()
 		for i in list.size():
 			mm.set_instance_transform(i, list[i])
@@ -467,6 +489,48 @@ static func grass(parent: Node3D, ground: Array[Vector3], seed := 1, dry := fals
 		mmi.visibility_range_end = reach
 		mmi.visibility_range_end_margin = 15.0
 		parent.add_child(mmi)
+
+
+static func _colored_quad(st: SurfaceTool, center: Vector3, right: Vector3, up: Vector3, color: Color) -> void:
+	var corners := [center - right - up, center + right - up, center + right + up, center - right + up]
+	st.set_color(color)
+	for i: int in [0, 2, 1, 0, 3, 2]:
+		st.add_vertex(corners[i])
+
+
+## Small geometric wildflowers: real petals instead of a flat texture, so they still read as
+## individual plants in the near field. One mesh per colour variant keeps the batches cheap.
+static func _flower_mesh(variant: int) -> ArrayMesh:
+	var key := "flower_%d" % variant
+	if _meshes.has(key):
+		return _meshes[key]
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var stem := Color(0.16, 0.32, 0.10)
+	var petals: Color = [Color(0.94, 0.93, 0.82), Color(0.95, 0.72, 0.12), Color(0.58, 0.34, 0.76)][variant]
+	var centre: Color = Color(0.95, 0.62, 0.06) if variant != 1 else Color(0.35, 0.20, 0.05)
+	for axis in 2:
+		var side := Vector3(0.012, 0, 0) if axis == 0 else Vector3(0, 0, 0.012)
+		_colored_quad(st, Vector3(0, 0.22, 0), side, Vector3(0, 0.22, 0), stem)
+	for leaf_side: float in [-1.0, 1.0]:
+		_colored_quad(st, Vector3(0.035 * leaf_side, 0.18, 0), Vector3(0.035, 0, 0.012), Vector3(0.008, 0.025, 0), stem)
+	var top := Vector3(0, 0.46, 0)
+	for i in 6:
+		var a := TAU * i / 6.0
+		var dir := Vector3(cos(a), 0, sin(a))
+		var pos := top + dir * 0.022
+		_colored_quad(st, pos, dir * 0.020, Vector3(-dir.z, 0, dir.x) * 0.011, petals)
+	_colored_quad(st, top + Vector3(0, 0.004, 0), Vector3(0.012, 0, 0), Vector3(0, 0, 0.012), centre)
+	st.generate_normals()
+	var mesh := ArrayMesh.new()
+	st.commit(mesh)
+	var material := StandardMaterial3D.new()
+	material.vertex_color_use_as_albedo = true
+	material.roughness = 0.82
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mesh.surface_set_material(0, material)
+	_meshes[key] = mesh
+	return mesh
 
 
 static func _tuft_mesh(dry: bool) -> ArrayMesh:
@@ -496,6 +560,7 @@ static func roadside_grass(parent: Node3D, path: PackedVector3Array, closed: boo
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
 	var points: Array[Vector3] = []
+	var shrubs: Array[Vector3] = []
 	var segments := path.size() if closed else path.size() - 1
 	for i in segments:
 		var a := path[i]
@@ -519,7 +584,19 @@ static func roadside_grass(parent: Node3D, path: PackedVector3Array, closed: boo
 			if blocked.is_valid() and blocked.call(p):
 				continue
 			points.append(p)
+		# Irregular low scrub behind the grass verge. These are non-colliding bushes (the tree
+		# colliders remain the caller's responsibility), so an occasional branch over the edge is
+		# harmless while the roadside stops looking like a shaved lawn.
+		if rng.randf() < length / 30.0:
+			var along := a.lerp(b, rng.randf())
+			var lateral := rng.randf_range(inner + 2.5, outer)
+			var p := along + side * lateral * (1.0 if rng.randf() < 0.5 else -1.0)
+			if height.is_valid():
+				p.y = height.call(p.x, p.z)
+			if not blocked.is_valid() or not blocked.call(p):
+				shrubs.append(p)
 	grass(parent, points, seed, dry)
+	plant(parent, "dry_shrub" if dry else "bush", shrubs, seed + 311, 0.55, 1.0, false)
 
 
 ## Grass tufts scattered over a rectangle (x/z), `density` per square metre.

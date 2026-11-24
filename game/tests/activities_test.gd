@@ -69,4 +69,7 @@ func run() -> void:
 	activity._process(0.1)
 	scene.world.paused = true
 	check(not activity.active and activity.message.contains("versetzt"), "Unexpected relocation invalidates active run")
+	check(activity.available_modes().has(7), "Landmark tour is offered on a map with places")
+	var tour: Array = activity._build_tour(scene.map_data["spawns"][0].origin)
+	check(tour[0].size() >= 4 and tour[0].size() == tour[1].size(), "Landmark tour builds ordered named targets")
 	quit(1 if failed else 0)

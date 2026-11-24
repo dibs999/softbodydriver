@@ -232,7 +232,7 @@ func _apply_lighting() -> void:
 	_sky.cloud_shadow = Color(0.06, 0.07, 0.1).lerp(Color(0.56, 0.61, 0.69).lerp(Color(0.42, 0.45, 0.5), cloud), daylight)
 	_environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	_environment.ambient_light_color = Color(0.35, 0.45, 0.65).lerp(Color(0.78, 0.84, 0.94), daylight)
-	_environment.ambient_light_energy = lerpf(0.10, 0.72 - cloud * 0.16, daylight)
+	_environment.ambient_light_energy = lerpf(0.10, 0.64 - cloud * 0.14, daylight)
 	_environment.fog_light_color = _sky.sky_horizon_color
 	_environment.fog_density = _day_fog + cloud * 0.0012 + float(FOG_EXTRA[weather_index]) * lerpf(0.6, 1.0, daylight)
 	_environment.fog_sky_affect = _sky_fog

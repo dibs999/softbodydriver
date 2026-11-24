@@ -571,9 +571,19 @@ func _on_car_selected(i: int) -> void:
 		preview_car.set_input(0, 1, 0, 1)
 
 
+func _map_activity_text(id: String) -> String:
+	var modes := ["Zeitfahren", "Drift-Challenge"]
+	if id == "city": modes.append("Lieferfahrt")
+	modes.append("Rennen")
+	if id == "proving_grounds": modes.append("Crashtest")
+	modes.append("Verfolgungsjagd")
+	modes.append("Entdeckertour")
+	return "Aktivitäten: " + " · ".join(modes) + "\nWetter und Tageszeit sind frei umschaltbar"
+
+
 func _on_map_selected(i: int) -> void:
 	Game.selected_map = Game.MAPS[i]["id"]
-	map_info.text = "START: %s\n%s" % [Game.MAPS[i]["name"], Game.MAPS[i]["description"]]
+	map_info.text = "START: %s\n%s\n\n%s" % [Game.MAPS[i]["name"], Game.MAPS[i]["description"], _map_activity_text(Game.selected_map)]
 	if _career_on(): _refresh_garage()   # contract line, lock state and start button for this map
 
 

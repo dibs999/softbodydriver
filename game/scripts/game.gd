@@ -494,8 +494,8 @@ func _build_environment() -> void:
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	e.tonemap_white = 6.0
 	e.adjustment_enabled = true
-	e.adjustment_contrast = 1.04
-	e.adjustment_saturation = 1.06
+	e.adjustment_contrast = 1.07
+	e.adjustment_saturation = 1.08
 	e.glow_intensity = 0.4
 	e.fog_enabled = true
 	e.fog_light_color = Color(0.7, 0.76, 0.85)
