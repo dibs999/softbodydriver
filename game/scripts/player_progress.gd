@@ -55,6 +55,12 @@ static func _valid(data: Variant) -> bool:
 			if not per_map is Dictionary: return false
 			for found in per_map.values():
 				if not found is bool: return false
+	if data.has("stunts"):
+		if not data["stunts"] is Dictionary: return false
+		for record in data["stunts"].values():
+			if not record is Dictionary: return false
+			if not _number(record.get("distance_m")) or float(record["distance_m"]) <= 0.0: return false
+			if not _number(record.get("airtime_s")) or float(record["airtime_s"]) <= 0.0: return false
 	var selection: Dictionary = data["selection"]
 	if not selection.get("last_car") is String or not selection.get("last_map") is String: return false
 	for car in data["braking"].values():
@@ -247,6 +253,26 @@ func landmark_count(map_id: String) -> int:
 	for found in places.values():
 		if found: count += 1
 	return count
+
+
+## Best freeroam jump on a map, or {} when none was recorded.
+func get_best_jump(map_id: String) -> Dictionary:
+	var record: Variant = (_data.get("stunts", {}) as Dictionary).get(map_id, {})
+	return (record as Dictionary).duplicate() if record is Dictionary else {}
+
+
+## Store a jump only when it is longer than the stored one; airtime rides along as context.
+func record_jump(map_id: String, distance_m: float, airtime_s: float) -> bool:
+	if read_only or map_id.is_empty() or not is_finite(distance_m) or distance_m <= 0.0 or not is_finite(airtime_s) or airtime_s <= 0.0:
+		return false
+	var old := get_best_jump(map_id)
+	if not old.is_empty() and distance_m <= float(old.get("distance_m", 0.0)):
+		return false
+	var previous := _data.duplicate(true)
+	var all: Dictionary = (_data.get("stunts", {}) as Dictionary).duplicate(true)
+	all[map_id] = {"distance_m": distance_m, "airtime_s": airtime_s}
+	_data["stunts"] = all
+	return _commit(previous)
 
 
 # ------------------------------------------------------------------------------- career

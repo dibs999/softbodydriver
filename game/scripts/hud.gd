@@ -16,6 +16,7 @@ var lesson: Node
 var equipment: Node
 var weather: Node
 var landmarks: Node
+var stunts: Node
 var _frame_ms := PackedFloat32Array()
 var _p95_ms := 0.0
 var _mean_ms := 0.0
@@ -190,6 +191,12 @@ func _draw() -> void:
 		var pw := _width(place_line, 12) + 22
 		draw_style_box(_chip_style, Rect2(canvas.x - 16 - pw, side_y, pw, 24))
 		_right(Vector2(canvas.x - 27, side_y + 16), place_line, 12, BLUE)
+		side_y += 30.0
+	if stunts and not stunts.status().is_empty():
+		var jump_line: String = stunts.status()
+		var jw := _width(jump_line, 12) + 22
+		draw_style_box(_chip_style, Rect2(canvas.x - 16 - jw, side_y, jw, 24))
+		_right(Vector2(canvas.x - 27, side_y + 16), jump_line, 12, GREEN)
 	if cruise_kmh > 0.0:
 		var cruise := "Tempomat  %d km/h" % int(cruise_kmh)
 		var cw := _width(cruise, 13) + 22

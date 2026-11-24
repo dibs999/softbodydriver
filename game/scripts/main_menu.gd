@@ -578,12 +578,16 @@ func _map_activity_text(id: String) -> String:
 	if id == "proving_grounds": modes.append("Crashtest")
 	modes.append("Verfolgungsjagd")
 	modes.append("Entdeckertour")
-	return "Aktivitäten: " + " · ".join(modes) + "\nFreie Fahrt: Orte entdecken · Wetter/Tageszeit umschaltbar"
+	return "Aktivitäten: " + " · ".join(modes) + "\nFreie Fahrt: Orte entdecken · Sprungrekorde · Wetter/Tageszeit umschaltbar"
 
 
 func _on_map_selected(i: int) -> void:
 	Game.selected_map = Game.MAPS[i]["id"]
-	map_info.text = "START: %s\n%s\n\n%s" % [Game.MAPS[i]["name"], Game.MAPS[i]["description"], _map_activity_text(Game.selected_map)]
+	var record := ""
+	var jump: Dictionary = Game.progress.get_best_jump(Game.selected_map)
+	if not jump.is_empty():
+		record = "\nSprungrekord: %.1f m" % float(jump["distance_m"])
+	map_info.text = "START: %s\n%s\n\n%s%s" % [Game.MAPS[i]["name"], Game.MAPS[i]["description"], _map_activity_text(Game.selected_map), record]
 	if _career_on(): _refresh_garage()   # contract line, lock state and start button for this map
 
 
