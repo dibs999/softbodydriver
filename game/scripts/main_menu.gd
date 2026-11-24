@@ -578,7 +578,7 @@ func _map_activity_text(id: String) -> String:
 	if id == "proving_grounds": modes.append("Crashtest")
 	modes.append("Verfolgungsjagd")
 	modes.append("Entdeckertour")
-	return "Aktivitäten: " + " · ".join(modes) + "\nWetter und Tageszeit sind frei umschaltbar"
+	return "Aktivitäten: " + " · ".join(modes) + "\nFreie Fahrt: Orte entdecken · Wetter/Tageszeit umschaltbar"
 
 
 func _on_map_selected(i: int) -> void:
