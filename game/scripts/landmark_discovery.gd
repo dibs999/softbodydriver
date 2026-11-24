@@ -62,4 +62,7 @@ func _process(delta: float) -> void:
 		if flat < DISCOVER_RADIUS and absf(at.y - target.y) < VERTICAL_RANGE:
 			_triggered[place_name] = true
 			if Game.progress.discover_landmark(map_id, place_name) and hud:
-				hud.toast("Ort entdeckt: %s · %d/%d" % [place_name, found_count(), total()])
+				var reward := ""
+				if Game.settings.get("career", false) and Game.progress.change_money(15.0):
+					reward = " · +15 €"
+				hud.toast("Ort entdeckt: %s · %d/%d%s" % [place_name, found_count(), total(), reward])

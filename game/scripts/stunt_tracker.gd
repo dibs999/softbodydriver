@@ -111,7 +111,12 @@ func _process(_delta: float) -> void:
 	if not hud:
 		return
 	if would_improve and saved:
-		hud.toast("Neuer Sprungrekord: %.1f m · %.2f s Luftzeit" % [distance, airtime])
+		var reward := ""
+		var game := get_node_or_null("/root/Game")
+		var bonus := maxi(10, int(distance * 1.5))
+		if game and game.settings.get("career", false) and progress.change_money(float(bonus)):
+			reward = " · +%d €" % bonus
+		hud.toast("Neuer Sprungrekord: %.1f m · %.2f s Luftzeit%s" % [distance, airtime, reward])
 	elif would_improve:
 		hud.toast("Sprung: %.1f m · Rekord konnte nicht gespeichert werden" % distance)
 	else:
