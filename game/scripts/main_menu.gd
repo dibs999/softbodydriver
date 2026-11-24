@@ -49,27 +49,31 @@ func _build_scene() -> void:
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
 	e.background_mode = Environment.BG_COLOR
-	e.background_color = Color("141619")
+	e.background_color = Color("10141a")
 	# The floor shader fades into this colour, so no horizon edge is visible.
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	e.ambient_light_color = Color("9aa3ad")
-	e.ambient_light_energy = 0.55
+	e.ambient_light_energy = 0.48
 	e.reflected_light_source = Environment.REFLECTION_SOURCE_BG
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	e.tonemap_white = 4.0
+	e.adjustment_enabled = true
+	e.adjustment_contrast = 1.04
+	e.adjustment_saturation = 1.05
 	# The floor fades into the backdrop instead of ending at a visible horizon.
 	env.environment = e
 	add_child(env)
 	_env = e
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-46, -38, 0)
-	sun.light_energy = 1.55
+	sun.light_energy = 1.45
 	sun.shadow_enabled = true
 	add_child(sun)
 	_sun = sun
 	var rim := DirectionalLight3D.new()
 	rim.rotation_degrees = Vector3(-18, 150, 0)
 	rim.light_energy = 0.7
-	rim.light_color = Color("ffd9b0")
+	rim.light_color = Color("ffc48a")
 	add_child(rim)
 	var floor_mesh := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
@@ -110,7 +114,7 @@ func _apply_graphics() -> void:
 # ------------------------------------------------------------------------------- layout
 func _panel(alpha := 0.62) -> PanelContainer:
 	var p := PanelContainer.new()
-	p.add_theme_stylebox_override("panel", UITheme.box(Color(0, 0, 0, alpha), 4, 16))
+	p.add_theme_stylebox_override("panel", UITheme.panel_box(Color(0.012, 0.016, 0.022, alpha), 16, 10))
 	return p
 
 
@@ -125,7 +129,10 @@ func _build_ui() -> void:
 
 	# Top bar.
 	var bar := PanelContainer.new()
-	bar.add_theme_stylebox_override("panel", UITheme.box(Color(0, 0, 0, 0.7), 0, 14))
+	var bar_style := UITheme.box(Color(0.008, 0.011, 0.016, 0.78), 0, 14)
+	bar_style.border_color = Color(1, 1, 1, 0.08)
+	bar_style.border_width_bottom = 1
+	bar.add_theme_stylebox_override("panel", bar_style)
 	bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	root.add_child(bar)
 	var top := HBoxContainer.new()
@@ -176,7 +183,7 @@ func _build_ui() -> void:
 	var car_group := ButtonGroup.new()
 	for i in Game.cars.size():
 		var c: Dictionary = Game.cars[i]
-		var tile := _tile(c["name"], _car_meta_text(c), "res://ui/cars/%s.png" % c["id"], Vector2(212, 119), car_group)
+		var tile := _tile(c["name"], _car_meta_text(c), "res://ui/cars/%s.png" % c["id"], Vector2(204, 115), car_group)
 		tile.pressed.connect(_on_car_selected.bind(i))
 		grid.add_child(tile)
 		car_buttons.append(tile)
@@ -206,7 +213,8 @@ func _build_ui() -> void:
 	for caption in ["LEISTUNG", "DREHMOMENT", "MASSE"]:
 		var chip := PanelContainer.new()
 		chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		chip.add_theme_stylebox_override("panel", UITheme.box(Color(1, 1, 1, 0.05), 4, 8))
+		chip.custom_minimum_size.y = 62
+		chip.add_theme_stylebox_override("panel", UITheme.box(Color(1, 1, 1, 0.055), 8, 9, UITheme.BORDER, 1))
 		stats.add_child(chip)
 		var content := VBoxContainer.new()
 		content.add_theme_constant_override("separation", 0)
@@ -230,12 +238,13 @@ func _build_ui() -> void:
 	for i in Game.PAINTS.size():
 		var entry: Array = Game.PAINTS[i]
 		var swatch := Button.new()
-		swatch.custom_minimum_size = Vector2(26, 26)
+		swatch.custom_minimum_size = Vector2(28, 28)
 		swatch.toggle_mode = true
 		swatch.tooltip_text = entry[0]
 		var col: Color = entry[1] if entry[1] is Color else Color(0.3, 0.3, 0.32)
 		for state in ["normal", "hover", "pressed", "hover_pressed"]:
-			var box := UITheme.box(col, 4, 0, UITheme.ACCENT if state.contains("pressed") else Color(1, 1, 1, 0.25), 2 if state.contains("pressed") else 1)
+			var fill := col.lerp(Color.WHITE, 0.12) if state.contains("hover") else col
+			var box := UITheme.box(fill, 8, 0, UITheme.ACCENT if state.contains("pressed") else Color(1, 1, 1, 0.28), 2 if state.contains("pressed") else 1)
 			swatch.add_theme_stylebox_override(state, box)
 		if entry[1] == null: swatch.text = "W"
 		swatch.pressed.connect(_on_paint.bind(i))
@@ -304,17 +313,21 @@ func _build_ui() -> void:
 	root.add_child(_preview_area)
 	root.move_child(_preview_area, 0)
 
+	var footer_panel := PanelContainer.new()
+	footer_panel.add_theme_stylebox_override("panel", UITheme.box(Color(0.008, 0.011, 0.016, 0.70), 7, 5, UITheme.BORDER, 1))
+	footer_panel.anchor_left = 1.0
+	footer_panel.anchor_right = 1.0
+	footer_panel.anchor_top = 1.0
+	footer_panel.anchor_bottom = 1.0
+	footer_panel.offset_left = -20 - 430
+	footer_panel.offset_right = -20
+	footer_panel.offset_top = -244
+	footer_panel.offset_bottom = -216
 	var footer := UITheme.label("W/S Gas & Bremse  ·  A/D Lenken  ·  C Kamera  ·  F1 Hilfe  ·  F3 Aktivitäten", 12, UITheme.MUTED)
-	footer.anchor_left = 1.0
-	footer.anchor_right = 1.0
-	footer.anchor_top = 1.0
-	footer.anchor_bottom = 1.0
-	footer.offset_left = -20 - 430
-	footer.offset_right = -20
-	footer.offset_top = -20 - 190 - 26
-	footer.offset_bottom = -20 - 190 - 6
 	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	root.add_child(footer)
+	footer.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	footer_panel.add_child(footer)
+	root.add_child(footer_panel)
 	_build_settings(root)
 
 
@@ -324,10 +337,10 @@ func _tile(caption: String, detail: String, image: String, thumb: Vector2, group
 	b.toggle_mode = true
 	b.button_group = group
 	b.custom_minimum_size = Vector2(thumb.x + 12, thumb.y + (58 if not detail.is_empty() else 40))
-	b.add_theme_stylebox_override("normal", UITheme.box(Color(1, 1, 1, 0.04), 4, 6))
-	b.add_theme_stylebox_override("hover", UITheme.box(Color(1, 1, 1, 0.10), 4, 6))
-	b.add_theme_stylebox_override("pressed", UITheme.box(Color(UITheme.ACCENT, 0.28), 4, 6, UITheme.ACCENT, 2))
-	b.add_theme_stylebox_override("hover_pressed", UITheme.box(Color(UITheme.ACCENT, 0.34), 4, 6, UITheme.ACCENT, 2))
+	b.add_theme_stylebox_override("normal", UITheme.box(Color(1, 1, 1, 0.045), 8, 6, Color(1, 1, 1, 0.055), 1))
+	b.add_theme_stylebox_override("hover", UITheme.box(Color(1, 1, 1, 0.105), 8, 6, Color(1, 1, 1, 0.12), 1))
+	b.add_theme_stylebox_override("pressed", UITheme.box(Color(UITheme.ACCENT, 0.26), 8, 6, UITheme.ACCENT, 2))
+	b.add_theme_stylebox_override("hover_pressed", UITheme.box(Color(UITheme.ACCENT, 0.34), 8, 6, UITheme.ACCENT, 2))
 	b.tooltip_text = caption
 	var v := VBoxContainer.new()
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -368,7 +381,7 @@ func _build_settings(root: Control) -> void:
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_settings.add_child(dim)
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", UITheme.box(Color(0.05, 0.05, 0.06, 0.97), 4, 18, UITheme.BORDER, 1))
+	panel.add_theme_stylebox_override("panel", UITheme.panel_box(Color(0.04, 0.047, 0.058, 0.97), 18, 10))
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.custom_minimum_size = Vector2(820, 700)
 	panel.position = Vector2(-410, -350)

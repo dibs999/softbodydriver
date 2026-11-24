@@ -88,10 +88,13 @@ var _heading := 0.0
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_panel.bg_color = Color(0.0, 0.0, 0.0, 0.52)
-	_panel.border_color = Color(1, 1, 1, 0.09)
+	_panel.bg_color = Color(0.006, 0.009, 0.014, 0.58)
+	_panel.border_color = Color(1, 1, 1, 0.11)
 	_panel.set_border_width_all(1)
-	_panel.set_corner_radius_all(6)
+	_panel.set_corner_radius_all(8)
+	_panel.shadow_color = Color(0, 0, 0, 0.28)
+	_panel.shadow_size = 8
+	_panel.shadow_offset = Vector2(0, 2)
 	_clip.clip_contents = true
 	_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_clip)

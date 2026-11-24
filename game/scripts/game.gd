@@ -493,6 +493,9 @@ func _build_environment() -> void:
 	e.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	e.tonemap_white = 6.0
+	e.adjustment_enabled = true
+	e.adjustment_contrast = 1.04
+	e.adjustment_saturation = 1.06
 	e.glow_intensity = 0.4
 	e.fog_enabled = true
 	e.fog_light_color = Color(0.7, 0.76, 0.85)
@@ -1173,7 +1176,7 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 		margin.add_theme_constant_override(side_name, 48)
 	row.add_child(margin)
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", UITheme.box(Color(0.04, 0.04, 0.045, 0.88), 4, 6, UITheme.BORDER, 1))
+	panel.add_theme_stylebox_override("panel", UITheme.panel_box(Color(0.032, 0.038, 0.048, 0.90), 6, 10))
 	margin.add_child(panel)
 	var tabs := TabContainer.new()
 	panel.add_child(tabs)

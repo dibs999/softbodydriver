@@ -36,15 +36,15 @@ var bold: Font
 var _panel_style: StyleBoxFlat
 var _chip_style: StyleBoxFlat
 
-const TEXT := Color("f2f2f2")
-const MUTED := Color(1, 1, 1, 0.58)
+const TEXT := Color("f4f6f8")
+const MUTED := Color(1, 1, 1, 0.60)
 const DIM := Color(1, 1, 1, 0.16)
 const ACCENT := Color("ff8a2b")
 const GREEN := Color("4fe08a")
 const BLUE := Color("4f8dff")
 const AMBER := Color("ffc14d")
 const RED := Color("ff5a4f")
-const BG := Color(0.0, 0.0, 0.0, 0.52)
+const BG := Color(0.006, 0.009, 0.014, 0.58)
 const MESSAGE_SECONDS := 4.5
 const STATUS := {
 	"ENGINE SEIZED": "Motor festgelaufen", "OUT OF FUEL": "Tank leer", "BATTERY EMPTY": "Akku leer",
@@ -71,11 +71,15 @@ func _ready() -> void:
 	bold = heavy
 	_panel_style = StyleBoxFlat.new()
 	_panel_style.bg_color = BG
-	_panel_style.border_color = Color(1, 1, 1, 0.09)
+	_panel_style.border_color = Color(1, 1, 1, 0.11)
 	_panel_style.set_border_width_all(1)
-	_panel_style.set_corner_radius_all(6)
+	_panel_style.set_corner_radius_all(8)
+	_panel_style.shadow_color = Color(0, 0, 0, 0.28)
+	_panel_style.shadow_size = 8
+	_panel_style.shadow_offset = Vector2(0, 2)
 	_chip_style = _panel_style.duplicate()
-	_chip_style.set_corner_radius_all(4)
+	_chip_style.set_corner_radius_all(7)
+	_chip_style.shadow_size = 5
 
 func toast(message: String) -> void:
 	if message.strip_edges().is_empty():
