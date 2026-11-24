@@ -49,6 +49,12 @@ static func _valid(data: Variant) -> bool:
 			if not cfg is Dictionary: return false
 			for v in cfg.values():
 				if not (v is String or v is bool or _number(v)): return false
+	if data.has("landmarks"):
+		if not data["landmarks"] is Dictionary: return false
+		for per_map in data["landmarks"].values():
+			if not per_map is Dictionary: return false
+			for found in per_map.values():
+				if not found is bool: return false
 	var selection: Dictionary = data["selection"]
 	if not selection.get("last_car") is String or not selection.get("last_map") is String: return false
 	for car in data["braking"].values():
@@ -214,6 +220,33 @@ func reset_lesson() -> bool:
 	var previous := _data.duplicate(true)
 	_data["milestones"] = {}
 	return _commit(previous)
+
+
+# ------------------------------------------------------------------------------- discovered places
+func landmark_known(map_id: String, place_name: String) -> bool:
+	var places: Variant = (_data.get("landmarks", {}) as Dictionary).get(map_id, {})
+	return places is Dictionary and bool(places.get(place_name, false))
+
+
+## Mark a named map place as discovered; true only when it is new and the profile was saved.
+func discover_landmark(map_id: String, place_name: String) -> bool:
+	if read_only or map_id.is_empty() or place_name.is_empty() or landmark_known(map_id, place_name): return false
+	var previous := _data.duplicate(true)
+	var all: Dictionary = (_data.get("landmarks", {}) as Dictionary).duplicate(true)
+	var entries: Dictionary = (all.get(map_id, {}) as Dictionary).duplicate()
+	entries[place_name] = true
+	all[map_id] = entries
+	_data["landmarks"] = all
+	return _commit(previous)
+
+
+func landmark_count(map_id: String) -> int:
+	var places: Variant = (_data.get("landmarks", {}) as Dictionary).get(map_id, {})
+	if not places is Dictionary: return 0
+	var count := 0
+	for found in places.values():
+		if found: count += 1
+	return count
 
 
 # ------------------------------------------------------------------------------- career

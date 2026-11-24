@@ -39,9 +39,13 @@ func run() -> void:
 	check(profile.record_braking("concept_gt", 45.0, 100.0), "Different speed retains separate comparable result")
 	check(not profile.record_braking("concept_gt", 25.0, 50.0), "Earlier speed bucket survives later result")
 	check(not profile.record_braking("concept_gt", NAN, 50.0) and not profile.record_braking("concept_gt", 1, INF) and not profile.record_braking("concept_gt", -1, 50), "Invalid numeric records rejected")
+	check(profile.discover_landmark("proving_grounds", "Boxencampus"), "First landmark discovery saved")
+	check(not profile.discover_landmark("proving_grounds", "Boxencampus"), "Known landmark is not reported as new again")
+	check(profile.discover_landmark("proving_grounds", "Sprung- und Crashbahn") and profile.landmark_count("proving_grounds") == 2, "Landmark count grows per map")
 	var loaded = fresh()
 	check(loaded.load_profile() == OK and loaded.is_completed("start_engine"), "Milestone survives save/reload")
 	check(loaded.get_selection()["last_map"] == "proving_grounds", "Selection survives reload")
+	check(loaded.landmark_known("proving_grounds", "Boxencampus") and loaded.landmark_count("proving_grounds") == 2, "Landmark discoveries survive reload")
 	var best: Dictionary = loaded.get_best_braking("concept_gt")
 	check(best["distance_m"] == 45 and best["start_speed_kmh"] == 100, "Exact stopping context survives reload")
 	best["distance_m"] = 0

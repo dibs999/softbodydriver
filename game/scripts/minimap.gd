@@ -4,6 +4,8 @@ extends Control
 const BACK := Color(0.0, 0.0, 0.0, 0.0)
 const ROAD := Color("#d9dee3")
 const PIN := Color("#ffc36c")
+const FOUND := Color("#55d98d")
+const UNDISCOVERED_TEXT := Color("#c8d4df")
 const TEXT := Color("#edf3f7")
 const MUTED := Color("#a8bacc")
 
@@ -49,7 +51,8 @@ class MapDrawing extends Control:
 			var p: Vector2 = xf * (places[i]["point"] as Vector2)
 			if not Rect2(Vector2(10, 10), size - Vector2(20, 20)).has_point(p):
 				continue
-			draw_circle(p, 7.0, PIN, true, -1.0, true)
+			var found := Game.progress.landmark_known(Game.selected_map, String(places[i]["name"]))
+			draw_circle(p, 7.0, FOUND if found else PIN, true, -1.0, true)
 			var label := str(i + 1)
 			var font := ThemeDB.fallback_font
 			var width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 9).x
@@ -222,9 +225,11 @@ func _draw() -> void:
 	draw_string(font, Vector2(12, size.y - 7), hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, MUTED)
 	if overview_open:
 		var left := _clip.position.x + _clip.size.x + 13.0
-		draw_string(font, Vector2(left, 52), "ORTE", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, MUTED)
+		draw_string(font, Vector2(left, 52), "ORTE · GRÜN ENTDECKT", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, MUTED)
 		for i in _map.places.size():
 			var y := 83.0 + i * 26.0
-			draw_circle(Vector2(left + 7, y - 5), 7.0, PIN, true, -1.0, true)
+			var place_name := String(_map.places[i]["name"])
+			var found := Game.progress.landmark_known(Game.selected_map, place_name)
+			draw_circle(Vector2(left + 7, y - 5), 7.0, FOUND if found else PIN, true, -1.0, true)
 			draw_string(font, Vector2(left + 4, y - 2), str(i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, BACK)
-			draw_string(font, Vector2(left + 20, y), _map.places[i]["name"], HORIZONTAL_ALIGNMENT_LEFT, size.x - left - 26.0, 14, TEXT)
+			draw_string(font, Vector2(left + 20, y), place_name, HORIZONTAL_ALIGNMENT_LEFT, size.x - left - 26.0, 14, FOUND if found else UNDISCOVERED_TEXT)

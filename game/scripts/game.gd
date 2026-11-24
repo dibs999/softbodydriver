@@ -12,6 +12,7 @@ const Minimap := preload("res://scripts/minimap.gd")
 const RoadSurface := preload("res://scripts/road_surface.gd")
 const RoadMarks := preload("res://scripts/road_marks.gd")
 const DrivingActivity := preload("res://scripts/driving_activity.gd")
+const LandmarkDiscovery := preload("res://scripts/landmark_discovery.gd")
 const DriverPrompts := preload("res://scripts/driver_prompts.gd")
 var equipment: Node3D
 var grabber: Node3D   # Ctrl + left mouse: pull a node of any car (node_grabber.gd)
@@ -28,6 +29,7 @@ var wipers: Node3D
 var cabin_closure: Node3D
 var lesson: Node
 var activity: DrivingActivity
+var landmarks: Node
 var surfaces := RoadSurface.new()
 var road_marks: RoadMarks
 
@@ -212,6 +214,8 @@ func travel(to: String) -> void:
 	minimap.configure(map_data, vehicles, _map_name(to))
 	audio.dirt = to == "desert"
 	activity.configure(to, map_data)
+	if landmarks:
+		landmarks.configure(to, map_data.get("map_places", []), player, hud)
 	_spawn_traffic()
 	world.sync_visuals()
 	cam.snap()
@@ -316,6 +320,9 @@ func _finish_ready() -> void:
 	Game.driving_help_changed.connect(hud.set_driving_help)
 	minimap = Minimap.new()
 	ui.add_child(minimap)
+	landmarks = LandmarkDiscovery.new()
+	landmarks.name = "LandmarkDiscovery"
+	add_child(landmarks)
 	var map_title: String = Game.selected_map
 	for entry in Game.MAPS:
 		if entry["id"] == Game.selected_map:
@@ -338,6 +345,8 @@ func _finish_ready() -> void:
 	add_child(activity)
 	activity.configure(Game.selected_map, map_data)
 	activity.completed.connect(_on_activity_completed)
+	landmarks.configure(Game.selected_map, map_data.get("map_places", []), player, hud)
+	hud.landmarks = landmarks
 	activity.spawn_opponents = _spawn_opponents
 	activity.release_opponents = _release_opponents
 	activity.spawn_police = _spawn_police

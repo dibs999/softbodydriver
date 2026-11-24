@@ -15,6 +15,7 @@ var activity: Node3D
 var lesson: Node
 var equipment: Node
 var weather: Node
+var landmarks: Node
 var _frame_ms := PackedFloat32Array()
 var _p95_ms := 0.0
 var _mean_ms := 0.0
@@ -164,23 +165,31 @@ func _draw() -> void:
 		var w := _width(label, 14, bold) + 32
 		draw_style_box(_chip_style, Rect2((canvas.x - w) * 0.5, top, w, 30))
 		_centered(Vector2(canvas.x * 0.5, top + 20), label, 14, AMBER, bold)
+	var side_y := 264.0
 	if is_instance_valid(weather):
 		var status: String = weather.get_brief() if weather.has_method("get_brief") else weather.get_status()
 		var w := _width(status, 12) + 22
-		var y := 264.0
-		draw_style_box(_chip_style, Rect2(canvas.x - 16 - w, y, w, 24))
-		_right(Vector2(canvas.x - 27, y + 16), status, 12, MUTED)
+		draw_style_box(_chip_style, Rect2(canvas.x - 16 - w, side_y, w, 24))
+		_right(Vector2(canvas.x - 27, side_y + 16), status, 12, MUTED)
+		side_y += 30.0
 	if Game.settings.get("career", false):
 		var money := "Konto  " + preload("res://scripts/career.gd").money_text(Game.progress.get_money())
 		var mw := _width(money, 12) + 22
-		draw_style_box(_chip_style, Rect2(canvas.x - 16 - mw, 294.0, mw, 24))
-		_right(Vector2(canvas.x - 27, 310.0), money, 12, TEXT)
+		draw_style_box(_chip_style, Rect2(canvas.x - 16 - mw, side_y, mw, 24))
+		_right(Vector2(canvas.x - 27, side_y + 16), money, 12, TEXT)
+		side_y += 30.0
 		var contract: Dictionary = Game.progress.get_contract(Game.selected_map)
 		if not contract.is_empty():
 			var line := "Auftrag  " + preload("res://scripts/career.gd").contract_text(contract)
 			var cw := _width(line, 12) + 22
-			draw_style_box(_chip_style, Rect2(canvas.x - 16 - cw, 324.0, cw, 24))
-			_right(Vector2(canvas.x - 27, 340.0), line, 12, AMBER)
+			draw_style_box(_chip_style, Rect2(canvas.x - 16 - cw, side_y, cw, 24))
+			_right(Vector2(canvas.x - 27, side_y + 16), line, 12, AMBER)
+			side_y += 30.0
+	if landmarks and landmarks.total() > 0:
+		var place_line: String = landmarks.status()
+		var pw := _width(place_line, 12) + 22
+		draw_style_box(_chip_style, Rect2(canvas.x - 16 - pw, side_y, pw, 24))
+		_right(Vector2(canvas.x - 27, side_y + 16), place_line, 12, BLUE)
 	if cruise_kmh > 0.0:
 		var cruise := "Tempomat  %d km/h" % int(cruise_kmh)
 		var cw := _width(cruise, 13) + 22

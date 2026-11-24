@@ -3,6 +3,7 @@ extends RefCounted
 
 const C := preload("res://scripts/maps/common.gd")
 const V := preload("res://scripts/maps/vegetation.gd")
+const WindTurbines := preload("res://scripts/maps/wind_turbines.gd")
 const STRAIGHT := 2600.0
 const RADIUS := 520.0
 ## Church tower of the village beyond the north-east bend, and the village's extent around it
@@ -884,16 +885,12 @@ static func _landmarks(parent: Node3D, world: SBWorld, metal: Material) -> void:
 		C.quad(parent, Vector3(x - 45.0, -0.038, 230), Vector2(365, 142), gravel, -0.05)
 	var white := C.mat(Color(0.76, 0.78, 0.78), 0.72)
 	var red := C.mat(Color(0.71, 0.18, 0.12), 0.7)
+	var turbines := WindTurbines.new()
+	turbines.name = "WindparkRotors"
+	parent.add_child(turbines)
 	for i in 6:
 		var p := Vector3(-1350 + i * 190.0, 0, -RADIUS - 240.0 - (i % 2) * 75.0)
-		C.box(parent, world, p + Vector3.UP * 25.0, Vector3(1.15, 25.0, 1.15), Vector3.ZERO, white, 0.8, false)
-		C.box(parent, world, p + Vector3(0, 50, -0.8), Vector3(2.7, 1.5, 1.9), Vector3.ZERO, metal, 0.8, false)
-		for blade in 3:
-			var angle := TAU / 3.0 * blade + i * 0.37
-			var direction := Vector3(-sin(angle), cos(angle), 0)
-			var hub := p + Vector3(0, 50, -3.2)
-			C.box(parent, world, hub + direction * 9.5, Vector3(0.58, 9.5, 0.17), Vector3(0, 0, angle), white, 0.8, false)
-			C.box(parent, world, hub + direction * 20.4, Vector3(0.45, 1.4, 0.15), Vector3(0, 0, angle), red, 0.8, false)
+		turbines.add_turbine(p, white, metal, red, i * 0.37)
 
 
 ## Rolling, partly wooded hills on the horizon beyond the countryside: the plain used to run
