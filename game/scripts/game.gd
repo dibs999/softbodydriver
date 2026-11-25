@@ -12,6 +12,9 @@ const Minimap := preload("res://scripts/minimap.gd")
 const RoadSurface := preload("res://scripts/road_surface.gd")
 const RoadMarks := preload("res://scripts/road_marks.gd")
 const DrivingActivity := preload("res://scripts/driving_activity.gd")
+const LandmarkDiscovery := preload("res://scripts/landmark_discovery.gd")
+const StuntTracker := preload("res://scripts/stunt_tracker.gd")
+const AmbientLife := preload("res://scripts/ambient_life.gd")
 const DriverPrompts := preload("res://scripts/driver_prompts.gd")
 var equipment: Node3D
 var grabber: Node3D   # Ctrl + left mouse: pull a node of any car (node_grabber.gd)
@@ -28,6 +31,9 @@ var wipers: Node3D
 var cabin_closure: Node3D
 var lesson: Node
 var activity: DrivingActivity
+var landmarks: Node
+var stunts: Node
+var ambient_life: Node3D
 var surfaces := RoadSurface.new()
 var road_marks: RoadMarks
 
@@ -212,6 +218,12 @@ func travel(to: String) -> void:
 	minimap.configure(map_data, vehicles, _map_name(to))
 	audio.dirt = to == "desert"
 	activity.configure(to, map_data)
+	if landmarks:
+		landmarks.configure(to, map_data.get("map_places", []), player, hud)
+	if stunts:
+		stunts.configure(to, player, world, hud)
+	if ambient_life:
+		ambient_life.configure(to)
 	_spawn_traffic()
 	world.sync_visuals()
 	cam.snap()
@@ -316,6 +328,16 @@ func _finish_ready() -> void:
 	Game.driving_help_changed.connect(hud.set_driving_help)
 	minimap = Minimap.new()
 	ui.add_child(minimap)
+	landmarks = LandmarkDiscovery.new()
+	landmarks.name = "LandmarkDiscovery"
+	add_child(landmarks)
+	stunts = StuntTracker.new()
+	stunts.name = "StuntTracker"
+	add_child(stunts)
+	ambient_life = AmbientLife.new()
+	ambient_life.name = "AmbientLife"
+	add_child(ambient_life)
+	ambient_life.configure(Game.selected_map)
 	var map_title: String = Game.selected_map
 	for entry in Game.MAPS:
 		if entry["id"] == Game.selected_map:
@@ -338,6 +360,10 @@ func _finish_ready() -> void:
 	add_child(activity)
 	activity.configure(Game.selected_map, map_data)
 	activity.completed.connect(_on_activity_completed)
+	landmarks.configure(Game.selected_map, map_data.get("map_places", []), player, hud)
+	stunts.configure(Game.selected_map, player, world, hud)
+	hud.landmarks = landmarks
+	hud.stunts = stunts
 	activity.spawn_opponents = _spawn_opponents
 	activity.release_opponents = _release_opponents
 	activity.spawn_police = _spawn_police
@@ -493,6 +519,9 @@ func _build_environment() -> void:
 	e.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	e.tonemap_white = 6.0
+	e.adjustment_enabled = true
+	e.adjustment_contrast = 1.07
+	e.adjustment_saturation = 1.08
 	e.glow_intensity = 0.4
 	e.fog_enabled = true
 	e.fog_light_color = Color(0.7, 0.76, 0.85)
@@ -1173,7 +1202,7 @@ func _build_pause_menu(ui: CanvasLayer) -> void:
 		margin.add_theme_constant_override(side_name, 48)
 	row.add_child(margin)
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", UITheme.box(Color(0.04, 0.04, 0.045, 0.88), 4, 6, UITheme.BORDER, 1))
+	panel.add_theme_stylebox_override("panel", UITheme.panel_box(Color(0.032, 0.038, 0.048, 0.90), 6, 10))
 	margin.add_child(panel)
 	var tabs := TabContainer.new()
 	panel.add_child(tabs)

@@ -4,7 +4,8 @@ signal completed(result: Dictionary)
 
 const C := preload("res://scripts/maps/common.gd")
 const RaceField := preload("res://scripts/race_field.gd")
-const MODES := ["Freie Fahrt", "Zeitfahren", "Drift-Challenge", "Lieferfahrt", "Rennen", "Crashtest", "Verfolgungsjagd"]
+const StuntTracker := preload("res://scripts/stunt_tracker.gd")
+const MODES := ["Freie Fahrt", "Zeitfahren", "Drift-Challenge", "Lieferfahrt", "Rennen", "Crashtest", "Verfolgungsjagd", "Entdeckertour", "Sprung-Challenge"]
 ## Pursuit: escape by opening a gap of ESCAPE_GAP metres and holding it ESCAPE_HOLD seconds, or by
 ## staying free until PURSUIT_TIME; caught after CAUGHT_HOLD s at walking pace next to the police.
 const ESCAPE_GAP := 300.0
@@ -61,6 +62,10 @@ var _arming := false
 var _spawn_position := Vector3.ZERO
 var _reset_wait := 0.0
 var _race_gates := PackedVector3Array()
+var _tour_places: Array[Dictionary] = []
+var _tour_names: Array[String] = []
+var _jump_spots: Array[Vector3] = []
+var _jump_observer: StuntTracker
 var _field := RaceField.new()
 var _crash_speed := 0.0         # km/h just before the impact
 var _crash_peak_g := 0.0
@@ -73,8 +78,22 @@ const MEDALS := ["", "Bronze", "Silber", "Gold"]
 func configure(id: String, data: Dictionary) -> void:
 	_race_route.clear()
 	_race_gates.clear()
+	_tour_places.clear()
+	_tour_names.clear()
+	_jump_spots.clear()
 	map_id = id
 	_start = data["spawns"][0]
+	# Landmarks are the tour destinations. Open water is skipped: its centre is a good map label,
+	# but a frustrating target for a car. Everything else may be reached on or off the road.
+	for entry: Dictionary in data.get("map_places", []):
+		var place_name := String(entry.get("name", "Ziel"))
+		if place_name.contains("See") or place_name.contains("Weiher") or place_name.contains("Teich"):
+			continue
+		var pos: Variant = entry.get("position", Vector3.INF)
+		if pos is Vector3 and pos.is_finite():
+			_tour_places.append({"name": place_name, "position": pos})
+			if place_name.contains("Sprung"):
+				_jump_spots.append(pos)
 	var path: PackedVector3Array = data.get("activity_route", data.get("waypoints", PackedVector3Array()))
 	# Retain the road's shape, with a gate roughly every 45 metres.
 	var distance := 100.0
@@ -97,6 +116,9 @@ func configure(id: String, data: Dictionary) -> void:
 				distance = 0.0
 		if _race_gates.size() > 2:
 			_race_gates.append(_race_gates[0])
+	if _jump_observer == null:
+		_jump_observer = StuntTracker.new()
+		add_child(_jump_observer)
 	var speeds: PackedFloat32Array = data.get("speeds", PackedFloat32Array())
 	if speeds.size() > 0:
 		var total := 0.0
@@ -121,6 +143,8 @@ func available_modes() -> Array[int]:
 	if _race_gates.size() > 3: out.append(4)
 	if map_id == "proving_grounds": out.append(5)
 	if _ai_path.size() > 10 and spawn_police.is_valid(): out.append(6)
+	if _tour_places.size() >= 3: out.append(7)
+	if not _jump_spots.is_empty(): out.append(8)
 	return out
 
 func choose() -> void:
@@ -134,6 +158,53 @@ func choose() -> void:
 func _read_best() -> void:
 	_car_id = str(vehicle.get_info().get("id", "car")) if is_instance_valid(vehicle) else "car"
 	best = float(_records.get_value(map_id + ":" + _car_id, str(mode), 0.0))
+
+
+## Nearest-neighbour tour through up to five landmarks. The order is deterministic for a given
+## spawn and map, but because it follows distance rather than the minimap label order it feels
+## like a small route instead of a random checklist.
+func _build_tour(origin: Vector3) -> Array:
+	var remaining := _tour_places.duplicate()
+	var points := PackedVector3Array([origin])
+	var names: Array[String] = ["Start"]
+	var at := origin
+	while points.size() < 6 and not remaining.is_empty():
+		var best_i := 0
+		var best_d := INF
+		for i in remaining.size():
+			var p: Vector3 = remaining[i]["position"]
+			var d := Vector2(p.x - at.x, p.z - at.z).length()
+			if d < best_d:
+				best_d = d
+				best_i = i
+		var next: Dictionary = remaining[best_i]
+		remaining.remove_at(best_i)
+		at = next["position"]
+		points.append(at)
+		names.append(String(next["name"]))
+	return [points, names]
+
+
+## Put the car far enough before the nearest road point at a jump landmark to reach useful speed.
+func _jump_spawn(spot: Vector3) -> Transform3D:
+	var direction := Vector3.RIGHT
+	if _ai_path.size() > 1:
+		var best_d := INF
+		for i in _ai_path.size():
+			var a := _ai_path[i]
+			var b := _ai_path[(i + 1) % _ai_path.size()]
+			var ab := b - a
+			ab.y = 0
+			var len2 := ab.length_squared()
+			if len2 < 0.01: continue
+			var t := clampf(Vector2(spot.x - a.x, spot.z - a.z).dot(Vector2(ab.x, ab.z)) / len2, 0.0, 1.0)
+			var q := a + ab * t
+			var d := Vector2(spot.x - q.x, spot.z - q.z).length_squared()
+			if d < best_d:
+				best_d = d
+				direction = ab.normalized()
+	return C.car_xform(spot - direction * 90.0, direction)
+
 
 func start() -> void:
 	if active:
@@ -165,6 +236,25 @@ func start() -> void:
 		route = PackedVector3Array([spawn.origin])
 		escaped = false
 		_escape_t = 0.0
+	elif mode == 7:
+		if _tour_places.size() < 3:
+			return
+		var tour := _build_tour(spawn.origin)
+		route = tour[0]
+		_tour_names = tour[1]
+		if route.size() > 1:
+			spawn = C.car_xform(route[0], route[1] - route[0])
+	elif mode == 8:
+		if _jump_spots.is_empty():
+			return
+		var spot := _jump_spots[0]
+		for candidate in _jump_spots:
+			if candidate.distance_squared_to(spawn.origin) < spot.distance_squared_to(spawn.origin):
+				spot = candidate
+		spawn = _jump_spawn(spot)
+		route = PackedVector3Array([spawn.origin, spot])
+		score = 0.0
+		_jump_observer.reset()
 	elif mode == 3:
 		# Curbside stops along existing streets, not inside the buildings.
 		route = PackedVector3Array([Vector3(4, 0, 44), Vector3(92, 0, -132), Vector3(260, 0, 220), Vector3(-4, 0, 132)])
@@ -272,6 +362,19 @@ func _process(_delta: float) -> void:
 		_pursuit(dt, t, position)
 		_previous = position
 		return
+	if mode == 8:
+		var contact := false
+		for load in vehicle.get_wheel_load():
+			if float(load) > 0.12:
+				contact = true
+				break
+		var event: Dictionary = _jump_observer.observe(position, float(t["speed_kmh"]), contact, vehicle.get_up().y, now, dt)
+		if not event.is_empty():
+			score = maxf(score, float(event["distance_m"]))
+		message = "Sprung-Challenge · bester Sprung %.1f m · noch %.0f s" % [score, maxf(0.0, 75.0 - elapsed)]
+		if elapsed >= 75.0: _finish()
+		_previous = position
+		return
 	if mode == 2:
 		var velocity := vehicle.get_velocity()
 		velocity.y = 0
@@ -308,6 +411,13 @@ func _process(_delta: float) -> void:
 			message = "Lieferung %d / %d · am Ziel 2 s halten" % [gate, route.size() - 1]
 			if _hold >= 2.0:
 				_hold = 0
+				gate += 1
+		elif mode == 7:
+			var target := route[gate]
+			var remaining_m := Vector2(position.x - target.x, position.z - target.z).length()
+			var place_name := _tour_names[gate] if gate < _tour_names.size() else "Ziel"
+			message = "%s · Ziel %d / %d · %.0f m" % [place_name, gate, route.size() - 1, remaining_m]
+			if remaining_m < 14.0:
 				gate += 1
 		else:
 			var forward := (route[gate] - route[gate - 1]).normalized()
@@ -440,6 +550,7 @@ func reference_time(points: PackedVector3Array, run_mode: int) -> float:
 	var length := 0.0
 	for i in range(1, points.size()): length += points[i].distance_to(points[i - 1])
 	if run_mode == 3: length *= 1.35
+	elif run_mode == 7: length *= 1.45   # landmarks rarely lie on one direct road
 	return length / _ref_speed
 
 ## Medal for a result: 0 none, 1 bronze, 2 silver, 3 gold. Timed runs against the reference
@@ -454,7 +565,7 @@ func medal_for(run_mode: int, result: Dictionary) -> int:
 		2:
 			var points := float(result.get("score", 0.0))
 			return 3 if points >= DRIFT_MEDAL_POINTS[2] else (2 if points >= DRIFT_MEDAL_POINTS[1] else (1 if points >= DRIFT_MEDAL_POINTS[0] else 0))
-		1, 3:
+		1, 3, 7:
 			var ref := reference_time(route, run_mode)
 			var t := float(result.get("elapsed", INF))
 			if ref <= 0.0: return 0
@@ -465,6 +576,9 @@ func medal_for(run_mode: int, result: Dictionary) -> int:
 		5:
 			var stars := int(result.get("crash", {}).get("stars", 0))
 			return 3 if stars >= 5 else (2 if stars == 4 else (1 if stars == 3 else 0))
+		8:
+			var distance := float(result.get("score", 0.0))
+			return 3 if distance >= 28.0 else (2 if distance >= 20.0 else (1 if distance >= 12.0 else 0))
 		6:
 			if not bool(result.get("escaped", false)): return 0
 			var t := float(result.get("elapsed", INF))
@@ -487,10 +601,12 @@ static func medal_tally(path := "user://driving_records.cfg") -> Array[int]:
 
 func _finish() -> void:
 	if not active: return
-	var higher_is_better := mode == 2 or mode == 5
+	var higher_is_better := mode == 2 or mode == 5 or mode == 8
 	var value := score if higher_is_better else elapsed
 	var previous_best := best
 	var improved := best == 0 or (value > best if higher_is_better else value < best)
+	if higher_is_better and value <= 0.0:
+		improved = false
 	if mode == 6 and not escaped:
 		improved = false   # an arrest is no record
 	var save_error := OK
@@ -508,7 +624,7 @@ func _finish() -> void:
 		"previous_best": previous_best, "improved": improved,
 		"record_saved": save_error == OK, "record_save_error": save_error,
 	}
-	var summary := ("Neue Bestleistung! " if improved else "Ziel! ") + ("%d Punkte" % score if mode == 2 else "%.2f s" % elapsed)
+	var summary := ("Neue Bestleistung! " if improved else "Ziel! ") + ("%d Punkte" % score if mode == 2 else ("%.1f m" % score if mode == 8 else "%.2f s" % elapsed))
 	if mode == 5:
 		last_result["crash"] = report.duplicate()
 		summary = "Crashtest: %d von 5 Sternen · %.0f km/h · %.0f g · Front %d %% · Fahrgastzelle %d %% · %s" % [

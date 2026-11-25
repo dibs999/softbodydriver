@@ -69,4 +69,13 @@ func run() -> void:
 	activity._process(0.1)
 	scene.world.paused = true
 	check(not activity.active and activity.message.contains("versetzt"), "Unexpected relocation invalidates active run")
+	check(activity.available_modes().has(7), "Landmark tour is offered on a map with places")
+	var tour: Array = activity._build_tour(scene.map_data["spawns"][0].origin)
+	check(tour[0].size() >= 4 and tour[0].size() == tour[1].size(), "Landmark tour builds ordered named targets")
+	check(activity.available_modes().has(8), "Jump challenge is offered at named jump sites")
+	check(activity.medal_for(8, {"score": 11.9}) == 0 and activity.medal_for(8, {"score": 12.0}) == 1 and activity.medal_for(8, {"score": 28.0}) == 3, "Jump challenge medals use distance thresholds")
+	activity.mode = 8
+	activity.start()
+	check(activity.active and activity.route.size() == 2 and activity.route[0].distance_to(activity.route[1]) > 80.0, "Jump challenge starts on a run-up before the ramp")
+	activity.cancel("test done")
 	quit(1 if failed else 0)

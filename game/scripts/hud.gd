@@ -15,6 +15,8 @@ var activity: Node3D
 var lesson: Node
 var equipment: Node
 var weather: Node
+var landmarks: Node
+var stunts: Node
 var _frame_ms := PackedFloat32Array()
 var _p95_ms := 0.0
 var _mean_ms := 0.0
@@ -36,15 +38,15 @@ var bold: Font
 var _panel_style: StyleBoxFlat
 var _chip_style: StyleBoxFlat
 
-const TEXT := Color("f2f2f2")
-const MUTED := Color(1, 1, 1, 0.58)
+const TEXT := Color("f4f6f8")
+const MUTED := Color(1, 1, 1, 0.60)
 const DIM := Color(1, 1, 1, 0.16)
 const ACCENT := Color("ff8a2b")
 const GREEN := Color("4fe08a")
 const BLUE := Color("4f8dff")
 const AMBER := Color("ffc14d")
 const RED := Color("ff5a4f")
-const BG := Color(0.0, 0.0, 0.0, 0.52)
+const BG := Color(0.006, 0.009, 0.014, 0.58)
 const MESSAGE_SECONDS := 4.5
 const STATUS := {
 	"ENGINE SEIZED": "Motor festgelaufen", "OUT OF FUEL": "Tank leer", "BATTERY EMPTY": "Akku leer",
@@ -71,11 +73,15 @@ func _ready() -> void:
 	bold = heavy
 	_panel_style = StyleBoxFlat.new()
 	_panel_style.bg_color = BG
-	_panel_style.border_color = Color(1, 1, 1, 0.09)
+	_panel_style.border_color = Color(1, 1, 1, 0.11)
 	_panel_style.set_border_width_all(1)
-	_panel_style.set_corner_radius_all(6)
+	_panel_style.set_corner_radius_all(8)
+	_panel_style.shadow_color = Color(0, 0, 0, 0.28)
+	_panel_style.shadow_size = 8
+	_panel_style.shadow_offset = Vector2(0, 2)
 	_chip_style = _panel_style.duplicate()
-	_chip_style.set_corner_radius_all(4)
+	_chip_style.set_corner_radius_all(7)
+	_chip_style.shadow_size = 5
 
 func toast(message: String) -> void:
 	if message.strip_edges().is_empty():
@@ -160,23 +166,37 @@ func _draw() -> void:
 		var w := _width(label, 14, bold) + 32
 		draw_style_box(_chip_style, Rect2((canvas.x - w) * 0.5, top, w, 30))
 		_centered(Vector2(canvas.x * 0.5, top + 20), label, 14, AMBER, bold)
+	var side_y := 264.0
 	if is_instance_valid(weather):
 		var status: String = weather.get_brief() if weather.has_method("get_brief") else weather.get_status()
 		var w := _width(status, 12) + 22
-		var y := 264.0
-		draw_style_box(_chip_style, Rect2(canvas.x - 16 - w, y, w, 24))
-		_right(Vector2(canvas.x - 27, y + 16), status, 12, MUTED)
+		draw_style_box(_chip_style, Rect2(canvas.x - 16 - w, side_y, w, 24))
+		_right(Vector2(canvas.x - 27, side_y + 16), status, 12, MUTED)
+		side_y += 30.0
 	if Game.settings.get("career", false):
 		var money := "Konto  " + preload("res://scripts/career.gd").money_text(Game.progress.get_money())
 		var mw := _width(money, 12) + 22
-		draw_style_box(_chip_style, Rect2(canvas.x - 16 - mw, 294.0, mw, 24))
-		_right(Vector2(canvas.x - 27, 310.0), money, 12, TEXT)
+		draw_style_box(_chip_style, Rect2(canvas.x - 16 - mw, side_y, mw, 24))
+		_right(Vector2(canvas.x - 27, side_y + 16), money, 12, TEXT)
+		side_y += 30.0
 		var contract: Dictionary = Game.progress.get_contract(Game.selected_map)
 		if not contract.is_empty():
 			var line := "Auftrag  " + preload("res://scripts/career.gd").contract_text(contract)
 			var cw := _width(line, 12) + 22
-			draw_style_box(_chip_style, Rect2(canvas.x - 16 - cw, 324.0, cw, 24))
-			_right(Vector2(canvas.x - 27, 340.0), line, 12, AMBER)
+			draw_style_box(_chip_style, Rect2(canvas.x - 16 - cw, side_y, cw, 24))
+			_right(Vector2(canvas.x - 27, side_y + 16), line, 12, AMBER)
+			side_y += 30.0
+	if landmarks and landmarks.total() > 0:
+		var place_line: String = landmarks.status()
+		var pw := _width(place_line, 12) + 22
+		draw_style_box(_chip_style, Rect2(canvas.x - 16 - pw, side_y, pw, 24))
+		_right(Vector2(canvas.x - 27, side_y + 16), place_line, 12, BLUE)
+		side_y += 30.0
+	if stunts and not stunts.status().is_empty():
+		var jump_line: String = stunts.status()
+		var jw := _width(jump_line, 12) + 22
+		draw_style_box(_chip_style, Rect2(canvas.x - 16 - jw, side_y, jw, 24))
+		_right(Vector2(canvas.x - 27, side_y + 16), jump_line, 12, GREEN)
 	if cruise_kmh > 0.0:
 		var cruise := "Tempomat  %d km/h" % int(cruise_kmh)
 		var cw := _width(cruise, 13) + 22
@@ -249,7 +269,7 @@ func _activity_card(canvas: Vector2, y: float) -> float:
 	draw_rect(Rect2(p, Vector2(w, 3)), ACCENT)
 	_text(p + Vector2(16, 25), activity.MODES[activity.mode].to_upper(), 12, ACCENT, bold)
 	_text(p + Vector2(16, 48), activity.message, 14)
-	var best_label := "Best: %d Pkt." % activity.best if activity.mode == 2 else "Best: %.2f s" % activity.best
+	var best_label := "Best: %d Pkt." % activity.best if activity.mode == 2 else ("Best: %.1f m" % activity.best if activity.mode == 8 else "Best: %.2f s" % activity.best)
 	_text(p + Vector2(16, 68), "Start · Aktivitätenmenü" if DriverPrompts.using_gamepad else "F3 Wechseln · F4 " + ("Abbruch" if activity.active else "Start"), 11, MUTED)
 	if activity.best > 0: _right(p + Vector2(w - 16, 25), best_label, 12, ACCENT)
 	if activity.active and activity.mode != 2:
@@ -264,13 +284,15 @@ func _activity_result(canvas: Vector2, result: Dictionary, y: float) -> float:
 	var p := Vector2((canvas.x - w) * 0.5, y)
 	_panel(Rect2(p, Vector2(w, 150)))
 	_text(p + Vector2(16, 25), "NEUE BESTLEISTUNG" if result.get("improved", false) else "LAUF ABGESCHLOSSEN", 14, ACCENT, bold)
-	var drift := int(result.get("mode", 1)) == 2
+	var result_mode := int(result.get("mode", 1))
+	var higher := result_mode == 2 or result_mode == 8
 	var value := float(result.get("result", 0))
-	_text(p + Vector2(16, 58), "%d Punkte" % value if drift else "%.2f Sekunden" % value, 24, TEXT, bold)
+	var value_text := "%d Punkte" % value if result_mode == 2 else ("%.1f Meter" % value if result_mode == 8 else "%.2f Sekunden" % value)
+	_text(p + Vector2(16, 58), value_text, 24, TEXT, bold)
 	var previous := float(result.get("previous_best", 0))
 	if previous > 0:
-		var difference := value - previous if drift else previous - value
-		var comparison := "%+.0f Punkte zur bisherigen Bestleistung" % difference if drift else "%.2f s %s als die bisherige Bestzeit" % [absf(difference), "schneller" if difference >= 0 else "langsamer"]
+		var difference := value - previous if higher else previous - value
+		var comparison := "%+.1f m zur bisherigen Bestweite" % difference if result_mode == 8 else ("%+.0f Punkte zur bisherigen Bestleistung" % difference if result_mode == 2 else "%.2f s %s als die bisherige Bestzeit" % [absf(difference), "schneller" if difference >= 0 else "langsamer"])
 		_text(p + Vector2(16, 83), comparison, 12, MUTED)
 	else:
 		_text(p + Vector2(16, 83), "Erster abgeschlossener Lauf", 12, MUTED)
