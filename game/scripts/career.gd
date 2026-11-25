@@ -47,6 +47,10 @@ static func payout(result: Dictionary) -> float:
 			return 60.0 * float(result.get("crash", {}).get("stars", 0))
 		6:   # pursuit: only an escape pays
 			return (350.0 + 150.0 * medal) if bool(result.get("escaped", false)) else 0.0
+		7:   # discovery tour: each reached landmark plus the medal
+			return 70.0 * float(result.get("checkpoints", 0)) + 90.0 * medal
+		8:   # jump challenge: distance pays directly, medals carry the larger bonus
+			return roundf(float(result.get("score", 0.0)) * 8.0) + 90.0 * medal
 	return 0.0
 
 ## Workshop bill for bringing a car back to new from its current telemetry: labour per broken and
@@ -82,8 +86,8 @@ static func _amount(v: Variant) -> float:
 
 ## Contracts: each map offers one at a time, an activity on that map with a minimum medal and a
 ## bonus on top of the normal pay. The bonus grows with the contracts already done (up to double).
-const CONTRACT_BASE := {1: 260.0, 2: 240.0, 3: 300.0, 4: 380.0, 5: 220.0, 6: 420.0}
-const MODE_NAMES := ["Freie Fahrt", "Zeitfahren", "Drift-Challenge", "Lieferfahrt", "Rennen", "Crashtest", "Verfolgungsjagd"]
+const CONTRACT_BASE := {1: 260.0, 2: 240.0, 3: 300.0, 4: 380.0, 5: 220.0, 6: 420.0, 7: 280.0, 8: 320.0}
+const MODE_NAMES := ["Freie Fahrt", "Zeitfahren", "Drift-Challenge", "Lieferfahrt", "Rennen", "Crashtest", "Verfolgungsjagd", "Entdeckertour", "Sprung-Challenge"]
 const MEDAL_NAMES := ["", "Bronze", "Silber", "Gold"]
 
 ## A new contract for a map from the modes it offers (free driving excluded). `serial` counts the

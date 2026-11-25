@@ -578,6 +578,7 @@ func _map_activity_text(id: String) -> String:
 	if id == "proving_grounds": modes.append("Crashtest")
 	modes.append("Verfolgungsjagd")
 	modes.append("Entdeckertour")
+	if id in ["desert", "proving_grounds"]: modes.append("Sprung-Challenge")
 	return "Aktivitäten: " + " · ".join(modes) + "\nFreie Fahrt: Orte entdecken · Sprungrekorde · Wetter/Tageszeit umschaltbar"
 
 

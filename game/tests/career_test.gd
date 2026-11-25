@@ -25,6 +25,9 @@ func _initialize() -> void:
 	check(Career.payout({"mode": 1, "medal": 3}) > Career.payout({"mode": 1, "medal": 0}), "A gold time trial pays more than a finish without medal")
 	check(Career.payout({"mode": 4, "place": 1}) > Career.payout({"mode": 4, "place": 3}) and Career.payout({"mode": 4, "place": 4}) == 0.0, "Races pay by place, only the podium")
 	check(Career.payout({"mode": 6, "escaped": false, "medal": 0}) == 0.0 and Career.payout({"mode": 6, "escaped": true, "medal": 3}) > 0.0, "An arrest pays nothing, an escape does")
+	check(Career.payout({"mode": 7, "checkpoints": 5, "medal": 2}) > Career.payout({"mode": 7, "checkpoints": 3, "medal": 0}), "Discovery tours pay for reached places and medals")
+	check(Career.payout({"mode": 8, "score": 24.0, "medal": 2}) > Career.payout({"mode": 8, "score": 12.0, "medal": 0}), "Jump challenges pay for distance and medals")
+	check(Career.make_contract("desert", [0, 7, 8], 0, 0)["mode"] in [7, 8], "Tour and jump contracts can be offered")
 	check(Career.money_text(12345.4) == "12.345 €" and Career.money_text(-80) == "-80 €", "Money is written the German way")
 	# Account in an isolated profile.
 	var path := "user://career_test_profile.json"

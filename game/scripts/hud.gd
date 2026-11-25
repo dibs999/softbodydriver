@@ -269,7 +269,7 @@ func _activity_card(canvas: Vector2, y: float) -> float:
 	draw_rect(Rect2(p, Vector2(w, 3)), ACCENT)
 	_text(p + Vector2(16, 25), activity.MODES[activity.mode].to_upper(), 12, ACCENT, bold)
 	_text(p + Vector2(16, 48), activity.message, 14)
-	var best_label := "Best: %d Pkt." % activity.best if activity.mode == 2 else "Best: %.2f s" % activity.best
+	var best_label := "Best: %d Pkt." % activity.best if activity.mode == 2 else ("Best: %.1f m" % activity.best if activity.mode == 8 else "Best: %.2f s" % activity.best)
 	_text(p + Vector2(16, 68), "Start · Aktivitätenmenü" if DriverPrompts.using_gamepad else "F3 Wechseln · F4 " + ("Abbruch" if activity.active else "Start"), 11, MUTED)
 	if activity.best > 0: _right(p + Vector2(w - 16, 25), best_label, 12, ACCENT)
 	if activity.active and activity.mode != 2:
@@ -284,13 +284,15 @@ func _activity_result(canvas: Vector2, result: Dictionary, y: float) -> float:
 	var p := Vector2((canvas.x - w) * 0.5, y)
 	_panel(Rect2(p, Vector2(w, 150)))
 	_text(p + Vector2(16, 25), "NEUE BESTLEISTUNG" if result.get("improved", false) else "LAUF ABGESCHLOSSEN", 14, ACCENT, bold)
-	var drift := int(result.get("mode", 1)) == 2
+	var result_mode := int(result.get("mode", 1))
+	var higher := result_mode == 2 or result_mode == 8
 	var value := float(result.get("result", 0))
-	_text(p + Vector2(16, 58), "%d Punkte" % value if drift else "%.2f Sekunden" % value, 24, TEXT, bold)
+	var value_text := "%d Punkte" % value if result_mode == 2 else ("%.1f Meter" % value if result_mode == 8 else "%.2f Sekunden" % value)
+	_text(p + Vector2(16, 58), value_text, 24, TEXT, bold)
 	var previous := float(result.get("previous_best", 0))
 	if previous > 0:
-		var difference := value - previous if drift else previous - value
-		var comparison := "%+.0f Punkte zur bisherigen Bestleistung" % difference if drift else "%.2f s %s als die bisherige Bestzeit" % [absf(difference), "schneller" if difference >= 0 else "langsamer"]
+		var difference := value - previous if higher else previous - value
+		var comparison := "%+.1f m zur bisherigen Bestweite" % difference if result_mode == 8 else ("%+.0f Punkte zur bisherigen Bestleistung" % difference if result_mode == 2 else "%.2f s %s als die bisherige Bestzeit" % [absf(difference), "schneller" if difference >= 0 else "langsamer"])
 		_text(p + Vector2(16, 83), comparison, 12, MUTED)
 	else:
 		_text(p + Vector2(16, 83), "Erster abgeschlossener Lauf", 12, MUTED)
